@@ -202,6 +202,17 @@ export function registerGallery(ctx: RrpClientContext): void {
     const selected = await remote.agentPresets.select(sessionId, 'rp')
     if (selected.ok === false) return { ok: false, message: selected.error?.message ?? 'agentPresets.select failed' }
     sessions.open(sessionId)
+
+    // The card name is the story's name; a rename is a nicety, never fatal.
+    const binding = sessions.binding(sessionId)
+    if (binding !== undefined) {
+      try {
+        await binding.session.rename?.(card.meta.name)
+      } catch {
+        /* title only */
+      }
+    }
+
     const opening = (card.openings.find((entry) => entry.id === card.meta.opening) ?? card.openings[0])?.body
     const response = await fetch('/dsh-rrp/start', {
       method: 'POST',

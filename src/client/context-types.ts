@@ -70,6 +70,8 @@ export interface RrpSessionBindingFace {
   session: {
     /** Send a user prompt; 'queue' appends a turn. */
     prompt(content: Array<{ type: 'text'; text: string }>, mode: 'queue' | 'steer'): Promise<unknown>
+    /** Rename the session (the card name becomes the title). */
+    rename?(title: string): Promise<unknown>
   }
 }
 
