@@ -60,7 +60,7 @@ export function emptyWorldState(): WorldState {
 export const WORLD_STATE_LIMITS = {
   characters: 24,
   inventory: 40,
-  flags: 24,
+  flags: 16,
   /** Longest stored string value for one flag. */
   flagValueChars: 160,
 } as const
