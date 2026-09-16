@@ -41,6 +41,14 @@
 
 ---
 
+## 长线实测与修复（2026-09-16）
+
+15 轮真实模型长局：**P0 全无，各专项 PASS**（人设/归因/摘要/技能/矫正/fork 重放；详见 [LONG_PLAY_TEST.md](reference/LONG_PLAY_TEST.md)）。
+
+唯一 **P1 = WorldState 事件累积**（flags 3→32，注入基线随轮增长），已修：提示词改为「当前切面」语义 + `pruneWorldState` 宿主硬上限（提交 `4eaab20`）。
+
+---
+
 ## 阶段路线
 
 | 阶段 | 主题 | 状态 |
