@@ -44,7 +44,8 @@
     "build": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && tsdown",
     "watch": "tsdown --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "link:dev": "node scripts/link-dev.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",

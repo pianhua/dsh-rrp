@@ -9,9 +9,9 @@
 
 ## 当前状态
 
-**阶段 0：文档与形态对齐（进行中）**
+**阶段 1：最小可挂载插件骨架（已完成）** —— 下一步进入阶段 2（自定义 RP 模式 + Author Agent）。
 
-本仓库目前**只有设计文档，没有生产代码**。我们刻意先锁定产品形态与宿主映射，再落第一行实现，避免重演「先写代码再补架构」导致的膨胀。
+插件已能在真实 `dsh web` 下加载、组合与干净卸载；当前尚无 RP 业务逻辑。开发与验证流程见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)，阶段进度见 [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md)。
 
 | 项 | 状态 |
 | :--- | :--- |
@@ -19,7 +19,8 @@
 | 宿主能力映射 | ✅ [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) |
 | 协作与红线准则 | ✅ [`AGENTS.md`](AGENTS.md) |
 | 当前任务指针 | ✅ [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md) |
-| 生产代码 | ⬜ 待阶段 1 启动 |
+| 开发环境流程 | ✅ [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
+| 生产代码 | ✅ 阶段 1 骨架（`src/`，可在 `dsh web` 挂载） |
 
 ---
 
@@ -73,6 +74,8 @@ DeepSeek Harness 宿主
 | 2 | [`docs/DESIGN.md`](docs/DESIGN.md) | 唯一产品目标规格 |
 | 3 | [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) | 宿主能力映射 + 反重复造轮子红线 |
 | 4 | [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md) | 当前唯一切片 |
+
+工程与开发环境：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) —— 构建、`rp-dev` 开发 profile、真实宿主验证流程。
 
 参考资料层（回答「为什么」，防漂移）：[`docs/reference/README.md`](docs/reference/README.md)
 
