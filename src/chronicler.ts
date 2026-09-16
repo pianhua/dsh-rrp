@@ -151,7 +151,9 @@ async function runInference(
   const stamp = (): string => new Date().toISOString()
   try {
     const prior = (faces.projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ?? emptyWorldState()
-    const transcript = transcriptOf(session)
+    // The Chronicler already receives the complete prior state, so it only
+    // needs THIS turn's prose — re-feeding older turns is pure token waste.
+    const transcript = latestTurnTranscriptOf(session)
     if (transcript.trim().length === 0) return { status: 'completed' }
 
     recordActivity(session, {
@@ -215,6 +217,35 @@ async function collectText(stream: AsyncIterable<StreamChunkLike>): Promise<stri
     if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') text += chunk.text
   }
   return text
+}
+
+/**
+ * Render ONLY the latest turn's user/assistant text. The Chronicler holds the
+ * full prior state, so older turns add cost without adding information.
+ * @param session - the session whose newest turn is rendered.
+ * @returns the latest turn's prose, capped.
+ */
+export function latestTurnTranscriptOf(session: SessionLike): string {
+  const events = session.snapshotEvents()
+  let start = 0
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (events[index]?.type === 'user/message') {
+      start = index
+      break
+    }
+  }
+  const parts: string[] = []
+  for (let index = start; index < events.length; index += 1) {
+    const event = events[index]
+    if (event?.type !== 'user/message' && event?.type !== 'assistant/message') continue
+    const blocks: string[] = []
+    collectTextBlocks(event.data, blocks)
+    const text = blocks.join('\n').trim()
+    if (text.length === 0) continue
+    parts.push('【' + (event.type === 'user/message' ? '玩家' : '叙述') + '】\n' + text)
+  }
+  const joined = parts.join('\n\n')
+  return joined.length > TRANSCRIPT_LIMIT ? joined.slice(joined.length - TRANSCRIPT_LIMIT) : joined
 }
 
 /** Render the session's user/assistant text blocks, tail-biased and capped.
