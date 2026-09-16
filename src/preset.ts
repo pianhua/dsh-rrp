@@ -41,7 +41,7 @@ const SOURCE_DIR = fileURLToPath(new URL('../presets/rp/', import.meta.url))
 const PACKAGE_MANIFEST = fileURLToPath(new URL('../package.json', import.meta.url))
 
 /** The harness home; mirrors @deepseek-ai/dsh-agent-presets' shipped default. */
-function harnessHome(): string {
+export function harnessHome(): string {
   return process.env.DSH_HOME ?? join(homedir(), '.dsh')
 }
 

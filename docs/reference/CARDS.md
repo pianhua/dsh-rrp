@@ -1,8 +1,9 @@
 # 原生卡包（Cards）规格提案 · v0
 
-> **状态：提案，未拍板。** 本文件落实 [DECISIONS.md](DECISIONS.md) 的 D13（卡包格式待所有者拍板）。
-> 在所有者确认「开放问题」前，**不写卡包解析代码、不冻结格式**。
-> 关联：D7（Skills 替代 Lorebook）· D14（不兼容酒馆卡）· HOST_ALIGNMENT 第 4 节红线。
+> **状态：v0 已落地。** 所有者以一张真实酒馆卡（`女仆大小姐.json`）触发转译，据此采用**目录形态**；
+> 首个原生卡包见 [`../../cards/maid-heiress/`](../../cards/maid-heiress/)，加载器见 `src/cards.ts`。
+> 宿主接缝已勘察（见 [HOST_SEAMS.md](HOST_SEAMS.md)）。
+> 关联：D7（Skills 替代 Lorebook）· D14（不兼容酒馆卡，靠 AI 单向转译）· HOST_ALIGNMENT 第 4 节红线。
 
 ---
 
@@ -137,24 +138,58 @@ opening: default
 
 ---
 
-## 9. 待勘察确认（宿主接缝）
+## 9. 宿主接缝（已勘察，详见 [HOST_SEAMS.md](HOST_SEAMS.md)）
 
-以下依赖对 DSH 宿主的精确勘察（正在进行，见 `docs/reference/HOST_SEAMS.md`）：
-
-1. 客户端**程序化新建会话**并指定 preset 的精确 API；
-2. 新建时能否**注入首条 user/assistant 消息**（开场白）；
-3. 卡包列表适合挂在哪个 **Slot / 顶栏 / 右侧栏**；
-4. 是否需要一条**可见的会话事件**类型（用于开场白与归因展示）。
+1. **卡片展厅**：没有全局顶栏 slot。正统入口 = `main` 主区面板（keyed）+ 同名
+   `sidebar.panellist` 导航图标（list id 必须等于 main key），切换用 `ctx.layout.selectPanel(id)`。
+2. **新建会话 + preset**：`ctx.sessions.create({ workspaceId?, cwd? })` **没有 preset 参数**；
+   建后立即 `ctx.remote.agentPresets.select(sessionId, 'rp')`（仅空会话可切换），再 `ctx.sessions.open(id)`。
+3. **开场白**：**没有「建时带首条消息」的 API**。做法是建后
+   `ctx.sessions.binding(id).session.prompt([{type:'text',text}], 'queue')`。注意这会写成一条
+   **user/message**（需带 `source` 才能与玩家发言区分）；`system/message` 会进入模型可见历史，RP 慎用。
+4. **正文可见化**：非 surface 的自定义事件默认不可见；要让卡片进正文，需
+   `ctx.uiConversation.events.register(...)` + `conversation.chat.node` 注册组件（右栏投影方案最省事，已用）。
+5. **preset 目录**只认 `agent.cordis.yml` + 可选 `preset.yml{name,description,order}`，**没有开场白/图标字段**。
 
 ---
 
-## 10. 开放问题（请所有者拍板 · D13）
+## 10. 已采用的 v0 决策
 
-1. **载体**：目录（本提案推荐）还是单文件打包？目录更利于 Skills / 开场 / 头像的共存。
-2. **开场白注入**：作为**首条正文**（推荐，直接进故事）还是作为给模型的**隐藏引导**？
-3. **世界核心**：常驻注入（推荐，小）还是也做成 Skill 按需调取（省 token 但可能漏守规则）？
-4. **玩家角色**：卡包声明并进入 `characters`（推荐）还是单独字段？
-5. **卡=preset？** 是否允许卡包自带 `agent.cordis.yml` 覆盖组合？建议**先不做**，保持 preset 唯一、卡只提供内容。
-6. **卡包根目录**：`<dshHome>/.dsh-rrp/cards/` 是否合适？
+| 问题 | 采用 |
+| :--- | :--- |
+| 载体 | **目录** `cards/<id>/`，零新依赖 |
+| 开场白 | **首条起笔消息**（`session.prompt`） |
+| 世界核心 | `persona` + `card.md` 正文**常驻注入**；细节走 `skills/` 按需调取 |
+| 玩家角色 | `player` → 进入初始 `characters` |
+| 卡 vs preset | 卡**不**自带 `agent.cordis.yml`；preset 仍唯一（`rp`） |
+| 根目录 | 用户 `<dshHome>/.dsh-rrp/cards/`，随包 `cards/`；用户同名覆盖 |
 
-> 确认后即进入实现：卡包读取（纯目录解析，无基建）→ 开场白注入 → 初始状态 → 卡片展厅。
+> 这些是 v0 默认，仍可随所有者意见调整（D13 的「可演进」精神）。
+
+## 11. 首个原生卡包：`女仆大小姐`（酒馆卡转译）
+
+来源 `女仆大小姐.json`（SillyTavern V2）。该卡 `description/personality/scenario` 为**空**，
+全部人物与世界观都在 `character_book`（世界书）的 10 条词条里。
+
+| 酒馆字段 | 我们的落点 |
+| :--- | :--- |
+| `name` / `creator` / `character_version` / `tags` | `card.md` frontmatter 的 `name` / `author` / `version` / `tags` |
+| `first_mes` | `openings/default.md`（`{{user}}` → 你，`名字:` 对白前缀改写为叙述） |
+| 世界书 · 世界设定 | `skills/world-setting/SKILL.md` |
+| 世界书 · 米娅 / 女仆长设定 | `skills/mia`、`skills/cecilia` |
+| 世界书 · 家族势力 | `skills/family` |
+| 世界书 · 平民公寓 | `skills/apartment` |
+| 纯爱基调 / 心理 / 伪装 / 暗中解决 / 生病 | `skills/tone` |
+| （无对应，我们新增） | `state.json` 初始 WorldState |
+| **丢弃** | `extensions`（`regex_scripts`、`tavern_helper` 等旧引擎私有字段，按 D14）；世界书 `keys/constant` 的**正则触发语义**降级为 Skill 的自然语义检索 |
+
+> **秘密可见性（待实机确认）**：米娅的真实身份是核心秘密，只能进「模型可见、玩家不直接看到」的层
+> （`card.md` 的 persona/world core 常驻注入 + `skills/`）。`state.json` 只放玩家已知事实。
+> 当前 persona 走 `agent/pre-step` 注入（正文里显示为 context 节点）——**这一点必须实机确认是否会剧透**。
+
+## 12. 实现现状
+
+- 加载器 `src/cards.ts`：纯目录解析（frontmatter 子集 / 开场白 / `state.json` / `skills`），无 HTTP、无 DB、无索引。
+- 只读路由 `src/cards-route.ts`：`GET /dsh-rrp/cards`（列表）、`GET /dsh-rrp/cards/one?id=<id>`（详情）。
+- 测试 `tests/cards.spec.ts`（含「用户卡覆盖随包卡」）。
+- **待做**：卡片展厅面板（`main` + `sidebar.panellist`）+ 点「开始」的新会话流（create → preset select → 开场白 prompt → 写初始状态）。

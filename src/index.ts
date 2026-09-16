@@ -9,6 +9,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { registerAuthorContext } from './author-context.ts'
+import { registerCardsRoute } from './cards-route.ts'
 import { registerChronicler } from './chronicler.ts'
 import { registerCorrectionRoute } from './correction.ts'
 import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
@@ -96,6 +97,11 @@ export function apply(ctx: Context): void {
   // Player correction: the panel's write path into the session log (D6).
   ctx.inject(['webServer', 'sessions'], (scoped: Context) => {
     registerCorrectionRoute(scoped)
+  })
+
+  // Card packs (Stage 6): read-only routes the gallery/start flow consumes.
+  ctx.inject(['webServer'], (scoped: Context) => {
+    registerCardsRoute(scoped)
   })
 
   // Summarizer: macro compass every N turns; the /summary command toggles it.

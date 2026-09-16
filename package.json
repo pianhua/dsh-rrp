@@ -9,6 +9,7 @@
   "types": "lib/types/index.d.ts",
   "files": [
     "lib",
+    "cards",
     "cordis.patch.yml",
     "README.md",
     "AGENTS.md",

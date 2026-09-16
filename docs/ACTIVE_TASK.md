@@ -8,7 +8,7 @@
 ## 任务状态
 
 - **阶段**：阶段 9 — 外部记忆扩展接入（已完成）
-- **状态**：全部可自动推进的阶段（0–5、5.5、7、8、9）已实现并验证；**唯一剩余阶段 6 需所有者先拍板卡包格式（D13）**
+- **状态**：阶段 0–5、5.5、7、8、9 已完成；**阶段 6 进行中**——所有者以真实酒馆卡触发转译，目录格式已定，加载器与首个测试卡已落地
 - **原则**：先锁定形态与宿主映射，再落实现；每阶段回读本文件
 
 ---
@@ -50,7 +50,7 @@
 | **7** | Summarizer Agent（可选大局观，按轮触发） | ✅ 完成 |
 | **8** | Session.fork 世界线 + `dsh-synapse` 协同 | ✅ 完成 |
 | **9** | 外部记忆扩展接入（EverOS 方向，纯扩展） | ✅ 完成 |
-| 6 | 原生卡包格式重制 + 卡片展厅 | ⏸️ **仅剩此项：待所有者拍板格式（D13）** |
+| 6 | 原生卡包格式重制 + 卡片展厅 | 🚧 **进行中**：格式+加载器+只读路由+首个测试卡已完成；展厅面板与开卡新会话流待做 |
 
 ---
 
@@ -66,16 +66,19 @@
 
 ## 下一动作
 
-**阶段 6：原生卡包格式重制 + 卡片展厅。** 已出具完整提案 [CARDS.md](reference/CARDS.md)（目录结构 / `card.md` frontmatter / 开场白 / 初始状态 / 与 Skills·投影映射 / 展厅入口 / 6 个开放问题）。按 D13，需所有者先在提案 §10 拍板：
+**阶段 6：卡片展厅 + 开卡新会话流。** 格式、加载器与首个测试卡已落地（[CARDS.md](reference/CARDS.md) §9–12）：
 
-1. 载体：目录（推荐）还是单文件打包；
-2. 开场白：首条正文（推荐）还是隐藏引导；
-3. 世界核心：常驻注入（推荐）还是做成 Skill；
-4. 玩家角色：进入 `characters`（推荐）还是单独字段；
-5. 是否允许卡包自带 `agent.cordis.yml`（建议先不做）；
-6. 卡包根目录位置。
+- ✅ 目录格式 + `src/cards.ts` 加载器 + `GET /dsh-rrp/cards`、`/cards/one` 只读路由 + `tests/cards.spec.ts`
+- ✅ 首个原生测试卡 `cards/maid-heiress`（由酒馆卡 `女仆大小姐.json` 单向转译，见 CARDS.md §11）
+- ⬜ **卡片展厅面板**：`main` 主区面板 + 同名 `sidebar.panellist` 导航图标（`ctx.slots` + `ctx.layout.selectPanel`）
+- ⬜ **开卡新会话流**：`ctx.sessions.create` → `ctx.remote.agentPresets.select(id,'rp')` → `session.prompt(开场白)` → 写初始 `state.json`
+- ⬜ **秘密可见性实机确认**：卡包 persona 走 `agent/pre-step` 注入，需确认是否以 context 节点剧透（CARDS.md §11）
 
-拍板前不写卡包解析代码（避免重演旧项目「先写再返工」）。
+## 阶段 6 首个交付：原生测试卡（2026-09-16）
+
+所有者提供酒馆卡 `女仆大小姐.json`（V2，`description/personality/scenario` 为空，信息全在世界书 10 条词条）。
+按 D14 做**单向转译**：`first_mes` → `openings/default.md`；世界书条目 → 6 个 `skills/*/SKILL.md`；
+新增 `state.json` 初始 WorldState；丢弃 `extensions`（`regex_scripts`/`tavern_helper` 等）。
 
 ---
 
