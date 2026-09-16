@@ -89,4 +89,19 @@ describe('card start route', () => {
     await host.route()!.handler(missing.req, missing.res)
     expect(missing.res.statusCode).toBe(404)
   })
+
+  it('writes the active card setting first', async () => {
+    const host = fakeHost()
+    registerStartRoute(host.ctx as never)
+    const { req, res } = exchange({
+      sessionId: 's1',
+      card: { id: 'c1', name: '测试卡', persona: 'P', worldCore: 'W' },
+      opening: OPENING,
+    })
+    await host.route()!.handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(host.appended[0]?.type).toBe('rrp/card')
+    expect(host.appended[0]?.data).toEqual({ id: 'c1', name: '测试卡', persona: 'P', worldCore: 'W' })
+  })
 })
+

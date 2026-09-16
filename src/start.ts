@@ -13,6 +13,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
+import { CARD_EVENT, type CardContext } from './card-types.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 import { WORLD_STATE_EVENT } from './world-state.ts'
 
@@ -53,6 +54,31 @@ interface WebServerService {
 }
 interface RuntimeFaces {
   get(name: string): unknown
+}
+
+/** Coerce a loose request value into a card context, or undefined when unusable. */
+function parseCardContext(value: unknown): CardContext | undefined {
+  if (value === null || typeof value !== 'object') return undefined
+  const record = value as Record<string, unknown>
+  if (typeof record.id !== 'string' || record.id.length === 0) return undefined
+  if (typeof record.name !== 'string' || record.name.length === 0) return undefined
+  const player = record.player
+  const context: CardContext = {
+    id: record.id,
+    name: record.name,
+    persona: typeof record.persona === 'string' ? record.persona : '',
+    worldCore: typeof record.worldCore === 'string' ? record.worldCore : '',
+  }
+  if (player !== null && typeof player === 'object') {
+    const fields = player as Record<string, unknown>
+    if (typeof fields.name === 'string' && fields.name.length > 0) {
+      context.player = {
+        name: fields.name,
+        ...(typeof fields.description === 'string' ? { description: fields.description } : {}),
+      }
+    }
+  }
+  return context
 }
 
 /** Read the whole request body as UTF-8 text. */
@@ -156,7 +182,12 @@ export function registerStartRoute(ctx: Context): void {
           send(res, 400, { error: 'invalid JSON body' })
           return
         }
-        const request = parsed as { sessionId?: unknown; state?: unknown; opening?: unknown }
+        const request = parsed as {
+          sessionId?: unknown
+          state?: unknown
+          opening?: unknown
+          card?: unknown
+        }
         if (typeof request.sessionId !== 'string' || request.sessionId.length === 0) {
           send(res, 400, { error: 'missing sessionId' })
           return
@@ -165,6 +196,17 @@ export function registerStartRoute(ctx: Context): void {
         if (session === undefined) {
           send(res, 404, { error: 'unknown session' })
           return
+        }
+
+        let cardWritten = false
+        if (request.card !== undefined && request.card !== null) {
+          const card = parseCardContext(request.card)
+          if (card === undefined) {
+            send(res, 400, { error: 'invalid card' })
+            return
+          }
+          session.append(CARD_EVENT, card)
+          cardWritten = true
         }
 
         let stateWritten = false
@@ -195,9 +237,9 @@ export function registerStartRoute(ctx: Context): void {
 
         console.log(
           TAG + ' card start ' + session.id
-          + ' (state=' + String(stateWritten) + ', opening=' + openingWritten + ')',
+          + ' (card=' + String(cardWritten) + ', state=' + String(stateWritten) + ', opening=' + openingWritten + ')',
         )
-        send(res, 200, { ok: true, stateWritten, openingWritten })
+        send(res, 200, { ok: true, cardWritten, stateWritten, openingWritten })
       },
     })
     console.log(TAG + ' card start route armed at ' + START_PATH)

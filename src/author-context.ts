@@ -8,6 +8,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
+import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
 import { SUMMARY_KEY, renderMacroSummary, type MacroSummary } from './macro-summary.ts'
 import { WORLD_STATE_KEY, renderWorldState, type WorldState } from './world-state.ts'
 
@@ -64,9 +65,14 @@ export function registerAuthorContext(ctx: Context, presetId: string): void {
           const state = projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined
           if (state === undefined) return decision
           const summary = projections.stateOf(session, SUMMARY_KEY) as MacroSummary | null | undefined
+          const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
 
-          const text = renderWorldState(state)
-            + (summary !== null && summary !== undefined ? '\n\n' + renderMacroSummary(summary) : '')
+          // Card setting first (immutable baseline), then live facts, then the arc.
+          const text = [
+            card === null || card === undefined ? undefined : renderCardContext(card),
+            renderWorldState(state),
+            summary === null || summary === undefined ? undefined : renderMacroSummary(summary),
+          ].filter((part): part is string => part !== undefined).join('\n\n')
           if (injected.get(session.id) === text) return decision
           injected.set(session.id, text)
 

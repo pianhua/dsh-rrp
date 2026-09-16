@@ -9,11 +9,11 @@
  * Format spec: docs/reference/CARDS.md. Card roots (user first, then shipped):
  * `<dshHome>/.dsh-rrp/cards/` and this package's bundled `cards/`.
  */
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { harnessHome } from './home.ts'
 import { worldStateSchema } from './projection/world-state.ts'
-import { harnessHome } from './preset.ts'
 import type { WorldState } from './world-state.ts'
 
 /** The shipped card root (resolved against the bundled lib/index.js). */
@@ -299,4 +299,27 @@ export function readCard(id: string, home: string = harnessHome()): CardPack | u
     }
   }
   return undefined
+}
+
+/**
+ * Materialize every card's world-knowledge skills into a preset's skills root.
+ * The RP scope's skill-filesystem scans that root (bundledSkillDir), so the
+ * model retrieves card lore by natural language instead of context-stuffing.
+ * Best-effort: one unreadable card or skill never breaks materialization.
+ * @param dir - the materialized preset directory.
+ */
+export function mountCardSkills(dir: string): void {
+  const root = join(dir, 'skills')
+  mkdirSync(root, { recursive: true })
+  for (const meta of listCards()) {
+    const card = readCard(meta.id)
+    if (card === undefined) continue
+    for (const skill of card.skills) {
+      try {
+        cpSync(skill.dir, join(root, meta.id + '-' + skill.id), { recursive: true, force: true })
+      } catch {
+        /* skip a skill that cannot be copied */
+      }
+    }
+  }
 }

@@ -206,7 +206,18 @@ export function registerGallery(ctx: RrpClientContext): void {
     const response = await fetch('/dsh-rrp/start', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ sessionId, state: card.initialState, opening }),
+      body: JSON.stringify({
+        sessionId,
+        state: card.initialState,
+        opening,
+        card: {
+          id: card.id,
+          name: card.meta.name,
+          persona: card.persona,
+          worldCore: card.worldCore,
+          player: card.meta.player,
+        },
+      }),
     })
     if (!response.ok) return { ok: false, message: await response.text() }
     ctx.layout?.selectPanel(null)

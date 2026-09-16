@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { listCards, parseCardMarkdown, parseFrontmatter, readCard } from '../src/cards.ts'
+import { listCards, mountCardSkills, parseCardMarkdown, parseFrontmatter, readCard } from '../src/cards.ts'
 
 const SAMPLE = `---
 id: demo
@@ -99,5 +99,12 @@ describe('the shipped test card', () => {
 
   it('returns undefined for an unknown card', () => {
     expect(readCard('nope')).toBeUndefined()
+  })
+
+  it('mounts card skills into a preset skills root', () => {
+    const target = join(home, 'preset')
+    mountCardSkills(target)
+    expect(existsSync(join(target, 'skills', 'maid-heiress-mia', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(target, 'skills', 'maid-heiress-tone', 'SKILL.md'))).toBe(true)
   })
 })

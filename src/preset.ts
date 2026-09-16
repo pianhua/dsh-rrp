@@ -19,9 +19,10 @@
  */
 import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { mountCardSkills } from './cards.ts'
+import { harnessHome } from './home.ts'
 
 /** Preset id, also the directory name; must satisfy the roster's PRESET_ID. */
 export const PRESET_ID = 'rp'
@@ -39,11 +40,6 @@ const SOURCE_DIR = fileURLToPath(new URL('../presets/rp/', import.meta.url))
 
 /** This package's own manifest, used to tell a reload from an uninstall. */
 const PACKAGE_MANIFEST = fileURLToPath(new URL('../package.json', import.meta.url))
-
-/** The harness home; mirrors @deepseek-ai/dsh-agent-presets' shipped default. */
-export function harnessHome(): string {
-  return process.env.DSH_HOME ?? join(homedir(), '.dsh')
-}
 
 /** The user preset directory this plugin owns. */
 export function presetDir(home: string = harnessHome()): string {
@@ -129,6 +125,8 @@ export function materializePreset(home?: string): MaterializeOutcome {
   rmSync(dir, { recursive: true, force: true })
   mkdirSync(dir, { recursive: true })
   cpSync(SOURCE_DIR, dir, { recursive: true, force: true })
+  // Mount every card's world-knowledge skills into the RP skill root (D7).
+  mountCardSkills(dir)
 
   const templated = readFileSync(sourceComposition, 'utf8')
     .replaceAll(SKILL_DIR_TOKEN, join(dir, 'skills'))

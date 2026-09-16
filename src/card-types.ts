@@ -51,3 +51,36 @@ export interface CardPack {
   initialState: WorldState | null
   skills: CardSkill[]
 }
+
+/** The active card's model-facing setting (projected; never player-facing). */
+export interface CardContext {
+  id: string
+  name: string
+  persona: string
+  worldCore: string
+  player?: CardPlayer
+}
+
+/** Session event type carrying the active card's setting (whole-value rule). */
+export const CARD_EVENT = 'rrp/card'
+
+/** Projection key for the active card. */
+export const CARD_KEY = 'rrpCard'
+
+/**
+ * Render the card setting as the Author's immutable world baseline.
+ * Dependency-free so host and any client preview share one wording.
+ * @param card - the active card context.
+ * @returns the context text handed to the Author before a step.
+ */
+export function renderCardContext(card: CardContext): string {
+  const lines = ['【当前卡包 · 设定基准】', '卡包：' + card.name]
+  if (card.player !== undefined) {
+    lines.push('玩家角色：' + card.player.name + (card.player.description === undefined ? '' : ' — ' + card.player.description))
+  }
+  if (card.worldCore.length > 0) lines.push('', '—— 世界核心 ——', card.worldCore)
+  if (card.persona.length > 0) lines.push('', '—— 人设与规则 ——', card.persona)
+  lines.push('', '以上是本次游玩的既定设定，必须遵守；不要把它们当作正文输出。')
+  return lines.join('\n')
+}
+
