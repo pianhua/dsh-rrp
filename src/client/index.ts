@@ -5,13 +5,15 @@
  * Everything is a reversible effect tied to this plugin's fiber.
  */
 import type { RrpClientContext } from './context-types.ts'
+import { registerGallery } from './gallery-panel.tsx'
+import { registerRpTheme } from './theme.ts'
 import { registerWorldStateTab } from './world-state-tab.tsx'
 
 /** Bundle id. The client-modules compose keys on the package name dsh-rrp. */
 export const name = 'dsh-rrp/client'
 
 /** Client runtime services required before mounting. */
-export const inject = ['slots', 'sidebarRightTabs', 'locale']
+export const inject = ['slots', 'sidebarRightTabs', 'locale', 'theme', 'sessions', 'remote', 'layout']
 
 const TAG = '[dsh-rrp]'
 
@@ -55,6 +57,20 @@ const ZH: Record<string, string> = {
   'phase.committed': '已更新状态',
   'phase.corrected': '已就地矫正',
   'phase.failed': '推演失败',
+  'actor.card': '卡包',
+  'gallery.title': '卡片展厅',
+  'gallery.reload': '刷新',
+  'gallery.loading': '加载中…',
+  'gallery.empty': '没有找到卡包',
+  'gallery.pick': '从左侧选择一张卡包，查看它的开场白与设定',
+  'gallery.player': '玩家角色',
+  'gallery.skills': '世界知识',
+  'gallery.opening': '开场白',
+  'gallery.start': '开始这一局',
+  'gallery.starting': '正在建立会话…',
+  'gallery.started': '已开始，切回对话',
+  'gallery.failed': '操作失败',
+  'gallery.unavailable': '会话服务不可用',
 }
 
 const EN: Record<string, string> = {
@@ -94,6 +110,20 @@ const EN: Record<string, string> = {
   'phase.committed': 'updated state',
   'phase.corrected': 'corrected in place',
   'phase.failed': 'inference failed',
+  'actor.card': 'Card',
+  'gallery.title': 'Card Gallery',
+  'gallery.reload': 'Refresh',
+  'gallery.loading': 'Loading…',
+  'gallery.empty': 'No cards found',
+  'gallery.pick': 'Pick a card on the left to preview its opening and setting',
+  'gallery.player': 'Player',
+  'gallery.skills': 'World knowledge',
+  'gallery.opening': 'Opening',
+  'gallery.start': 'Start this story',
+  'gallery.starting': 'Creating session…',
+  'gallery.started': 'Started — switch back to the chat',
+  'gallery.failed': 'Failed',
+  'gallery.unavailable': 'Session service unavailable',
 }
 
 /** Client plugin body. Registers only reversible effects. */
@@ -114,5 +144,7 @@ export function apply(ctx: RrpClientContext): void {
     }
   }, 'dsh-rrp: locale dictionaries')
 
+  registerRpTheme(ctx)
   registerWorldStateTab(ctx)
+  registerGallery(ctx)
 }

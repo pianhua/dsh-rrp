@@ -16,6 +16,7 @@ import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
 import { activityProjection } from './projection/activity.ts'
 import { summaryProjection } from './projection/summary.ts'
 import { worldStateProjection } from './projection/world-state.ts'
+import { registerStartRoute } from './start.ts'
 import { registerSummarizer, registerSummaryCommand } from './summarizer.ts'
 
 /** Loader row id. Keep in sync with cordis.patch.yml. */
@@ -102,6 +103,11 @@ export function apply(ctx: Context): void {
   // Card packs (Stage 6): read-only routes the gallery/start flow consumes.
   ctx.inject(['webServer'], (scoped: Context) => {
     registerCardsRoute(scoped)
+  })
+
+  // Card start: write the initial state and the opening the browser cannot.
+  ctx.inject(['webServer', 'sessions'], (scoped: Context) => {
+    registerStartRoute(scoped)
   })
 
   // Summarizer: macro compass every N turns; the /summary command toggles it.

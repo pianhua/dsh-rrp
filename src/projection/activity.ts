@@ -18,7 +18,7 @@ import {
 const activitySchema = z.object({
   id: z.string(),
   at: z.string(),
-  actor: z.enum(['chronicler', 'summarizer', 'player']),
+  actor: z.enum(['chronicler', 'summarizer', 'player', 'card']),
   target: z.enum(['world-state', 'summary']),
   phase: z.enum(['started', 'committed', 'failed', 'corrected']),
   detail: z.string().optional(),

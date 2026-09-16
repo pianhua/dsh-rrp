@@ -24,52 +24,9 @@ export type FrontmatterValue = string | string[] | Record<string, string>
 /** Parsed frontmatter. */
 export type Frontmatter = Record<string, FrontmatterValue>
 
-/** Declared player character (solves "the Author does not know who you are"). */
-export interface CardPlayer {
-  name: string
-  description?: string
-}
+import type { CardMeta, CardOpening, CardPack, CardSkill } from './card-types.ts'
 
-/** Card-level metadata from `card.md` frontmatter. */
-export interface CardMeta {
-  id: string
-  name: string
-  summary?: string
-  tags: string[]
-  /** Default opening file id (without extension). */
-  opening: string
-  version?: string
-  author?: string
-  player?: CardPlayer
-}
-
-/** One opening greeting. */
-export interface CardOpening {
-  id: string
-  body: string
-}
-
-/** One world-knowledge skill bundled by the card. */
-export interface CardSkill {
-  id: string
-  name?: string
-  description?: string
-  dir: string
-}
-
-/** A fully parsed card. */
-export interface CardPack {
-  id: string
-  dir: string
-  meta: CardMeta
-  /** Persona/rules appended to the Author for sessions using this card. */
-  persona: string
-  /** The card.md body: the always-on world core. */
-  worldCore: string
-  openings: CardOpening[]
-  initialState: WorldState | null
-  skills: CardSkill[]
-}
+export type { CardMeta, CardOpening, CardPack, CardPlayer, CardSkill } from './card-types.ts'
 
 /** Card roots, user override first. */
 export function cardRoots(home: string = harnessHome()): string[] {
