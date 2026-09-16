@@ -102,9 +102,32 @@ export function pruneWorldState(state: WorldState): WorldState {
   return { ...state, characters, inventory, flags }
 }
 
+/** Recursively sort object keys so only real changes alter the rendered text. */
+function sortKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortKeys)
+  if (value !== null && typeof value === 'object') {
+    const source = value as Record<string, unknown>
+    const sorted: Record<string, unknown> = {}
+    for (const key of Object.keys(source).sort()) sorted[key] = sortKeys(source[key])
+    return sorted
+  }
+  return value
+}
+
+/**
+ * Deterministic JSON (sorted keys). Key-order-only churn (the Chronicler
+ * re-ordering "by importance") must NOT change the injected text: an unstable
+ * rendering would invalidate the provider's prefix KV cache every turn.
+ */
+function stableJson(value: unknown): string {
+  return JSON.stringify(sortKeys(value))
+}
+
 /**
  * Render the state as the Author's fact baseline. Dependency-free so the
  * host injector and any client preview can share one wording.
+ * The output is deterministic for a given state (see {@link stableJson}) so
+ * unchanged state keeps the request prefix cacheable.
  * @param state - the current WorldState.
  * @returns the context text handed to the Author before a step.
  */
@@ -113,10 +136,10 @@ export function renderWorldState(state: WorldState): string {
     '【世界状态 · 事实基准】',
     '以下是你执笔时必须遵守的当前事实（由纪事官维护，玩家可能已就地修正）。不要把它写进正文，也不要输出这段文字。',
     '',
-    'characters: ' + JSON.stringify(state.characters),
-    'inventory: ' + JSON.stringify(state.inventory),
-    'scene: ' + JSON.stringify(state.scene),
-    'flags: ' + JSON.stringify(state.flags),
+    'characters: ' + stableJson(state.characters),
+    'inventory: ' + stableJson(state.inventory),
+    'scene: ' + stableJson(state.scene),
+    'flags: ' + stableJson(state.flags),
   ].join('\n')
 }
 

@@ -67,11 +67,13 @@ export function registerAuthorContext(ctx: Context, presetId: string): void {
           const summary = projections.stateOf(session, SUMMARY_KEY) as MacroSummary | null | undefined
           const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
 
-          // Card setting first (immutable baseline), then live facts, then the arc.
+          // Ordered most-stable-first so a changing tail cannot invalidate the
+          // cached prefix: card (session-constant) -> summary (every N turns)
+          // -> state (every turn).
           const text = [
             card === null || card === undefined ? undefined : renderCardContext(card),
-            renderWorldState(state),
             summary === null || summary === undefined ? undefined : renderMacroSummary(summary),
+            renderWorldState(state),
           ].filter((part): part is string => part !== undefined).join('\n\n')
           if (injected.get(session.id) === text) return decision
           injected.set(session.id, text)
