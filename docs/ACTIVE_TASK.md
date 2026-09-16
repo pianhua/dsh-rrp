@@ -50,7 +50,7 @@
 | **7** | Summarizer Agent（可选大局观，按轮触发） | ✅ 完成 |
 | **8** | Session.fork 世界线 + `dsh-synapse` 协同 | ✅ 完成 |
 | **9** | 外部记忆扩展接入（EverOS 方向，纯扩展） | ✅ 完成 |
-| 6 | 原生卡包格式重制 + 卡片展厅 | 🚧 **进行中**：格式+加载器+只读路由+首个测试卡已完成；展厅面板与开卡新会话流待做 |
+| 6 | 原生卡包格式重制 + 卡片展厅 | 🚧 **基本完成**：格式/加载器/只读路由/首个测试卡/**展厅面板**/**开卡新会话流**/P0 主题均已落地；P1 小说排版与 P3 沉浸视图待做 |
 
 ---
 
@@ -66,13 +66,16 @@
 
 ## 下一动作
 
-**阶段 6：卡片展厅 + 开卡新会话流。** 格式、加载器与首个测试卡已落地（[CARDS.md](reference/CARDS.md) §9–12）：
+**阶段 6：卡片展厅 + 开卡新会话流 + P0 主题。** 已落地（[CARDS.md](reference/CARDS.md) §9–12，[UI_CEILING.md](reference/UI_CEILING.md)）：
 
 - ✅ 目录格式 + `src/cards.ts` 加载器 + `GET /dsh-rrp/cards`、`/cards/one` 只读路由 + `tests/cards.spec.ts`
 - ✅ 首个原生测试卡 `cards/maid-heiress`（由酒馆卡 `女仆大小姐.json` 单向转译，见 CARDS.md §11）
-- ⬜ **卡片展厅面板**：`main` 主区面板 + 同名 `sidebar.panellist` 导航图标（`ctx.slots` + `ctx.layout.selectPanel`）
-- ⬜ **开卡新会话流**：`ctx.sessions.create` → `ctx.remote.agentPresets.select(id,'rp')` → `session.prompt(开场白)` → 写初始 `state.json`
-- ⬜ **秘密可见性实机确认**：卡包 persona 走 `agent/pre-step` 注入，需确认是否以 context 节点剧透（CARDS.md §11）
+- ✅ **卡片展厅** `src/client/gallery-panel.tsx`：`main` 主区面板 + 同名 `sidebar.panellist` 导航图标
+- ✅ **开卡新会话流**：`ctx.sessions.create` → `ctx.remote.agentPresets.select(id,'rp')` → `POST /dsh-rrp/start`（写初始状态 + 追加开场白）+ `tests/start.spec.ts`
+- ✅ **P0 RP 主题** `src/client/theme.ts`：暖纸色 + 衬线 + 大行高，`ctx.theme.overrideTokens`，可逆
+- ⬜ **实机确认（关键）**：开场白以 `assistant/message` 追加是否被宿主接受并渲染为正文；被拒会自动回退为 plugin notice（`user/message`）
+- ⬜ **实机确认**：卡包 persona 走 `agent/pre-step` 注入是否会以 context 节点剧透（CARDS.md §11）
+- ⬜ **P1/P3**：正文节点 shadow（小说排版）与「沉浸」视图 Tab（见 UI_CEILING.md）
 
 ## 阶段 6 首个交付：原生测试卡（2026-09-16）
 
@@ -84,7 +87,7 @@
 
 ## 验收标准
 
-- 阶段 1–5、5.5、7、8、9（已达成）：真实 `dsh web` 加载、RP 环路、纪事官、Skills、编年官、fork 重放、外部契约，均无报错；`pnpm run typecheck` / `build` / `test`（33 用例）全绿
+- 阶段 1–5、5.5、7、8、9（已达成）：真实 `dsh web` 加载、RP 环路、纪事官、Skills、编年官、fork 重放、外部契约，均无报错；`pnpm run typecheck` / `build` / `test`（52 用例）全绿
 - 全程：不触犯 [`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md) 第 4 节任一红线
 - 每阶段：代码保持轻量透明，无并发/分布式/多用户复杂度
 
@@ -92,8 +95,8 @@
 
 ## 阻塞与风险
 
-- **阶段 6（唯一阻塞）**：卡包格式待所有者拍板（D13）；这是**所有者决策**，不是技术阻塞
+- **阶段 6**：格式已由所有者真实酒馆卡触发落地（D13「形态成熟后再定」已满足）；剩余为 P1/P3 观感深化
 - **人工验证项**：纪事官/编年官真实模型推演、Author 真实消费、面板渲染、真实 fork 游玩——均需人工 UI 确认（本机无浏览器自动化、未自动烧 token）
 - **/summary 开关持久性**：进程内状态；如需持久化可挂 `ctx.settings`
 - **面板形态**：已为结构化就地编辑器 + 活动账本归因；细粒度「就地点击修改数值」待打磨
-- **卡包主体**：Stage 6 未实现，当前 RP 无卡无开场白——已在 [CARDS.md](reference/CARDS.md) 出提案，等待 D13 拍板
+- **开场白注入**：宿主没有「建时带首条消息」的 API，当前以 `assistant/message` 追加；需实机确认宿主是否接受并渲染（被拒自动回退为 plugin notice）
