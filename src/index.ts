@@ -8,9 +8,9 @@
  * Chronicler / Skills logic arrives in later stages — see docs/ACTIVE_TASK.md.
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { registerAuthorContext } from './author-context.ts'
 import { registerCardsRoute } from './cards-route.ts'
 import { registerChronicler } from './chronicler.ts'
+import { registerContextPublisher } from './context-publisher.ts'
 import { registerCorrectionRoute } from './correction.ts'
 import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
 import { activityProjection } from './projection/activity.ts'
@@ -97,9 +97,10 @@ export function apply(ctx: Context): void {
     registerChronicler(scoped, PRESET_ID)
   })
 
-  // Author: consume the latest WorldState as a per-step fact baseline.
+  // Author context: publish card + facts as durable surface messages, replacing
+  // the previous facts message so the history never accumulates stale state.
   ctx.inject(['sessionProjections'], (scoped: Context) => {
-    registerAuthorContext(scoped, PRESET_ID)
+    registerContextPublisher(scoped, PRESET_ID)
   })
 
   // Player correction: the panel's write path into the session log (D6).
