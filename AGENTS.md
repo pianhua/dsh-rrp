@@ -56,6 +56,7 @@ dsh-rrp/
 │   ├── macro-summary.ts         # 四维大局观纯词汇（host/client 共享）
 │   ├── client/                  # 客户端 Slot 与右侧栏插件
 │   │   ├── index.ts             # 客户端入口
+│   │   ├── world-state-tab.tsx  # 世界状态：结构化就地编辑器
 │   │   └── components/          # React 18 UI 组件 (状态看板/卡片展厅)
 │   ├── agents/                  # 智体提示词与行为规范
 │   │   ├── chronicler.ts        # 纪事官提示词与输出契约
@@ -66,7 +67,7 @@ dsh-rrp/
 │       └── summary.ts           # 大局编年投影单元
 ├── presets/                     # 随包分发的原生 agent preset（RP 模式）
 │   └── rp/                      # 组合、元数据与随模式作用域的世界知识技能
-│       └── skills/              # SKILL.md 世界设定包（D7，按需调取）
+│       └── skills/              # 空的随模式技能根（世界知识由卡包/用户技能提供）
 ├── cards/                       # 官方原生卡包 (未来制定标准规范)
 ├── cordis.patch.yml             # DSH profile patch 声明
 ├── package.json                 # 依赖声明 (严格遵循 DSH peer 规范)

@@ -32,7 +32,7 @@ describe('RP preset materialization', () => {
     expect(composition).not.toContain('__DSH_RRP_SKILL_DIR__')
     expect(composition).toContain(join(outcome.dir, 'skills'))
     expect(existsSync(join(outcome.dir, 'preset.yml'))).toBe(true)
-    expect(existsSync(join(outcome.dir, 'skills', 'return-inn', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(outcome.dir, 'skills'))).toBe(true)
 
     expect(removePreset(home)).toBe('removed')
     expect(existsSync(outcome.dir)).toBe(false)
