@@ -45,7 +45,7 @@ function fakeContext() {
 
 describe('dsh-rrp client half', () => {
   it('declares the required client services', () => {
-    expect(client.inject).toEqual(expect.arrayContaining(['slots', 'sidebarRightTabs', 'locale', 'theme', 'sessions', 'remote', 'layout']))
+    expect(client.inject).toEqual(expect.arrayContaining(['slots', 'sidebarRightTabs', 'locale', 'theme', 'sessions', 'remote', 'remote.agentPresets', 'layout']))
   })
 
   it('applies the RP reading theme as a reversible override layer', () => {

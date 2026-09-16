@@ -13,7 +13,18 @@ import { registerWorldStateTab } from './world-state-tab.tsx'
 export const name = 'dsh-rrp/client'
 
 /** Client runtime services required before mounting. */
-export const inject = ['slots', 'sidebarRightTabs', 'locale', 'theme', 'sessions', 'remote', 'layout']
+// Cordis Remote proxies are namespaced: accessing ctx.remote.agentPresets
+// requires declaring 'remote.agentPresets' (not just 'remote').
+export const inject = [
+  'slots',
+  'sidebarRightTabs',
+  'locale',
+  'theme',
+  'sessions',
+  'remote',
+  'remote.agentPresets',
+  'layout',
+]
 
 const TAG = '[dsh-rrp]'
 
