@@ -53,6 +53,56 @@ export function emptyWorldState(): WorldState {
 }
 
 /**
+ * Safety caps. WorldState is the CURRENT slice, not an unbounded event log:
+ * long play must not grow the injected fact baseline forever. Writers order
+ * entries by importance, so a cap keeps the head.
+ */
+export const WORLD_STATE_LIMITS = {
+  characters: 24,
+  inventory: 40,
+  flags: 24,
+  /** Longest stored string value for one flag. */
+  flagValueChars: 160,
+} as const
+
+/** Keep at most `limit` entries of a record, preserving key order. */
+function capRecord<T>(record: Record<string, T>, limit: number): Record<string, T> {
+  const keys = Object.keys(record)
+  if (keys.length <= limit) return record
+  const capped: Record<string, T> = {}
+  for (const key of keys.slice(0, limit)) capped[key] = record[key] as T
+  return capped
+}
+
+/** Bound one flag value's length so a single verbose flag cannot dominate. */
+function capFlagValue(value: WorldStateFlag): WorldStateFlag {
+  if (typeof value !== 'string' || value.length <= WORLD_STATE_LIMITS.flagValueChars) return value
+  return value.slice(0, WORLD_STATE_LIMITS.flagValueChars) + '…'
+}
+
+/**
+ * Bound a state to the safety caps. Pure; returns the SAME reference when the
+ * state is already within limits (so the projection's Object.is gate holds).
+ * @param state - the state to bound.
+ * @returns the bounded state, or the input when nothing changed.
+ */
+export function pruneWorldState(state: WorldState): WorldState {
+  const characters = capRecord(state.characters, WORLD_STATE_LIMITS.characters)
+  const inventory = capRecord(state.inventory, WORLD_STATE_LIMITS.inventory)
+  const head = capRecord(state.flags, WORLD_STATE_LIMITS.flags)
+  let flags = head
+  for (const [key, value] of Object.entries(head)) {
+    const capped = capFlagValue(value)
+    if (capped !== value) {
+      if (flags === head) flags = { ...head }
+      flags[key] = capped
+    }
+  }
+  if (characters === state.characters && inventory === state.inventory && flags === state.flags) return state
+  return { ...state, characters, inventory, flags }
+}
+
+/**
  * Render the state as the Author's fact baseline. Dependency-free so the
  * host injector and any client preview can share one wording.
  * @param state - the current WorldState.

@@ -6,7 +6,7 @@
  * COMPLETE WorldState (the session-projection whole-value rule).
  */
 import { worldStateSchema } from '../projection/world-state.ts'
-import type { WorldState } from '../world-state.ts'
+import { pruneWorldState, type WorldState } from '../world-state.ts'
 
 /** The Chronicler's persona and rules. */
 export const CHRONICLER_SYSTEM_PROMPT = [
@@ -16,9 +16,10 @@ export const CHRONICLER_SYSTEM_PROMPT = [
   '推演准则：',
   '1. 只记录真实发生的变化：物理后果、心理波动、关系变动、场景推进、已揭示的事实。',
   '2. 忽略噪声：未被剧情确认的猜测、玩家的意图（而非已发生的结果）、纯修辞都不记录。',
-  '3. 保留先前的全部词条；只增改与剧情直接相关的部分，不随意删除。',
-  '4. 如实反映玩家行动造成的后果，但绝不替玩家角色杜撰新的行动、对白或心理。',
-  '5. 忠于既有设定；可以补充合理的细节，但不得改写世界观。',
+  '3. 你维护的是「当前切面」，不是事件流水账：仍会影响后续剧情的事项要保留；已解决、已无关或被后续发展取代的条目应当移除（它们的历史由「大局编年」承载，不会丢失）。',
+  '4. 按重要度维护：characters / inventory / flags 都按重要度从高到低排列；flags 保持精简（≤ 20 条），其值应是当前事实（如「米娅已知晓你的生日」），而不是「某轮发生了什么」的叙述。',
+  '5. 如实反映玩家行动造成的后果，但绝不替玩家角色杜撰新的行动、对白或心理。',
+  '6. 忠于既有设定；可以补充合理的细节，但不得改写世界观。',
   '',
   '输出格式（严格遵守）：',
   '- 只输出一个 JSON 对象，不要任何解释、Markdown 或代码围栏。',
@@ -27,7 +28,7 @@ export const CHRONICLER_SYSTEM_PROMPT = [
   '- inventory 是「物品名 → { quantity?: number, note?: string }」的对象。',
   '- scene 是 { location?: string, time?: string, weather?: string }。',
   '- flags 是「事件/秘密/承诺名 → string | number | boolean」的对象。',
-  '- 该 JSON 必须是变化后的完整状态，而不是增量。',
+  '- 该 JSON 必须是变化后的完整状态（当前切面），而不是增量，也不是历史记录。',
 ].join('\n')
 
 /** Inputs the Chronicler sees: the prior state and the rendered transcript. */
@@ -68,5 +69,5 @@ export function parseChroniclerReply(reply: string): WorldState | undefined {
     return undefined
   }
   const result = worldStateSchema.safeParse(parsed)
-  return result.success ? result.data : undefined
+  return result.success ? pruneWorldState(result.data) : undefined
 }
