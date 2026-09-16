@@ -8,7 +8,9 @@
  * Chronicler / Skills logic arrives in later stages — see docs/ACTIVE_TASK.md.
  */
 import type { Context } from '@deepseek-ai/cordis'
+import { registerAuthorContext } from './author-context.ts'
 import { registerChronicler } from './chronicler.ts'
+import { registerCorrectionRoute } from './correction.ts'
 import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
 import { worldStateProjection } from './projection/world-state.ts'
 
@@ -75,6 +77,16 @@ export function apply(ctx: Context): void {
   // Chronicler: armed only when every host seam it needs is present.
   ctx.inject(['jobs', 'llm', 'agents', 'sessionProjections'], (scoped: Context) => {
     registerChronicler(scoped, PRESET_ID)
+  })
+
+  // Author: consume the latest WorldState as a per-step fact baseline.
+  ctx.inject(['sessionProjections'], (scoped: Context) => {
+    registerAuthorContext(scoped, PRESET_ID)
+  })
+
+  // Player correction: the panel's write path into the session log (D6).
+  ctx.inject(['webServer', 'sessions'], (scoped: Context) => {
+    registerCorrectionRoute(scoped)
   })
 }
 

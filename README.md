@@ -9,9 +9,9 @@
 
 ## 当前状态
 
-**阶段 5：Skills 知识体系替代 Lorebook（已完成）** —— 下一步补完核心 RP 环路（Author 消费 WorldState + 玩家矫正）。
+**阶段 5.5：核心 RP 环路闭环（已完成）** —— 下一步进入阶段 7（Summarizer 大局编年）。
 
-插件已能在真实 `dsh web` 下加载与干净卸载：物化原生 RP 模式「角色扮演 · 执笔」，注册 WorldState 会话投影与原生右侧栏 Tab，每轮正文后由纪事官异步推演状态，并在 RP 作用域按需发现随包世界设定技能。开发与验证流程见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)，阶段进度见 [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md)。
+核心环路已跑通：物化原生 RP 模式「角色扮演 · 执笔」→ Author 每步只读消费最新 WorldState → 每轮正文后纪事官异步推演完整状态 → 玩家可在原生右侧栏就地矫正（无锁 Last-Write-Wins）→ 下一轮 Author 以最新切面起笔；世界设定以 Skills 按需调取。开发与验证流程见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)，阶段进度见 [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md)。
 
 | 项 | 状态 |
 | :--- | :--- |
@@ -20,7 +20,7 @@
 | 协作与红线准则 | ✅ [`AGENTS.md`](AGENTS.md) |
 | 当前任务指针 | ✅ [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md) |
 | 开发环境流程 | ✅ [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
-| 生产代码 | ✅ 阶段 1–5（RP 模式 + 投影看板 + 纪事官 + Skills） |
+| 生产代码 | ✅ 阶段 1–5.5（RP 模式 + 投影看板 + 纪事官 + Skills + 闭环矫正） |
 
 ---
 

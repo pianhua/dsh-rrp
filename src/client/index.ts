@@ -20,22 +20,26 @@ const LOCALE_NS = 'rrp'
 
 const ZH: Record<string, string> = {
   title: '世界状态',
-  'guide.description': '查看角色、物品、场景与事件',
-  'section.characters': '角色',
-  'section.inventory': '物品',
-  'section.scene': '场景',
-  'section.flags': '事件',
-  empty: '本会话暂无世界状态',
+  'guide.description': '查看并就地矫正角色、物品、场景与事件',
+  editHint: '直接编辑下方状态并保存；下一轮执笔会以最新切面为准（无锁矫正）。',
+  save: '保存矫正',
+  saving: '保存中…',
+  saved: '已保存，下一轮起笔生效',
+  saveFailed: '保存失败',
+  invalidJson: 'JSON 格式不合法',
+  noSession: '当前没有会话',
 }
 
 const EN: Record<string, string> = {
   title: 'World State',
-  'guide.description': 'Characters, inventory, scene, and flags',
-  'section.characters': 'Characters',
-  'section.inventory': 'Inventory',
-  'section.scene': 'Scene',
-  'section.flags': 'Flags',
-  empty: 'No world state in this session yet',
+  'guide.description': 'View and correct characters, inventory, scene, and flags',
+  editHint: 'Edit the state and save. The next turn draws from the newest slice (no locks).',
+  save: 'Save correction',
+  saving: 'Saving…',
+  saved: 'Saved — effective next turn',
+  saveFailed: 'Save failed',
+  invalidJson: 'Invalid JSON',
+  noSession: 'No active session',
 }
 
 /** Client plugin body. Registers only reversible effects. */

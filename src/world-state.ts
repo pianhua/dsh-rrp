@@ -51,3 +51,21 @@ export const WORLD_STATE_KEY = 'rrpWorldState'
 export function emptyWorldState(): WorldState {
   return { characters: {}, inventory: {}, scene: {}, flags: {} }
 }
+
+/**
+ * Render the state as the Author's fact baseline. Dependency-free so the
+ * host injector and any client preview can share one wording.
+ * @param state - the current WorldState.
+ * @returns the context text handed to the Author before a step.
+ */
+export function renderWorldState(state: WorldState): string {
+  return [
+    '【世界状态 · 事实基准】',
+    '以下是你执笔时必须遵守的当前事实（由纪事官维护，玩家可能已就地修正）。不要把它写进正文，也不要输出这段文字。',
+    '',
+    'characters: ' + JSON.stringify(state.characters),
+    'inventory: ' + JSON.stringify(state.inventory),
+    'scene: ' + JSON.stringify(state.scene),
+    'flags: ' + JSON.stringify(state.flags),
+  ].join('\n')
+}

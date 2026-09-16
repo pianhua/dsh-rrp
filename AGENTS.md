@@ -50,13 +50,14 @@ dsh-rrp/
 │   ├── preset.ts                # RP 模式（agent preset）物化与归属
 │   ├── world-state.ts           # WorldState 纯词汇（host/client 共享）
 │   ├── chronicler.ts            # 纪事官触发与异步推演（ctx.jobs + ctx.llm）
+│   ├── author-context.ts        # Author 每步只读消费最新 WorldState（agent/pre-step）
+│   ├── correction.ts            # 玩家矫正写路径（宿主 webserver 路由）
 │   ├── client/                  # 客户端 Slot 与右侧栏插件
 │   │   ├── index.ts             # 客户端入口
 │   │   └── components/          # React 18 UI 组件 (状态看板/卡片展厅)
 │   ├── agents/                  # 智体提示词与行为规范
-│   │   ├── author.ts            # 执笔作家提示词
-│   │   ├── chronicler.ts        # 纪事官智能体逻辑
-│   │   └── summarizer.ts        # 大局编年摘要智能体 (可开可关)
+│   │   ├── chronicler.ts        # 纪事官提示词与输出契约
+│   │   └── summarizer.ts        # 大局编年摘要智能体 (可开可关，待阶段 7)
 │   ├── skills/                  # 预留：技能相关 TS 辅助（技能包随 preset 分发）
 │   └── projection/              # 会话投影纯数学折叠器 (WorldState)
 │       └── world-state.ts       # WorldState 投影单元（zod 校验 + 纯折叠）
