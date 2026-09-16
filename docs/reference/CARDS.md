@@ -187,15 +187,15 @@ opening: default
 > （`card.md` 的 persona/world core 常驻注入 + `skills/`）。`state.json` 只放玩家已知事实。
 > 当前 persona 走 `agent/pre-step` 注入（正文里显示为 context 节点）——**这一点必须实机确认是否会剧透**。
 
-## 12. 实现现状（2026-09-16）
+## 12. 实现现状（2026-09-17）
 
 - 加载器 `src/cards.ts`：纯目录解析（frontmatter 子集 / 开场白 / `state.json` / `skills`），无 HTTP、无 DB、无索引；`mountCardSkills()` 把每张卡的 `skills/*` 挂进 RP preset 的技能根（启动日志 `RP skills visible (6)`）。
 - 卡面类型 `src/card-types.ts`：依赖为零，宿主与浏览器共享。
-- **卡包设定投影** `rrp/card`（`src/projection/card.ts`）+ `renderCardContext`：Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入（`src/author-context.ts`）。
+- **卡包设定投影** `rrp/card`（`src/projection/card.ts`）+ `renderCardContext`：Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入（`src/context-publisher.ts`，追加式去重）。
 - 只读路由 `src/cards-route.ts`：`GET /dsh-rrp/cards`、`GET /dsh-rrp/cards/one?id=<id>`。
 - 开卡路由 `src/start.ts`：`POST /dsh-rrp/start` → 写 `rrp/card`、`rrp/world-state`（actor `card`）、追加开场白。
-- 卡片展厅 `src/client/gallery-panel.tsx`：`main` 主区面板 + 同名 `sidebar.panellist` 导航；开始流 = create → `agentPresets.select('rp')` → open → POST start。
-- P0 主题 `src/client/theme.ts`：`ctx.theme.overrideTokens`（暖纸色 / 衬线 / 行高），可逆。
-- 测试：`tests/cards.spec.ts`、`tests/start.spec.ts`、`tests/author-context.spec.ts`、`tests/client.spec.ts`——全套 **55 用例**。
-- **待实机确认**：开场白以 `assistant/message` 追加是否被宿主接受并渲染为正文（被拒自动回退 plugin notice）。
-- **待做**：P1 正文小说排版；P3 沉浸视图（见 [UI_CEILING.md](UI_CEILING.md)）。
+- 卡片展厅 `src/client/gallery-panel.tsx`：`main` 主区面板 + 同名 `sidebar.panellist` 导航；开始流 = create → `agentPresets.select('rp')` → open → POST start。UI 用宿主原子库（搜索/封面/标签/技能卡/开场白 + 底部主操作条）。
+- **主题（已撤回 P0）**：暖纸 `overrideTokens` 层观感被所有者否决，改用 **DSH 原版亮暗**；面板自身靠 `@deepseek-ai/dsh-client-ui-primitives` 原子 + `--dsw-alias-*` token 保持原生观感（见 [UI_CEILING.md](UI_CEILING.md) §A4）。
+- 测试：`tests/cards.spec.ts`、`tests/start.spec.ts`、`tests/client.spec.ts` 等——全套 **66 用例**（`pnpm typecheck` / `build` 全绿）。
+- **已实机确认**：开场白被宿主原生接受为**正文第一条**；卡包 persona 注入**零剧透**（见 [MANUAL_TEST.md](MANUAL_TEST.md)）。
+- **待优化**：多卡技能作用域（当前 `mountCardSkills` 全局挂载会跨卡串味）；P4 输入区接管；多卡体系下的卡面封面图。

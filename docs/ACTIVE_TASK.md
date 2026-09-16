@@ -57,6 +57,19 @@
 
 ---
 
+## UI 精修（2026-09-17）
+
+所有者实测后给出两条明确反馈，本轮据此改造：
+
+| 反馈 | 处置 |
+| :--- | :--- |
+| 「纸质主题不好看，暂时用回 DSH 原版亮暗」 | **撤掉 P0 暖纸 override**：删除 `src/client/theme.ts`、client `inject` 移除 `theme`、`context-types.ts` 去掉主题服务面、`tests/client.spec.ts` 改为「不覆盖宿主主题」断言 |
+| 「侧边栏、选卡、开始这些 UI 太简陋，要做精美」 | 面板改用**宿主自己的原子库**：`@deepseek-ai/dsh-client-ui-primitives`（平台模块，见 [HOST_SEAMS.md](reference/HOST_SEAMS.md) §A4）——展厅加搜索/封面/标签/技能卡/开场白/底部主操作条；世界状态侧栏改为卡片化就地编辑器 + 底部保存条 + 运行中状态点 |
+
+**证据等级**：`typecheck` / `build` / `test`（66 用例）全绿；已构建客户端 bundle 已 serve 且含新标记（`linear-gradient(140deg`、`gallery.nomatch`、`world.missing`），暖纸 token 已从本插件 bundle 消失。**面板视觉与交互仍需所有者实机确认**（见 [MANUAL_TEST.md](reference/MANUAL_TEST.md) §8）。
+
+---
+
 ## 阶段路线
 
 | 阶段 | 主题 | 状态 |
@@ -66,7 +79,7 @@
 | **7** | Summarizer Agent（可选大局观，按轮触发） | ✅ 完成 |
 | **8** | Session.fork 世界线 + `dsh-synapse` 协同 | ✅ 完成 |
 | **9** | 外部记忆扩展接入（EverOS 方向，纯扩展） | ✅ 完成 |
-| 6 | 原生卡包格式重制 + 卡片展厅 | ✅ **完成**：格式/加载器/只读路由/首个测试卡/**展厅**/**开卡流**/P0 主题/**卡包设定注入**/**技能挂载**/**P3 沉浸视图**均已落地；P1（shadow 正文节点）经评估主动不做 |
+| 6 | 原生卡包格式重制 + 卡片展厅 | ✅ **完成**：格式/加载器/只读路由/首个测试卡/**展厅**/**开卡流**/**UI 精修（宿主原子库）**/**卡包设定注入**/**技能挂载**/**P3 沉浸视图**均已落地；P0 暖纸主题已撤回、P1（shadow 正文节点）评估后不做 |
 
 ---
 
@@ -82,19 +95,20 @@
 
 ## 下一动作
 
-**阶段 6：卡片展厅 + 开卡新会话流 + P0 主题。** 已落地（[CARDS.md](reference/CARDS.md) §9–12，[UI_CEILING.md](reference/UI_CEILING.md)）：
+**阶段 6：卡片展厅 + 开卡新会话流 + UI 精修。** 已落地（[CARDS.md](reference/CARDS.md) §9–12，[UI_CEILING.md](reference/UI_CEILING.md)）：
 
 - ✅ 目录格式 + `src/cards.ts` 加载器 + `GET /dsh-rrp/cards`、`/cards/one` 只读路由 + `tests/cards.spec.ts`
 - ✅ 首个原生测试卡 `cards/maid-heiress`（由酒馆卡 `女仆大小姐.json` 单向转译，见 CARDS.md §11）
 - ✅ **卡片展厅** `src/client/gallery-panel.tsx`：`main` 主区面板 + 同名 `sidebar.panellist` 导航图标
 - ✅ **开卡新会话流**：`ctx.sessions.create` → `ctx.remote.agentPresets.select(id,'rp')` → `POST /dsh-rrp/start`（写初始状态 + 追加开场白）+ `tests/start.spec.ts`
-- ✅ **P0 RP 主题** `src/client/theme.ts`：暖纸色 + 衬线 + 大行高，`ctx.theme.overrideTokens`，可逆
+- ⏸️ **P0 暖纸主题（已撤回）**：曾以 `ctx.theme.overrideTokens` 实现暖纸 + 衬线 + 大行高；所有者实测后否决观感，恢复 **DSH 原版亮暗**（`src/client/theme.ts` 已删除，能力记录见 [UI_CEILING.md](reference/UI_CEILING.md)）
+- ✅ **UI 精修（宿主原子库）**：卡片展厅与「世界状态」侧栏改用平台模块 `@deepseek-ai/dsh-client-ui-primitives`（Button / Pill / Input / StateDot / Tooltip / Icon*）——搜索框、卡面封面、技能卡、开场白引用块、底部主操作条；面板**自动跟随明暗主题**（[HOST_SEAMS.md](reference/HOST_SEAMS.md) §A4）
 - ✅ **卡包设定注入**：`rrp/card` 投影（`src/projection/card.ts`）+ Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入
 - ✅ **卡包技能挂载**：`mountCardSkills` 把 `cards/*/skills` 挂进 preset 技能根——实测启动日志 `RP skills visible (6)`
 - ⬜ **实机确认（关键）**：开场白以 `assistant/message` 追加是否被宿主接受并渲染为正文；被拒会自动回退为 plugin notice（`user/message`）
 - ⬜ **实机确认**：卡包 persona 走 `agent/pre-step` 注入是否会以 context 节点剧透（CARDS.md §11）
 - ✅ **P3 沉浸视图** `src/client/story-view.tsx`：新增「沉浸」Tab，订阅宿主 `chat` 快照，按小说排版重排正文（**纯增量**，不替换宿主渲染）
-- ⏸️ **P1 正文节点 shadow**：**主动不做**——属"替换宿主渲染"，做错会让聊天直接不显示；主题已覆盖字体/行高/配色，边际收益低而风险高（见 UI_CEILING.md）
+- ⏸️ **P1 正文节点 shadow**：**主动不做**——属"替换宿主渲染"，做错会让聊天直接不显示；沉浸视图（P3，纯增量）已覆盖小说排版需求，边际收益低而风险高（见 UI_CEILING.md）
 
 ## 阶段 6 首个交付：原生测试卡（2026-09-16）
 
@@ -106,7 +120,7 @@
 
 ## 验收标准
 
-- 阶段 1–5、5.5、7、8、9（已达成）：真实 `dsh web` 加载、RP 环路、纪事官、Skills、编年官、fork 重放、外部契约，均无报错；`pnpm run typecheck` / `build` / `test`（52 用例）全绿
+- 阶段 1–5、5.5、7、8、9（已达成）：真实 `dsh web` 加载、RP 环路、纪事官、Skills、编年官、fork 重放、外部契约，均无报错；`pnpm run typecheck` / `build` / `test`（66 用例）全绿
 - 全程：不触犯 [`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md) 第 4 节任一红线
 - 每阶段：代码保持轻量透明，无并发/分布式/多用户复杂度
 

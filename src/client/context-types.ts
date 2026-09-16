@@ -56,15 +56,6 @@ export interface RrpLocaleService {
   bind(ns: string): (key: string) => string
 }
 
-/** Theme override service face (subset of dsh-client-ui-theme). */
-export interface RrpThemeService {
-  /** Stack a reversible token override layer over the active theme. */
-  overrideTokens(
-    source: string,
-    tokens: Record<string, { light: string; dark: string }>,
-  ): () => void
-}
-
 /** One session's behavior face (subset of the client session contract). */
 export interface RrpSessionBindingFace {
   session: {
@@ -116,8 +107,6 @@ export type RrpClientContext = CordisContext & {
   slots: RrpSlotsService
   sidebarRightTabs: RrpSidebarRightTabsService
   locale: RrpLocaleService
-  /** Present whenever the theme feature is loaded. */
-  theme?: RrpThemeService
   /** Present whenever the session controller is loaded. */
   sessions?: RrpSessionsService
   /** Present whenever the remote RPC layer is loaded. */

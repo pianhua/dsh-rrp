@@ -216,6 +216,33 @@ export function apply(ctx: Context): void {
 
 > ⚠️ 不要注册进 root：`registry.d.ts:17-31` 警告——root 是 single，二次注册会**阴影**掉整个 AppFrame（侧栏、会话、右栏全部消失）。
 
+### A4. 复用宿主原子库：`@deepseek-ai/dsh-client-ui-primitives`（platform module）
+
+**结论**：插件客户端 bundle **可以直接复用宿主自己的 UI 原子**，观感与主题（亮/暗）自动一致，无需自建样式栈。
+
+**证据链**（已装宿主 0.1.5-rc.2）：
+
+1. 宿主 web 前端的模块表（`dist/assets/index-*.js`）里，`PLATFORM_MODULES` 固定注入以下模块给所有插件 bundle 的 `require`：
+
+   ```
+   react · react/jsx-runtime · react-dom · react-dom/client
+   @deepseek-ai/cordis · @deepseek-ai/dsh-client-store
+   @deepseek-ai/dsh-client-ui-slots
+   @deepseek-ai/dsh-client-ui-primitives
+   @deepseek-ai/dsh-client-ui-dockkit
+   ```
+
+2. `dsh-client-ui-primitives` 的运行时导出（自宿主 bundle 实测）：`Button` / `Pill` / `Input` / `StateDot` / `DisclosureRow` / `Tooltip` / `Modal` / `Menu` / `HoverCard` / `Toast` / `JsonTree` / `MarkdownText` / `MessageText` / 以及全部 `Icon*` 图标；**只吃 `--dsw-*` token**，天然跟随明暗主题。
+
+3. 构建侧：把该裸标识符列为 externals（见 `tsdown.config.ts` 的 `CLIENT_EXTERNALS`），**不要打进 bundle**——运行时由模块表提供；打进反而会与宿主重复且拿不到 CSS module 的哈希类名。
+
+**落地做法（本项目）**：
+
+- 类型：`src/client/primitives.d.ts` 声明**结构面**（只声明用到的原子），因为该包不是已安装依赖，构建期也不需要解析它。
+- 测试：vitest 里 Node 解析不到该裸标识符，用 `vitest.config.ts` 的 alias 指向 `tests/stubs/ui-primitives.ts`（永不渲染，中性组件即可）。
+- 组件样式：宿主 CSS 在构建期已产成哈希类名（如 `_button_cfgyt_4`），导入的原子自带样式；我们只负责布局，并在需要时叠加 `--dsw-alias-*` token。
+
+**边界**：模块表是**冻结**的（列表固定），不能 require 任意宿主内部模块；要新增原子依赖必须走「自建设计 token 的普通 React 组件」，或直接复用上面这张表里已有的原子。
 
 ## B. 从客户端以「指定 preset + 开场白」新建会话
 

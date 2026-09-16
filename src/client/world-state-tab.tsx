@@ -7,7 +7,21 @@
  * The player corrects the state in place (D6, no locks); saving posts the
  * whole edited state to the host route, and the panel re-reads the
  * authoritative projection.
+ *
+ * The chrome is built from the host's own atoms
+ * (\`@deepseek-ai/dsh-client-ui-primitives\`) and \`--dsw-alias-*\` tokens so it
+ * matches whatever light/dark theme the user runs.
  */
+import {
+  Button,
+  IconLoadingOutline16,
+  IconPlusOutline16,
+  IconTrashOutline16,
+  Input,
+  Pill,
+  StateDot,
+  Tooltip,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { ACTIVITY_KEY, pendingActivity, type RrpActivityLog } from '../activity.ts'
 import {
@@ -82,6 +96,16 @@ function draftOf(view: WorldStateView | undefined): Draft {
   }
 }
 
+/** True when the whole slice carries no information at all. */
+function isEmptyDraft(draft: Draft): boolean {
+  return draft.characters.length === 0
+    && draft.inventory.length === 0
+    && draft.flags.length === 0
+    && draft.scene.location.length === 0
+    && draft.scene.time.length === 0
+    && draft.scene.weather.length === 0
+}
+
 /** Parse a free-text flag value into string | number | boolean. */
 function parseFlagValue(raw: string): string | number | boolean {
   const text = raw.trim()
@@ -129,42 +153,51 @@ function stateOfDraft(draft: Draft): WorldState {
 }
 
 const S: Record<string, CSSProperties> = {
-  root: { padding: '4px 8px 16px', display: 'flex', flexDirection: 'column' },
-  heading: { fontWeight: 600, fontSize: 13, margin: '12px 0 6px', display: 'flex', alignItems: 'center', gap: 8 },
-  title: { fontWeight: 600, fontSize: 14, margin: '4px 0', display: 'flex', alignItems: 'center', gap: 8 },
-  hint: { margin: '0 0 4px', fontSize: 11, lineHeight: 1.5, opacity: 0.65 },
-  card: {
-    border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.3))',
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 6,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 5,
+  root: { height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--dsw-alias-bg-base)', color: 'var(--dsw-alias-label-primary)' },
+  header: {
+    flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px 10px',
+    borderBottom: '1px solid var(--dsw-alias-border-l1)',
   },
-  field: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 },
-  label: { flex: '0 0 48px', opacity: 0.7 },
-  input: { flex: 1, minWidth: 0 },
-  rowActions: { display: 'flex', justifyContent: 'flex-end' },
-  actions: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 },
-  status: { fontSize: 11, opacity: 0.75 },
-  smallButton: { fontSize: 11, padding: '2px 8px' },
+  title: { fontSize: 14, fontWeight: 600 },
+  spacer: { flex: 1 },
+  scroll: { flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 14px 20px' },
+  hint: { margin: '0 0 10px', fontSize: 11.5, lineHeight: 1.6, color: 'var(--dsw-alias-label-tertiary)' },
+  empty: {
+    display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', marginBottom: 12,
+    borderRadius: 10, background: 'var(--dsw-alias-bg-layer-1)',
+    border: '1px dashed var(--dsw-alias-border-l2)', fontSize: 12,
+    color: 'var(--dsw-alias-label-tertiary)',
+  },
   activity: {
-    border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
-    borderRadius: 8,
-    padding: '6px 8px',
-    margin: '2px 0 8px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 3,
+    display: 'flex', flexDirection: 'column', gap: 4, padding: '9px 11px', marginBottom: 14,
+    borderRadius: 10, background: 'var(--dsw-alias-bg-layer-1)',
+    border: '1px solid var(--dsw-alias-border-l1)',
   },
-  activityHead: { fontSize: 11, fontWeight: 600, opacity: 0.75 },
-  activityEmpty: { fontSize: 11, opacity: 0.5 },
+  activityHead: { fontSize: 11, fontWeight: 600, color: 'var(--dsw-alias-label-secondary)', letterSpacing: '0.02em' },
+  activityEmpty: { fontSize: 11, color: 'var(--dsw-alias-label-dimmed)' },
   activityRow: { display: 'flex', gap: 6, fontSize: 11, lineHeight: 1.5, alignItems: 'baseline' },
-  activityWho: { flex: '0 0 auto', fontWeight: 600 },
-  activityWhat: { flex: 1, minWidth: 0, opacity: 0.85, wordBreak: 'break-word' },
-  activityWhen: { flex: '0 0 auto', opacity: 0.5 },
-  running: { fontSize: 11, opacity: 0.8 },
+  activityWho: { flex: '0 0 auto', fontWeight: 600, color: 'var(--dsw-alias-label-secondary)' },
+  activityWhat: { flex: 1, minWidth: 0, color: 'var(--dsw-alias-label-tertiary)', wordBreak: 'break-word' },
+  activityWhen: { flex: '0 0 auto', color: 'var(--dsw-alias-label-dimmed)' },
+  running: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--dsw-alias-label-secondary)' },
+  section: { display: 'flex', alignItems: 'center', gap: 8, margin: '16px 0 8px' },
+  sectionTitle: { fontSize: 12.5, fontWeight: 600 },
+  card: {
+    display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 11px', marginBottom: 8,
+    borderRadius: 10, background: 'var(--dsw-alias-bg-layer-1)',
+    border: '1px solid var(--dsw-alias-border-l1)',
+  },
+  cardHead: { display: 'flex', alignItems: 'center', gap: 8 },
+  cardLabel: { fontSize: 11, fontWeight: 600, color: 'var(--dsw-alias-label-tertiary)', flex: 1 },
+  field: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 },
+  fieldLabel: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)' },
+  grid2: { display: 'flex', gap: 8 },
+  half: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 },
+  footer: {
+    flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+    borderTop: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-base)',
+  },
+  status: { flex: 1, minWidth: 0, fontSize: 11.5, color: 'var(--dsw-alias-label-tertiary)', lineHeight: 1.4 },
 }
 
 /** Local wall-clock label for a ledger entry. */
@@ -173,12 +206,40 @@ function clockOf(at: string): string {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function Field(props: { label: string; value: string; onChange: (next: string) => void }): ReactNode {
+/** One labelled text field. */
+function Field(props: { label: string; value: string; placeholder?: string; onChange: (next: string) => void }): ReactNode {
   return (
     <label style={S.field}>
-      <span style={S.label}>{props.label}</span>
-      <input style={S.input} value={props.value} onChange={(event) => props.onChange(event.target.value)} />
+      <span style={S.fieldLabel}>{props.label}</span>
+      <Input
+        value={props.value}
+        placeholder={props.placeholder}
+        onChange={(event) => props.onChange(event.target.value)}
+      />
     </label>
+  )
+}
+
+/** A section heading with a count and an add action. */
+function SectionHead(props: { title: string; count: number; addLabel: string; onAdd: () => void }): ReactNode {
+  return (
+    <div style={S.section}>
+      <span style={S.sectionTitle}>{props.title}</span>
+      <Pill>{String(props.count)}</Pill>
+      <span style={S.spacer} />
+      <Button variant="ghost" size="sm" icon={<IconPlusOutline16 size={16} />} onClick={props.onAdd}>
+        {props.addLabel}
+      </Button>
+    </div>
+  )
+}
+
+/** The remove control shared by every editable card. */
+function RemoveButton(props: { label: string; onClick: () => void }): ReactNode {
+  return (
+    <Tooltip label={props.label}>
+      <Button variant="ghost" size="sm" icon={<IconTrashOutline16 size={16} />} aria-label={props.label} onClick={props.onClick} />
+    </Tooltip>
   )
 }
 
@@ -196,6 +257,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
 
   const [draft, setDraft] = useState<Draft>(() => draftOf(view))
   const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState('')
 
   // Follow the authoritative projection until the player starts editing.
@@ -218,6 +280,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
       setStatus(t('noSession'))
       return
     }
+    setSaving(true)
     setStatus(t('saving'))
     void fetch(CORRECTION_PATH, {
       method: 'POST',
@@ -232,86 +295,133 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
       .catch((error: unknown) => {
         setStatus(t('saveFailed') + ': ' + String((error as { message?: string })?.message ?? error))
       })
+      .finally(() => setSaving(false))
   }
 
   return (
     <div className="dsh-rrp-world" style={S.root}>
-      <div style={S.title}>
-        <span>{t('title')}</span>
-        {dirty ? <span style={S.status}>{t('unsaved')}</span> : null}
+      <div style={S.header}>
+        <span style={S.title}>{t('title')}</span>
+        {dirty ? <Pill active>{t('unsaved')}</Pill> : null}
       </div>
-      <p style={S.hint}>{t('editHint')}</p>
 
-      <div style={S.activity}>
-        <div style={S.activityHead}>{t('activity.title')}</div>
-        {inferenceRunning !== undefined ? <div style={S.running}>{'⏳ ' + t('activity.running')}</div> : null}
-        {recentActivity.length === 0 ? <div style={S.activityEmpty}>{t('activity.none')}</div> : null}
-        {recentActivity.map((entry, index) => (
-          <div key={entry.id + ':' + entry.phase + ':' + index} style={S.activityRow}>
-            <span style={S.activityWho}>{t('actor.' + entry.actor)}</span>
-            <span style={S.activityWhat}>
-              {t('phase.' + entry.phase)}
-              {entry.detail !== undefined && entry.detail.length > 0 ? ' · ' + entry.detail : ''}
-            </span>
-            <span style={S.activityWhen}>{clockOf(entry.at)}</span>
+      <div style={S.scroll}>
+        <p style={S.hint}>{t('editHint')}</p>
+
+        {isEmptyDraft(draft) ? <div style={S.empty}>{t('world.missing')}</div> : null}
+
+        <div style={S.activity}>
+          <div style={S.activityHead}>{t('activity.title')}</div>
+          {inferenceRunning !== undefined ? (
+            <div style={S.running}>
+              <StateDot state="ongoing" />
+              <span>{t('activity.running')}</span>
+            </div>
+          ) : null}
+          {recentActivity.length === 0 ? <div style={S.activityEmpty}>{t('activity.none')}</div> : null}
+          {recentActivity.map((entry, index) => (
+            <div key={entry.id + ':' + entry.phase + ':' + index} style={S.activityRow}>
+              <span style={S.activityWho}>{t('actor.' + entry.actor)}</span>
+              <span style={S.activityWhat}>
+                {t('phase.' + entry.phase)}
+                {entry.detail !== undefined && entry.detail.length > 0 ? ' · ' + entry.detail : ''}
+              </span>
+              <span style={S.activityWhen}>{clockOf(entry.at)}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={S.section}><span style={S.sectionTitle}>{t('section.scene')}</span></div>
+        <div style={S.card}>
+          <Field label={t('scene.location')} value={draft.scene.location} onChange={(v) => mutate((d) => { d.scene.location = v })} />
+          <div style={S.grid2}>
+            <div style={S.half}>
+              <Field label={t('scene.time')} value={draft.scene.time} onChange={(v) => mutate((d) => { d.scene.time = v })} />
+            </div>
+            <div style={S.half}>
+              <Field label={t('scene.weather')} value={draft.scene.weather} onChange={(v) => mutate((d) => { d.scene.weather = v })} />
+            </div>
+          </div>
+        </div>
+
+        <SectionHead
+          title={t('section.characters')}
+          count={draft.characters.length}
+          addLabel={t('add')}
+          onAdd={() => mutate((d) => { d.characters.push({ name: '', affinity: '', mood: '', appearance: '', condition: '' }) })}
+        />
+        {draft.characters.map((row, index) => (
+          <div key={index} style={S.card}>
+            <div style={S.cardHead}>
+              <span style={S.cardLabel}>{t('section.characters') + ' ' + String(index + 1)}</span>
+              <RemoveButton label={t('remove')} onClick={() => mutate((d) => { d.characters.splice(index, 1) })} />
+            </div>
+            <Field label={t('name')} value={row.name} onChange={(v) => mutate((d) => { d.characters[index].name = v })} />
+            <div style={S.grid2}>
+              <div style={S.half}>
+                <Field label={t('field.affinity')} value={row.affinity} onChange={(v) => mutate((d) => { d.characters[index].affinity = v })} />
+              </div>
+              <div style={S.half}>
+                <Field label={t('field.mood')} value={row.mood} onChange={(v) => mutate((d) => { d.characters[index].mood = v })} />
+              </div>
+            </div>
+            <Field label={t('field.appearance')} value={row.appearance} onChange={(v) => mutate((d) => { d.characters[index].appearance = v })} />
+            <Field label={t('field.condition')} value={row.condition} onChange={(v) => mutate((d) => { d.characters[index].condition = v })} />
+          </div>
+        ))}
+
+        <SectionHead
+          title={t('section.inventory')}
+          count={draft.inventory.length}
+          addLabel={t('add')}
+          onAdd={() => mutate((d) => { d.inventory.push({ name: '', quantity: '', note: '' }) })}
+        />
+        {draft.inventory.map((row, index) => (
+          <div key={index} style={S.card}>
+            <div style={S.cardHead}>
+              <span style={S.cardLabel}>{t('section.inventory') + ' ' + String(index + 1)}</span>
+              <RemoveButton label={t('remove')} onClick={() => mutate((d) => { d.inventory.splice(index, 1) })} />
+            </div>
+            <Field label={t('name')} value={row.name} onChange={(v) => mutate((d) => { d.inventory[index].name = v })} />
+            <div style={S.grid2}>
+              <div style={S.half}>
+                <Field label={t('field.quantity')} value={row.quantity} onChange={(v) => mutate((d) => { d.inventory[index].quantity = v })} />
+              </div>
+              <div style={S.half}>
+                <Field label={t('field.note')} value={row.note} onChange={(v) => mutate((d) => { d.inventory[index].note = v })} />
+              </div>
+            </div>
+          </div>
+        ))}
+
+        <SectionHead
+          title={t('section.flags')}
+          count={draft.flags.length}
+          addLabel={t('add')}
+          onAdd={() => mutate((d) => { d.flags.push({ key: '', value: '' }) })}
+        />
+        {draft.flags.map((row, index) => (
+          <div key={index} style={S.card}>
+            <div style={S.cardHead}>
+              <span style={S.cardLabel}>{t('section.flags') + ' ' + String(index + 1)}</span>
+              <RemoveButton label={t('remove')} onClick={() => mutate((d) => { d.flags.splice(index, 1) })} />
+            </div>
+            <Field label={t('flag.key')} value={row.key} onChange={(v) => mutate((d) => { d.flags[index].key = v })} />
+            <Field label={t('flag.value')} value={row.value} onChange={(v) => mutate((d) => { d.flags[index].value = v })} />
           </div>
         ))}
       </div>
 
-      <h4 style={S.heading}>{t('section.scene')}</h4>
-      <Field label={t('scene.location')} value={draft.scene.location} onChange={(v) => mutate((d) => { d.scene.location = v })} />
-      <Field label={t('scene.time')} value={draft.scene.time} onChange={(v) => mutate((d) => { d.scene.time = v })} />
-      <Field label={t('scene.weather')} value={draft.scene.weather} onChange={(v) => mutate((d) => { d.scene.weather = v })} />
-
-      <h4 style={S.heading}>
-        <span>{t('section.characters')}</span>
-        <button type="button" style={S.smallButton} onClick={() => mutate((d) => { d.characters.push({ name: '', affinity: '', mood: '', appearance: '', condition: '' }) })}>{t('add')}</button>
-      </h4>
-      {draft.characters.map((row, index) => (
-        <div key={index} style={S.card}>
-          <Field label={t('name')} value={row.name} onChange={(v) => mutate((d) => { d.characters[index].name = v })} />
-          <Field label={t('field.affinity')} value={row.affinity} onChange={(v) => mutate((d) => { d.characters[index].affinity = v })} />
-          <Field label={t('field.mood')} value={row.mood} onChange={(v) => mutate((d) => { d.characters[index].mood = v })} />
-          <Field label={t('field.appearance')} value={row.appearance} onChange={(v) => mutate((d) => { d.characters[index].appearance = v })} />
-          <Field label={t('field.condition')} value={row.condition} onChange={(v) => mutate((d) => { d.characters[index].condition = v })} />
-          <div style={S.rowActions}>
-            <button type="button" style={S.smallButton} onClick={() => mutate((d) => { d.characters.splice(index, 1) })}>{t('remove')}</button>
-          </div>
-        </div>
-      ))}
-
-      <h4 style={S.heading}>
-        <span>{t('section.inventory')}</span>
-        <button type="button" style={S.smallButton} onClick={() => mutate((d) => { d.inventory.push({ name: '', quantity: '', note: '' }) })}>{t('add')}</button>
-      </h4>
-      {draft.inventory.map((row, index) => (
-        <div key={index} style={S.card}>
-          <Field label={t('name')} value={row.name} onChange={(v) => mutate((d) => { d.inventory[index].name = v })} />
-          <Field label={t('field.quantity')} value={row.quantity} onChange={(v) => mutate((d) => { d.inventory[index].quantity = v })} />
-          <Field label={t('field.note')} value={row.note} onChange={(v) => mutate((d) => { d.inventory[index].note = v })} />
-          <div style={S.rowActions}>
-            <button type="button" style={S.smallButton} onClick={() => mutate((d) => { d.inventory.splice(index, 1) })}>{t('remove')}</button>
-          </div>
-        </div>
-      ))}
-
-      <h4 style={S.heading}>
-        <span>{t('section.flags')}</span>
-        <button type="button" style={S.smallButton} onClick={() => mutate((d) => { d.flags.push({ key: '', value: '' }) })}>{t('add')}</button>
-      </h4>
-      {draft.flags.map((row, index) => (
-        <div key={index} style={S.card}>
-          <Field label={t('flag.key')} value={row.key} onChange={(v) => mutate((d) => { d.flags[index].key = v })} />
-          <Field label={t('flag.value')} value={row.value} onChange={(v) => mutate((d) => { d.flags[index].value = v })} />
-          <div style={S.rowActions}>
-            <button type="button" style={S.smallButton} onClick={() => mutate((d) => { d.flags.splice(index, 1) })}>{t('remove')}</button>
-          </div>
-        </div>
-      ))}
-
-      <div style={S.actions}>
-        <button type="button" onClick={save} disabled={sessionId === undefined}>{t('save')}</button>
+      <div style={S.footer}>
         <span style={S.status}>{status}</span>
+        <Button
+          variant="primary"
+          icon={saving ? <IconLoadingOutline16 size={16} /> : undefined}
+          disabled={sessionId === undefined || saving}
+          onClick={save}
+        >
+          {saving ? t('saving') : t('save')}
+        </Button>
       </div>
     </div>
   )

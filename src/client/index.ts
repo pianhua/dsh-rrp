@@ -7,7 +7,6 @@
 import type { RrpClientContext } from './context-types.ts'
 import { registerGallery } from './gallery-panel.tsx'
 import { registerStoryView } from './story-view.tsx'
-import { registerRpTheme } from './theme.ts'
 import { registerWorldStateTab } from './world-state-tab.tsx'
 
 /** Bundle id. The client-modules compose keys on the package name dsh-rrp. */
@@ -20,7 +19,6 @@ export const inject = [
   'slots',
   'sidebarRightTabs',
   'locale',
-  'theme',
   'sessions',
   'remote',
   'remote.agentPresets',
@@ -61,6 +59,7 @@ const ZH: Record<string, string> = {
   'scene.time': '时间',
   'scene.weather': '天气',
   noSession: '当前没有会话',
+  'world.missing': '尚未建立世界状态，先开一局或手动添加。',
   'activity.title': '最近变更',
   'activity.none': '尚无变更记录',
   'activity.running': '纪事官正在推演…',
@@ -76,6 +75,8 @@ const ZH: Record<string, string> = {
   'gallery.loading': '加载中…',
   'gallery.empty': '没有找到卡包',
   'gallery.pick': '从左侧选择一张卡包，查看它的开场白与设定',
+  'gallery.search': '搜索卡包…',
+  'gallery.nomatch': '没有匹配的卡包',
   'gallery.player': '玩家角色',
   'gallery.skills': '世界知识',
   'gallery.opening': '开场白',
@@ -116,6 +117,7 @@ const EN: Record<string, string> = {
   'scene.time': 'Time',
   'scene.weather': 'Weather',
   noSession: 'No active session',
+  'world.missing': 'No world state yet — start a story or add entries manually.',
   'activity.title': 'Recent changes',
   'activity.none': 'No changes recorded yet',
   'activity.running': 'Chronicler is inferring…',
@@ -131,6 +133,8 @@ const EN: Record<string, string> = {
   'gallery.loading': 'Loading…',
   'gallery.empty': 'No cards found',
   'gallery.pick': 'Pick a card on the left to preview its opening and setting',
+  'gallery.search': 'Search cards…',
+  'gallery.nomatch': 'No matching cards',
   'gallery.player': 'Player',
   'gallery.skills': 'World knowledge',
   'gallery.opening': 'Opening',
@@ -161,7 +165,6 @@ export function apply(ctx: RrpClientContext): void {
     }
   }, 'dsh-rrp: locale dictionaries')
 
-  registerRpTheme(ctx)
   registerWorldStateTab(ctx)
   registerGallery(ctx)
   registerStoryView(ctx)

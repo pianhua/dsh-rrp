@@ -5,7 +5,6 @@ import * as client from '../src/client/index.ts'
 function fakeContext() {
   const types: Array<{ id?: string; kind?: string }> = []
   const bodies: Array<{ name?: string; key?: string; id?: string }> = []
-  const overrides: Array<{ source: string; tokens: Record<string, unknown> }> = []
   const ctx = {
     effect(fn: () => (() => void) | void) {
       return fn()
@@ -33,27 +32,17 @@ function fakeContext() {
         return (key: string) => key
       },
     },
-    theme: {
-      overrideTokens(source: string, tokens: Record<string, unknown>) {
-        overrides.push({ source, tokens })
-        return () => {}
-      },
-    },
   }
-  return { ctx, types, bodies, overrides }
+  return { ctx, types, bodies }
 }
 
 describe('dsh-rrp client half', () => {
   it('declares the required client services', () => {
-    expect(client.inject).toEqual(expect.arrayContaining(['slots', 'sidebarRightTabs', 'locale', 'theme', 'sessions', 'remote', 'remote.agentPresets', 'layout']))
+    expect(client.inject).toEqual(expect.arrayContaining(['slots', 'sidebarRightTabs', 'locale', 'sessions', 'remote', 'remote.agentPresets', 'layout']))
   })
 
-  it('applies the RP reading theme as a reversible override layer', () => {
-    const { ctx, overrides } = fakeContext()
-    client.apply(ctx as never)
-    expect(overrides).toHaveLength(1)
-    expect(overrides[0]?.source).toBe('dsh-rrp')
-    expect(Object.keys(overrides[0]?.tokens ?? {})).toContain('--dsw-font-markdown-base-font-family')
+  it('does not override the host theme (native light/dark only)', () => {
+    expect(client.inject).not.toContain('theme')
   })
 
   it('registers the WorldState tab type and its keyed body', () => {

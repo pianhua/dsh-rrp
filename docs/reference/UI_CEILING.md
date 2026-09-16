@@ -13,7 +13,8 @@
 
 | 能力 | 宿主接缝 | 能做到什么 |
 | :--- | :--- | :--- |
-| **全局主题** | `ctx.theme`（`@deepseek-ai/dsh-client-ui-theme`）· `register(ThemeDefinition)` / `overrideTokens(source,tokens)` / `setTheme(id)` | 覆盖 `--dsw-alias-*` token（明/暗两套）。改配色、衬线字体、行距、圆角、背景——**整站观感 RP 化** |
+| **全局主题** | `ctx.theme`（`@deepseek-ai/dsh-client-ui-theme`）· `register(ThemeDefinition)` / `overrideTokens(source,tokens)` / `setTheme(id)` | 覆盖 `--dsw-alias-*` token（明/暗两套）。能力保留，但**本项目当前不用**：所有者否决暖纸主题，明确「暂时用 DSH 原版亮暗」（见 §2 P0） |
+| **复用宿主 UI 原子** | 平台模块 `@deepseek-ai/dsh-client-ui-primitives`（浏览器 bundle 可 `require`，见 [HOST_SEAMS.md](HOST_SEAMS.md) §A4） | 直接用 `Button/Pill/Input/StateDot/Tooltip/Modal/Icon*` 等**宿主同款原子**——自动跟随明暗主题、自动匹配圆角/间距/字体，无需自建样式栈 |
 | **自定义会话视图** | `conversation.view`（list）+ `ctx.uiConversation.views.register({target,create})` | 新增一个视图 Tab（和 Chat / Trajectory 并列），用**自己的渲染目标**把整段会话按小说排版呈现 |
 | **替换正文节点** | `conversation.chat.node`（keyed，按 kind 注册，`priority` 是 shadowing rank） | 以更高 priority 注册同 key（如 `assistant-step`）**阴影掉宿主渲染**，不动宿主代码就换正文气泡/排版 |
 | **接管输入区** | `conversation.composer`（chain） | 把输入框换成 RP 输入（说话/行动/继续/导演指令等） |
@@ -49,13 +50,14 @@
 
 | 优先级 | 动作 | 用到的接缝 | 效果 |
 | :---: | :--- | :--- | :--- |
-| **P0** | 注册 `rrp` 主题（暖色/衬线/大行距/低对比边框） | `ctx.theme.register` + `overrideTokens` | 全局观感立刻从「编码工具」变「阅读器」 |
+| **P0** | ~~注册 `rrp` 暖纸主题~~ **已撤回** | `ctx.theme.overrideTokens` | 实现并实测过（暖纸 `#f6f1e7` + 衬线 + 1.95 行高），**所有者否决其观感**；改回「DSH 原版亮暗」。能力仍是官方可逆接缝，日后想做可再启用 |
 | **P1** | 正文节点 shadow：`conversation.chat.node` 的 `assistant-step` | keyed + 高 priority | ⏸️ **评估后不做**：等于重新实现宿主的 Assistant 渲染器，做错会让聊天直接不显示；主题已覆盖字体/行高/配色，收益低风险高。改走 P3 增量视图 |
 | **P2** | 卡片展厅 + 开卡新会话 | `main` + `sidebar.panellist` + `ctx.sessions`/`ctx.remote` | 从卡包开局（当前正在做） |
 | **P3** | 「沉浸」视图 Tab（全屏、无干扰、正文+右栏状态） | `conversation.view` + 订阅 `chat` 目标快照 | ✅ **已实现** `src/client/story-view.tsx`（纯增量，不替换宿主渲染） |
 | **P4** | 输入区接管（说话/行动/继续/OOC/导演） | `conversation.composer`（chain） | 不再是「给 coding agent 派活」的输入框 |
 
-> 建议按 P0 → P2 → P1/P3 推进：P0 改动最小、收益最直观；P2 是功能闭环；P1/P3 是观感深化。
+> **观感路线已改**：不再整站换肤，而是**用宿主原子把插件自己的面板（卡片展厅 / 世界状态 / 沉浸视图）做精致**，
+> 与宿主亮暗主题零冲突。见提交 `feat(ui): ...` 与 [MANUAL_TEST.md](MANUAL_TEST.md) §8。
 
 ---
 
@@ -63,4 +65,6 @@
 
 - **能做到**：换主题配色与排版、加自定义视图 Tab、替换正文渲染、接管输入区、加主区面板与全屏浮层、加右栏 Tab。
 - **做不到/受限**：换掉三栏骨架、加全局顶栏、任意注入全局 CSS。
-- **因此**：现有 UI 不适配 RP **不是插件能力不够**，而是我们还没用这些接缝去改；从「注册一个 RP 主题」开始，就能立刻见效。
+- **因此**：现有 UI 不适配 RP **不是插件能力不够**，而是我们还没用这些接缝去改。
+- **实践结论（2026-09-17）**：整站换肤（P0 暖纸）观感被所有者否决；更稳的路线是**宿主主题不动**，
+  用平台原子库 `@deepseek-ai/dsh-client-ui-primitives` 把插件面板做精致（自动明暗一致），再配合 P3 沉浸视图。
