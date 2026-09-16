@@ -9,9 +9,9 @@
 
 ## 当前状态
 
-**阶段 5.5：核心 RP 环路闭环（已完成）** —— 下一步进入阶段 7（Summarizer 大局编年）。
+**阶段 7：Summarizer 大局编年（已完成）** —— 下一步进入阶段 8（Session.fork 世界线重放 + dsh-synapse 协同）。
 
-核心环路已跑通：物化原生 RP 模式「角色扮演 · 执笔」→ Author 每步只读消费最新 WorldState → 每轮正文后纪事官异步推演完整状态 → 玩家可在原生右侧栏就地矫正（无锁 Last-Write-Wins）→ 下一轮 Author 以最新切面起笔；世界设定以 Skills 按需调取。开发与验证流程见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)，阶段进度见 [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md)。
+核心环路已跑通：物化原生 RP 模式「角色扮演 · 执笔」→ Author 每步只读消费最新 WorldState → 每轮正文后纪事官异步推演完整状态 → 玩家可在原生右侧栏就地矫正（无锁 Last-Write-Wins）→ 世界设定以 Skills 按需调取 → 每 8 回合编年官提炼四维大局观防偏航（`/summary` 可关）。开发与验证流程见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)，阶段进度见 [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md)。
 
 | 项 | 状态 |
 | :--- | :--- |
@@ -20,7 +20,7 @@
 | 协作与红线准则 | ✅ [`AGENTS.md`](AGENTS.md) |
 | 当前任务指针 | ✅ [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md) |
 | 开发环境流程 | ✅ [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
-| 生产代码 | ✅ 阶段 1–5.5（RP 模式 + 投影看板 + 纪事官 + Skills + 闭环矫正） |
+| 生产代码 | ✅ 阶段 1–7（RP 模式 + 投影看板 + 纪事官 + Skills + 闭环矫正 + 大局编年） |
 
 ---
 

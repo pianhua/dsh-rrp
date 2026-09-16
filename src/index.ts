@@ -12,7 +12,9 @@ import { registerAuthorContext } from './author-context.ts'
 import { registerChronicler } from './chronicler.ts'
 import { registerCorrectionRoute } from './correction.ts'
 import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
+import { summaryProjection } from './projection/summary.ts'
 import { worldStateProjection } from './projection/world-state.ts'
+import { registerSummarizer, registerSummaryCommand } from './summarizer.ts'
 
 /** Loader row id. Keep in sync with cordis.patch.yml. */
 export const name = 'dsh-rrp'
@@ -40,7 +42,7 @@ interface SkillsService {
 
 /** Structural face of the session-projection registry. */
 interface SessionProjectionsService {
-  register(definition: typeof worldStateProjection): () => void
+  register(definition: typeof worldStateProjection | typeof summaryProjection): () => void
 }
 
 /** Plugin body. Every registration is a reversible effect. */
@@ -67,6 +69,8 @@ export function apply(ctx: Context): void {
     if (registry === undefined) return
     registry.register(worldStateProjection)
     console.log(`${TAG} WorldState projection registered (key '${worldStateProjection.key}')`)
+    registry.register(summaryProjection)
+    console.log(`${TAG} macro-summary projection registered (key '${summaryProjection.key}')`)
   })
 
   // Roster probe: deferred until agent-presets activates, disposed with this fiber.
@@ -87,6 +91,14 @@ export function apply(ctx: Context): void {
   // Player correction: the panel's write path into the session log (D6).
   ctx.inject(['webServer', 'sessions'], (scoped: Context) => {
     registerCorrectionRoute(scoped)
+  })
+
+  // Summarizer: macro compass every N turns; the /summary command toggles it.
+  ctx.inject(['jobs', 'llm', 'agents', 'sessionProjections'], (scoped: Context) => {
+    registerSummarizer(scoped, PRESET_ID)
+  })
+  ctx.inject(['commands'], (scoped: Context) => {
+    registerSummaryCommand(scoped)
   })
 }
 

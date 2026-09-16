@@ -8,6 +8,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
+import { SUMMARY_KEY, renderMacroSummary, type MacroSummary } from './macro-summary.ts'
 import { WORLD_STATE_KEY, renderWorldState, type WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
@@ -62,8 +63,10 @@ export function registerAuthorContext(ctx: Context, presetId: string): void {
           if (projections.stateOf(session, 'agentPreset') !== presetId) return decision
           const state = projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined
           if (state === undefined) return decision
+          const summary = projections.stateOf(session, SUMMARY_KEY) as MacroSummary | null | undefined
 
           const text = renderWorldState(state)
+            + (summary !== null && summary !== undefined ? '\n\n' + renderMacroSummary(summary) : '')
           if (injected.get(session.id) === text) return decision
           injected.set(session.id, text)
 

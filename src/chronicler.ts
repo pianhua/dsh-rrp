@@ -188,8 +188,9 @@ async function collectText(stream: AsyncIterable<StreamChunkLike>): Promise<stri
   return text
 }
 
-/** Render the session's user/assistant text blocks, tail-biased and capped. */
-function transcriptOf(session: SessionLike): string {
+/** Render the session's user/assistant text blocks, tail-biased and capped.
+ * Exported so the Summarizer consumes the same rendering. */
+export function transcriptOf(session: SessionLike): string {
   const parts: string[] = []
   for (const event of session.snapshotEvents()) {
     if (event.type !== 'user/message' && event.type !== 'assistant/message') continue
