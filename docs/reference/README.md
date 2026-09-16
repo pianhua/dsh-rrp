@@ -24,6 +24,7 @@
 | [`COMMUNITY_PLUGINS.md`](COMMUNITY_PLUGINS.md) | 社区成熟插件长什么样？ | 建工程骨架前 |
 | [`SKILLS.md`](SKILLS.md) | Skills 是什么？我们如何用它替代 Lorebook？ | 做知识体系前 |
 | [`WORLDLINES.md`](WORLDLINES.md) | 为什么 fork 后状态不穿帮？与 synapse 的边界 | 涉及分支/重放时 |
+| [`MEMORY.md`](MEMORY.md) | 记忆放哪？外部记忆插件如何接入？我们绝不做什么 | 涉及记忆/检索时 |
 | [`dsh-plugin-development-research.md`](dsh-plugin-development-research.md) | DSH 插件开发的完整技术机制 | 需要宿主细节时查阅 |
 
 ---

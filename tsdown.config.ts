@@ -36,7 +36,7 @@ const CLIENT_EXTERNALS = [
 
 export default defineConfig([
   {
-    entry: { index: 'src/index.ts' },
+    entry: { index: 'src/index.ts', contracts: 'src/contracts.ts' },
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',

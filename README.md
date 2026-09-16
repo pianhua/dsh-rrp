@@ -9,7 +9,7 @@
 
 ## 当前状态
 
-**阶段 8：世界线 fork 重放（已完成）** —— 下一步进入阶段 9（外部记忆扩展接入）。
+**阶段 9：外部记忆扩展接入（已完成）** —— 全部可自动推进的阶段已完成；**唯一剩余阶段 6（卡包格式 + 卡片展厅）按 D13 等待所有者拍板格式**。
 
 核心环路已跑通：物化原生 RP 模式「角色扮演 · 执笔」→ Author 每步只读消费最新 WorldState → 每轮正文后纪事官异步推演完整状态 → 玩家可在原生右侧栏就地矫正（无锁 Last-Write-Wins）→ 世界设定以 Skills 按需调取 → 每 8 回合编年官提炼四维大局观防偏航（`/summary` 可关）。开发与验证流程见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)，阶段进度见 [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md)。
 
@@ -20,7 +20,7 @@
 | 协作与红线准则 | ✅ [`AGENTS.md`](AGENTS.md) |
 | 当前任务指针 | ✅ [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md) |
 | 开发环境流程 | ✅ [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
-| 生产代码 | ✅ 阶段 1–8（RP 模式 + 投影看板 + 纪事官 + Skills + 闭环矫正 + 大局编年 + fork 重放） |
+| 生产代码 | ✅ 阶段 0–5、5.5、7–9（待阶段 6 卡包格式定稿） |
 
 ---
 
@@ -75,7 +75,8 @@ DeepSeek Harness 宿主
 | 3 | [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) | 宿主能力映射 + 反重复造轮子红线 |
 | 4 | [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md) | 当前唯一切片 |
 
-工程与开发环境：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) —— 构建、`rp-dev` 开发 profile、真实宿主验证流程。
+工程与开发环境：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) —— 构建、`rp-dev` 开发 profile、真实宿主验证流程。  
+扩展契约：`dsh-rrp/contracts`（外部记忆/分析插件读取 WorldState 与大局编年）；边界见 [`docs/reference/MEMORY.md`](docs/reference/MEMORY.md)。
 
 参考资料层（回答「为什么」，防漂移）：[`docs/reference/README.md`](docs/reference/README.md)
 
