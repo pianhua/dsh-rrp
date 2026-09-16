@@ -93,6 +93,18 @@ export interface RrpRemoteService {
   }
 }
 
+/** The target-neutral conversation assembly face (subset of uiConversation). */
+export interface RrpUiConversationService {
+  /** Resolve the per-session conversation binding. */
+  binding(sessionId: string): {
+    /** Resolve one registered view target's observable snapshot. */
+    target(name: string): {
+      getSnapshot(): unknown
+      subscribe(listener: () => void): () => void
+    }
+  }
+}
+
 /** Layout viewing-state face (subset of dsh-client-ui-layout). */
 export interface RrpLayoutService {
   /** Select a registered main panel, or null to return to the conversation. */
@@ -112,4 +124,6 @@ export type RrpClientContext = CordisContext & {
   remote?: RrpRemoteService
   /** Present whenever the layout shell is loaded. */
   layout?: RrpLayoutService
+  /** Present whenever the conversation assembly core is loaded. */
+  uiConversation?: RrpUiConversationService
 }

@@ -6,6 +6,7 @@
  */
 import type { RrpClientContext } from './context-types.ts'
 import { registerGallery } from './gallery-panel.tsx'
+import { registerStoryView } from './story-view.tsx'
 import { registerRpTheme } from './theme.ts'
 import { registerWorldStateTab } from './world-state-tab.tsx'
 
@@ -24,6 +25,7 @@ export const inject = [
   'remote',
   'remote.agentPresets',
   'layout',
+  'uiConversation',
 ]
 
 const TAG = '[dsh-rrp]'
@@ -82,6 +84,8 @@ const ZH: Record<string, string> = {
   'gallery.started': '已开始，切回对话',
   'gallery.failed': '操作失败',
   'gallery.unavailable': '会话服务不可用',
+  'view.story': '沉浸',
+  'story.empty': '这一局还没有正文。回到「对话」标签开始游玩，或先输入一句行动。',
 }
 
 const EN: Record<string, string> = {
@@ -135,6 +139,8 @@ const EN: Record<string, string> = {
   'gallery.started': 'Started — switch back to the chat',
   'gallery.failed': 'Failed',
   'gallery.unavailable': 'Session service unavailable',
+  'view.story': 'Immersion',
+  'story.empty': 'No prose yet. Switch back to Chat to play, or send an action first.',
 }
 
 /** Client plugin body. Registers only reversible effects. */
@@ -158,4 +164,5 @@ export function apply(ctx: RrpClientContext): void {
   registerRpTheme(ctx)
   registerWorldStateTab(ctx)
   registerGallery(ctx)
+  registerStoryView(ctx)
 }

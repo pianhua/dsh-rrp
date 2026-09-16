@@ -69,6 +69,14 @@ describe('dsh-rrp client half', () => {
     expect(body?.key).toBe('dsh-rrp/world-state')
   })
 
+  it('registers the immersive story view tab', () => {
+    const { ctx, bodies } = fakeContext()
+    client.apply(ctx as never)
+    const view = bodies.find((entry) => entry.name === 'conversation.view')
+    expect(view).toBeDefined()
+    expect(view?.id).toBe('dsh-rrp/story')
+  })
+
   it('registers the card gallery as a main panel plus a matching nav entry', () => {
     const { ctx, bodies } = fakeContext()
     client.apply(ctx as never)
