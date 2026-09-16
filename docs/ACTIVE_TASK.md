@@ -47,9 +47,13 @@
 
 唯一 **P1 = WorldState 事件累积**（flags 3→32，注入基线随轮增长），已修：提示词改为「当前切面」语义 + `pruneWorldState` 宿主硬上限（提交 `4eaab20`）。
 
-**续修（上下文副本累积）**：进一步发现宿主会把每条 pre-step 注入以 `surfaceOp:'append'` 落盘，导致每轮追加一份过时状态。
-改为**取代式持久发布**（`src/context-publisher.ts`）：卡包发布一次、事实变化时用 `surfaceOp:{op:'replace'}` 就地取代；带三级兜底（replace 被拒→append）与重启认领。
-**真机验证 PASS**（Chrome Agent，提交 `ea2993a`）：`ON SURFACE: card=1 facts=1`、`replace=7`、无拒绝日志；详见 [CONTEXT_PUBLISHER_VERIFY.md](reference/CONTEXT_PUBLISHER_VERIFY.md)。
+**续修（上下文发布，经历一次纠错）**：
+
+1. 发现宿主把每条 pre-step 注入以 `surfaceOp:'append'` 落盘 → 每轮追加一份过时状态；
+2. 一度改为 **replace 式发布**（surface 恒定 1 份），但实测**摧毁前缀 KV 缓存**（命中率 90%→14%，`cacheRead` 卡死 1024）——replace 会搬动消息位置，破坏"上轮请求是下轮请求前缀"；
+3. **最终定案：append + 内容去重**（`src/context-publisher.ts`）——卡包只注入一次、事实仅在变化时追加；接受上下文增长（旧副本**被缓存**，交给宿主 compaction），换取缓存连续性。
+
+**真机复验 PASS**（Chrome Agent，提交 `6610e4a`）：命中率 40%→43%→74%→**82%→88%→80%**，`cacheRead` 持续增长（1024→6144），`replace=0`，`card IN LOG=1`。详见 [CONTEXT_PUBLISHER_VERIFY.md](reference/CONTEXT_PUBLISHER_VERIFY.md) §10。
 
 ---
 

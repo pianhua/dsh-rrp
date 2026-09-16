@@ -194,3 +194,21 @@ node scripts/inspect-context.mjs --usage --latest
 
 > 注意：本方案**不追求** surface 上只有 1 份状态；那是 replace 的诱人陷阱。
 > 我们追求的是**缓存连续 + 卡包不重复**，上下文增长交给宿主 compaction。
+
+### 10.5 复验结果（2026-09-16 · Chrome 测试 Agent · 提交 `6610e4a`）：**PASS**
+
+会话 `session-6ac242b2…`，5 轮：
+
+```text
+turn | cacheMissIn | cacheRead | prompt | hit%
+   1 |        1553 |      1024 |   2577 |   40%
+   1 |        2704 |      2048 |   4752 |   43%
+   2 |        1444 |      4096 |   5540 |   74%
+   3 |        1124 |      5120 |   6244 |   82%   <- 达成 ≥80%
+   4 |         833 |      6144 |   6977 |   88%
+   5 |        1510 |      6144 |   7654 |   80%
+```
+
+- `replace-shaped context events = 0`（append 定案）；
+- `card IN LOG = 1`（不随轮次增长）、`facts IN LOG = 6`（append 预期）；
+- Console 0 红字；第三人称 / 不代打 / 不剧透。
