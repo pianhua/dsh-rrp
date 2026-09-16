@@ -33,10 +33,11 @@ function fakeSession(id: string, seed: Array<{ seq?: number; type?: string; data
   return { session, appended }
 }
 
+// user/message data IS the UserMessage (SessionEventMap['user/message'] = UserMessage).
 const owned = (seq: number, text: string) => ({
   seq,
   type: 'user/message',
-  data: { message: { source: { kind: 'plugin', plugin: 'dsh-rrp' }, content: [{ type: 'text', text }] } },
+  data: { id: 'm' + seq, role: 'user', source: { kind: 'plugin', plugin: 'dsh-rrp' }, content: [{ type: 'text', text }] },
 })
 
 describe('durable context publisher', () => {

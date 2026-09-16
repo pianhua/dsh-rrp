@@ -60,10 +60,14 @@ function seqOf(appended: unknown): number | undefined {
   return typeof seq === 'number' ? seq : undefined
 }
 
-/** Flatten a logged message event's text blocks. */
+/**
+ * Flatten a logged event's text blocks. \`user/message\` carries the
+ * UserMessage DIRECTLY as its data (\`SessionEventMap['user/message'] = UserMessage\`),
+ * unlike \`assistant/message\`, which wraps it under \`message\`. Handle both.
+ */
 function eventText(event: SessionEventLike): string {
-  const source = event.data as { message?: { content?: unknown } } | undefined
-  const content = source?.message?.content
+  const data = event.data as { content?: unknown; message?: { content?: unknown } } | undefined
+  const content = data?.content ?? data?.message?.content
   if (!Array.isArray(content)) return ''
   return content.map((block) => (block as { text?: unknown }).text ?? '').join('')
 }
@@ -71,8 +75,8 @@ function eventText(event: SessionEventLike): string {
 /** Whether one logged event is our own context message for a marker. */
 function isOwned(event: SessionEventLike, marker: string): boolean {
   if (event.type !== 'user/message') return false
-  const source = event.data as { message?: { source?: { plugin?: unknown } } } | undefined
-  if (source?.message?.source?.plugin !== PLUGIN) return false
+  const data = event.data as { source?: { plugin?: unknown } } | undefined
+  if (data?.source?.plugin !== PLUGIN) return false
   return eventText(event).startsWith(marker)
 }
 
