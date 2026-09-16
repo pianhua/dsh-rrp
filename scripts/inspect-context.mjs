@@ -55,8 +55,10 @@ const textOf = (event) => {
   return content.map((block) => block?.text ?? '').join('')
 }
 
-const arg = process.argv[2]
-const file = arg === undefined || arg === '--latest' ? newestSessionFile() : arg
+const argv = process.argv.slice(2)
+const usageOnly = argv.includes('--usage')
+const positional = argv.filter((value) => !value.startsWith('--'))
+const file = positional[0] ?? newestSessionFile()
 if (file === undefined) {
   console.error('no session file found')
   process.exit(2)
@@ -66,6 +68,29 @@ const events = []
 for (const line of raw.split(/\r?\n/)) {
   if (line.trim().length === 0) continue
   try { events.push(JSON.parse(line)) } catch { /* skip */ }
+}
+
+// --usage: objective per-turn KV-cache hit rate, straight from the logged usage.
+if (usageOnly) {
+  console.log('file: ' + file)
+  console.log('')
+  console.log('turn | cacheMissIn | cacheRead | prompt | hit%')
+  for (const event of events) {
+    if (event.type !== 'assistant/message') continue
+    const usage = event.data?.usage
+    if (usage === undefined || typeof usage.inputTokens !== 'number') continue
+    const cache = typeof usage.cacheReadTokens === 'number' ? usage.cacheReadTokens : 0
+    const prompt = usage.inputTokens + cache
+    const hit = prompt === 0 ? 0 : Math.round((cache / prompt) * 100)
+    console.log(
+      String(event.data.turn ?? '?').padStart(4) + ' | ' +
+      String(usage.inputTokens).padStart(11) + ' | ' +
+      String(cache).padStart(9) + ' | ' +
+      String(prompt).padStart(6) + ' | ' +
+      String(hit).padStart(4) + '%',
+    )
+  }
+  process.exit(0)
 }
 
 const owned = events.filter((event) => event.type === 'user/message' && /^【(当前卡包|世界状态)/.test(textOf(event)))

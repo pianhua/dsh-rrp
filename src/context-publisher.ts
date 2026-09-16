@@ -1,19 +1,16 @@
 /**
  * dsh-rrp — durable context publishing (card + facts).
  *
- * WHY: the host persists every \`agent/pre-step\` message with
- * \`surfaceOp:'append'\` (dsh-agent-loop line 1028), so a per-turn state
- * injection accumulated one stale copy per turn. This module publishes the
- * context as durable surface messages and REPLACES the previous facts message,
- * so the model-visible surface always holds exactly one current copy.
+ * WHY APPEND (not replace): provider caching is PREFIX caching, so a context
+ * message must keep its position across turns for the previous request to stay
+ * a prefix of the next. Replacing moved the message to the tail and collapsed
+ * the measured hit rate from ~90% to 27%. We therefore append and dedup by
+ * content — the session-constant card is published once, and the facts lane is
+ * published only when it actually changes. Some context growth is accepted; it
+ * is cached, and host compaction folds it later.
  *
- * DSH has no log rollback, and none is needed:
- *   - \`Session.append\` validates BEFORE \`log.push\`, so a rejected replace
- *     writes nothing; we catch it and fall back to a plain append.
- *   - A replace never deletes: the old event stays in the log, shadowed only in
- *     the ordered surface (replayable, auditable).
- *   - \`append\` forbids re-entering during publication, so the event listener
- *     defers through \`queueMicrotask\`.
+ * \`append\` forbids re-entering during publication, so the event listener
+ * defers through \`queueMicrotask\`.
  */
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
@@ -108,21 +105,17 @@ function pluginMessage(text: string): Record<string, unknown> {
  * so falling back to append is always safe.
  */
 function publishLane(session: ContextSession, retained: Retained, text: string, lane: 'card' | 'facts'): void {
-  const current = lane === 'card' ? retained.card : retained.facts
   try {
-    if (current !== undefined) {
-      try {
-        const appended = session.append('user/message', pluginMessage(text), {
-          surfaceOp: { op: 'replace', startSeq: current, endSeq: current },
-          sourceEventSeqs: [current],
-        })
-        setLane(retained, lane, seqOf(appended) ?? current, text)
-        return
-      } catch (error) {
-        console.warn(TAG + ' context replace rejected; appending instead:', error)
-        setLane(retained, lane, undefined, undefined)
-      }
-    }
+    // APPEND, never replace. This is deliberate:
+    //   Provider caching is PREFIX caching. An appended context message keeps
+    //   its position, so each request extends the previous request's token
+    //   prefix (high hit rate — measured ~90%).
+    //   A replacement REMOVES the old message and appends the new one at the
+    //   tail, moving it; the next request then diverges where the old message
+    //   used to be, and the whole suffix is recomputed (measured 27%).
+    //   Some context growth is therefore accepted; it is cached, and the host's
+    //   compaction folds it later. Cache continuity is worth far more than a
+    //   duplicate-free log.
     const appended = session.append('user/message', pluginMessage(text), { surfaceOp: 'append' })
     setLane(retained, lane, seqOf(appended), text)
   } catch (error) {

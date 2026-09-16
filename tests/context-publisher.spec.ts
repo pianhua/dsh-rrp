@@ -14,16 +14,13 @@ const projections = {
   },
 }
 
-/** A fake session recording appends; optionally rejects replace intents. */
-function fakeSession(id: string, seed: Array<{ seq?: number; type?: string; data?: unknown }> = [], rejectReplace = false) {
+/** A fake session recording appends. */
+function fakeSession(id: string, seed: Array<{ seq?: number; type?: string; data?: unknown }> = []) {
   const appended: Array<{ type: string; data: unknown; intent?: unknown }> = []
   let seq = seed.length
   const session = {
     id,
     append(type: string, data: unknown, intent?: unknown) {
-      if (rejectReplace && typeof (intent as { surfaceOp?: unknown } | undefined)?.surfaceOp === 'object') {
-        throw new Error('replace rejected')
-      }
       appended.push({ type, data, intent })
       seq += 1
       return { seq }
@@ -40,6 +37,14 @@ const owned = (seq: number, text: string) => ({
   data: { id: 'm' + seq, role: 'user', source: { kind: 'plugin', plugin: 'dsh-rrp' }, content: [{ type: 'text', text }] },
 })
 
+const localProjections = (readState: () => unknown) => ({
+  stateOf: (_session: unknown, key: string) => {
+    if (key === CARD_KEY) return CARD
+    if (key === 'rrpWorldState') return readState()
+    return undefined
+  },
+})
+
 describe('durable context publisher', () => {
   it('publishes the card once and the facts once on the first pass', () => {
     const { session, appended } = fakeSession('a1')
@@ -49,45 +54,38 @@ describe('durable context publisher', () => {
     expect((appended[1]?.intent as { surfaceOp: string }).surfaceOp).toBe('append')
   })
 
-  it('replaces the facts message when the state changes, never duplicating the card', () => {
+  it('appends the changed facts and never duplicates the constant card', () => {
     let state: unknown = STATE
-    const local = {
-      stateOf: (_session: unknown, key: string) => {
-        if (key === CARD_KEY) return CARD
-        if (key === 'rrpWorldState') return state
-        return undefined
-      },
-    }
     const { session, appended } = fakeSession('a2')
-    publishContext(session, local)
+    publishContext(session, localProjections(() => state))
     state = { ...STATE, flags: { 新事实: true } }
-    publishContext(session, local)
+    publishContext(session, localProjections(() => state))
 
-    expect(appended).toHaveLength(3) // card, facts, facts(replace)
-    const intent = appended[2]?.intent as { surfaceOp: { op: string; startSeq: number; endSeq: number }; sourceEventSeqs: number[] }
-    expect(intent.surfaceOp).toEqual({ op: 'replace', startSeq: 2, endSeq: 2 })
-    expect(intent.sourceEventSeqs).toEqual([2])
+    expect(appended).toHaveLength(3)
     const cardAppends = appended.filter((entry) => JSON.stringify(entry.data).includes('【当前卡包'))
     expect(cardAppends).toHaveLength(1)
+    const factsAppends = appended.filter((entry) => JSON.stringify(entry.data).includes('【世界状态'))
+    expect(factsAppends).toHaveLength(2)
   })
 
-  it('falls back to append when the host rejects the replace', () => {
+  it('NEVER emits a replace (cache continuity guard)', () => {
     let state: unknown = STATE
-    const local = {
-      stateOf: (_session: unknown, key: string) => {
-        if (key === CARD_KEY) return CARD
-        if (key === 'rrpWorldState') return state
-        return undefined
-      },
-    }
-    const { session, appended } = fakeSession('a3', [], true)
-    publishContext(session, local)
+    const { session, appended } = fakeSession('a7')
+    publishContext(session, localProjections(() => state))
     state = { ...STATE, flags: { 又一条: true } }
-    publishContext(session, local)
+    publishContext(session, localProjections(() => state))
+    state = { ...STATE, flags: { 再一条: true } }
+    publishContext(session, localProjections(() => state))
 
-    // card + facts appended, the rejected replace wrote nothing, fallback appended.
-    expect(appended).toHaveLength(3)
-    expect((appended[2]?.intent as { surfaceOp: string }).surfaceOp).toBe('append')
+    for (const entry of appended) {
+      expect((entry.intent as { surfaceOp: unknown }).surfaceOp).toBe('append')
+    }
+  })
+
+  it('publishes nothing when neither card nor state is present', () => {
+    const { session, appended } = fakeSession('a5')
+    publishContext(session, { stateOf: () => undefined })
+    expect(appended).toHaveLength(0)
   })
 
   it('adopts existing context after a restart instead of duplicating it', () => {
@@ -97,28 +95,21 @@ describe('durable context publisher', () => {
     expect(appended).toHaveLength(0) // fully adopted: nothing re-published
   })
 
-  it('continues replacing the adopted facts message after a restart', () => {
+  it('appends only the changed facts after a restart (no card duplicate)', () => {
     const seed = [owned(1, renderCardContext(CARD)), owned(2, renderWorldState(STATE))]
-    let state: unknown = STATE
-    const local = {
-      stateOf: (_session: unknown, key: string) => {
-        if (key === CARD_KEY) return CARD
-        if (key === 'rrpWorldState') return state
-        return undefined
-      },
-    }
     const { session, appended } = fakeSession('a6', seed)
-    state = { ...STATE, flags: { 新事实: true } }
-    publishContext(session, local)
+    const state = { ...STATE, flags: { 新事实: true } }
+    publishContext(session, localProjections(() => state))
 
     expect(appended).toHaveLength(1)
-    const intent = appended[0]?.intent as { surfaceOp: { op: string; startSeq: number; endSeq: number } }
-    expect(intent.surfaceOp).toEqual({ op: 'replace', startSeq: 2, endSeq: 2 })
+    expect((appended[0]?.intent as { surfaceOp: string }).surfaceOp).toBe('append')
+    expect(JSON.stringify(appended[0]?.data)).toContain('【世界状态')
   })
 
-  it('does nothing when neither card nor state is present', () => {
-    const { session, appended } = fakeSession('a5')
-    publishContext(session, { stateOf: () => undefined })
-    expect(appended).toHaveLength(0)
+  it('does not re-publish an unchanged facts block', () => {
+    const { session, appended } = fakeSession('a8')
+    publishContext(session, projections)
+    publishContext(session, projections)
+    expect(appended).toHaveLength(2) // card + facts only
   })
 })
