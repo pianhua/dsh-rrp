@@ -46,6 +46,15 @@ const ZH: Record<string, string> = {
   'scene.time': '时间',
   'scene.weather': '天气',
   noSession: '当前没有会话',
+  'activity.title': '最近变更',
+  'activity.none': '尚无变更记录',
+  'activity.running': '纪事官正在推演…',
+  'actor.chronicler': '纪事官',
+  'actor.summarizer': '大局编年',
+  'actor.player': '你',
+  'phase.committed': '已更新状态',
+  'phase.corrected': '已就地矫正',
+  'phase.failed': '推演失败',
 }
 
 const EN: Record<string, string> = {
@@ -76,6 +85,15 @@ const EN: Record<string, string> = {
   'scene.time': 'Time',
   'scene.weather': 'Weather',
   noSession: 'No active session',
+  'activity.title': 'Recent changes',
+  'activity.none': 'No changes recorded yet',
+  'activity.running': 'Chronicler is inferring…',
+  'actor.chronicler': 'Chronicler',
+  'actor.summarizer': 'Summarizer',
+  'actor.player': 'You',
+  'phase.committed': 'updated state',
+  'phase.corrected': 'corrected in place',
+  'phase.failed': 'inference failed',
 }
 
 /** Client plugin body. Registers only reversible effects. */

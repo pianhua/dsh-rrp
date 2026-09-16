@@ -9,6 +9,7 @@
  * authoritative projection.
  */
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { ACTIVITY_KEY, pendingActivity, type RrpActivityLog } from '../activity.ts'
 import {
   WORLD_STATE_KEY,
   type WorldState,
@@ -148,6 +149,28 @@ const S: Record<string, CSSProperties> = {
   actions: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 },
   status: { fontSize: 11, opacity: 0.75 },
   smallButton: { fontSize: 11, padding: '2px 8px' },
+  activity: {
+    border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
+    borderRadius: 8,
+    padding: '6px 8px',
+    margin: '2px 0 8px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 3,
+  },
+  activityHead: { fontSize: 11, fontWeight: 600, opacity: 0.75 },
+  activityEmpty: { fontSize: 11, opacity: 0.5 },
+  activityRow: { display: 'flex', gap: 6, fontSize: 11, lineHeight: 1.5, alignItems: 'baseline' },
+  activityWho: { flex: '0 0 auto', fontWeight: 600 },
+  activityWhat: { flex: 1, minWidth: 0, opacity: 0.85, wordBreak: 'break-word' },
+  activityWhen: { flex: '0 0 auto', opacity: 0.5 },
+  running: { fontSize: 11, opacity: 0.8 },
+}
+
+/** Local wall-clock label for a ledger entry. */
+function clockOf(at: string): string {
+  const date = new Date(at)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 function Field(props: { label: string; value: string; onChange: (next: string) => void }): ReactNode {
@@ -165,6 +188,11 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
     ? (props.useProjection(WORLD_STATE_KEY) as WorldStateView | undefined)
     : undefined
   const sessionId = props.sessionId
+  const activity = typeof props.useProjection === 'function'
+    ? (props.useProjection(ACTIVITY_KEY) as RrpActivityLog | undefined)
+    : undefined
+  const recentActivity = (activity?.entries ?? []).slice(-4).reverse()
+  const inferenceRunning = activity === undefined ? undefined : pendingActivity(activity, 'world-state')
 
   const [draft, setDraft] = useState<Draft>(() => draftOf(view))
   const [dirty, setDirty] = useState(false)
@@ -213,6 +241,22 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
         {dirty ? <span style={S.status}>{t('unsaved')}</span> : null}
       </div>
       <p style={S.hint}>{t('editHint')}</p>
+
+      <div style={S.activity}>
+        <div style={S.activityHead}>{t('activity.title')}</div>
+        {inferenceRunning !== undefined ? <div style={S.running}>{'⏳ ' + t('activity.running')}</div> : null}
+        {recentActivity.length === 0 ? <div style={S.activityEmpty}>{t('activity.none')}</div> : null}
+        {recentActivity.map((entry, index) => (
+          <div key={entry.id + ':' + entry.phase + ':' + index} style={S.activityRow}>
+            <span style={S.activityWho}>{t('actor.' + entry.actor)}</span>
+            <span style={S.activityWhat}>
+              {t('phase.' + entry.phase)}
+              {entry.detail !== undefined && entry.detail.length > 0 ? ' · ' + entry.detail : ''}
+            </span>
+            <span style={S.activityWhen}>{clockOf(entry.at)}</span>
+          </div>
+        ))}
+      </div>
 
       <h4 style={S.heading}>{t('section.scene')}</h4>
       <Field label={t('scene.location')} value={draft.scene.location} onChange={(v) => mutate((d) => { d.scene.location = v })} />

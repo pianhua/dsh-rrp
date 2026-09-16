@@ -12,6 +12,7 @@ import { registerAuthorContext } from './author-context.ts'
 import { registerChronicler } from './chronicler.ts'
 import { registerCorrectionRoute } from './correction.ts'
 import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
+import { activityProjection } from './projection/activity.ts'
 import { summaryProjection } from './projection/summary.ts'
 import { worldStateProjection } from './projection/world-state.ts'
 import { registerSummarizer, registerSummaryCommand } from './summarizer.ts'
@@ -42,7 +43,9 @@ interface SkillsService {
 
 /** Structural face of the session-projection registry. */
 interface SessionProjectionsService {
-  register(definition: typeof worldStateProjection | typeof summaryProjection): () => void
+  register(
+    definition: typeof worldStateProjection | typeof summaryProjection | typeof activityProjection,
+  ): () => void
 }
 
 /** Plugin body. Every registration is a reversible effect. */
@@ -71,6 +74,8 @@ export function apply(ctx: Context): void {
     console.log(`${TAG} WorldState projection registered (key '${worldStateProjection.key}')`)
     registry.register(summaryProjection)
     console.log(`${TAG} macro-summary projection registered (key '${summaryProjection.key}')`)
+    registry.register(activityProjection)
+    console.log(`${TAG} activity ledger projection registered (key '${activityProjection.key}')`)
   })
 
   // Roster probe: deferred until agent-presets activates, disposed with this fiber.

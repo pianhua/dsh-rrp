@@ -94,9 +94,17 @@ describe('Chronicler trigger', () => {
     const hooks = started!.run()
     const outcome = await hooks.done
     expect(outcome.status).toBe('completed')
-    expect(host.appended).toHaveLength(1)
-    expect(host.appended[0]?.type).toBe('rrp/world-state')
-    expect(host.appended[0]?.data).toEqual(VALID)
+    const stateWrites = host.appended.filter((entry) => entry.type === 'rrp/world-state')
+    expect(stateWrites).toHaveLength(1)
+    expect(stateWrites[0]?.data).toEqual(VALID)
+
+    // Attribution: the ledger must show the Chronicler started and what changed.
+    const activity = host.appended.filter((entry) => entry.type === 'rrp/activity')
+    expect(activity.map((entry) => (entry.data as { phase: string }).phase)).toEqual(['started', 'committed'])
+    const committed = activity[1]?.data as { actor: string; target: string; detail?: string }
+    expect(committed.actor).toBe('chronicler')
+    expect(committed.target).toBe('world-state')
+    expect(committed.detail).toContain('新增角色「毓忻」')
   })
 
   it('ignores sessions on other presets', () => {

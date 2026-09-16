@@ -12,8 +12,9 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
+import { recordActivity } from './activity.ts'
 import { SUMMARIZER_SYSTEM_PROMPT, buildSummarizerPrompt, parseSummarizerReply } from './agents/summarizer.ts'
-import { transcriptOf } from './chronicler.ts'
+import { messageOf, transcriptOf } from './chronicler.ts'
 import { SUMMARY_EVENT } from './macro-summary.ts'
 
 const TAG = '[dsh-rrp]'
@@ -140,7 +141,7 @@ function scheduleSummary(faces: HostFaces, session: SessionLike, turn: number): 
   try {
     faces.jobs.start({
       kind: JOB_KIND,
-      label: 'Summarizer: turn ' + turn,
+      label: '大局编年 Summarizer · 第 ' + turn + ' 轮',
       ...(owner === undefined ? {} : { owner }),
       run: () => {
         const controller = new AbortController()
@@ -168,10 +169,16 @@ async function runSummary(
   signal: AbortSignal,
   isCancelled: () => boolean,
 ): Promise<{ status: string }> {
+  const activityId = randomUUID()
+  const stamp = (): string => new Date().toISOString()
   try {
     const full = transcriptOf(session)
     if (full.trim().length === 0) return { status: 'completed' }
     const transcript = full.length > TRANSCRIPT_LIMIT ? full.slice(full.length - TRANSCRIPT_LIMIT) : full
+
+    recordActivity(session, {
+      id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'started',
+    })
 
     const stream = faces.llm.stream({
       provider: route.provider,
@@ -190,15 +197,31 @@ async function runSummary(
     for await (const chunk of stream) {
       if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') text += chunk.text
     }
-    if (isCancelled()) return { status: 'killed' }
+    if (isCancelled()) {
+      recordActivity(session, {
+        id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'failed', detail: '已取消',
+      })
+      return { status: 'killed' }
+    }
 
     const summary = parseSummarizerReply(text)
     if (summary === undefined) throw new Error('Summarizer reply was not a valid MacroSummary')
     session.append(SUMMARY_EVENT, summary)
+    recordActivity(session, {
+      id: activityId,
+      at: stamp(),
+      actor: 'summarizer',
+      target: 'summary',
+      phase: 'committed',
+      detail: '目标：' + summary.goal + '；矛盾：' + summary.conflict,
+    })
     console.log(TAG + ' Summarizer committed a macro summary for session ' + session.id)
     return { status: 'completed' }
   } catch (error) {
     console.warn(TAG + ' Summarizer failed:', error)
+    recordActivity(session, {
+      id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'failed', detail: messageOf(error),
+    })
     return { status: isCancelled() ? 'killed' : 'failed' }
   }
 }

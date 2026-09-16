@@ -49,9 +49,16 @@ describe('player correction route', () => {
     await host.route()!.handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(host.appended).toHaveLength(1)
-    expect(host.appended[0]?.type).toBe('rrp/world-state')
-    expect(host.appended[0]?.data).toEqual(VALID)
+    const stateWrites = host.appended.filter((entry) => entry.type === 'rrp/world-state')
+    expect(stateWrites).toHaveLength(1)
+    expect(stateWrites[0]?.data).toEqual(VALID)
+
+    // Attribution: a player correction is recorded as such in the ledger.
+    const activity = host.appended.filter((entry) => entry.type === 'rrp/activity')
+    expect(activity).toHaveLength(1)
+    const corrected = activity[0]?.data as { actor: string; phase: string }
+    expect(corrected.actor).toBe('player')
+    expect(corrected.phase).toBe('corrected')
   })
 
   it('rejects an invalid state without appending', async () => {

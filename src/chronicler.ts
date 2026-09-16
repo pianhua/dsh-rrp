@@ -14,8 +14,9 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
+import { recordActivity } from './activity.ts'
 import { CHRONICLER_SYSTEM_PROMPT, buildChroniclerPrompt, parseChroniclerReply } from './agents/chronicler.ts'
-import { WORLD_STATE_EVENT, WORLD_STATE_KEY, emptyWorldState, type WorldState } from './world-state.ts'
+import { WORLD_STATE_EVENT, WORLD_STATE_KEY, diffWorldState, emptyWorldState, type WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'chronicler'
@@ -118,7 +119,7 @@ function scheduleInference(faces: HostFaces, session: SessionLike): void {
   try {
     faces.jobs.start({
       kind: JOB_KIND,
-      label: 'Chronicler: ' + session.id,
+      label: '纪事官 Chronicler · ' + session.id.slice(0, 8),
       ...(owner === undefined ? {} : { owner }),
       run: () => {
         const controller = new AbortController()
@@ -146,10 +147,16 @@ async function runInference(
   signal: AbortSignal,
   isCancelled: () => boolean,
 ): Promise<{ status: string }> {
+  const activityId = randomUUID()
+  const stamp = (): string => new Date().toISOString()
   try {
     const prior = (faces.projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ?? emptyWorldState()
     const transcript = transcriptOf(session)
     if (transcript.trim().length === 0) return { status: 'completed' }
+
+    recordActivity(session, {
+      id: activityId, at: stamp(), actor: 'chronicler', target: 'world-state', phase: 'started',
+    })
 
     const prompt = buildChroniclerPrompt({ prior, transcript })
     const stream = faces.llm.stream({
@@ -166,17 +173,39 @@ async function runInference(
       signal,
     })
     const text = await collectText(stream)
-    if (isCancelled()) return { status: 'killed' }
+    if (isCancelled()) {
+      recordActivity(session, {
+        id: activityId, at: stamp(), actor: 'chronicler', target: 'world-state', phase: 'failed', detail: '已取消',
+      })
+      return { status: 'killed' }
+    }
 
     const next = parseChroniclerReply(text)
     if (next === undefined) throw new Error('Chronicler reply was not a valid WorldState')
     session.append(WORLD_STATE_EVENT, next)
+    recordActivity(session, {
+      id: activityId,
+      at: stamp(),
+      actor: 'chronicler',
+      target: 'world-state',
+      phase: 'committed',
+      detail: diffWorldState(prior, next),
+    })
     console.log(TAG + ' Chronicler committed WorldState for session ' + session.id)
     return { status: 'completed' }
   } catch (error) {
     console.warn(TAG + ' Chronicler inference failed:', error)
+    recordActivity(session, {
+      id: activityId, at: stamp(), actor: 'chronicler', target: 'world-state', phase: 'failed', detail: messageOf(error),
+    })
     return { status: isCancelled() ? 'killed' : 'failed' }
   }
+}
+
+/** Readable error text for a ledger entry. */
+export function messageOf(error: unknown): string {
+  const message = (error as { message?: unknown } | undefined)?.message
+  return typeof message === 'string' && message.length > 0 ? message : String(error)
 }
 
 /** Concatenate streamed text deltas. */

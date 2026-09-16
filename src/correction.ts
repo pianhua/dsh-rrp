@@ -9,7 +9,9 @@
  * The route rides the host webserver (HOST_ALIGNMENT: only register an
  * endpoint when one is genuinely needed; never `createServer`).
  */
+import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
+import { recordActivity } from './activity.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 import { WORLD_STATE_EVENT } from './world-state.ts'
 
@@ -104,6 +106,14 @@ export function registerCorrectionRoute(ctx: Context): void {
           return
         }
         session.append(WORLD_STATE_EVENT, state.data)
+        recordActivity(session, {
+          id: randomUUID(),
+          at: new Date().toISOString(),
+          actor: 'player',
+          target: 'world-state',
+          phase: 'corrected',
+          detail: '玩家就地矫正',
+        })
         console.log(TAG + ' player correction committed for session ' + request.sessionId)
         send(res, 200, { ok: true })
       },

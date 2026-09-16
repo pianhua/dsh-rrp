@@ -69,3 +69,111 @@ export function renderWorldState(state: WorldState): string {
     'flags: ' + JSON.stringify(state.flags),
   ].join('\n')
 }
+
+/** Placeholder shown when a field had no value. */
+const EMPTY_FIELD = '（空）'
+/** Shown when a writer pass changed nothing material. */
+export const NO_WORLD_STATE_CHANGE = '（无实质变化）'
+/** Cap the digest so the panel line stays readable. */
+const DIFF_CLAUSE_LIMIT = 6
+
+/** Render one field value for the change digest. */
+function showField(value: unknown): string {
+  if (value === undefined || value === null || value === '') return EMPTY_FIELD
+  return typeof value === 'string' ? value : String(value)
+}
+
+/** Every key present on either side, in first-seen order. */
+function unionKeys<T>(before: Record<string, T>, after: Record<string, T>): string[] {
+  return [...new Set([...Object.keys(before), ...Object.keys(after)])]
+}
+
+/**
+ * Human-readable digest of the difference between two states. This is what
+ * makes a background state write attributable: the ledger stores it beside the
+ * writer's name, so the player sees WHAT the Chronicler changed.
+ * Dependency-free so host writers and the client panel share one wording.
+ * @param prior - the state before the pass.
+ * @param next - the state after the pass.
+ * @returns a short clause list, or the no-change placeholder.
+ */
+export function diffWorldState(prior: WorldState, next: WorldState): string {
+  const clauses: string[] = []
+
+  const sceneFields: Array<[keyof WorldStateScene, string]> = [
+    ['location', '地点'],
+    ['time', '时间'],
+    ['weather', '天气'],
+  ]
+  for (const [field, label] of sceneFields) {
+    if (prior.scene?.[field] !== next.scene?.[field]) {
+      clauses.push(label + ' ' + showField(prior.scene?.[field]) + ' → ' + showField(next.scene?.[field]))
+    }
+  }
+
+  const characterFields: Array<[keyof WorldStateCharacter, string]> = [
+    ['affinity', '好感'],
+    ['mood', '情绪'],
+    ['appearance', '外貌'],
+    ['condition', '状态'],
+  ]
+  for (const name of unionKeys(prior.characters, next.characters)) {
+    const before = prior.characters[name]
+    const after = next.characters[name]
+    if (before === undefined) {
+      clauses.push('新增角色「' + name + '」')
+      continue
+    }
+    if (after === undefined) {
+      clauses.push('移除角色「' + name + '」')
+      continue
+    }
+    for (const [field, label] of characterFields) {
+      if (before[field] !== after[field]) {
+        clauses.push('角色「' + name + '」' + label + ' ' + showField(before[field]) + ' → ' + showField(after[field]))
+      }
+    }
+  }
+
+  const itemFields: Array<[keyof WorldStateItem, string]> = [
+    ['quantity', '数量'],
+    ['note', '备注'],
+  ]
+  for (const name of unionKeys(prior.inventory, next.inventory)) {
+    const before = prior.inventory[name]
+    const after = next.inventory[name]
+    if (before === undefined) {
+      clauses.push('新增物品「' + name + '」')
+      continue
+    }
+    if (after === undefined) {
+      clauses.push('移除物品「' + name + '」')
+      continue
+    }
+    for (const [field, label] of itemFields) {
+      if (before[field] !== after[field]) {
+        clauses.push('物品「' + name + '」' + label + ' ' + showField(before[field]) + ' → ' + showField(after[field]))
+      }
+    }
+  }
+
+  for (const key of unionKeys(prior.flags, next.flags)) {
+    const before = prior.flags[key]
+    const after = next.flags[key]
+    if (before === undefined) {
+      clauses.push('新事件「' + key + '」')
+      continue
+    }
+    if (after === undefined) {
+      clauses.push('移除事件「' + key + '」')
+      continue
+    }
+    if (before !== after) clauses.push('事件「' + key + '」' + showField(before) + ' → ' + showField(after))
+  }
+
+  if (clauses.length === 0) return NO_WORLD_STATE_CHANGE
+  const shown = clauses.slice(0, DIFF_CLAUSE_LIMIT)
+  return clauses.length > shown.length
+    ? shown.join('；') + '；…共 ' + clauses.length + ' 处变化'
+    : shown.join('；')
+}

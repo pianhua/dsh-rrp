@@ -12,8 +12,10 @@
  * dependency-free so both a host plugin and a browser bundle can import it.
  */
 export {
+  NO_WORLD_STATE_CHANGE,
   WORLD_STATE_EVENT,
   WORLD_STATE_KEY,
+  diffWorldState,
   emptyWorldState,
   renderWorldState,
 } from './world-state.ts'
@@ -31,3 +33,16 @@ export {
   renderMacroSummary,
 } from './macro-summary.ts'
 export type { MacroSummary } from './macro-summary.ts'
+export {
+  ACTIVITY_EVENT,
+  ACTIVITY_KEY,
+  ACTIVITY_LIMIT,
+  emptyActivityLog,
+} from './activity.ts'
+export type {
+  RrpActivity,
+  RrpActivityLog,
+  RrpActor,
+  RrpPhase,
+  RrpTarget,
+} from './activity.ts'
