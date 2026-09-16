@@ -50,8 +50,12 @@ export function registerAuthorContext(ctx: Context, presetId: string): void {
     return
   }
 
-  // Last rendered baseline per session, so an unchanged state adds no message.
-  const injected = new Map<string, string>()
+  // The host persists every injected message, so an unchanged payload would be
+  // duplicated on each turn. Track two lanes separately:
+  //   - card  : session-constant -> injected exactly once.
+  //   - facts : summary + state  -> injected only when they actually change.
+  const injectedCard = new Map<string, string>()
+  const injectedFacts = new Map<string, string>()
 
   ctx.effect(() => {
     const dispose = runtime.on('agent/pre-step', (...args: unknown[]) => {
@@ -67,26 +71,26 @@ export function registerAuthorContext(ctx: Context, presetId: string): void {
           const summary = projections.stateOf(session, SUMMARY_KEY) as MacroSummary | null | undefined
           const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
 
-          // Ordered most-stable-first so a changing tail cannot invalidate the
-          // cached prefix: card (session-constant) -> summary (every N turns)
-          // -> state (every turn).
-          const text = [
-            card === null || card === undefined ? undefined : renderCardContext(card),
+          const cardText = card === null || card === undefined ? undefined : renderCardContext(card)
+          const factsText = [
             summary === null || summary === undefined ? undefined : renderMacroSummary(summary),
             renderWorldState(state),
           ].filter((part): part is string => part !== undefined).join('\n\n')
-          if (injected.get(session.id) === text) return decision
-          injected.set(session.id, text)
 
-          const message = {
-            id: randomUUID(),
-            role: 'user',
-            content: [{ type: 'text', text }],
-            source: { kind: 'plugin', plugin: PLUGIN },
+          const additions: Array<Record<string, unknown>> = []
+          if (cardText !== undefined && injectedCard.get(session.id) !== cardText) {
+            injectedCard.set(session.id, cardText)
+            additions.push(pluginMessage(cardText))
           }
+          if (injectedFacts.get(session.id) !== factsText) {
+            injectedFacts.set(session.id, factsText)
+            additions.push(pluginMessage(factsText))
+          }
+          if (additions.length === 0) return decision
+
           const entered = [...decision.messages]
           const lastClaimed = entered.findLastIndex((item) => payload.messages.includes(item))
-          entered.splice(lastClaimed + 1, 0, message)
+          entered.splice(lastClaimed + 1, 0, ...additions)
           return { ...decision, messages: entered }
         } catch (error) {
           console.warn(TAG + ' Author context injection failed:', error)
@@ -97,4 +101,14 @@ export function registerAuthorContext(ctx: Context, presetId: string): void {
     console.log(TAG + ' Author WorldState context armed for preset ' + presetId)
     return dispose
   }, 'dsh-rrp: Author context')
+}
+
+/** One plugin-role context message (persisted by the host as a user/message). */
+function pluginMessage(text: string): Record<string, unknown> {
+  return {
+    id: randomUUID(),
+    role: 'user',
+    content: [{ type: 'text', text }],
+    source: { kind: 'plugin', plugin: PLUGIN },
+  }
 }
