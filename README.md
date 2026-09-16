@@ -9,9 +9,9 @@
 
 ## 当前状态
 
-**阶段 3：WorldState 会话投影 + 原生右侧栏看板（已完成）** —— 下一步进入阶段 4（Chronicler Agent 异步推演记账）。
+**阶段 4：Chronicler Agent 异步推演记账（已完成）** —— 下一步进入阶段 5（Skills 知识体系替代 Lorebook）。
 
-插件已能在真实 `dsh web` 下加载与干净卸载，物化出原生 RP 模式「角色扮演 · 执笔」，并注册了 WorldState 会话投影与原生右侧栏 Tab。开发与验证流程见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)，阶段进度见 [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md)。
+插件已能在真实 `dsh web` 下加载与干净卸载，物化出原生 RP 模式「角色扮演 · 执笔」，注册了 WorldState 会话投影与原生右侧栏 Tab，并在每轮 RP 正文后由纪事官异步推演完整世界状态、落为会话事件。开发与验证流程见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)，阶段进度见 [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md)。
 
 | 项 | 状态 |
 | :--- | :--- |
@@ -20,7 +20,7 @@
 | 协作与红线准则 | ✅ [`AGENTS.md`](AGENTS.md) |
 | 当前任务指针 | ✅ [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md) |
 | 开发环境流程 | ✅ [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
-| 生产代码 | ✅ 阶段 1–3（投影 + 右侧栏看板 + RP 模式） |
+| 生产代码 | ✅ 阶段 1–4（RP 模式 + 投影看板 + 纪事官） |
 
 ---
 

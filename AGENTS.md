@@ -49,6 +49,7 @@ dsh-rrp/
 │   ├── index.ts                 # 插件后端入口 (Cordis 插件)
 │   ├── preset.ts                # RP 模式（agent preset）物化与归属
 │   ├── world-state.ts           # WorldState 纯词汇（host/client 共享）
+│   ├── chronicler.ts            # 纪事官触发与异步推演（ctx.jobs + ctx.llm）
 │   ├── client/                  # 客户端 Slot 与右侧栏插件
 │   │   ├── index.ts             # 客户端入口
 │   │   └── components/          # React 18 UI 组件 (状态看板/卡片展厅)

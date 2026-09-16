@@ -1,0 +1,220 @@
+/**
+ * dsh-rrp — the Chronicler runner.
+ *
+ * On a completed turn of an RP-preset session, schedule an async background job
+ * (D3: body text first, state inference after) that asks the Chronicler to fold
+ * the turn into a complete WorldState, then appends it as an rrp/world-state
+ * session event (D5/D6: the projection adopts whole values; the player can
+ * correct afterwards).
+ *
+ * Host-first: scheduled through ctx.jobs, inferred through ctx.llm, and
+ * recorded into the session log via Session.append. The plugin attaches its own
+ * jobs controller so RP-preset agents (whose composition has no tool-jobs row)
+ * can start background work.
+ */
+import { randomUUID } from 'node:crypto'
+import type { Context } from '@deepseek-ai/cordis'
+import { CHRONICLER_SYSTEM_PROMPT, buildChroniclerPrompt, parseChroniclerReply } from './agents/chronicler.ts'
+import { WORLD_STATE_EVENT, WORLD_STATE_KEY, emptyWorldState, type WorldState } from './world-state.ts'
+
+const TAG = '[dsh-rrp]'
+const JOB_KIND = 'chronicler'
+/** Cap the transcript handed to the Chronicler (characters, tail-biased). */
+const TRANSCRIPT_LIMIT = 8000
+
+/** Structural host faces, kept local so the bundle imports no host package. */
+interface SessionLike {
+  readonly id: string
+  append(type: string, data: unknown): unknown
+  snapshotEvents(): readonly { type: string; data?: unknown }[]
+}
+interface StreamChunkLike {
+  type?: string
+  text?: string
+}
+interface LlmService {
+  stream(options: Record<string, unknown>): AsyncIterable<StreamChunkLike>
+}
+interface JobHooksLike {
+  cancel(reason?: string): void
+  done: Promise<{ status: string }>
+}
+interface JobsService {
+  attachController(name: string): () => void
+  start(spec: { kind: string; label: string; owner?: unknown; run(): JobHooksLike }): string
+}
+interface AgentLike {
+  options?: { provider?: string; model?: string }
+}
+interface AgentsService {
+  get(id: string): AgentLike | undefined
+}
+interface ProjectionsService {
+  stateOf(session: unknown, key: string): unknown
+}
+interface HostFaces {
+  readonly llm: LlmService
+  readonly jobs: JobsService
+  readonly agents: AgentsService
+  readonly projections: ProjectionsService
+}
+interface RuntimeFaces {
+  get(name: string): unknown
+  on(event: string, listener: (...args: unknown[]) => void): () => void
+}
+
+/**
+ * Arm the Chronicler for one preset.
+ * @param ctx - the (agent-scope-free) context owning the registration.
+ * @param presetId - only sessions composed from this preset are inferred.
+ */
+export function registerChronicler(ctx: Context, presetId: string): void {
+  const runtime = ctx as unknown as RuntimeFaces
+  const llm = runtime.get('llm') as LlmService | undefined
+  const jobs = runtime.get('jobs') as JobsService | undefined
+  const agents = runtime.get('agents') as AgentsService | undefined
+  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
+  if (llm === undefined || jobs === undefined || agents === undefined || projections === undefined) {
+    console.warn(TAG + ' Chronicler idle (missing llm/jobs/agents/sessionProjections)')
+    return
+  }
+  const faces: HostFaces = { llm, jobs, agents, projections }
+
+  ctx.effect(() => {
+    const disposeController = jobs.attachController('dsh-rrp')
+    const disposeListener = runtime.on('session/event', (...args: unknown[]) => {
+      const session = args[0] as SessionLike | undefined
+      const event = args[1] as { type?: string; data?: { reason?: { kind?: string } } } | undefined
+      if (session === undefined || event?.type !== 'turn/end') return
+      if (event.data?.reason?.kind !== 'completed') return
+      if (projections.stateOf(session, 'agentPreset') !== presetId) return
+      scheduleInference(faces, session)
+    })
+    console.log(TAG + ' Chronicler armed for preset ' + presetId)
+    return () => {
+      disposeListener()
+      disposeController()
+    }
+  }, 'dsh-rrp: Chronicler trigger')
+}
+
+/** Resolve the provider/model route for the session's live agent. */
+function routeFor(owner: AgentLike | undefined): { provider: string; model: string } | undefined {
+  const provider = owner?.options?.provider
+  const model = owner?.options?.model
+  if (provider === undefined || provider.length === 0) return undefined
+  if (model === undefined || model.length === 0) return undefined
+  return { provider, model }
+}
+
+/** Schedule one background inference job. Never throws into the session feed. */
+function scheduleInference(faces: HostFaces, session: SessionLike): void {
+  const owner = faces.agents.get(session.id)
+  const route = routeFor(owner)
+  if (route === undefined) {
+    console.warn(TAG + ' Chronicler skipped ' + session.id + ': no provider/model route')
+    return
+  }
+  try {
+    faces.jobs.start({
+      kind: JOB_KIND,
+      label: 'Chronicler: ' + session.id,
+      ...(owner === undefined ? {} : { owner }),
+      run: () => {
+        const controller = new AbortController()
+        let cancelled = false
+        const done = runInference(faces, session, route, controller.signal, () => cancelled)
+        return {
+          cancel: () => {
+            cancelled = true
+            controller.abort()
+          },
+          done,
+        }
+      },
+    })
+  } catch (error) {
+    console.warn(TAG + ' Chronicler could not start a job:', error)
+  }
+}
+
+/** One inference pass: prompt -> model -> parse -> append. */
+async function runInference(
+  faces: HostFaces,
+  session: SessionLike,
+  route: { provider: string; model: string },
+  signal: AbortSignal,
+  isCancelled: () => boolean,
+): Promise<{ status: string }> {
+  try {
+    const prior = (faces.projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ?? emptyWorldState()
+    const transcript = transcriptOf(session)
+    if (transcript.trim().length === 0) return { status: 'completed' }
+
+    const prompt = buildChroniclerPrompt({ prior, transcript })
+    const stream = faces.llm.stream({
+      provider: route.provider,
+      model: route.model,
+      system: CHRONICLER_SYSTEM_PROMPT,
+      messages: [{
+        id: randomUUID(),
+        role: 'user',
+        content: [{ type: 'text', text: prompt }],
+        source: { kind: 'plugin', plugin: 'dsh-rrp' },
+      }],
+      sessionId: session.id,
+      signal,
+    })
+    const text = await collectText(stream)
+    if (isCancelled()) return { status: 'killed' }
+
+    const next = parseChroniclerReply(text)
+    if (next === undefined) throw new Error('Chronicler reply was not a valid WorldState')
+    session.append(WORLD_STATE_EVENT, next)
+    console.log(TAG + ' Chronicler committed WorldState for session ' + session.id)
+    return { status: 'completed' }
+  } catch (error) {
+    console.warn(TAG + ' Chronicler inference failed:', error)
+    return { status: isCancelled() ? 'killed' : 'failed' }
+  }
+}
+
+/** Concatenate streamed text deltas. */
+async function collectText(stream: AsyncIterable<StreamChunkLike>): Promise<string> {
+  let text = ''
+  for await (const chunk of stream) {
+    if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') text += chunk.text
+  }
+  return text
+}
+
+/** Render the session's user/assistant text blocks, tail-biased and capped. */
+function transcriptOf(session: SessionLike): string {
+  const parts: string[] = []
+  for (const event of session.snapshotEvents()) {
+    if (event.type !== 'user/message' && event.type !== 'assistant/message') continue
+    const blocks: string[] = []
+    collectTextBlocks(event.data, blocks)
+    const text = blocks.join('\n').trim()
+    if (text.length === 0) continue
+    parts.push('【' + (event.type === 'user/message' ? '玩家' : '叙述') + '】\n' + text)
+  }
+  const joined = parts.join('\n\n')
+  return joined.length > TRANSCRIPT_LIMIT ? joined.slice(joined.length - TRANSCRIPT_LIMIT) : joined
+}
+
+/** Recursively collect { type: 'text', text } blocks from an event payload. */
+function collectTextBlocks(value: unknown, out: string[]): void {
+  if (value === null || value === undefined) return
+  if (Array.isArray(value)) {
+    for (const item of value) collectTextBlocks(item, out)
+    return
+  }
+  if (typeof value !== 'object') return
+  const record = value as Record<string, unknown>
+  if (record.type === 'text' && typeof record.text === 'string') {
+    out.push(record.text)
+    return
+  }
+  for (const item of Object.values(record)) collectTextBlocks(item, out)
+}

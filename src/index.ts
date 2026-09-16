@@ -8,6 +8,7 @@
  * Chronicler / Skills logic arrives in later stages — see docs/ACTIVE_TASK.md.
  */
 import type { Context } from '@deepseek-ai/cordis'
+import { registerChronicler } from './chronicler.ts'
 import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
 import { worldStateProjection } from './projection/world-state.ts'
 
@@ -64,6 +65,11 @@ export function apply(ctx: Context): void {
   // Roster probe: deferred until agent-presets activates, disposed with this fiber.
   ctx.inject(['agentPresets'], (scoped: Context) => {
     void verifyPreset(scoped)
+  })
+
+  // Chronicler: armed only when every host seam it needs is present.
+  ctx.inject(['jobs', 'llm', 'agents', 'sessionProjections'], (scoped: Context) => {
+    registerChronicler(scoped, PRESET_ID)
   })
 }
 

@@ -1,0 +1,108 @@
+import { describe, expect, it } from 'vitest'
+import { buildChroniclerPrompt, parseChroniclerReply } from '../src/agents/chronicler.ts'
+import { registerChronicler } from '../src/chronicler.ts'
+import { emptyWorldState } from '../src/world-state.ts'
+
+const VALID = {
+  characters: { 毓忻: { affinity: 3, mood: '警惕' } },
+  inventory: { 铜钥匙: { quantity: 1 } },
+  scene: { location: '归离客栈' },
+  flags: { 已知晓密道: true },
+}
+
+describe('Chronicler reply contract', () => {
+  it('parses a bare JSON object and tolerates surrounding prose', () => {
+    expect(parseChroniclerReply(JSON.stringify(VALID))).toEqual(VALID)
+    expect(parseChroniclerReply('好的，结果如下：\n' + JSON.stringify(VALID) + '\n以上。')).toEqual(VALID)
+  })
+
+  it('rejects unusable replies', () => {
+    expect(parseChroniclerReply('没有 JSON')).toBeUndefined()
+    expect(parseChroniclerReply('{ not json }')).toBeUndefined()
+    expect(parseChroniclerReply('{"scene":{"location":7}}')).toBeUndefined()
+  })
+
+  it('includes the prior state and transcript in the prompt', () => {
+    const prompt = buildChroniclerPrompt({ prior: emptyWorldState(), transcript: '【玩家】\n我推门而入。' })
+    expect(prompt).toContain('characters')
+    expect(prompt).toContain('我推门而入。')
+  })
+})
+
+/** Minimal fake host: records the session feed listener and the started job. */
+function fakeHost(preset: string) {
+  const listeners = new Map<string, (...args: unknown[]) => void>()
+  const appended: Array<{ type: string; data: unknown }> = []
+  let started: { kind: string; label: string; run(): { cancel(reason?: string): void; done: Promise<{ status: string }> } } | undefined
+
+  const session = {
+    id: 'session-1',
+    append(type: string, data: unknown) {
+      appended.push({ type, data })
+      return { type, data }
+    },
+    snapshotEvents: () => [
+      { type: 'user/message', data: { content: [{ type: 'text', text: '我推门而入。' }] } },
+      { type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟，暖意扑面。' }] } },
+      { type: 'step/end', data: { turn: 1, step: 0 } },
+    ],
+  }
+
+  const llm = {
+    async *stream() {
+      yield { type: 'text-delta', text: JSON.stringify(VALID) }
+    },
+  }
+  const jobs = {
+    attachController: () => () => {},
+    start(spec: typeof started) {
+      started = spec
+      return 'chronicler-1'
+    },
+  }
+  const agents = { get: () => ({ options: { provider: 'deepseek', model: 'deepseek-chat' } }) }
+  const projections = { stateOf: (_session: unknown, key: string) => (key === 'agentPreset' ? preset : undefined) }
+
+  const ctx = {
+    effect(fn: () => (() => void) | void) {
+      return fn()
+    },
+    get(name: string): unknown {
+      return ({ llm, jobs, agents, sessionProjections: projections } as Record<string, unknown>)[name]
+    },
+    on(name: string, listener: (...args: unknown[]) => void) {
+      listeners.set(name, listener)
+      return () => {}
+    },
+  }
+  return { ctx, session, listeners, appended, started: () => started }
+}
+
+describe('Chronicler trigger', () => {
+  it('inferrs and appends a complete WorldState on a completed RP turn', async () => {
+    const host = fakeHost('rp')
+    registerChronicler(host.ctx as never, 'rp')
+
+    const feed = host.listeners.get('session/event')
+    expect(feed).toBeDefined()
+    feed?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+
+    const started = host.started()
+    expect(started).toBeDefined()
+    expect(started?.kind).toBe('chronicler')
+
+    const hooks = started!.run()
+    const outcome = await hooks.done
+    expect(outcome.status).toBe('completed')
+    expect(host.appended).toHaveLength(1)
+    expect(host.appended[0]?.type).toBe('rrp/world-state')
+    expect(host.appended[0]?.data).toEqual(VALID)
+  })
+
+  it('ignores sessions on other presets', () => {
+    const host = fakeHost('standard')
+    registerChronicler(host.ctx as never, 'rp')
+    host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    expect(host.started()).toBeUndefined()
+  })
+})
