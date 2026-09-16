@@ -1,0 +1,13 @@
+# dsh-rrp bundle patch — inserts this plugin into a profile's layer stack.
+#
+# Installed through the official CLI:
+#
+#   dsh plugin --profile <name> add <path-to-this-repo>
+#
+# the command reconciles `dsh.profile.bundles` against installed packages and,
+# seeing `dsh.bundle.patch` in package.json, appends dsh-rrp to the bundle
+# stack. The profile boot then merges THIS patch (a single insert of the plugin
+# row). No profile file edits needed.
+- insert:
+    - id: dsh-rrp
+      name: 'dsh-rrp'

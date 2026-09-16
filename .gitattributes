@@ -1,0 +1,7 @@
+# Normalize line endings in the repository; Windows checkouts stay usable.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
