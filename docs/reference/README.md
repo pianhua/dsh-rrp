@@ -23,6 +23,7 @@
 | [`LESSONS.md`](LESSONS.md) | 旧项目为什么失败？哪些资产值得留？ | 想「参考旧实现」前 |
 | [`COMMUNITY_PLUGINS.md`](COMMUNITY_PLUGINS.md) | 社区成熟插件长什么样？ | 建工程骨架前 |
 | [`SKILLS.md`](SKILLS.md) | Skills 是什么？我们如何用它替代 Lorebook？ | 做知识体系前 |
+| [`WORLDLINES.md`](WORLDLINES.md) | 为什么 fork 后状态不穿帮？与 synapse 的边界 | 涉及分支/重放时 |
 | [`dsh-plugin-development-research.md`](dsh-plugin-development-research.md) | DSH 插件开发的完整技术机制 | 需要宿主细节时查阅 |
 
 ---
