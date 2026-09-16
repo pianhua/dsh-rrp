@@ -121,8 +121,8 @@ opening: default
 
 | 卡包资产 | 落到的宿主/插件接缝 | 说明 |
 | :--- | :--- | :--- |
-| `persona` + 正文世界核心 | 会话级上下文注入（复用 `author-context.ts` 的 `agent/pre-step` 路径） | 只在带该卡的会话生效，不污染 preset |
-| `skills/` | DSH Skill（`skill-filesystem` + `tool-skill`） | 复用现有 RP 作用域技能根 |
+| `persona` + 正文世界核心 | `rrp/card` 投影 + `author-context.ts` 的 `agent/pre-step` 注入 | 只在带该卡的会话生效，不污染 preset；模型可见、面板不显示 |
+| `skills/` | `mountCardSkills` 拷入 preset 技能根 → DSH Skill | 实测启动日志 `RP skills visible (6)` |
 | `state.json` | `rrp/world-state` 事件 + 现有投影 | 无需新投影 |
 | 开场白 | 新会话的首条消息 | 需宿主「以预设新建会话 + 注入首条消息」接缝（见 §9 待勘察） |
 | 卡面/列表 | 卡片展厅 UI | 复用 Slots / 右侧栏 / 顶栏入口（见 §9） |
@@ -187,9 +187,15 @@ opening: default
 > （`card.md` 的 persona/world core 常驻注入 + `skills/`）。`state.json` 只放玩家已知事实。
 > 当前 persona 走 `agent/pre-step` 注入（正文里显示为 context 节点）——**这一点必须实机确认是否会剧透**。
 
-## 12. 实现现状
+## 12. 实现现状（2026-09-16）
 
-- 加载器 `src/cards.ts`：纯目录解析（frontmatter 子集 / 开场白 / `state.json` / `skills`），无 HTTP、无 DB、无索引。
-- 只读路由 `src/cards-route.ts`：`GET /dsh-rrp/cards`（列表）、`GET /dsh-rrp/cards/one?id=<id>`（详情）。
-- 测试 `tests/cards.spec.ts`（含「用户卡覆盖随包卡」）。
-- **待做**：卡片展厅面板（`main` + `sidebar.panellist`）+ 点「开始」的新会话流（create → preset select → 开场白 prompt → 写初始状态）。
+- 加载器 `src/cards.ts`：纯目录解析（frontmatter 子集 / 开场白 / `state.json` / `skills`），无 HTTP、无 DB、无索引；`mountCardSkills()` 把每张卡的 `skills/*` 挂进 RP preset 的技能根（启动日志 `RP skills visible (6)`）。
+- 卡面类型 `src/card-types.ts`：依赖为零，宿主与浏览器共享。
+- **卡包设定投影** `rrp/card`（`src/projection/card.ts`）+ `renderCardContext`：Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入（`src/author-context.ts`）。
+- 只读路由 `src/cards-route.ts`：`GET /dsh-rrp/cards`、`GET /dsh-rrp/cards/one?id=<id>`。
+- 开卡路由 `src/start.ts`：`POST /dsh-rrp/start` → 写 `rrp/card`、`rrp/world-state`（actor `card`）、追加开场白。
+- 卡片展厅 `src/client/gallery-panel.tsx`：`main` 主区面板 + 同名 `sidebar.panellist` 导航；开始流 = create → `agentPresets.select('rp')` → open → POST start。
+- P0 主题 `src/client/theme.ts`：`ctx.theme.overrideTokens`（暖纸色 / 衬线 / 行高），可逆。
+- 测试：`tests/cards.spec.ts`、`tests/start.spec.ts`、`tests/author-context.spec.ts`、`tests/client.spec.ts`——全套 **55 用例**。
+- **待实机确认**：开场白以 `assistant/message` 追加是否被宿主接受并渲染为正文（被拒自动回退 plugin notice）。
+- **待做**：P1 正文小说排版；P3 沉浸视图（见 [UI_CEILING.md](UI_CEILING.md)）。

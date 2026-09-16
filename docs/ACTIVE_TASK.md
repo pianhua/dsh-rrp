@@ -50,7 +50,7 @@
 | **7** | Summarizer Agent（可选大局观，按轮触发） | ✅ 完成 |
 | **8** | Session.fork 世界线 + `dsh-synapse` 协同 | ✅ 完成 |
 | **9** | 外部记忆扩展接入（EverOS 方向，纯扩展） | ✅ 完成 |
-| 6 | 原生卡包格式重制 + 卡片展厅 | 🚧 **基本完成**：格式/加载器/只读路由/首个测试卡/**展厅面板**/**开卡新会话流**/P0 主题均已落地；P1 小说排版与 P3 沉浸视图待做 |
+| 6 | 原生卡包格式重制 + 卡片展厅 | 🚧 **基本完成**：格式/加载器/只读路由/首个测试卡/**展厅**/**开卡流**/P0 主题/**卡包设定注入**/**技能挂载**均已落地；P1 小说排版与 P3 沉浸视图待做 |
 
 ---
 
@@ -73,6 +73,8 @@
 - ✅ **卡片展厅** `src/client/gallery-panel.tsx`：`main` 主区面板 + 同名 `sidebar.panellist` 导航图标
 - ✅ **开卡新会话流**：`ctx.sessions.create` → `ctx.remote.agentPresets.select(id,'rp')` → `POST /dsh-rrp/start`（写初始状态 + 追加开场白）+ `tests/start.spec.ts`
 - ✅ **P0 RP 主题** `src/client/theme.ts`：暖纸色 + 衬线 + 大行高，`ctx.theme.overrideTokens`，可逆
+- ✅ **卡包设定注入**：`rrp/card` 投影（`src/projection/card.ts`）+ Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入
+- ✅ **卡包技能挂载**：`mountCardSkills` 把 `cards/*/skills` 挂进 preset 技能根——实测启动日志 `RP skills visible (6)`
 - ⬜ **实机确认（关键）**：开场白以 `assistant/message` 追加是否被宿主接受并渲染为正文；被拒会自动回退为 plugin notice（`user/message`）
 - ⬜ **实机确认**：卡包 persona 走 `agent/pre-step` 注入是否会以 context 节点剧透（CARDS.md §11）
 - ⬜ **P1/P3**：正文节点 shadow（小说排版）与「沉浸」视图 Tab（见 UI_CEILING.md）
