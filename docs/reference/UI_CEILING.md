@@ -50,9 +50,9 @@
 | 优先级 | 动作 | 用到的接缝 | 效果 |
 | :---: | :--- | :--- | :--- |
 | **P0** | 注册 `rrp` 主题（暖色/衬线/大行距/低对比边框） | `ctx.theme.register` + `overrideTokens` | 全局观感立刻从「编码工具」变「阅读器」 |
-| **P1** | 正文节点 shadow：`conversation.chat.node` 的 `assistant-step` | keyed + 高 priority | 小说排版（首行缩进、段距、对白高亮、弱化工具卡） |
+| **P1** | 正文节点 shadow：`conversation.chat.node` 的 `assistant-step` | keyed + 高 priority | ⏸️ **评估后不做**：等于重新实现宿主的 Assistant 渲染器，做错会让聊天直接不显示；主题已覆盖字体/行高/配色，收益低风险高。改走 P3 增量视图 |
 | **P2** | 卡片展厅 + 开卡新会话 | `main` + `sidebar.panellist` + `ctx.sessions`/`ctx.remote` | 从卡包开局（当前正在做） |
-| **P3** | 「沉浸」视图 Tab（全屏、无干扰、正文+右栏状态） | `conversation.view` + `uiConversation.views` | 彻底的 RP 阅读/游玩界面 |
+| **P3** | 「沉浸」视图 Tab（全屏、无干扰、正文+右栏状态） | `conversation.view` + 订阅 `chat` 目标快照 | ✅ **已实现** `src/client/story-view.tsx`（纯增量，不替换宿主渲染） |
 | **P4** | 输入区接管（说话/行动/继续/OOC/导演） | `conversation.composer`（chain） | 不再是「给 coding agent 派活」的输入框 |
 
 > 建议按 P0 → P2 → P1/P3 推进：P0 改动最小、收益最直观；P2 是功能闭环；P1/P3 是观感深化。
