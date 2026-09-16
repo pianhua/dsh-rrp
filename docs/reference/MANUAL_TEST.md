@@ -61,3 +61,26 @@ dsh --profile rp-dev --port 3099 --no-open
 
 - [ ] **秘密剧透**：卡包设定含「米娅是财阀千金」这一核心秘密。若它出现在**聊天正文**（而非只在轨迹/请求检查里），立即报告——需要改为纯 Skill 承载。
 - [ ] 开场白 `assistant/message` 若被宿主拒绝，会回退成 plugin notice；两种情况都请记录。
+
+---
+
+## 实机验收结果（2026-09-16，浏览器测试 Agent）
+
+| 检查大项 | 结果 | 记录 |
+| :--- | :---: | :--- |
+| 1. 主题（P0） | **PASS** | 暖纸色 `#f6f1e7` + 衬线 + 1.95 行高生效；明暗均可读、可逆 |
+| 2. 卡片展厅（P2） | **PASS** | 图标/列表/简介/标签/玩家角色/6 技能/开场白完整；刷新无异常 |
+| 3. 开卡开局 | **FAIL → 已修** | 报 `cannot get property "remote.agentPresets" without inject`；见下方修复 |
+| 4. 设定入作者 | **PASS** | 前置上下文含设定基准与事实基准；正文第三人称、不代打、不自称作者 |
+| 5. 技能检索（D7） | **PASS** | `available_skills` 含全部 6 个 `maid-*`，模型主动 `skill` 载入全部 6 篇 |
+| 6. 状态归因与矫正 | **PASS** | 纪事官归因准确；就地改好感 7→20 后，次轮纪事官按 20 推进到 25（Last-Write-Wins） |
+| 7. 已知风险 | **PASS** | **零剧透**（秘密只通过行为细节体现）；开场白被宿主原生接受为**正文第一条** |
+
+### 缺陷与修复
+
+- **现象**：卡片展厅点「开始这一局」报 `cannot get property "remote.agentPresets" without inject`。
+- **根因**：Cordis Remote 代理是**命名空间服务**，只声明 `'remote'` 不够，必须显式声明 `'remote.agentPresets'`
+  （宿主 `dsh-client-ui-agent-preset/lib/client.js:1397` 即如此声明）。
+- **修复**：`src/client/index.ts` 的 `inject` 数组加入 `'remote.agentPresets'`（提交 `69611c6`）。
+- **状态**：待复测第 3 项（点「开始这一局」应直接成功）。
+
