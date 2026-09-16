@@ -17,7 +17,7 @@ afterEach(() => {
 })
 
 describe('RP preset materialization', () => {
-  it('writes the shipped preset into the user root', () => {
+  it('writes the shipped preset and its skill bundles into the user root', () => {
     const home = tempHome()
     const outcome = materializePreset(home)
 
@@ -26,9 +26,13 @@ describe('RP preset materialization', () => {
     expect(PRESET_ID).toBe('rp')
 
     const composition = readFileSync(join(outcome.dir, 'agent.cordis.yml'), 'utf8')
-    expect(composition).toContain("@deepseek-ai/dsh-persona")
-    expect(composition).toContain('Author Agent')
+    expect(composition).toContain('@deepseek-ai/dsh-persona')
+    expect(composition).toContain('@deepseek-ai/dsh-skill-filesystem')
+    expect(composition).toContain('@deepseek-ai/dsh-tool-skill')
+    expect(composition).not.toContain('__DSH_RRP_SKILL_DIR__')
+    expect(composition).toContain(join(outcome.dir, 'skills'))
     expect(existsSync(join(outcome.dir, 'preset.yml'))).toBe(true)
+    expect(existsSync(join(outcome.dir, 'skills', 'return-inn', 'SKILL.md'))).toBe(true)
 
     expect(removePreset(home)).toBe('removed')
     expect(existsSync(outcome.dir)).toBe(false)

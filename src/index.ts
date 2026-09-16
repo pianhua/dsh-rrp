@@ -31,6 +31,11 @@ interface AgentPresetsService {
   standingKeyFor(id?: string): Promise<unknown>
 }
 
+/** Structural face of the host skill registry, for one scoped catalog read. */
+interface SkillsService {
+  list(options: { scope: unknown }): Promise<Array<{ name: string }>>
+}
+
 /** Structural face of the session-projection registry. */
 interface SessionProjectionsService {
   register(definition: typeof worldStateProjection): () => void
@@ -83,8 +88,16 @@ async function verifyPreset(ctx: Context): Promise<void> {
       console.warn(`${TAG} RP mode '${PRESET_ID}' is broken: ${preset.broken}`)
       return
     }
-    await presets.standingKeyFor(PRESET_ID)
+    const scope = await presets.standingKeyFor(PRESET_ID)
     console.log(`${TAG} RP mode '${preset.name ?? PRESET_ID}' composed and ready`)
+
+    // Verify the RP scope's skill catalog actually discovers the bundled bundles.
+    const skills = readable.get('skills') as SkillsService | undefined
+    if (skills !== undefined) {
+      const catalog = await skills.list({ scope })
+      const names = catalog.map((entry) => entry.name).join(', ')
+      console.log(`${TAG} RP skills visible (${catalog.length}): ${names.length > 0 ? names : '(none)'}`)
+    }
   } catch (error) {
     console.warn(`${TAG} RP mode verification failed:`, error)
   }

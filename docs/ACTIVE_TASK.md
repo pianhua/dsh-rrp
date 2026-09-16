@@ -7,8 +7,8 @@
 
 ## 任务状态
 
-- **阶段**：阶段 4 — Chronicler Agent 异步推演记账（已完成）
-- **状态**：纪事官已随宿主 `ctx.jobs` + `ctx.llm` 武装；RP 会话每轮结束异步推演并落整值事件
+- **阶段**：阶段 5 — Skills 知识体系替代 Lorebook（已完成）
+- **状态**：RP 作用域已挂载 `skill-filesystem` + `tool-skill`，随包世界设定技能可被发现
 - **原则**：先锁定形态与宿主映射，再落实现；每阶段回读本文件
 
 ---
@@ -22,46 +22,43 @@
 | **2** | 自定义 RP 模式 + Author Agent 基础对话 | ✅ 完成 |
 | **3** | WorldState 会话投影 + 原生右侧栏看板 | ✅ 完成 |
 | **4** | Chronicler Agent（`ctx.jobs` 异步推演记账） | ✅ 完成 |
-| 5 | Skills 知识体系（替代 Lorebook） | ⬜ 下一步 |
-| 6 | 原生卡包格式重制 + 卡片展厅 | ⬜ |
+| **5** | Skills 知识体系（替代 Lorebook） | ✅ 完成 |
+| **5.5** | **闭环补完**：Author 消费最新 WorldState + 玩家矫正（D6） | ⬜ 下一步 |
+| 6 | 原生卡包格式重制 + 卡片展厅（D13：待所有者拍板格式） | ⏸️ 待定 |
 | 7 | Summarizer Agent（可选大局观，按轮触发） | ⬜ |
 | 8 | Session.fork 世界线 + `dsh-synapse` 协同 | ⬜ |
 | 9 | 外部记忆扩展接入（EverOS 方向，纯扩展） | ⬜ |
 
----
-
-## 阶段 4 交付物（已完成）
-
-- `src/agents/chronicler.ts`：纪事官人设与推演准则；**完整状态**输出契约；容错 JSON 提取 + zod 校验（`parseChroniclerReply`）
-- `src/chronicler.ts`：
-  - 触发：宿主 `session/event` 的 `turn/end` 且 `reason.kind === 'completed'`，并用 `agentPreset` 投影门控为 RP 会话
-  - 调度：`ctx.jobs.attachController('dsh-rrp')` 自附全局控制器（RP preset 无 tool-jobs 行）→ `ctx.jobs.start` 注册后台任务
-  - 推演：`ctx.llm.stream` 单次领域提示词调用（对照宿主 `compaction-basic` 的调用形态），可取消
-  - 落账：`session.append('rrp/world-state', 完整状态)`（整值事件），驱动阶段 3 投影与面板刷新
-  - 全程错误contained：失败只记日志，绝不打断会话
-- 测试：提示词/解析（含容错与拒绝）、预设门控、**假 LLM 端到端**（触发→任务→推演→落账）
-- 实测：`[dsh-rrp] Chronicler armed for preset rp`（附带控制器无报错）
-
-> 记：真实模型的一轮推演需在 UI 中实际游玩一次确认（本机未自动触发模型调用）。
+> **路线说明**：阶段 5 完成后，核心 RP 环路仍缺两半——Author 尚未「只读消费最新 WorldState」，面板尚不能「就地矫正」。这两项（D6 核心承诺）优先于阶段 6；阶段 6 卡包格式按 D13 明确留待项目形态成熟、所有者拍板后再定。
 
 ---
 
-## 下一动作（阶段 5 最小切片）
+## 阶段 5 交付物（已完成）
 
-目标：**Skills 知识体系替代 Lorebook（D7）**。
+- `presets/rp/agent.cordis.yml`：新增 `@deepseek-ai/dsh-skill-filesystem`（`bundledSkillDir` 指向随模式物化的技能目录）与 `@deepseek-ai/dsh-tool-skill`；只在 RP 作用域注册，不污染其他模式
+- `presets/rp/skills/return-inn/SKILL.md`：示例世界设定技能（frontmatter `name` / `description` 决定语义触发）
+- `src/preset.ts`：物化整棵 preset 树（含 `skills/`），把组合里的 `__DSH_RRP_SKILL_DIR__` 替换为副本的绝对技能路径；归属哈希改为递归覆盖全部文件
+- `src/index.ts`：`verifyPreset` 增加按 RP scope 读取技能目录的诊断日志（宿主能力实证）
+- 测试：模板化 + 技能物化 + 既有归属/清理（共 15 用例）
+- **实测**：`[dsh-rrp] RP skills visible (1): return-inn`
 
-1. 侦察 `ctx.skills` 与 `@deepseek-ai/dsh-skill-filesystem` 的注册/扫描契约（`SKILL.md` 目录、roots、`snapshot/list/get`）
-2. 确定卡包世界知识的落点（项目 `.dsh/skills` / `customSkillDirs` / 运行时 `ctx.skills.register`）
-3. RP preset 纳入 `skill-filesystem` + `tool-skill` 行，让 Author 按需调取设定（渐进披露，不硬塞上下文）
-4. 真实 `dsh web` 验证：设定按需加载、正文引用正确
+---
 
-> 进入阶段 5 前先回读 D7 / D8 与 [`SKILLS.md`](reference/SKILLS.md)。
+## 下一动作（阶段 5.5 最小切片）
+
+目标：**补齐核心 RP 环路——Author 只读消费最新 WorldState；玩家在右侧栏就地矫正（D6）**。
+
+1. **Author 消费**：每轮起笔前把当前 `rrpWorldState` 作为运行时上下文注入 Author 会话（优先用宿主 `system-prompt` / 预设作用域的既有接缝，不自造提示词拼接管线）
+2. **玩家矫正**：右侧栏面板可编辑四大维度；提交后追加**整值** `rrp/world-state` 事件（Last-Write-Wins，无锁、无校验矩阵）
+3. 验证：改状态 → 下一轮 Author 以新切面起笔；分支切换后状态精确重放
+
+> 进入前先回读 D5 / D6 / D9 与 [`GLOSSARY.md`](reference/GLOSSARY.md)（WorldState / Player Correction）。
 
 ---
 
 ## 验收标准
 
-- 阶段 1–4（已达成）：真实 `dsh web` 加载、RP 模式组合、投影注册、右侧栏 Tab 下发、纪事官武装，均无报错
+- 阶段 1–5（已达成）：真实 `dsh web` 加载、RP 模式组合、投影注册、右侧栏 Tab 下发、纪事官武装、技能发现，均无报错
 - 全程：不触犯 [`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md) 第 4 节任一红线
 - 每阶段：代码保持轻量透明，无并发/分布式/多用户复杂度
 
@@ -69,9 +66,8 @@
 
 ## 阻塞与风险
 
-- ~~**事件追加 API**~~：已确认 `Session.append` 对未知事件类型放行（仅校验 `request/header`、`tool/result`），整值事件可落日志
-- ~~**异步接缝**~~：已确认 `ctx.jobs.attachController` + `ctx.jobs.start` 与 `ctx.llm.stream` 契约
-- **模型推演验证**：真实模型的一轮 Chronicler 推演尚未实测（需人工游玩一次）
-- **Skills 机制**：`@deepseek-ai/dsh-skill` 的具体注册方式需在阶段 5 前确认
-- **卡包格式**：按用户决策，**留到项目形态成熟后再制定**
-- **浏览器实测**：面板渲染 / 分支重放 / 基础对话仍待人工 UI 确认
+- ~~**Skills 机制**~~：已确认 `skill-filesystem` 的 `bundledSkillDir` 根与作用域注册，并实测发现技能
+- **Author 消费接缝**：把 WorldState 注入 Author 提示词的确切宿主接缝（`system-prompt` 段落 / 运行时上下文）需在阶段 5.5 前核实
+- **玩家矫正写路径**：面板提交需追加会话事件；客户端到宿主的写通道（Remote/命令）需在阶段 5.5 前核实
+- **卡包格式**：按 D13，待所有者拍板后再制定；阶段 6 暂缓
+- **模型推演/浏览器实测**：纪事官真实推演、面板渲染与分支重放仍待人工 UI 确认

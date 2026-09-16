@@ -31,3 +31,15 @@
       - 从上一轮的结尾自然承接：先写玩家行动的直接后果，再推进 NPC 与场景。
       - 一次输出一个完整的场景小节；不主动跳过玩家的重大抉择。
       - 对白贴合人物身份与当前情绪，避免千人一腔。
+
+# ── 知识体系（D7：Skills 替代 Lorebook）────────────────────────────────────
+# skill-filesystem 只在这个 preset 的作用域里注册本地技能根：除默认的项目根/用户根
+# 之外，额外把随包分发的世界设定目录（bundledSkillDir，由插件物化时写入绝对路径）
+# 纳入扫描；tool-skill 把目录暴露给模型，按需调取、渐进披露，而不是把设定硬塞进上下文。
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    bundledSkillDir: '__DSH_RRP_SKILL_DIR__'
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'

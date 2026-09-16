@@ -57,11 +57,12 @@ dsh-rrp/
 │   │   ├── author.ts            # 执笔作家提示词
 │   │   ├── chronicler.ts        # 纪事官智能体逻辑
 │   │   └── summarizer.ts        # 大局编年摘要智能体 (可开可关)
-│   ├── skills/                  # RP 通用基础技能 (按需调取)
+│   ├── skills/                  # 预留：技能相关 TS 辅助（技能包随 preset 分发）
 │   └── projection/              # 会话投影纯数学折叠器 (WorldState)
 │       └── world-state.ts       # WorldState 投影单元（zod 校验 + 纯折叠）
 ├── presets/                     # 随包分发的原生 agent preset（RP 模式）
-│   └── rp/                      # Author 执笔模式的组合与元数据
+│   └── rp/                      # 组合、元数据与随模式作用域的世界知识技能
+│       └── skills/              # SKILL.md 世界设定包（D7，按需调取）
 ├── cards/                       # 官方原生卡包 (未来制定标准规范)
 ├── cordis.patch.yml             # DSH profile patch 声明
 ├── package.json                 # 依赖声明 (严格遵循 DSH peer 规范)
