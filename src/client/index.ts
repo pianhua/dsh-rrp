@@ -1,39 +1,60 @@
 /**
  * dsh-rrp — client (browser) half.
  *
- * Stage 1 skeleton: proves the client bundle loads and disposes reversibly.
- * The WorldState sidebar tab arrives in stage 3; this file only reserves the
- * seat so the wiring is verified end to end.
+ * Registers the locale dictionaries and the WorldState right-sidebar tab.
+ * Everything is a reversible effect tied to this plugin's fiber.
  */
 import type { RrpClientContext } from './context-types.ts'
+import { registerWorldStateTab } from './world-state-tab.ts'
 
 /** Bundle id. The client-modules compose keys on the package name dsh-rrp. */
 export const name = 'dsh-rrp/client'
 
 /** Client runtime services required before mounting. */
-export const inject = ['slots']
+export const inject = ['slots', 'sidebarRightTabs', 'locale']
 
 const TAG = '[dsh-rrp]'
 
-/** Reserved slot; the WorldState panel replaces the null renderer in stage 3. */
-const RESERVED_SLOT = 'sidebar.footer'
+/** Locale namespace owned by this plugin; all UI copy goes through it. */
+const LOCALE_NS = 'rrp'
+
+const ZH: Record<string, string> = {
+  title: '世界状态',
+  'guide.description': '查看角色、物品、场景与事件',
+  'section.characters': '角色',
+  'section.inventory': '物品',
+  'section.scene': '场景',
+  'section.flags': '事件',
+  empty: '本会话暂无世界状态',
+}
+
+const EN: Record<string, string> = {
+  title: 'World State',
+  'guide.description': 'Characters, inventory, scene, and flags',
+  'section.characters': 'Characters',
+  'section.inventory': 'Inventory',
+  'section.scene': 'Scene',
+  'section.flags': 'Flags',
+  empty: 'No world state in this session yet',
+}
 
 /** Client plugin body. Registers only reversible effects. */
 export function apply(ctx: RrpClientContext): void {
   ctx.effect(() => {
-    console.log(`${TAG} client half active (stage 1 skeleton)`)
+    console.log(`${TAG} client half active`)
     return () => {
       console.log(`${TAG} client half disposed`)
     }
   }, 'dsh-rrp: client lifecycle')
 
-  // Guarded reservation: an undeclared slot or an unexpected registry shape
-  // must degrade this one seat, never reject the plugin fiber.
-  try {
-    ctx.slots.inject(RESERVED_SLOT, () =>
-      ctx.slots.register({ name: RESERVED_SLOT, key: 'dsh-rrp' }, () => null),
-    )
-  } catch (error) {
-    console.warn(`${TAG} reserved seat registration failed:`, error)
-  }
+  ctx.effect(() => {
+    const offZh = ctx.locale.register(LOCALE_NS, 'zh', ZH)
+    const offEn = ctx.locale.register(LOCALE_NS, 'en', EN)
+    return () => {
+      offZh()
+      offEn()
+    }
+  }, 'dsh-rrp: locale dictionaries')
+
+  registerWorldStateTab(ctx)
 }

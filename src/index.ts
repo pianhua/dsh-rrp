@@ -1,25 +1,25 @@
 /**
  * dsh-rrp — host half.
  *
- * Stage 2: materializes the RP mode (a native DSH agent preset carrying the
- * Author persona — see presets/rp/) into the harness-home user preset root,
- * and verifies at boot that the roster discovers and can compose it.
+ * Stage 2 materializes the RP mode (a native DSH agent preset carrying the
+ * Author persona — see presets/rp/). Stage 3 registers the WorldState session
+ * projection the right-sidebar panel reads.
  *
- * Author / Chronicler / WorldState / Skills logic arrives in later stages —
- * see docs/ACTIVE_TASK.md.
+ * Chronicler / Skills logic arrives in later stages — see docs/ACTIVE_TASK.md.
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
+import { worldStateProjection } from './projection/world-state.ts'
 
 /** Loader row id. Keep in sync with cordis.patch.yml. */
 export const name = 'dsh-rrp'
 
-/** No host services are hard requirements; the roster is probed via ctx.get. */
+/** No host services are hard requirements; capabilities are probed as optional. */
 export const inject: string[] = []
 
 const TAG = '[dsh-rrp]'
 
-/** Structural face of the host agent-preset roster this plugin probes. */
+/** Structural face of the host agent-preset roster. */
 interface AgentPresetRow {
   id: string
   name?: string
@@ -28,6 +28,11 @@ interface AgentPresetRow {
 interface AgentPresetsService {
   resolve(id?: string): Promise<AgentPresetRow>
   standingKeyFor(id?: string): Promise<unknown>
+}
+
+/** Structural face of the session-projection registry. */
+interface SessionProjectionsService {
+  register(definition: typeof worldStateProjection): () => void
 }
 
 /** Plugin body. Every registration is a reversible effect. */
@@ -46,16 +51,23 @@ export function apply(ctx: Context): void {
     }
   }, 'dsh-rrp: RP preset ownership')
 
-  // Optional capability, but timing-sensitive: the agent-presets roster may
-  // activate after this row. `ctx.inject` defers the probe until the service
-  // exists and disposes it with this fiber, so a profile without a roster
-  // simply never probes. Never block the load on it either way.
+  // Optional capability: `ctx.inject` defers registration until the registry
+  // exists and ties the registration to this plugin's lifetime.
+  ctx.inject(['sessionProjections'], (scoped: Context) => {
+    const readable = scoped as unknown as { get(name: string): unknown }
+    const registry = readable.get('sessionProjections') as SessionProjectionsService | undefined
+    if (registry === undefined) return
+    registry.register(worldStateProjection)
+    console.log(`${TAG} WorldState projection registered (key '${worldStateProjection.key}')`)
+  })
+
+  // Roster probe: deferred until agent-presets activates, disposed with this fiber.
   ctx.inject(['agentPresets'], (scoped: Context) => {
     void verifyPreset(scoped)
   })
 }
 
-/** Probe the roster: the preset must be discoverable and composable. */
+/** Probe the roster: the RP preset must be discoverable and composable. */
 async function verifyPreset(ctx: Context): Promise<void> {
   try {
     const readable = ctx as unknown as { get(name: string): unknown }

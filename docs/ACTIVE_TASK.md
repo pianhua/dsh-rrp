@@ -7,8 +7,8 @@
 
 ## 任务状态
 
-- **阶段**：阶段 2 — 自定义 RP 模式 + Author Agent（已完成）
-- **状态**：RP 模式（原生 agent preset）已随插件物化并在真实宿主中成功组合
+- **阶段**：阶段 3 — WorldState 会话投影 + 原生右侧栏看板（已完成）
+- **状态**：投影已注册进宿主 registry，右侧栏 Tab 已注册并随 bundle 下发
 - **原则**：先锁定形态与宿主映射，再落实现；每阶段回读本文件
 
 ---
@@ -20,8 +20,8 @@
 | **0** | 文档架构与产品形态对齐 | ✅ 完成 |
 | **1** | 最小可挂载插件骨架（能 `dsh web` 加载，无业务） | ✅ 完成 |
 | **2** | 自定义 RP 模式 + Author Agent 基础对话 | ✅ 完成 |
-| 3 | WorldState 会话投影 + 原生右侧栏看板 | ⬜ 下一步 |
-| 4 | Chronicler Agent（`ctx.jobs` 异步推演记账） | ⬜ |
+| **3** | WorldState 会话投影 + 原生右侧栏看板 | ✅ 完成 |
+| 4 | Chronicler Agent（`ctx.jobs` 异步推演记账） | ⬜ 下一步 |
 | 5 | Skills 知识体系（替代 Lorebook） | ⬜ |
 | 6 | 原生卡包格式重制 + 卡片展厅 | ⬜ |
 | 7 | Summarizer Agent（可选大局观，按轮触发） | ⬜ |
@@ -30,36 +30,36 @@
 
 ---
 
-## 阶段 2 交付物（已完成）
+## 阶段 3 交付物（已完成）
 
-- `presets/rp/agent.cordis.yml`：RP 模式的 agent-plane 组合，唯一一行 `@deepseek-ai/dsh-persona`，`complete: true`（Author 文本即完整系统提示）+ 屏蔽运行环境快照
-- `presets/rp/preset.yml`：模式显示名「角色扮演 · 执笔」与说明
-- `src/preset.ts`：把随包 preset 物化到 `<dshHome>/.agent-presets/rp/`（DSH 默认扫描的 user root）；marker 记录哈希，刷新只覆盖自己未被改动的副本，用户编辑永不覆盖
-- `src/index.ts`：`apply` 物化 + `ctx.inject(['agentPresets'])` 延迟校验（解决 roster 晚于本行激活的时序问题），`standingKeyFor` 预组合确保模式真实可用
-- `tests/preset.spec.ts`：物化 / 刷新 / 用户编辑保护 / 幂等清理
-- 实测（真实 `dsh --profile rp-dev`）：`[dsh-rrp] RP preset created at ...` → `[dsh-rrp] RP mode '角色扮演 · 执笔' composed and ready`
+- `src/world-state.ts`：WorldState 纯词汇（`characters` / `inventory` / `scene` / `flags`）、事件名 `rrp/world-state`、投影键 `rrpWorldState`
+- `src/projection/world-state.ts`：zod 4 校验 + 纯折叠；遵守整值事件规则，未命中事件返回**同一引用**；`wire.view` 直接复用状态引用
+- `src/index.ts`：`ctx.inject(['sessionProjections'])` 注册投影单元（可逆）
+- `src/client/world-state-tab.ts`：原生右侧栏 Tab 类型（`ctx.sidebarRightTabs.register`）+ `sidebar.right.pane.tab` body，经 `useProjection('rrpWorldState')` 读取状态
+- `src/client/index.ts`：locale 字典（zh/en）走 `ctx.locale.register`，UI 文案零硬编码（守 HOST_ALIGNMENT 红线）
+- 测试：折叠、同引用、逐会话初始化、wire 引用、客户端注册（共 10 用例）
+- 实测：`[dsh-rrp] WorldState projection registered (key 'rrpWorldState')`；boot graph 含 `dsh-rrp/client.js`，服务端下发 bundle 含 Tab 注册标记
 
-> Author 的权能边界（只写正文、严禁代打、不写状态）写在 persona 文本里；Chronicler 与状态记账留待阶段 4。
+> 面板渲染与分支重放的浏览器实测仍需人工在 UI 中确认（本机无浏览器自动化）。
 
 ---
 
-## 下一动作（阶段 3 最小切片）
+## 下一动作（阶段 4 最小切片）
 
-目标：**WorldState 会话投影 + 原生右侧栏看板**。
+目标：**Chronicler Agent 在每轮正文后异步推演世界变化，产出完整 WorldState 并落为会话事件**。
 
-1. 侦察 `ctx.sessionProjections.register` 与 `@deepseek-ai/dsh-session-projection` 的 `init/apply` 纯函数契约
-2. 定义四大维度（`characters` / `inventory` / `scene` / `flags`）的初始切面与事件折叠（纯数学，领域只写折叠）
-3. 客户端注册原生右侧栏 Tab（`ctx.sidebarRightTabs`；slot 键见宿主实测的 `sidebar.right.*`）
-4. 真实 `dsh web` 验证：状态渲染正确、分支切换精确重放
+1. 侦察宿主异步接缝：`ctx.jobs`（后台任务）与 `ctx.subagents` / `@deepseek-ai/dsh-subagent`（独立智体派生）
+2. 用官方 subagent 机制承载 Chronicler（D4：是正经 Agent，不是提取器），提示词写入 `src/agents/chronicler.ts`
+3. 推演结果以**完整状态**追加为 `rrp/world-state` 事件（整值规则），驱动阶段 3 投影与面板刷新
+4. 在真实 `dsh web` 跑一轮，验证事件落日志、投影刷新
 
-> 进入阶段 3 前先回读 D5 / D6 / D9 决策与 [`GLOSSARY.md`](reference/GLOSSARY.md) 术语（WorldState / Player Correction）。
+> 进入阶段 4 前先回读 D3 / D4 / D5 决策与 [`GLOSSARY.md`](reference/GLOSSARY.md) 术语（Chronicler / State Inference）。
 
 ---
 
 ## 验收标准
 
-- 阶段 1（已达成）：`dsh web` 能加载插件，`apply` 与 disposer 均无报错，组合含 client bundle
-- 阶段 2（已达成）：RP 模式被 roster 发现并成功组合；Author 权能边界写入 persona
+- 阶段 1–3（已达成）：真实 `dsh web` 加载、RP 模式组合、投影注册、右侧栏 Tab 下发，均无报错
 - 全程：不触犯 [`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md) 第 4 节任一红线
 - 每阶段：代码保持轻量透明，无并发/分布式/多用户复杂度
 
@@ -67,10 +67,10 @@
 
 ## 阻塞与风险
 
-- ~~**真实宿主版本**~~：已核实 CLI 0.1.5-rc.1 / 宿主包 0.1.5-rc.2
-- ~~**Agent 模式接线**~~：已确认 `ctx.agentPresets`（`resolve` / `standingKeyFor`）与 user root 物化路径
-- **会话投影契约**：`ctx.sessionProjections.register` 的 `init/apply` 签名与事件类型需在阶段 3 开始前对照本机源码核实
-- **右侧栏 Tab**：`ctx.sidebarRightTabs` 在 0.1.5-rc.2 已确认存在；确切注册签名留阶段 3 核实
+- ~~**会话投影契约**~~：已确认 `ctx.sessionProjections.register` 的 `init/apply/wire` 与 zod 4 schema 契约，并实测注册成功
+- ~~**右侧栏 Tab**~~：已确认两段式注册（`ctx.sidebarRightTabs.register` + `sidebar.right.pane.tab`）并随 bundle 下发
+- **事件追加 API**：需在阶段 4 前核实宿主向会话日志追加自定义事件的确切接缝
+- **异步智体接缝**：`ctx.jobs` 与 `ctx.subagents` 的确切用法需在阶段 4 开始前核实
 - **Skills 机制**：`@deepseek-ai/dsh-skill` 的具体注册方式需在阶段 5 前确认
 - **卡包格式**：按用户决策，**留到项目形态成熟后再制定**
-- **对话冒烟**：阶段 2 的「基础对话」仍需在 UI 中选 `角色扮演 · 执笔` 实际发一轮验证（需模型与人工）
+- **浏览器实测**：面板渲染 / 分支重放 / 基础对话均需人工 UI 确认

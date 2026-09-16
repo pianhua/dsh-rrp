@@ -48,6 +48,7 @@ dsh-rrp/
 ├── src/                         # 源码
 │   ├── index.ts                 # 插件后端入口 (Cordis 插件)
 │   ├── preset.ts                # RP 模式（agent preset）物化与归属
+│   ├── world-state.ts           # WorldState 纯词汇（host/client 共享）
 │   ├── client/                  # 客户端 Slot 与右侧栏插件
 │   │   ├── index.ts             # 客户端入口
 │   │   └── components/          # React 18 UI 组件 (状态看板/卡片展厅)
@@ -57,6 +58,7 @@ dsh-rrp/
 │   │   └── summarizer.ts        # 大局编年摘要智能体 (可开可关)
 │   ├── skills/                  # RP 通用基础技能 (按需调取)
 │   └── projection/              # 会话投影纯数学折叠器 (WorldState)
+│       └── world-state.ts       # WorldState 投影单元（zod 校验 + 纯折叠）
 ├── presets/                     # 随包分发的原生 agent preset（RP 模式）
 │   └── rp/                      # Author 执笔模式的组合与元数据
 ├── cards/                       # 官方原生卡包 (未来制定标准规范)
