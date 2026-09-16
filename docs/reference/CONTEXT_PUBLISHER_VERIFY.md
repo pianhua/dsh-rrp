@@ -122,3 +122,32 @@ VERDICT: replace WAS accepted ...
 - [ ] **矫正路径**：第 5 轮后，在右侧把「米娅·好感」改成一个夸张值并保存；再发一句行动，确认作者按新值起笔；
 - [ ] **重启认领**：停掉再重启实例，对同一会话再玩 1 轮，再跑 `--latest`，`ON SURFACE: facts` 仍应为 **1**（证明重启后不重复追加卡包、并继续 replace）；
 - [ ] **旧会话不受影响**：旧会话仍显示多份（历史既定），新会话才是修复对象。
+
+---
+
+## 验证结果（2026-09-16 · Chrome 测试 Agent · submit ea2993a）：**全部 PASS**
+
+| 项 | 实测 | 判定 |
+| :--- | :--- | :---: |
+| ① 工具基线（旧会话） | `ON SURFACE: card=15 facts=0`，`replace=0` | ✅ |
+| ② 新局 5 轮游玩 | 5 轮推进自然 | ✅ |
+| ③ 浏览器体验 | 第三人称/不代打/不剧透、面板与归因每轮更新、沉浸 Tab 纯净、Console 0 红字 | ✅ |
+| ④ 宿主接受 replace | **无** `context replace rejected` | ✅ |
+| ⑤ 核心量化 | `IN LOG: card=1 facts=8` / **`ON SURFACE: card=1 facts=1`** / `replace=7` | 🏆 |
+| ⑥ 矫正 + 重启认领 | 好感 88→91（触发 replace）；`findOwned` 认领 card=seq9 / facts=seq102 | ✅ |
+
+**replace 链**（每一步都遮蔽上一条，surface 只留最新）：
+
+```text
+seq 10  append                                     on-surface=false
+seq 34  {op:replace,start:10,end:10}               on-surface=false
+seq 46  {op:replace,start:34,end:34}               on-surface=false
+seq 58  {op:replace,start:46,end:46}               on-surface=false
+seq 75  {op:replace,start:58,end:58}               on-surface=false
+seq 87  {op:replace,start:75,end:75}               on-surface=false
+seq 90  {op:replace,start:87,end:87}               on-surface=false   <- 玩家矫正触发
+seq 102 {op:replace,start:90,end:90}               on-surface=true    <- 唯一可见
+```
+
+**结论**：模型可见上下文里，卡包 1 份 + 事实 1 份 = **恒定 O(1)**，彻底消除长局多副本膨胀；
+历史旧副本仍留在 append-only 日志中（可重放、可审计），由 surface 折叠遮蔽——这正是 DSH 的既定语义。

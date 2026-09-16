@@ -47,6 +47,10 @@
 
 唯一 **P1 = WorldState 事件累积**（flags 3→32，注入基线随轮增长），已修：提示词改为「当前切面」语义 + `pruneWorldState` 宿主硬上限（提交 `4eaab20`）。
 
+**续修（上下文副本累积）**：进一步发现宿主会把每条 pre-step 注入以 `surfaceOp:'append'` 落盘，导致每轮追加一份过时状态。
+改为**取代式持久发布**（`src/context-publisher.ts`）：卡包发布一次、事实变化时用 `surfaceOp:{op:'replace'}` 就地取代；带三级兜底（replace 被拒→append）与重启认领。
+**真机验证 PASS**（Chrome Agent，提交 `ea2993a`）：`ON SURFACE: card=1 facts=1`、`replace=7`、无拒绝日志；详见 [CONTEXT_PUBLISHER_VERIFY.md](reference/CONTEXT_PUBLISHER_VERIFY.md)。
+
 ---
 
 ## 阶段路线
