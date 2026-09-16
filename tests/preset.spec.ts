@@ -1,0 +1,54 @@
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { PRESET_ID, materializePreset, presetDir, removePreset } from '../src/preset.ts'
+
+const homes: string[] = []
+
+function tempHome(): string {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-rrp-preset-'))
+  homes.push(home)
+  return home
+}
+
+afterEach(() => {
+  for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true })
+})
+
+describe('RP preset materialization', () => {
+  it('writes the shipped preset into the user root', () => {
+    const home = tempHome()
+    const outcome = materializePreset(home)
+
+    expect(outcome.action).toBe('created')
+    expect(outcome.dir).toBe(presetDir(home))
+    expect(PRESET_ID).toBe('rp')
+
+    const composition = readFileSync(join(outcome.dir, 'agent.cordis.yml'), 'utf8')
+    expect(composition).toContain("@deepseek-ai/dsh-persona")
+    expect(composition).toContain('Author Agent')
+    expect(existsSync(join(outcome.dir, 'preset.yml'))).toBe(true)
+
+    expect(removePreset(home)).toBe('removed')
+    expect(existsSync(outcome.dir)).toBe(false)
+  })
+
+  it('refreshes its own unmodified copy but never a user edit', () => {
+    const home = tempHome()
+    materializePreset(home)
+    expect(materializePreset(home).action).toBe('refreshed')
+
+    const target = join(presetDir(home), 'agent.cordis.yml')
+    writeFileSync(target, readFileSync(target, 'utf8') + '\n# user edit\n')
+
+    expect(materializePreset(home).action).toBe('left-user')
+    expect(removePreset(home)).toBe('left-user')
+    expect(existsSync(target)).toBe(true)
+  })
+
+  it('is a no-op when nothing was materialized', () => {
+    const home = tempHome()
+    expect(removePreset(home)).toBe('absent')
+  })
+})

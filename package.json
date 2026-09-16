@@ -12,7 +12,8 @@
     "cordis.patch.yml",
     "README.md",
     "AGENTS.md",
-    "docs"
+    "docs",
+    "presets"
   ],
   "exports": {
     ".": {

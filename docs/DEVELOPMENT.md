@@ -68,10 +68,11 @@ dsh --profile rp-dev --port 3099 --no-open      # 真实宿主验证
 启动日志中应出现：
 
 ```
-[dsh-rrp] host half active (stage 1 skeleton)
-...
-[dsh-rrp] host half disposed
+[dsh-rrp] RP preset created at C:\Users\<you>\.dsh\.agent-presets\rp
+[dsh-rrp] RP mode '角色扮演 · 执笔' composed and ready
 ```
+
+RP 模式随插件物化到 `<dshHome>/.agent-presets/rp/`（DSH 原生 preset user root）；`composed and ready` 表示 roster 已发现并成功组合该 preset，可在会话的模式选择器里选「角色扮演 · 执笔」。
 
 不启动服务器即可确认组合：
 

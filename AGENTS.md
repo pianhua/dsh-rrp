@@ -47,6 +47,7 @@ dsh-rrp/
 │   └── reference/               # 为什么这么设计：决策/术语/经验/技能
 ├── src/                         # 源码
 │   ├── index.ts                 # 插件后端入口 (Cordis 插件)
+│   ├── preset.ts                # RP 模式（agent preset）物化与归属
 │   ├── client/                  # 客户端 Slot 与右侧栏插件
 │   │   ├── index.ts             # 客户端入口
 │   │   └── components/          # React 18 UI 组件 (状态看板/卡片展厅)
@@ -56,6 +57,8 @@ dsh-rrp/
 │   │   └── summarizer.ts        # 大局编年摘要智能体 (可开可关)
 │   ├── skills/                  # RP 通用基础技能 (按需调取)
 │   └── projection/              # 会话投影纯数学折叠器 (WorldState)
+├── presets/                     # 随包分发的原生 agent preset（RP 模式）
+│   └── rp/                      # Author 执笔模式的组合与元数据
 ├── cards/                       # 官方原生卡包 (未来制定标准规范)
 ├── cordis.patch.yml             # DSH profile patch 声明
 ├── package.json                 # 依赖声明 (严格遵循 DSH peer 规范)

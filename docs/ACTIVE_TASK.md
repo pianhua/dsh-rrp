@@ -7,8 +7,8 @@
 
 ## 任务状态
 
-- **阶段**：阶段 1 — 最小可挂载插件骨架（已完成）
-- **状态**：仓库已有生产代码骨架；可在真实 `dsh web` 下加载、组合、干净卸载
+- **阶段**：阶段 2 — 自定义 RP 模式 + Author Agent（已完成）
+- **状态**：RP 模式（原生 agent preset）已随插件物化并在真实宿主中成功组合
 - **原则**：先锁定形态与宿主映射，再落实现；每阶段回读本文件
 
 ---
@@ -19,8 +19,8 @@
 | :--- | :--- | :--- |
 | **0** | 文档架构与产品形态对齐 | ✅ 完成 |
 | **1** | 最小可挂载插件骨架（能 `dsh web` 加载，无业务） | ✅ 完成 |
-| 2 | 自定义 RP 模式 + Author Agent 基础对话 | ⬜ 下一步 |
-| 3 | WorldState 会话投影 + 原生右侧栏看板 | ⬜ |
+| **2** | 自定义 RP 模式 + Author Agent 基础对话 | ✅ 完成 |
+| 3 | WorldState 会话投影 + 原生右侧栏看板 | ⬜ 下一步 |
 | 4 | Chronicler Agent（`ctx.jobs` 异步推演记账） | ⬜ |
 | 5 | Skills 知识体系（替代 Lorebook） | ⬜ |
 | 6 | 原生卡包格式重制 + 卡片展厅 | ⬜ |
@@ -30,33 +30,36 @@
 
 ---
 
-## 阶段 1 交付物（已完成）
+## 阶段 2 交付物（已完成）
 
-- 工程骨架：`package.json`（`dsh.bundle.patch` + `dsh.client`，DSH 包仅 `peerDependencies`）、`tsconfig.json`、`tsconfig.build.json`、`tsdown.config.ts`
-- `cordis.patch.yml`：仅 `insert` 本插件行
-- 后端入口 `src/index.ts`：function 插件（`name` / `inject` / `apply`），可逆生命周期 effect
-- 客户端入口 `src/client/index.ts`：`window.__ModuleLoader__` 闭包工厂，预留 `sidebar.footer` 空 Seat（可逆）
-- `tests/host-mount.spec.ts`：HMR 安全（挂载/卸载无残留）
-- 开发环境：`rp-dev` profile + `pnpm run link:dev`（跨盘 junction），见 [`DEVELOPMENT.md`](DEVELOPMENT.md)
+- `presets/rp/agent.cordis.yml`：RP 模式的 agent-plane 组合，唯一一行 `@deepseek-ai/dsh-persona`，`complete: true`（Author 文本即完整系统提示）+ 屏蔽运行环境快照
+- `presets/rp/preset.yml`：模式显示名「角色扮演 · 执笔」与说明
+- `src/preset.ts`：把随包 preset 物化到 `<dshHome>/.agent-presets/rp/`（DSH 默认扫描的 user root）；marker 记录哈希，刷新只覆盖自己未被改动的副本，用户编辑永不覆盖
+- `src/index.ts`：`apply` 物化 + `ctx.inject(['agentPresets'])` 延迟校验（解决 roster 晚于本行激活的时序问题），`standingKeyFor` 预组合确保模式真实可用
+- `tests/preset.spec.ts`：物化 / 刷新 / 用户编辑保护 / 幂等清理
+- 实测（真实 `dsh --profile rp-dev`）：`[dsh-rrp] RP preset created at ...` → `[dsh-rrp] RP mode '角色扮演 · 执笔' composed and ready`
+
+> Author 的权能边界（只写正文、严禁代打、不写状态）写在 persona 文本里；Chronicler 与状态记账留待阶段 4。
 
 ---
 
-## 下一动作（阶段 2 最小切片）
+## 下一动作（阶段 3 最小切片）
 
-目标：**把插件组合出一个自定义 RP 模式，并让 Author Agent 能就基础对话产出正文**。
+目标：**WorldState 会话投影 + 原生右侧栏看板**。
 
-1. 侦察宿主 Agent 接线：`ctx.agents` / `@deepseek-ai/dsh-agent-presets` 的注册与挂载方式（对照本机 0.1.5-rc.2）
-2. 定义 Author Agent 的系统提示词与权能边界（只写正文、严禁代打、不写状态）
-3. 以 DSH 原生 preset / RP 模式形态挂载，避免自建编排
-4. 在真实 `dsh web` 下跑一轮基础对话验证
+1. 侦察 `ctx.sessionProjections.register` 与 `@deepseek-ai/dsh-session-projection` 的 `init/apply` 纯函数契约
+2. 定义四大维度（`characters` / `inventory` / `scene` / `flags`）的初始切面与事件折叠（纯数学，领域只写折叠）
+3. 客户端注册原生右侧栏 Tab（`ctx.sidebarRightTabs`；slot 键见宿主实测的 `sidebar.right.*`）
+4. 真实 `dsh web` 验证：状态渲染正确、分支切换精确重放
 
-> 进入阶段 2 前先回读 D3 / D4 决策与 [`GLOSSARY.md`](reference/GLOSSARY.md) 术语。
+> 进入阶段 3 前先回读 D5 / D6 / D9 决策与 [`GLOSSARY.md`](reference/GLOSSARY.md) 术语（WorldState / Player Correction）。
 
 ---
 
 ## 验收标准
 
 - 阶段 1（已达成）：`dsh web` 能加载插件，`apply` 与 disposer 均无报错，组合含 client bundle
+- 阶段 2（已达成）：RP 模式被 roster 发现并成功组合；Author 权能边界写入 persona
 - 全程：不触犯 [`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md) 第 4 节任一红线
 - 每阶段：代码保持轻量透明，无并发/分布式/多用户复杂度
 
@@ -64,9 +67,10 @@
 
 ## 阻塞与风险
 
-- ~~**真实宿主版本**~~：已核实 CLI 0.1.5-rc.1 / 宿主包 0.1.5-rc.2，与基线一致
-- **Agent 模式接线**：`ctx.agents` / `dsh-agent-presets` 的确切注册方式需在阶段 2 开始前核实
-- **右侧栏 API**：`ctx.sidebarRightTabs` 在 0.1.5-rc.2 已确认存在；确切签名留阶段 3 核实
+- ~~**真实宿主版本**~~：已核实 CLI 0.1.5-rc.1 / 宿主包 0.1.5-rc.2
+- ~~**Agent 模式接线**~~：已确认 `ctx.agentPresets`（`resolve` / `standingKeyFor`）与 user root 物化路径
+- **会话投影契约**：`ctx.sessionProjections.register` 的 `init/apply` 签名与事件类型需在阶段 3 开始前对照本机源码核实
+- **右侧栏 Tab**：`ctx.sidebarRightTabs` 在 0.1.5-rc.2 已确认存在；确切注册签名留阶段 3 核实
 - **Skills 机制**：`@deepseek-ai/dsh-skill` 的具体注册方式需在阶段 5 前确认
 - **卡包格式**：按用户决策，**留到项目形态成熟后再制定**
-- **模型切换风险**：文档先行正是为了避免多代实现漂移；后续每个阶段须回读本文件对齐
+- **对话冒烟**：阶段 2 的「基础对话」仍需在 UI 中选 `角色扮演 · 执笔` 实际发一轮验证（需模型与人工）
