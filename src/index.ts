@@ -9,10 +9,12 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { registerActivityRoute } from './activity-route.ts'
+import { listCards } from './cards.ts'
 import { registerCardsRoute } from './cards-route.ts'
 import { registerChronicler } from './chronicler.ts'
 import { registerCorrectionRoute } from './correction.ts'
 import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
+import { presetIdForCard } from './preset-id.ts'
 import { cardProjection } from './projection/card.ts'
 import { summaryProjection } from './projection/summary.ts'
 import { worldStateProjection } from './projection/world-state.ts'
@@ -123,6 +125,12 @@ export function apply(ctx: Context): void {
   })
 }
 
+/** Comma-joined skill names, or `(none)`. */
+function skillNames(catalog: Array<{ name: string }>): string {
+  const names = catalog.map((entry) => entry.name).join(', ')
+  return names.length > 0 ? names : '(none)'
+}
+
 /** Probe the roster: the RP preset must be discoverable and composable. */
 async function verifyPreset(ctx: Context): Promise<void> {
   try {
@@ -136,12 +144,28 @@ async function verifyPreset(ctx: Context): Promise<void> {
     const scope = await presets.standingKeyFor(PRESET_ID)
     console.log(`${TAG} RP mode '${preset.name ?? PRESET_ID}' composed and ready`)
 
-    // Verify the RP scope's skill catalog actually discovers the bundled bundles.
+    // Verify each preset's scope discovers exactly the bundles it should: the
+    // base RP mode carries no card lore, and each card preset carries only its
+    // own (the isolation the scoped-preset design exists for).
     const skills = readable.get('skills') as SkillsService | undefined
     if (skills !== undefined) {
-      const catalog = await skills.list({ scope })
-      const names = catalog.map((entry) => entry.name).join(', ')
-      console.log(`${TAG} RP skills visible (${catalog.length}): ${names.length > 0 ? names : '(none)'}`)
+      const base = await skills.list({ scope })
+      console.log(`${TAG} RP skills visible (${base.length}): ${skillNames(base)}`)
+      for (const meta of listCards()) {
+        const cardPresetId = presetIdForCard(meta.id)
+        try {
+          const cardPreset = await presets.resolve(cardPresetId)
+          if (cardPreset.broken !== undefined) {
+            console.warn(`${TAG} card preset '${cardPresetId}' is broken: ${cardPreset.broken}`)
+            continue
+          }
+          const cardScope = await presets.standingKeyFor(cardPresetId)
+          const catalog = await skills.list({ scope: cardScope })
+          console.log(`${TAG} card preset '${cardPresetId}' skills (${catalog.length}): ${skillNames(catalog)}`)
+        } catch (error) {
+          console.warn(`${TAG} card preset '${cardPresetId}' verification failed:`, error)
+        }
+      }
     }
   } catch (error) {
     console.warn(`${TAG} RP mode verification failed:`, error)

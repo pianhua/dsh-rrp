@@ -1,31 +1,35 @@
 /**
- * dsh-rrp — the RP mode preset (materialization + ownership).
+ * dsh-rrp — the RP mode presets (materialization + ownership).
  *
  * A DSH "mode" is an agent preset: a directory holding `agent.cordis.yml` that
  * the agent-presets roster mounts once per process and every session naming it
- * joins. We ship ours inside this package (`presets/rp/`), including its own
- * `skills/` bundles, and materialize the whole tree into the harness-home user
- * preset root (`<dshHome>/.agent-presets/rp/`), which
- * `@deepseek-ai/dsh-agent-presets` scans by default.
+ * joins. We ship the base mode inside this package (`presets/rp/`) and
+ * materialize it into the harness-home user preset root
+ * (`<dshHome>/.agent-presets/<id>/`), which `@deepseek-ai/dsh-agent-presets`
+ * scans by default.
  *
+ * Card skills are SCOPED BY PRESET: the base `rp` preset carries no card lore,
+ * and each card gets a derived `rp-<card-id>` preset whose own `skills/` root
+ * holds only that card's bundles (see ./preset-id.ts). Mounting every card into
+ * one shared root would leak one card's world knowledge into every session.
  * The composition carries a `bundledSkillDir` placeholder that materialization
- * replaces with the copy's absolute `skills/` path, so the RP scope's
- * skill-filesystem provider discovers the world-knowledge bundles (D7).
+ * replaces with the copy's absolute `skills/` path.
  *
  * Ownership: a marker records the hash of every file we wrote. We refresh only
  * our own unmodified copy; a user-edited preset is never overwritten, and
- * dispose removes the directory only while it is still our unmodified copy —
+ * dispose removes directories only while they are still our unmodified copy —
  * and only on uninstall, never on a reload/restart.
  */
 import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { mountCardSkills } from './cards.ts'
+import { listCards, mountSkillsForCard } from './cards.ts'
 import { harnessHome } from './home.ts'
+import { BASE_PRESET_ID, belongsToRpPreset, presetIdForCard } from './preset-id.ts'
 
-/** Preset id, also the directory name; must satisfy the roster's PRESET_ID. */
-export const PRESET_ID = 'rp'
+/** Base preset id, also the directory name; must satisfy the roster's PRESET_ID. */
+export const PRESET_ID = BASE_PRESET_ID
 
 /** Ownership marker written beside the materialized copy. */
 const MARKER_FILE = '.dsh-rrp.json'
@@ -41,9 +45,9 @@ const SOURCE_DIR = fileURLToPath(new URL('../presets/rp/', import.meta.url))
 /** This package's own manifest, used to tell a reload from an uninstall. */
 const PACKAGE_MANIFEST = fileURLToPath(new URL('../package.json', import.meta.url))
 
-/** The user preset directory this plugin owns. */
-export function presetDir(home: string = harnessHome()): string {
-  return join(home, '.agent-presets', PRESET_ID)
+/** The user preset directory for one preset id. */
+export function presetDir(home: string = harnessHome(), id: string = PRESET_ID): string {
+  return join(home, '.agent-presets', id)
 }
 
 /** Outcome of one materialization pass. */
@@ -52,6 +56,8 @@ export interface MaterializeOutcome {
   dir: string
   /** `created` on first write, `refreshed` on our own copy, `left-user` when foreign/edited. */
   action: 'created' | 'refreshed' | 'left-user'
+  /** Per-card preset outcomes when the base was materialized as a family. */
+  cards?: MaterializeOutcome[]
 }
 
 /** Every file under `root` as sorted POSIX relative paths. */
@@ -106,14 +112,11 @@ function isOursUnmodified(dir: string): boolean {
 }
 
 /**
- * Materialize (or refresh) the shipped RP preset, templating the composition
- * with the copy's own skills path.
- * @param home - harness home override; defaults to DSH_HOME or ~/.dsh.
- * @returns the directory and the action taken.
- * @throws when the shipped source is missing (a build/package error).
+ * Materialize (or refresh) ONE preset directory, templating the composition
+ * with the copy's own skills path and, for a card preset, mounting only that
+ * card's world-knowledge bundles.
  */
-export function materializePreset(home?: string): MaterializeOutcome {
-  const dir = presetDir(home)
+function materializeOne(dir: string, cardId: string | undefined, home: string | undefined): MaterializeOutcome {
   const sourceComposition = join(SOURCE_DIR, COMPOSITION_FILE)
   if (!existsSync(sourceComposition)) {
     throw new Error(`dsh-rrp: shipped RP preset missing at ${SOURCE_DIR} — rebuild before linking`)
@@ -125,8 +128,7 @@ export function materializePreset(home?: string): MaterializeOutcome {
   rmSync(dir, { recursive: true, force: true })
   mkdirSync(dir, { recursive: true })
   cpSync(SOURCE_DIR, dir, { recursive: true, force: true })
-  // Mount every card's world-knowledge skills into the RP skill root (D7).
-  mountCardSkills(dir)
+  if (cardId !== undefined) mountSkillsForCard(dir, cardId, home)
 
   const templated = readFileSync(sourceComposition, 'utf8')
     .replaceAll(SKILL_DIR_TOKEN, join(dir, 'skills'))
@@ -138,20 +140,35 @@ export function materializePreset(home?: string): MaterializeOutcome {
 }
 
 /**
+ * Materialize the base RP preset plus one scoped preset per visible card.
+ * @param home - harness home override; defaults to DSH_HOME or ~/.dsh.
+ * @returns the base outcome (with each card preset outcome in `cards`).
+ * @throws when the shipped source is missing (a build/package error).
+ */
+export function materializePreset(home?: string): MaterializeOutcome {
+  const base = materializeOne(presetDir(home), undefined, home)
+  const cards: MaterializeOutcome[] = []
+  for (const meta of listCards(home)) {
+    cards.push(materializeOne(presetDir(home, presetIdForCard(meta.id)), meta.id, home))
+  }
+  return { ...base, cards }
+}
+
+/**
  * Dispose-time cleanup, mirroring the community preset-materializer pattern:
- * a session records the preset id it was composed from, so the preset must
- * keep resolving across a reload, restart, or update. Only a vanished package
- * (an uninstall) removes our unmodified copy.
+ * a session records the preset id it was composed from, so presets must keep
+ * resolving across a reload, restart, or update. Only a vanished package
+ * (an uninstall) removes our unmodified copies.
  * @param home - harness home override; defaults to DSH_HOME or ~/.dsh.
  * @returns `kept-installed`, `removed`, `left-user`, or `absent`.
  */
 export function cleanupPreset(home?: string): 'kept-installed' | 'removed' | 'left-user' | 'absent' {
   if (existsSync(PACKAGE_MANIFEST)) return 'kept-installed'
-  return removePreset(home)
+  return removeAllPresets(home)
 }
 
 /**
- * Remove our materialization, unless the user edited or replaced it.
+ * Remove the base materialization, unless the user edited or replaced it.
  * @param home - harness home override; defaults to DSH_HOME or ~/.dsh.
  * @returns `removed`, `left-user`, or `absent`.
  */
@@ -161,4 +178,28 @@ export function removePreset(home?: string): 'removed' | 'left-user' | 'absent' 
   if (!isOursUnmodified(dir)) return 'left-user'
   rmSync(dir, { recursive: true, force: true })
   return 'removed'
+}
+
+/**
+ * Remove every unmodified RP-family preset (base + card presets).
+ * @param home - harness home override; defaults to DSH_HOME or ~/.dsh.
+ * @returns `removed` when any were removed, `left-user` when one was edited, else `absent`.
+ */
+export function removeAllPresets(home?: string): 'removed' | 'left-user' | 'absent' {
+  const root = join(home ?? harnessHome(), '.agent-presets')
+  if (!existsSync(root)) return 'absent'
+  let sawAny = false
+  let leftUser = false
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !belongsToRpPreset(entry.name)) continue
+    sawAny = true
+    const dir = join(root, entry.name)
+    if (!isOursUnmodified(dir)) {
+      leftUser = true
+      continue
+    }
+    rmSync(dir, { recursive: true, force: true })
+  }
+  if (!sawAny) return 'absent'
+  return leftUser ? 'left-user' : 'removed'
 }

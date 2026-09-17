@@ -85,6 +85,24 @@
 
 ---
 
+## 多卡技能作用域（2026-09-17）
+
+**问题**：`mountCardSkills` 把**所有**卡的 `skills/*` 挂进同一个 `rp` preset 的技能根。DSH 的 skill 目录按 **agent preset 作用域**分层，于是任何一张卡都能检索到别的卡的世界知识——跨卡串味、甚至剧透。
+
+**方案：每张卡一个派生 preset。**
+
+- id 规则：基础 `rp`（无卡包设定）+ `rp-<card-id>`（只含该卡技能），见 `src/preset-id.ts`（依赖为零，宿主与浏览器共用）；
+- 物化：`materializePreset` 物化基础 preset + 每张卡一个；`mountSkillsForCard(dir, cardId)` 只拷当前卡的技能；
+- 选择：卡片展厅开局时 `agentPresets.select(sessionId, presetIdForCard(card.id))`；
+- 触发：纪事官/编年官按 **preset family** 匹配（`matchesPreset(id, 'rp')`），`rp-*` 同样受管；
+- 清理：卸载时 `removeAllPresets` 删除整个 family（只删我们未改动的 marker 目录）。
+
+**验证**：`tests/host-mount.spec.ts` 造两张合成卡 `alpha`/`beta`，断言 `rp-alpha` 只含 `alpha-lore`、`rp-beta` 只含 `beta-lore`、基础 `rp` 两者皆无；`tests/preset-id.spec.ts` 覆盖 id 规则。真机启动日志：`RP skills visible (0)` + `card preset 'rp-maid-heiress' skills (6)`。
+
+**证据等级**：73 用例全绿、`typecheck`/`build` 通过、宿主实测启动日志与磁盘目录均确认隔离。
+
+---
+
 ## 阶段路线
 
 | 阶段 | 主题 | 状态 |
@@ -115,11 +133,11 @@
 - ✅ 目录格式 + `src/cards.ts` 加载器 + `GET /dsh-rrp/cards`、`/cards/one` 只读路由 + `tests/cards.spec.ts`
 - ✅ 首个原生测试卡 `cards/maid-heiress`（由酒馆卡 `女仆大小姐.json` 单向转译，见 CARDS.md §11）
 - ✅ **卡片展厅** `src/client/gallery-panel.tsx`：`main` 主区面板 + 同名 `sidebar.panellist` 导航图标
-- ✅ **开卡新会话流**：`ctx.sessions.create` → `ctx.remote.agentPresets.select(id,'rp')` → `POST /dsh-rrp/start`（写初始状态 + 追加开场白）+ `tests/start.spec.ts`
+- ✅ **开卡新会话流**：`ctx.sessions.create` → `ctx.remote.agentPresets.select(id, presetIdForCard(card.id))` → `POST /dsh-rrp/start`（发布初始状态 + 最后追加开场白）→ `sessions.open` + `tests/start.spec.ts`
 - ⏸️ **P0 暖纸主题（已撤回）**：曾以 `ctx.theme.overrideTokens` 实现暖纸 + 衬线 + 大行高；所有者实测后否决观感，恢复 **DSH 原版亮暗**（`src/client/theme.ts` 已删除，能力记录见 [UI_CEILING.md](reference/UI_CEILING.md)）
 - ✅ **UI 精修（宿主原子库）**：卡片展厅与「世界状态」侧栏改用平台模块 `@deepseek-ai/dsh-client-ui-primitives`（Button / Pill / Input / StateDot / Tooltip / Icon*）——搜索框、卡面封面、技能卡、开场白引用块、底部主操作条；面板**自动跟随明暗主题**（[HOST_SEAMS.md](reference/HOST_SEAMS.md) §A4）
 - ✅ **卡包设定注入**：`rrpCard` 投影（`src/projection/card.ts`）+ Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入（状态寄存在 `user/message` 的 `source.rrp`）
-- ✅ **卡包技能挂载**：`mountCardSkills` 把 `cards/*/skills` 挂进 preset 技能根——实测启动日志 `RP skills visible (6)`
+- ✅ **卡包技能挂载（按卡隔离）**：`mountSkillsForCard` 只把当前卡的技能挂进**该卡专属 preset** `rp-<card-id>`；基础 `rp` 无卡包设定——实测 `RP skills visible (0)` + `card preset 'rp-maid-heiress' skills (6)`
 - ⬜ **实机确认（关键）**：开场白以 `assistant/message` 追加是否被宿主接受并渲染为正文；被拒会自动回退为 plugin notice（`user/message`）
 - ⬜ **实机确认**：卡包 persona 走 `agent/pre-step` 注入是否会以 context 节点剧透（CARDS.md §11）
 - ✅ **P3 沉浸视图** `src/client/story-view.tsx`：新增「沉浸」Tab，订阅宿主 `chat` 快照，按小说排版重排正文（**纯增量**，不替换宿主渲染）

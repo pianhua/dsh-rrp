@@ -16,6 +16,7 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
 import { CHRONICLER_SYSTEM_PROMPT, buildChroniclerPrompt, parseChroniclerReply } from './agents/chronicler.ts'
+import { matchesPreset } from './preset-id.ts'
 import { publishState } from './state-publisher.ts'
 import { rrpPayloadOf } from './state-payload.ts'
 import { WORLD_STATE_KEY, diffWorldState, emptyWorldState, type WorldState } from './world-state.ts'
@@ -90,7 +91,7 @@ export function registerChronicler(ctx: Context, presetId: string): void {
       const event = args[1] as { type?: string; data?: { reason?: { kind?: string } } } | undefined
       if (session === undefined || event?.type !== 'turn/end') return
       if (event.data?.reason?.kind !== 'completed') return
-      if (projections.stateOf(session, 'agentPreset') !== presetId) return
+      if (!matchesPreset(projections.stateOf(session, 'agentPreset') as string | undefined, presetId)) return
       scheduleInference(faces, session)
     })
     console.log(TAG + ' Chronicler armed for preset ' + presetId)

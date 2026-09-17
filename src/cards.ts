@@ -302,24 +302,25 @@ export function readCard(id: string, home: string = harnessHome()): CardPack | u
 }
 
 /**
- * Materialize every card's world-knowledge skills into a preset's skills root.
- * The RP scope's skill-filesystem scans that root (bundledSkillDir), so the
- * model retrieves card lore by natural language instead of context-stuffing.
- * Best-effort: one unreadable card or skill never breaks materialization.
- * @param dir - the materialized preset directory.
+ * Materialize ONE card's world-knowledge skills into its own preset's skills
+ * root. The card preset's skill-filesystem scans that root (bundledSkillDir), so
+ * the model retrieves that card's lore by natural language instead of
+ * context-stuffing — and no other card's lore is in scope.
+ * Best-effort: an unreadable card or skill never breaks materialization.
+ * @param dir - the materialized card preset directory.
+ * @param cardId - the card whose skills are mounted.
+ * @param home - harness home override; defaults to DSH_HOME or ~/.dsh.
  */
-export function mountCardSkills(dir: string): void {
+export function mountSkillsForCard(dir: string, cardId: string, home?: string): void {
+  const card = readCard(cardId, home)
+  if (card === undefined || card.skills.length === 0) return
   const root = join(dir, 'skills')
   mkdirSync(root, { recursive: true })
-  for (const meta of listCards()) {
-    const card = readCard(meta.id)
-    if (card === undefined) continue
-    for (const skill of card.skills) {
-      try {
-        cpSync(skill.dir, join(root, meta.id + '-' + skill.id), { recursive: true, force: true })
-      } catch {
-        /* skip a skill that cannot be copied */
-      }
+  for (const skill of card.skills) {
+    try {
+      cpSync(skill.dir, join(root, skill.id), { recursive: true, force: true })
+    } catch {
+      /* skip a skill that cannot be copied */
     }
   }
 }

@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { PRESET_ID, materializePreset, presetDir, removePreset } from '../src/preset.ts'
+import { PRESET_ID, materializePreset, presetDir, removeAllPresets, removePreset } from '../src/preset.ts'
 
 const homes: string[] = []
 
@@ -49,6 +49,26 @@ describe('RP preset materialization', () => {
     expect(materializePreset(home).action).toBe('left-user')
     expect(removePreset(home)).toBe('left-user')
     expect(existsSync(target)).toBe(true)
+  })
+
+  it("materializes one scoped preset per card with only that card's skills", () => {
+    const home = tempHome()
+    const outcome = materializePreset(home)
+
+    const card = outcome.cards?.find((entry) => entry.dir === presetDir(home, 'rp-maid-heiress'))
+    expect(card).toBeDefined()
+    // The card preset's composition points at its OWN skills root...
+    const composition = readFileSync(join(card!.dir, 'agent.cordis.yml'), 'utf8')
+    expect(composition).toContain(join(card!.dir, 'skills'))
+    // ...which holds this card's bundles...
+    expect(existsSync(join(card!.dir, 'skills', 'mia', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(card!.dir, 'skills', 'world-setting', 'SKILL.md'))).toBe(true)
+    // ...and the base preset carries NO card lore.
+    expect(existsSync(join(outcome.dir, 'skills', 'mia'))).toBe(false)
+
+    // Uninstall-style cleanup removes the whole family.
+    expect(removeAllPresets(home)).toBe('removed')
+    expect(existsSync(card!.dir)).toBe(false)
   })
 
   it('is a no-op when nothing was materialized', () => {

@@ -17,7 +17,7 @@
 | 发「你好」后作者自行铺开山谷、猎人、木屋 | 没有卡包提供世界；人设只能自造或空转 |
 | 作者自称「纪事者 / 作者」并询问「想把故事开在哪」 | 没有开场白，也没有玩家角色，作者不知道自己在演谁 |
 | 右侧状态从空开始 | 没有卡包提供初始 WorldState |
-| `RP skills visible (0)` | 没有卡包提供世界知识技能 |
+| `RP skills visible (0)`（基础 `rp`） | 基础模式不带卡包设定；世界知识挂在派生 preset `rp-<card-id>` 上（见 §12） |
 | 「不像 RP，像 coding agent」 | 没有卡面、开场白、文学排版这些 RP 的可见骨架 |
 
 **结论：卡包是 RP 的地基。** 它同时承载：人设、开场白、玩家角色、初始状态、世界知识、卡面。
@@ -122,7 +122,7 @@ opening: default
 | 卡包资产 | 落到的宿主/插件接缝 | 说明 |
 | :--- | :--- | :--- |
 | `persona` + 正文世界核心 | `rrpCard` 投影 + `src/state-publisher.ts` 注入 | 只在带该卡的会话生效，不污染 preset；模型可见、面板不显示 |
-| `skills/` | `mountCardSkills` 拷入 preset 技能根 → DSH Skill | 实测启动日志 `RP skills visible (6)` |
+| `skills/` | `mountSkillsForCard` 拷入**该卡专属 preset** (`rp-<id>`) 的技能根 → DSH Skill | 实测启动日志 `card preset 'rp-maid-heiress' skills (6): maid-apartment, …` |
 | `state.json` | `user/message` 的 `source.rrp.worldState` + 现有投影 | 无需新投影 |
 | 开场白 | 新会话的首条消息 | 需宿主「以预设新建会话 + 注入首条消息」接缝（见 §9 待勘察） |
 | 卡面/列表 | 卡片展厅 UI | 复用 Slots / 右侧栏 / 顶栏入口（见 §9） |
@@ -143,7 +143,7 @@ opening: default
 1. **卡片展厅**：没有全局顶栏 slot。正统入口 = `main` 主区面板（keyed）+ 同名
    `sidebar.panellist` 导航图标（list id 必须等于 main key），切换用 `ctx.layout.selectPanel(id)`。
 2. **新建会话 + preset**：`ctx.sessions.create({ workspaceId?, cwd? })` **没有 preset 参数**；
-   建后立即 `ctx.remote.agentPresets.select(sessionId, 'rp')`（仅空会话可切换），再 `ctx.sessions.open(id)`。
+   建后立即 `ctx.remote.agentPresets.select(sessionId, presetIdForCard(card.id))`（仅空会话可切换）；POST `/dsh-rrp/start` 之后再 `ctx.sessions.open(id)`。
 3. **开场白**：**没有「建时带首条消息」的 API**。做法是建后
    `ctx.sessions.binding(id).session.prompt([{type:'text',text}], 'queue')`。注意这会写成一条
    **user/message**（需带 `source` 才能与玩家发言区分）；`system/message` 会进入模型可见历史，RP 慎用。
@@ -189,13 +189,14 @@ opening: default
 
 ## 12. 实现现状（2026-09-17）
 
-- 加载器 `src/cards.ts`：纯目录解析（frontmatter 子集 / 开场白 / `state.json` / `skills`），无 HTTP、无 DB、无索引；`mountCardSkills()` 把每张卡的 `skills/*` 挂进 RP preset 的技能根（启动日志 `RP skills visible (6)`）。
+- 加载器 `src/cards.ts`：纯目录解析（frontmatter 子集 / 开场白 / `state.json` / `skills`），无 HTTP、无 DB、无索引；`mountSkillsForCard()` 把**一张卡**的 `skills/*` 挂进**它自己的** preset 技能根。
 - 卡面类型 `src/card-types.ts`：依赖为零，宿主与浏览器共享。
 - **卡包设定投影** `rrpCard`（`src/projection/card.ts`）+ `renderCardContext`：Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入（`src/state-publisher.ts`，追加式去重）。
 - 只读路由 `src/cards-route.ts`：`GET /dsh-rrp/cards`、`GET /dsh-rrp/cards/one?id=<id>`。
 - 开卡路由 `src/start.ts`：`POST /dsh-rrp/start` → 发布卡包 + 初始状态上下文（`source.rrp`；actor `card` 记入内存账本），**最后**追加开场白。
-- 卡片展厅 `src/client/gallery-panel.tsx`：`main` 主区面板 + 同名 `sidebar.panellist` 导航；开始流 = create → `agentPresets.select('rp')` → open → POST start。UI 用宿主原子库（搜索/封面/标签/技能卡/开场白 + 底部主操作条）。
+- 卡片展厅 `src/client/gallery-panel.tsx`：`main` 主区面板 + 同名 `sidebar.panellist` 导航；开始流 = create → `agentPresets.select(presetIdForCard(card.id))` → POST start → open。UI 用宿主原子库（搜索/封面/标签/技能卡/开场白 + 底部主操作条）。
 - **主题（已撤回 P0）**：暖纸 `overrideTokens` 层观感被所有者否决，改用 **DSH 原版亮暗**；面板自身靠 `@deepseek-ai/dsh-client-ui-primitives` 原子 + `--dsw-alias-*` token 保持原生观感（见 [UI_CEILING.md](UI_CEILING.md) §A4）。
 - 测试：`tests/cards.spec.ts`、`tests/start.spec.ts`、`tests/client.spec.ts` 等——全套 **66 用例**（`pnpm typecheck` / `build` 全绿）。
 - **已实机确认**：开场白被宿主原生接受为**正文第一条**；卡包 persona 注入**零剧透**（见 [MANUAL_TEST.md](MANUAL_TEST.md)）。
-- **待优化**：多卡技能作用域（当前 `mountCardSkills` 全局挂载会跨卡串味）；P4 输入区接管；多卡体系下的卡面封面图。
+- ✅ **技能作用域（已修）**：每张卡一个 `rp-<card-id>` preset（`src/preset-id.ts`），绑定卡包开局时 `agentPresets.select` 选它；基础 `rp` 无卡包设定。宿主启动日志会逐个打印各 preset 的技能表。
+- **待优化**：P4 输入区接管；多卡体系下的卡面封面图；第二张官方测试卡。

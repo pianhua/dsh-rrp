@@ -15,6 +15,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
 import { SUMMARIZER_SYSTEM_PROMPT, buildSummarizerPrompt, parseSummarizerReply } from './agents/summarizer.ts'
 import { messageOf, transcriptOf } from './chronicler.ts'
+import { matchesPreset } from './preset-id.ts'
 import { publishState } from './state-publisher.ts'
 
 const TAG = '[dsh-rrp]'
@@ -108,7 +109,7 @@ export function registerSummarizer(ctx: Context, presetId: string): void {
       if (session === undefined || event?.type !== 'turn/end') return
       if (event.data?.reason?.kind !== 'completed') return
       if (!summaryEnabled) return
-      if (projections.stateOf(session, 'agentPreset') !== presetId) return
+      if (!matchesPreset(projections.stateOf(session, 'agentPreset') as string | undefined, presetId)) return
       const boundary = projections.stateOf(session, 'turnBoundary') as { lastTurn?: number } | undefined
       const turn = boundary?.lastTurn ?? 0
       if (turn === 0 || turn % DEFAULT_EVERY_TURNS !== 0) return

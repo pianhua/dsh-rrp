@@ -27,6 +27,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import type { CardMeta, CardPack } from '../card-types.ts'
+import { presetIdForCard } from '../preset-id.ts'
 import type { RrpClientContext } from './context-types.ts'
 
 /** Panel id: the \`main\` key and the \`sidebar.panellist\` id must match. */
@@ -429,7 +430,9 @@ export function registerGallery(ctx: RrpClientContext): void {
     const remote = ctx.remote
     if (sessions === undefined || remote === undefined) return { ok: false, message: t('gallery.unavailable') }
     const sessionId = await sessions.create({})
-    const selected = await remote.agentPresets.select(sessionId, 'rp')
+    // Each card gets its own scoped preset (rp-<card-id>) so only this card's
+    // world-knowledge skills are in the session's skill scope.
+    const selected = await remote.agentPresets.select(sessionId, presetIdForCard(card.id))
     if (selected.ok === false) return { ok: false, message: selected.error?.message ?? 'agentPresets.select failed' }
 
     // The card name is the story's name; a rename is a nicety, never fatal.

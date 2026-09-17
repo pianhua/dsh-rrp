@@ -16,7 +16,8 @@ dsh --profile rp-dev --port 3099 --no-open
 - `activity route armed at /dsh-rrp/activity`
 - `active-card projection registered (key 'rrpCard')`
 - `card routes armed` / `card start route armed`
-- **`RP skills visible (6): maid-apartment, maid-cecilia, maid-family, maid-mia, maid-tone-rules, maid-world-setting`**
+- `RP skills visible (0): (none)`（基础 `rp` 模式**不带**任何卡包设定）
+- `card preset 'rp-maid-heiress' skills (6): maid-apartment, maid-cecilia, maid-family, maid-mia, maid-tone-rules, maid-world-setting`
 
 ## 1. 主题（原生亮/暗，P0 已撤回）
 
