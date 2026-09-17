@@ -12,6 +12,7 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parse as parseYAML } from 'yaml'
 import { harnessHome } from './home.ts'
 import { isCardId } from './preset-id.ts'
 import { worldStateSchema } from './projection/world-state.ts'
@@ -56,95 +57,6 @@ function asObject(value: FrontmatterValue | undefined): Record<string, string> |
   return typeof value === 'object' && !Array.isArray(value) ? value : undefined
 }
 
-/** Strip matching quotes from a scalar. */
-function unquote(text: string): string {
-  const trimmed = text.trim()
-  if (trimmed.length >= 2) {
-    const first = trimmed[0]
-    const last = trimmed[trimmed.length - 1]
-    if ((first === '"' && last === '"') || (first === "'" && last === "'")) return trimmed.slice(1, -1)
-  }
-  return trimmed
-}
-
-/** Parse a scalar or inline `[a, b]` array. */
-function parseScalar(text: string): string | string[] {
-  const trimmed = text.trim()
-  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-    return trimmed
-      .slice(1, -1)
-      .split(',')
-      .map((part) => unquote(part))
-      .filter((part) => part.length > 0)
-  }
-  return unquote(trimmed)
-}
-
-/** Read an indented block scalar starting at `start`; returns value + next index. */
-function readBlockScalar(lines: string[], start: number): [string, number] {
-  const collected: string[] = []
-  let indent = Number.POSITIVE_INFINITY
-  let index = start
-  for (; index < lines.length; index += 1) {
-    const line = lines[index] ?? ''
-    if (line.trim().length === 0) {
-      collected.push('')
-      continue
-    }
-    const leading = line.length - line.trimStart().length
-    if (leading === 0) break
-    if (leading < indent) indent = leading
-    collected.push(line)
-  }
-  while (collected.length > 0 && collected[collected.length - 1] === '') collected.pop()
-  const shift = Number.isFinite(indent) ? indent : 0
-  return [collected.map((line) => line.slice(shift)).join('\n'), index]
-}
-
-/** Parse the constrained frontmatter subset our cards use. Pure. */
-function parseBlock(lines: string[]): Frontmatter {
-  const data: Frontmatter = {}
-  let index = 0
-  while (index < lines.length) {
-    const line = lines[index] ?? ''
-    const trimmed = line.trim()
-    if (trimmed.length === 0 || trimmed.startsWith('#')) {
-      index += 1
-      continue
-    }
-    const match = /^([A-Za-z0-9_.-]+):(.*)$/.exec(line)
-    if (match === null) {
-      index += 1
-      continue
-    }
-    const key = match[1] as string
-    const rest = (match[2] ?? '').trim()
-    if (rest === '|' || rest === '>') {
-      const [value, next] = readBlockScalar(lines, index + 1)
-      data[key] = value
-      index = next
-      continue
-    }
-    if (rest.length > 0) {
-      data[key] = parseScalar(rest)
-      index += 1
-      continue
-    }
-    // A bare key introduces one nesting level (e.g. player:).
-    const nested: Record<string, string> = {}
-    let next = index + 1
-    for (; next < lines.length; next += 1) {
-      const candidate = lines[next] ?? ''
-      if (candidate.trim().length === 0) continue
-      if (!/^\s+\S/.test(candidate)) break
-      const entry = /^\s+([A-Za-z0-9_.-]+):\s*(.*)$/.exec(candidate)
-      if (entry !== null) nested[entry[1] as string] = unquote(entry[2] ?? '')
-    }
-    data[key] = nested
-    index = next
-  }
-  return data
-}
 
 /**
  * Split a Markdown document into YAML-ish frontmatter and body.
@@ -163,7 +75,14 @@ export function parseFrontmatter(raw: string): { data: Frontmatter; body: string
     }
   }
   if (close === -1) return undefined
-  return { data: parseBlock(lines.slice(1, close)), body: lines.slice(close + 1).join('\n') }
+  
+  const yamlText = lines.slice(1, close).join('\n')
+  try {
+    const data = parseYAML(yamlText) as Frontmatter
+    return { data, body: lines.slice(close + 1).join('\n') }
+  } catch {
+    return undefined
+  }
 }
 
 /**

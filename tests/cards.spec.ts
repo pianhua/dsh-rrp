@@ -30,7 +30,7 @@ describe('card frontmatter parser', () => {
     expect(parsed?.data.id).toBe('demo')
     expect(parsed?.data.tags).toEqual(['甲', '乙'])
     expect(parsed?.data.player).toEqual({ name: '顾青', description: '一个剑客。' })
-    expect(parsed?.data.persona).toBe('第一行规则。\n第二行规则。')
+    expect(parsed?.data.persona).toBe('第一行规则。\n第二行规则。\n')
     expect(parsed?.body.trim()).toBe('# 世界核心\n\n正文。')
   })
 
