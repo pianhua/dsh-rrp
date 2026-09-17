@@ -9,18 +9,19 @@
 
 ## 当前状态
 
-**阶段 9：外部记忆扩展接入（已完成）** —— 全部可自动推进的阶段已完成；**唯一剩余阶段 6（卡包格式 + 卡片展厅）按 D13 等待所有者拍板格式**。
+**阶段 0–9 与阶段 6 全部完成**；随后完成了 UI 精修、会话可读性修复、多卡技能作用域与 **D8 知识沉淀**。当前处于「可反复实测、按需打磨」的状态。
 
-核心环路已跑通：物化原生 RP 模式「角色扮演 · 执笔」→ Author 每步只读消费最新 WorldState → 每轮正文后纪事官异步推演完整状态 → 玩家可在原生右侧栏就地矫正（无锁 Last-Write-Wins）→ 世界设定以 Skills 按需调取 → 每 8 回合编年官提炼四维大局观防偏航（`/summary` 可关）。开发与验证流程见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)，阶段进度见 [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md)。
+核心环路已跑通：物化原生 RP 模式 → Author 只读消费卡包设定 / 最新 WorldState / 大局编年 → 每轮正文后纪事官异步推演状态 → 玩家在原生右侧栏就地矫正（无锁 Last-Write-Wins）→ 世界设定以 Skills 按需调取 → 每 8 回合编年官提炼四维大局观（`/summary` 可关）→ 剧情确立的新设定可经 `/lore` 审阅后沉淀为**本会话专属**技能。
 
 | 项 | 状态 |
 | :--- | :--- |
 | 产品设计规格 | ✅ [`docs/DESIGN.md`](docs/DESIGN.md) |
 | 宿主能力映射 | ✅ [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) |
 | 协作与红线准则 | ✅ [`AGENTS.md`](AGENTS.md) |
+| **交接文档（先读这份）** | ✅ [`docs/HANDOFF.md`](docs/HANDOFF.md) |
 | 当前任务指针 | ✅ [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md) |
 | 开发环境流程 | ✅ [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
-| 生产代码 | ✅ 阶段 0–5、5.5、7–9（待阶段 6 卡包格式定稿） |
+| 生产代码 | ✅ 阶段 0–9 + 阶段 6 + UI / 可读性 / 多卡作用域 / D8 |
 
 ---
 
@@ -47,8 +48,10 @@ DeepSeek Harness 宿主
      ├── Author Agent      执笔智体（纯正文、只读设定）
      ├── Chronicler Agent  纪事官（异步推演世界状态）
      ├── Summarizer Agent  大局编年（可选，定期摘要）
-     ├── WorldState 投影   DSH 原生右侧栏状态看板
-     └── Skills 知识体系   世界设定按需调取
+     ├── Scribe Agent      典籍编纂（D8：只起草一条，玩家确认才落盘）
+     ├── 世界状态 / 典籍     DSH 原生右侧栏面板
+     ├── 卡片展厅 + 开卡     main 面板 + 左栏导航
+     └── Skills 知识体系    卡包技能（preset 作用域）+ 沉淀（会话作用域）
 ```
 
 核心理念：**领域只写纯数学，驱动权归宿主。**
@@ -66,10 +69,12 @@ DeepSeek Harness 宿主
 
 ## 文档索引
 
-> 冷启动只读这四份，读完即停；详细宿主能力清单见 HOST_ALIGNMENT。
+> **接手先读 [`docs/HANDOFF.md`](docs/HANDOFF.md)**（现状、架构、宿主硬约束、验证工具、待办）。
+> 契约层四份：[`AGENTS.md`](AGENTS.md) → [`docs/DESIGN.md`](docs/DESIGN.md) → [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) → [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md)。
 
 | 顺序 | 文档 | 作用 |
 | ---: | :--- | :--- |
+| 0 | [`docs/HANDOFF.md`](docs/HANDOFF.md) | **交接总入口**：现状 / 架构 / 宿主硬约束 / 待办 |
 | 1 | [`AGENTS.md`](AGENTS.md) | 协作准则、红线、开工协议 |
 | 2 | [`docs/DESIGN.md`](docs/DESIGN.md) | 唯一产品目标规格 |
 | 3 | [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) | 宿主能力映射 + 反重复造轮子红线 |

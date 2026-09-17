@@ -1,14 +1,15 @@
 # 当前任务（ACTIVE_TASK.md）
 
-> 更新时间：2026-09-16  
+> 更新时间：2026-09-17  
+> **交接总入口：[`HANDOFF.md`](HANDOFF.md)**  
 > 规格基线：[`DESIGN.md`](DESIGN.md) · 宿主映射：[`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md) · 开发流程：[`DEVELOPMENT.md`](DEVELOPMENT.md)
 
 ---
 
 ## 任务状态
 
-- **阶段**：阶段 9 — 外部记忆扩展接入（已完成）
-- **状态**：阶段 0–5、5.5、7、8、9 已完成；**阶段 6 进行中**——所有者以真实酒馆卡触发转译，目录格式已定，加载器与首个测试卡已落地
+- **阶段**：阶段 0–9 与阶段 6 **全部完成**；随后完成 UI 精修、会话可读性修复、多卡技能作用域、D8 知识沉淀
+- **状态**：可反复实测、按需打磨；后续候选见文末「下一步候选」
 - **原则**：先锁定形态与宿主映射，再落实现；每阶段回读本文件
 
 ---
@@ -145,7 +146,7 @@
 
 ---
 
-## 下一动作
+## 已完成（阶段 6 交付回顾）
 
 **阶段 6：卡片展厅 + 开卡新会话流 + UI 精修。** 已落地（[CARDS.md](reference/CARDS.md) §9–12，[UI_CEILING.md](reference/UI_CEILING.md)）：
 
@@ -157,8 +158,8 @@
 - ✅ **UI 精修（宿主原子库）**：卡片展厅与「世界状态」侧栏改用平台模块 `@deepseek-ai/dsh-client-ui-primitives`（Button / Pill / Input / StateDot / Tooltip / Icon*）——搜索框、卡面封面、技能卡、开场白引用块、底部主操作条；面板**自动跟随明暗主题**（[HOST_SEAMS.md](reference/HOST_SEAMS.md) §A4）
 - ✅ **卡包设定注入**：`rrpCard` 投影（`src/projection/card.ts`）+ Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入（状态寄存在 `user/message` 的 `source.rrp`）
 - ✅ **卡包技能挂载（按卡隔离）**：`mountSkillsForCard` 只把当前卡的技能挂进**该卡专属 preset** `rp-<card-id>`；基础 `rp` 无卡包设定——实测 `RP skills visible (0)` + `card preset 'rp-maid-heiress' skills (6)`
-- ⬜ **实机确认（关键）**：开场白以 `assistant/message` 追加是否被宿主接受并渲染为正文；被拒会自动回退为 plugin notice（`user/message`）
-- ⬜ **实机确认**：卡包 persona 走 `agent/pre-step` 注入是否会以 context 节点剧透（CARDS.md §11）
+- ✅ **实机确认**：开场白以 `assistant/message` 追加被宿主原生接受、渲染为正文第一条（被拒会自动回退为 plugin notice）
+- ✅ **实机确认**：卡包 persona 注入**零剧透**（秘密只通过行为细节体现）
 - ✅ **P3 沉浸视图** `src/client/story-view.tsx`：新增「沉浸」Tab，订阅宿主 `chat` 快照，按小说排版重排正文（**纯增量**，不替换宿主渲染）
 - ⏸️ **P1 正文节点 shadow**：**主动不做**——属"替换宿主渲染"，做错会让聊天直接不显示；沉浸视图（P3，纯增量）已覆盖小说排版需求，边际收益低而风险高（见 UI_CEILING.md）
 
@@ -172,16 +173,27 @@
 
 ## 验收标准
 
-- 阶段 1–5、5.5、7、8、9（已达成）：真实 `dsh web` 加载、RP 环路、纪事官、Skills、编年官、fork 重放、外部契约，均无报错；`pnpm run typecheck` / `build` / `test`（66 用例）全绿
+- 阶段 1–5、5.5、7、8、9（已达成）：真实 `dsh web` 加载、RP 环路、纪事官、Skills、编年官、fork 重放、外部契约，均无报错；`pnpm run typecheck` / `build` / `test`（**91 用例**）全绿
 - 全程：不触犯 [`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md) 第 4 节任一红线
 - 每阶段：代码保持轻量透明，无并发/分布式/多用户复杂度
 
 ---
 
+## 下一步候选
+
+| 优先级 | 事项 | 说明 |
+| :--- | :--- | :--- |
+| 中 | **第二张官方测试卡** | 目前只有 `maid-heiress`；多卡技能作用域需要第二张卡才能肉眼验证 |
+| 中 | **P4 输入区接管** | `conversation.composer`（chain）：行动 / 对白 / 继续 / 导演指令 |
+| 低 | `/summary` 开关持久化 | 现为进程内状态，可挂 `ctx.settings` |
+| 低 | 沉淀草稿在线编辑 | 面板加可编辑字段（草稿已在内存） |
+| 低 | 多语言与文案打磨 | locale 字典已分 ZH/EN |
+
+---
+
 ## 阻塞与风险
 
-- **阶段 6**：格式已由所有者真实酒馆卡触发落地（D13「形态成熟后再定」已满足）；剩余为 P1/P3 观感深化
-- **人工验证项**：纪事官/编年官真实模型推演、Author 真实消费、面板渲染、真实 fork 游玩——均需人工 UI 确认（本机无浏览器自动化、未自动烧 token）
-- **/summary 开关持久性**：进程内状态；如需持久化可挂 `ctx.settings`
-- **面板形态**：已为结构化就地编辑器 + 活动账本归因；细粒度「就地点击修改数值」待打磨
-- **开场白注入**：宿主没有「建时带首条消息」的 API，当前以 `assistant/message` 追加；需实机确认宿主是否接受并渲染（被拒自动回退为 plugin notice）
+- **人工验证项**：真实模型推演、Author 消费、面板渲染、长线游玩——必须人工/浏览器 Agent 实测；单测用结构化替身，覆盖不到 Cordis 代理与生命周期行为（见 [HANDOFF.md](HANDOFF.md) §5）。
+- **旧会话兼容**：2026-09-17 之前的会话其 `rrp/*` 事件已按 `ignorable` 忽略，**世界状态面板为空**（正文与历史可读）。
+- **活动账本**：刻意只存宿主内存，重启清空。
+- **D8 沉淀**：已实现并实测通过（含跨会话隔离）；「写入后下一轮可检索」已由浏览器实测确认（见 [MANUAL_TEST.md](reference/MANUAL_TEST.md) §9）。

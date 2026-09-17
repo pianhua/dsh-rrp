@@ -22,10 +22,18 @@
 | [`HOST_ALIGNMENT`](../HOST_ALIGNMENT.md) | 宿主有什么？我们不许造什么？ | 实现前（契约层） |
 | [`LESSONS.md`](LESSONS.md) | 旧项目为什么失败？哪些资产值得留？ | 想「参考旧实现」前 |
 | [`COMMUNITY_PLUGINS.md`](COMMUNITY_PLUGINS.md) | 社区成熟插件长什么样？ | 建工程骨架前 |
-| [`SKILLS.md`](SKILLS.md) | Skills 是什么？我们如何用它替代 Lorebook？ | 做知识体系前 |
+| [`HOST_SEAMS.md`](HOST_SEAMS.md) | 宿主接缝实测细节（slot / preset / 事件词表 / 原子库） | 接宿主能力前 |
+| [`SKILLS.md`](SKILLS.md) | Skills 是什么？如何替代 Lorebook？D8 沉淀怎么控？ | 做知识体系前 |
+| [`CARDS.md`](CARDS.md) | 卡包格式、目录契约与开卡流 | 做卡包/开卡前 |
 | [`WORLDLINES.md`](WORLDLINES.md) | 为什么 fork 后状态不穿帮？与 synapse 的边界 | 涉及分支/重放时 |
 | [`MEMORY.md`](MEMORY.md) | 记忆放哪？外部记忆插件如何接入？我们绝不做什么 | 涉及记忆/检索时 |
+| [`UI_CEILING.md`](UI_CEILING.md) | DSH 原始 UI 能改装到什么程度？ | 做界面改造前 |
+| [`MANUAL_TEST.md`](MANUAL_TEST.md) | 实机验收清单与历史结果 | 每次涉及 UI/宿主行为后 |
+| [`LONG_PLAY_TEST.md`](LONG_PLAY_TEST.md) | 长线（15 轮）测试清单与量化结论 | 做长线回归前 |
+| [`CONTEXT_PUBLISHER_VERIFY.md`](CONTEXT_PUBLISHER_VERIFY.md) | 上下文发布与缓存命中的核验方法 | 动注入/发布时 |
 | [`dsh-plugin-development-research.md`](dsh-plugin-development-research.md) | DSH 插件开发的完整技术机制 | 需要宿主细节时查阅 |
+
+> 交接总入口在上一层：[`../HANDOFF.md`](../HANDOFF.md)。
 
 ---
 

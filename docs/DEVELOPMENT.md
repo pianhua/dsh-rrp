@@ -1,7 +1,7 @@
 # 开发环境与日常流程（DEVELOPMENT.md）
 
 > 面向本仓库的开发者（人类与 AI）：一条命令构建，一条命令挂到真实 DSH 验证。
-> 契约层仍是 [`../AGENTS.md`](../AGENTS.md) 与 [`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md)。
+> **接手先读 [`HANDOFF.md`](HANDOFF.md)**（宿主硬约束、模块地图、待办）；契约层是 [`../AGENTS.md`](../AGENTS.md) 与 [`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md)。
 
 ---
 
@@ -59,20 +59,28 @@ pnpm run link:dev          # = node scripts/link-dev.mjs [profile]
 ## 4. 日常循环
 
 ```bash
-pnpm run typecheck                              # 类型检查
-pnpm test                                       # vitest：HMR 安全（挂载/卸载无残留）
+pnpm run typecheck                              # 类型检查（含 tests）
+pnpm test                                       # vitest：21 文件 / 91 用例（含 HMR 无残留）
 pnpm run build                                  # 构建 host + client
 dsh --profile rp-dev --port 3099 --no-open      # 真实宿主验证
+node scripts/inspect-context.mjs --latest       # 需要时：解码日志、统计上下文与缓存
 ```
 
-启动日志中应出现：
+启动日志中应出现（完整清单见 [`HANDOFF.md`](HANDOFF.md) §1）：
 
-```
-[dsh-rrp] RP preset created at C:\Users\<you>\.dsh\.agent-presets\rp
-[dsh-rrp] RP mode '角色扮演 · 执笔' composed and ready
+```text
+[dsh-rrp] RP preset refreshed at <dshHome>\.agent-presets\rp
+[dsh-rrp] WorldState projection registered (key rrpWorldState)
+[dsh-rrp] macro-summary projection registered (key rrpSummary)
+[dsh-rrp] active-card projection registered (key rrpCard)
+[dsh-rrp] Chronicler armed for preset rp
+[dsh-rrp] sediment runtime armed (per-session scoping via agent.ctx)
+[dsh-rrp] sediment route armed at /dsh-rrp/sediment
+[dsh-rrp] RP skills visible (0): (none)
+[dsh-rrp] card preset rp-maid-heiress skills (6): maid-apartment, …, maid-world-setting
 ```
 
-RP 模式随插件物化到 `<dshHome>/.agent-presets/rp/`（DSH 原生 preset user root）；`composed and ready` 表示 roster 已发现并成功组合该 preset，可在会话的模式选择器里选「角色扮演 · 执笔」。
+RP 基础模式物化到 `<dshHome>/.agent-presets/rp/`，**每张卡**另有一个 `rp-<card-id>` preset（只含该卡的世界知识技能）——所以基础模式显示 `skills (0)` 是正常的，卡包技能在卡 preset 名下逐条打印。
 
 不启动服务器即可确认组合：
 
@@ -88,4 +96,8 @@ dsh --profile rp-dev --dump-config | grep -A2 dsh-rrp
 
 - 只改 `rp-dev`，不碰日常 `web`；
 - 所有注册必须可逆（返回 disposer）；
-- 不新增宿主已有能力（见 HOST_ALIGNMENT 第 4 节）。
+- 不新增宿主已有能力（见 HOST_ALIGNMENT 第 4 节）；
+- **绝不发明会话事件类型**（会让整个日志不可读）；
+- **不在陌生 context 上属性读取服务**（用 `ctx.get(name)`；agent 生命周期监听器整体 try/catch）。
+
+> 这几条的成因、证据与正确写法见 [`HANDOFF.md`](HANDOFF.md) §4 —— 每一条都是真实踩过的坑。

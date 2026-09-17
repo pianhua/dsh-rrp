@@ -40,35 +40,49 @@
 
 ```text
 dsh-rrp/
-├── docs/                        # 设计、宿主映射与任务指针
+├── docs/                        # 设计、宿主映射、任务指针与交接
+│   ├── HANDOFF.md               # 交接总入口：现状/架构/硬约束/待办
 │   ├── DESIGN.md                # 唯一产品目标规格
 │   ├── HOST_ALIGNMENT.md        # 宿主能力映射与反重复造轮子红线
+│   ├── DEVELOPMENT.md           # 开发环境与日常循环
 │   ├── ACTIVE_TASK.md           # 当前执行任务指针
 │   └── reference/               # 为什么这么设计：决策/术语/经验/技能
 ├── src/                         # 源码
 │   ├── index.ts                 # 插件后端入口 (Cordis 插件)
-│   ├── preset.ts                # RP 模式（agent preset）物化与归属
+│   ├── preset.ts / preset-id.ts # RP 模式物化（基础 rp + 每卡 rp-<id>）与 id 规则
+│   ├── cards.ts / card-types.ts # 卡包解析与词汇（host/client 共享的纯类型）
 │   ├── world-state.ts           # WorldState 纯词汇（host/client 共享）
-│   ├── chronicler.ts            # 纪事官触发与异步推演（ctx.jobs + ctx.llm）
-│   ├── author-context.ts        # Author 每步只读消费 WorldState + 大局编年
-│   ├── correction.ts            # 玩家矫正写路径（宿主 webserver 路由）
-│   ├── summarizer.ts            # 大局编年触发与推演（ctx.jobs + ctx.llm + /summary）
 │   ├── macro-summary.ts         # 四维大局观纯词汇（host/client 共享）
-│   ├── client/                  # 客户端 Slot 与右侧栏插件
-│   │   ├── index.ts             # 客户端入口
+│   ├── state-payload.ts         # 状态载体：user/message 的 source.rrp
+│   ├── state-publisher.ts       # 追加式发布（卡包 / 事实两通道）
+│   ├── chronicler.ts            # 纪事官触发与异步推演（ctx.jobs + ctx.llm）
+│   ├── summarizer.ts            # 编年官触发与推演（ctx.jobs + ctx.llm + /summary）
+│   ├── activity.ts / activity-route.ts   # 归因账本（宿主内存 + 只读路由）
+│   ├── sediment.ts / sediment-provider.ts / sediment-runtime.ts / sediment-route.ts
+│   │                            # D8 知识沉淀：按会话存储、skill provider、路由与 /lore
+│   ├── correction.ts            # 玩家矫正写路径（宿主 webserver 路由）
+│   ├── cards-route.ts / start.ts# 卡包只读路由 / 开卡（发布初始状态 + 开场白）
+│   ├── contracts.ts             # 对外只读契约（依赖为零）
+│   ├── home.ts                  # harnessHome() 叶子模块
+│   ├── client/                  # 客户端入口与面板
+│   │   ├── index.ts             # 客户端入口（locale + 注册）
 │   │   ├── world-state-tab.tsx  # 世界状态：结构化就地编辑器
-│   │   └── components/          # React 18 UI 组件 (状态看板/卡片展厅)
+│   │   ├── sediment-tab.tsx     # 典籍（D8）：起草/审阅/确认/删除
+│   │   ├── gallery-panel.tsx    # 卡片展厅 + 开卡流
+│   │   ├── story-view.tsx       # 「沉浸」视图（纯增量）
+│   │   └── primitives.d.ts      # 宿主原子库结构面类型
 │   ├── agents/                  # 智体提示词与行为规范
 │   │   ├── chronicler.ts        # 纪事官提示词与输出契约
-│   │   └── summarizer.ts        # 大局编年摘要智能体 (可开可关，待阶段 7)
-│   ├── skills/                  # 预留：技能相关 TS 辅助（技能包随 preset 分发）
+│   │   ├── summarizer.ts        # 编年官摘要智能体
+│   │   └── scribe.ts            # D8 典籍编纂者（只起草一条）
 │   └── projection/              # 会话投影纯数学折叠器
 │       ├── world-state.ts       # WorldState 投影单元（zod 校验 + 纯折叠）
-│       └── summary.ts           # 大局编年投影单元
+│       ├── summary.ts           # 大局编年投影单元
+│       └── card.ts              # 当前卡包投影单元
 ├── presets/                     # 随包分发的原生 agent preset（RP 模式）
 │   └── rp/                      # 组合、元数据与随模式作用域的世界知识技能
-│       └── skills/              # 空的随模式技能根（世界知识由卡包/用户技能提供）
-├── cards/                       # 官方原生卡包 (未来制定标准规范)
+├── cards/                       # 官方原生卡包
+├── scripts/                     # link-dev / inspect-context / repair-legacy-sessions
 ├── cordis.patch.yml             # DSH profile patch 声明
 ├── package.json                 # 依赖声明 (严格遵循 DSH peer 规范)
 └── tsconfig.json
@@ -82,4 +96,8 @@ dsh-rrp/
 1. **查阅现状**：先确认当前工作区，不随意创建计划外文件；
 2. **对齐目标**：在动笔前先核对 `docs/DESIGN.md` 与 `docs/HOST_ALIGNMENT.md`；涉及设计取舍或命名时，先读 [`docs/reference/DECISIONS.md`](docs/reference/DECISIONS.md) 与 [`docs/reference/GLOSSARY.md`](docs/reference/GLOSSARY.md)；
 3. **红线拦截**：如果发现准备写 `http.createServer`、写通用 SQLite 连接池、写前端整站弹窗，立即停手，寻找对应的 DSH 宿主能力；
-4. **轻量优雅**：代码追求精炼透明，每一行代码都直接服务于 RP 游玩体验，拒绝为了“架构完整性”而脑补基建。
+4. **轻量优雅**：代码追求精炼透明，每一行代码都直接服务于 RP 游玩体验，拒绝为了“架构完整性”而脑补基建；
+5. **三条宿主硬约束**（详见 [`docs/HANDOFF.md`](docs/HANDOFF.md) §4，违者会真机爆炸）：
+   - **绝不发明会话事件类型** —— 状态寄存在已知 `user/message` 的 `source`；
+   - **不在陌生 context 上属性读取服务** —— 用 `ctx.get(name)`；agent 生命周期监听器整体 try/catch；
+   - **注入上下文只追加、绝不 replace** —— 前缀缓存是性能命脉。
