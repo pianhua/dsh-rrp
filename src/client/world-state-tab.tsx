@@ -225,6 +225,12 @@ const S: Record<string, CSSProperties> = {
     borderBottom: '1px solid var(--dsw-alias-border-l1)',
   },
   title: { fontSize: 14, fontWeight: 600 },
+  presetTag: {
+    fontSize: 10.5, fontWeight: 500, padding: '2px 7px', borderRadius: 4,
+    background: 'var(--dsw-alias-bg-layer-2)', color: 'var(--dsw-alias-label-secondary)',
+    fontFamily: 'var(--dsw-font-mono, monospace)', letterSpacing: '0.01em',
+    maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
+  },
   spacer: { flex: 1 },
   scroll: { flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px' },
   hint: { margin: '0 0 12px', fontSize: 11.5, lineHeight: 1.6, color: 'var(--dsw-alias-label-tertiary)' },
@@ -344,6 +350,11 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
   const view = typeof props.useProjection === 'function'
     ? (props.useProjection(WORLD_STATE_KEY) as WorldStateView | undefined)
     : undefined
+  // The session's own preset (rp-<card>), distinct from the DSH global default
+  // in Settings. Read-only: this panel never changes it.
+  const sessionPreset = typeof props.useProjection === 'function'
+    ? (props.useProjection('agentPreset') as string | undefined)
+    : undefined
   const sessionId = props.sessionId
   const [activity, setActivity] = useState<RrpActivityLog | undefined>(undefined)
   const recentActivity = (activity?.entries ?? []).slice(-4).reverse()
@@ -437,6 +448,12 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
     <div className="dsh-rrp-world" style={S.root}>
       <div style={S.header}>
         <span style={S.title}>{t('title')}</span>
+        {sessionPreset !== undefined && sessionPreset.length > 0 ? (
+          <Tooltip label={t('preset.hint') || '本会话的 Agent 预设（与设置里的全局默认不同）'}>
+            <span style={S.presetTag}>{sessionPreset}</span>
+          </Tooltip>
+        ) : null}
+        <span style={S.spacer} />
         {dirty ? <Pill active>{t('unsaved')}</Pill> : null}
       </div>
 
