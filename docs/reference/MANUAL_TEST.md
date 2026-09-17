@@ -13,7 +13,7 @@ dsh --profile rp-dev --port 3099 --no-open
 
 启动日志应包含：
 
-- `activity ledger projection registered (key 'rrpActivity')`
+- `activity route armed at /dsh-rrp/activity`
 - `active-card projection registered (key 'rrpCard')`
 - `card routes armed` / `card start route armed`
 - **`RP skills visible (6): maid-apartment, maid-cecilia, maid-family, maid-mia, maid-tone-rules, maid-world-setting`**
@@ -86,6 +86,13 @@ dsh --profile rp-dev --port 3099 --no-open
 
 - [ ] 亮/暗两种模式下，上述面板的边框、文字、按钮对比度正常，无「白色方块/黑底黑字」；
 - [ ] 面板交互（点击、聚焦、悬停）与宿主其他面板一致（圆角胶囊按钮、输入框聚焦变品牌色）。
+
+**会话可读性（2026-09-17 关键修复）**
+
+- [ ] 打开任意历史 RP 记录：**不再出现红色「历史加载失败 / unknown to this harness」横幅**；
+- [ ] 点「开始这一局」后**无需手动刷新**：开场白立即作为正文第一条出现，提示词注入不再顶在最前；
+- [ ] 新会话的日志里**不再有 `rrp/*` 事件**（状态改寄存在 `user/message` 的 `source.rrp`）；
+- [ ] 「最近变更」仍能显示纪事官/玩家的归因（现在由 `GET /dsh-rrp/activity` 轮询）。
 
 > 结果请追加到下节表格；本轮尚未由浏览器 Agent 全量确认。
 

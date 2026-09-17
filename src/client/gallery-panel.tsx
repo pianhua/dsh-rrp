@@ -431,7 +431,6 @@ export function registerGallery(ctx: RrpClientContext): void {
     const sessionId = await sessions.create({})
     const selected = await remote.agentPresets.select(sessionId, 'rp')
     if (selected.ok === false) return { ok: false, message: selected.error?.message ?? 'agentPresets.select failed' }
-    sessions.open(sessionId)
 
     // The card name is the story's name; a rename is a nicety, never fatal.
     const binding = sessions.binding(sessionId)
@@ -461,6 +460,10 @@ export function registerGallery(ctx: RrpClientContext): void {
       }),
     })
     if (!response.ok) return { ok: false, message: await response.text() }
+    // Stage the session only AFTER the log is complete: the conversation view
+    // then pulls the whole history (card context + facts + opening) in one go,
+    // instead of racing the host's live follow stream for the opening.
+    sessions.open(sessionId)
     ctx.layout?.selectPanel(null)
     return { ok: true }
   }

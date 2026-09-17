@@ -7,7 +7,8 @@
  * without ever being stuffed into every message.
  */
 import { z } from 'zod'
-import { CARD_EVENT, CARD_KEY, type CardContext } from '../card-types.ts'
+import { CARD_KEY, type CardContext } from '../card-types.ts'
+import { rrpPayloadOf } from '../state-payload.ts'
 
 const playerSchema = z.object({ name: z.string(), description: z.string().optional() })
 
@@ -28,9 +29,7 @@ export const cardProjection = {
   stateVersion: 1,
   init: (): CardContext | null => null,
   apply: (state: CardContext | null, event: { type: string; data?: unknown }): CardContext | null =>
-    event.type === CARD_EVENT && event.data !== undefined && event.data !== null
-      ? (event.data as CardContext)
-      : state,
+    rrpPayloadOf(event)?.card ?? state,
   wire: {
     viewSchema: stateSchema,
     view: (state: CardContext | null): CardContext | null => state,

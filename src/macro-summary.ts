@@ -18,9 +18,6 @@ export interface MacroSummary {
   threads: string[]
 }
 
-/** Session event type carrying a complete post-change summary (whole-value rule). */
-export const SUMMARY_EVENT = 'rrp/summary'
-
 /** Projection key, also the client `useProjection(key)` lookup key. */
 export const SUMMARY_KEY = 'rrpSummary'
 

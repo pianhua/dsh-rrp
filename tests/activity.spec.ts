@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ACTIVITY_EVENT,
-  ACTIVITY_KEY,
   ACTIVITY_LIMIT,
+  appendActivity,
   emptyActivityLog,
+  forgetActivity,
   pendingActivity,
+  readActivity,
+  recordActivity,
   type RrpActivity,
 } from '../src/activity.ts'
-import { activityProjection } from '../src/projection/activity.ts'
 import { NO_WORLD_STATE_CHANGE, diffWorldState, emptyWorldState } from '../src/world-state.ts'
 
 /** A complete ledger entry with overridable fields. */
@@ -22,41 +23,39 @@ function entry(overrides: Partial<RrpActivity> = {}): RrpActivity {
   }
 }
 
-describe('activity ledger projection', () => {
+describe('activity ledger (host-side, in-memory)', () => {
   it('appends entries and keeps the bounded tail', () => {
-    let log = emptyActivityLog()
+    const id = 'spec-bounded'
+    forgetActivity(id)
     for (let index = 0; index < ACTIVITY_LIMIT + 5; index += 1) {
-      log = activityProjection.apply(log, {
-        type: ACTIVITY_EVENT,
-        data: entry({ id: 'a' + index, phase: 'committed' }),
-      })
+      recordActivity(id, entry({ id: 'a' + index, phase: 'committed' }))
     }
+    const log = readActivity(id)
     expect(log.entries).toHaveLength(ACTIVITY_LIMIT)
     expect(log.entries[0]?.id).toBe('a5')
     expect(log.entries.at(-1)?.id).toBe('a' + (ACTIVITY_LIMIT + 4))
+    forgetActivity(id)
   })
 
-  it('returns the same reference for unrelated events (Object.is gate)', () => {
-    const log = emptyActivityLog()
-    expect(activityProjection.apply(log, { type: 'user/message', data: {} })).toBe(log)
+  it('reads an empty ledger for an unknown session', () => {
+    expect(readActivity('spec-unknown').entries).toEqual([])
+  })
+
+  it('keeps sessions isolated and forgets one on request', () => {
+    recordActivity('spec-a', entry({ id: 'a' }))
+    recordActivity('spec-b', entry({ id: 'b' }))
+    expect(readActivity('spec-a').entries[0]?.id).toBe('a')
+    expect(readActivity('spec-b').entries[0]?.id).toBe('b')
+    forgetActivity('spec-a')
+    expect(readActivity('spec-a').entries).toEqual([])
+    forgetActivity('spec-b')
   })
 
   it('reports a pending writer only while the tail for its target is started', () => {
-    const started = activityProjection.apply(emptyActivityLog(), { type: ACTIVITY_EVENT, data: entry() })
+    const started = appendActivity(emptyActivityLog(), entry())
     expect(pendingActivity(started, 'world-state')?.id).toBe('a1')
-    const committed = activityProjection.apply(started, {
-      type: ACTIVITY_EVENT,
-      data: entry({ phase: 'committed' }),
-    })
+    const committed = appendActivity(started, entry({ phase: 'committed' }))
     expect(pendingActivity(committed, 'world-state')).toBeUndefined()
-  })
-
-  it('initializes a fresh ledger per session', () => {
-    expect(activityProjection.init()).not.toBe(activityProjection.init())
-  })
-
-  it('publishes the stable ledger key', () => {
-    expect(ACTIVITY_KEY).toBe('rrpActivity')
   })
 })
 

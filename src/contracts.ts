@@ -8,12 +8,16 @@
  * (`ctx.sessionQuery` for retrieval, an `agent/pre-step` listener or an
  * RP-preset row for context).
  *
+ * Durable state rides inside ordinary `user/message` events (a session event
+ * type the host knows); `RrpStatePayload` / `rrpPayloadOf` is the supported
+ * way to read it back, since inventing a session event type makes the whole log
+ * unreadable to the host.
+ *
  * This module is the only supported import surface for that. It is deliberately
  * dependency-free so both a host plugin and a browser bundle can import it.
  */
 export {
   NO_WORLD_STATE_CHANGE,
-  WORLD_STATE_EVENT,
   WORLD_STATE_KEY,
   diffWorldState,
   emptyWorldState,
@@ -28,16 +32,16 @@ export type {
   WorldStateView,
 } from './world-state.ts'
 export {
-  SUMMARY_EVENT,
   SUMMARY_KEY,
   renderMacroSummary,
 } from './macro-summary.ts'
 export type { MacroSummary } from './macro-summary.ts'
 export {
-  ACTIVITY_EVENT,
-  ACTIVITY_KEY,
   ACTIVITY_LIMIT,
+  appendActivity,
   emptyActivityLog,
+  lastActivity,
+  pendingActivity,
 } from './activity.ts'
 export type {
   RrpActivity,
@@ -47,7 +51,6 @@ export type {
   RrpTarget,
 } from './activity.ts'
 export {
-  CARD_EVENT,
   CARD_KEY,
   renderCardContext,
 } from './card-types.ts'
@@ -59,3 +62,10 @@ export type {
   CardPlayer,
   CardSkill,
 } from './card-types.ts'
+export {
+  RRP_PLUGIN,
+  messageTextOf,
+  rrpPayloadOf,
+  rrpStateMessage,
+} from './state-payload.ts'
+export type { RrpStatePayload } from './state-payload.ts'

@@ -41,9 +41,6 @@ export interface WorldState {
 /** The client-visible view. Identical today; a separate name allows versioning. */
 export type WorldStateView = WorldState
 
-/** Session event type carrying a complete post-change WorldState (whole-value rule). */
-export const WORLD_STATE_EVENT = 'rrp/world-state'
-
 /** Projection key, also the client `useProjection(key)` lookup key. */
 export const WORLD_STATE_KEY = 'rrpWorldState'
 

@@ -30,17 +30,20 @@
 
 ```ts
 import {
-  WORLD_STATE_KEY, WORLD_STATE_EVENT, type WorldState,
-  SUMMARY_KEY, SUMMARY_EVENT, type MacroSummary,
+  WORLD_STATE_KEY, SUMMARY_KEY, rrpPayloadOf,
+  type WorldState, type MacroSummary, type RrpStatePayload,
 } from 'dsh-rrp/contracts'
 
 // 读取某个会话当前的世界状态 / 大局编年（宿主投影 registry 的同步切面）：
 const worldState = ctx.sessionProjections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined
 const summary = ctx.sessionProjections.stateOf(session, SUMMARY_KEY) as MacroSummary | null | undefined
+
+// 直接读日志时：我们的结构面寄存在普通 user/message 的 source.rrp
+const payload = rrpPayloadOf(event) as RrpStatePayload | undefined
 ```
 
 - `lib/contracts.js` / `lib/types/contracts.d.ts` 由构建产出，是稳定面；
-- 事件名与投影键是**契约**，变更视为破坏性变更；
+- **投影键**是契约，变更视为破坏性变更；我们**不自造会话事件类型**（宿主词表封闭，见 [HOST_SEAMS.md](HOST_SEAMS.md) §A5），状态一律寄存在 `user/message` 的 `source.rrp`，`rrpPayloadOf` 是唯一受支持的读法；
 - 状态本身由整值事件 + 纯折叠得出，fork 后天然可重放（见 [`WORLDLINES.md`](WORLDLINES.md)）。
 
 ---

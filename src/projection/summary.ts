@@ -6,7 +6,8 @@
  * reuses that reference so an unchanged summary publishes nothing.
  */
 import { z } from 'zod'
-import { SUMMARY_EVENT, SUMMARY_KEY, type MacroSummary } from '../macro-summary.ts'
+import { SUMMARY_KEY, type MacroSummary } from '../macro-summary.ts'
+import { rrpPayloadOf } from '../state-payload.ts'
 
 /** Runtime validator for one macro summary. */
 export const macroSummarySchema = z.object({
@@ -24,10 +25,10 @@ export const summaryProjection = {
   stateSchema,
   stateVersion: 1,
   init: (): MacroSummary | null => null,
-  apply: (state: MacroSummary | null, event: { type: string; data?: unknown }): MacroSummary | null =>
-    event.type === SUMMARY_EVENT && event.data !== undefined && event.data !== null
-      ? (event.data as MacroSummary)
-      : state,
+  apply: (state: MacroSummary | null, event: { type: string; data?: unknown }): MacroSummary | null => {
+    const payload = rrpPayloadOf(event)
+    return payload !== undefined && payload.summary !== undefined ? payload.summary : state
+  },
   wire: {
     viewSchema: stateSchema,
     view: (state: MacroSummary | null): MacroSummary | null => state,

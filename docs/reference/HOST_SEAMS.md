@@ -244,6 +244,39 @@ export function apply(ctx: Context): void {
 
 **边界**：模块表是**冻结**的（列表固定），不能 require 任意宿主内部模块；要新增原子依赖必须走「自建设计 token 的普通 React 组件」，或直接复用上面这张表里已有的原子。
 
+### A5. 会话事件词表是「封闭」的：插件**不得自造事件类型**
+
+**结论（血的教训）**：插件用 `Session.append('my-plugin/event', ...)` 写自定义事件类型，会让**整个会话日志之后都无法被宿主读取**，前端出现红色 `历史加载失败 … unknown to this harness and not marked ignorable`。
+
+**证据链**（已装宿主 0.1.5-rc.2）：
+
+1. `dsh-session-persistence` 的读路径 `validateStoredEvents` / `assertEventsSupported`：
+
+   ```js
+   if (!KNOWN_SESSION_EVENT_TYPES.has(event.type) && event.ignorable !== true)
+     throw unsupported('… contains event type "…" unknown to this harness and not marked ignorable; refusing to interpret the log')
+   ```
+
+2. `KNOWN_SESSION_EVENT_TYPES` 是**构建期生成**的常量集合（`gen-persistence-catalog`，本机 56 个），注释明确写着：out-of-repo 插件事件天然不在表内，**事件名注册被否决**（"would make reads composition-dependent"），唯一兼容机制是事件信封上的 `ignorable: true`。
+
+3. **但是** `Session.append(type, data, opts?)` 的 `opts` 只接受 `surfaceOp/sourceEventSeqs`（surface 事件）或什么都不接受（非 surface 事件）——**没有任何公开 API 能设置 `ignorable`**。消费方可读 `ignorable`，生产者却写不出，所以在本版本上「自造事件类型」= 制造不可读日志。
+
+**正确做法（本项目采用）**：状态**寄生在已知的 `user/message` 事件里**，放在消息的 `source` 字段（模型只看 `content`，`source` 不进 provider 请求）：
+
+```ts
+session.append('user/message', {
+  id, role: 'user',
+  content: [{ type: 'text', text: renderWorldState(state) }],   // 模型可见
+  source: { kind: 'plugin', plugin: 'dsh-rrp', rrp: { worldState: state } }, // 结构面，仅本地投影读
+}, { surfaceOp: 'append' })
+```
+
+> 校验器 `validateSessionEventData` 对 `user/message` 的 `source` **不做字段白名单**，所以附加 `rrp` 字段是安全的。
+
+**日志修复**：老版本写下的 `rrp/*` 事件可用 `scripts/repair-legacy-sessions.mjs` 补上 `ignorable:true`（默认 dry-run，`--apply` 会留 `*.pre-ignorable.bak`）。**注意 zstd 物理格式**：会话日志是**多帧**拼接，且宿主断言**第一帧必须恰好是一行 header**（`assertZstdHeaderFrame`）；把整个文件重压成单帧会得到 `corrupt Zstandard session log: first frame is not exactly one header line`。
+
+**旁注**：活动账本（谁改了状态）刻意**不进会话日志**——它是玩家可见、模型不可见的簿记，改为宿主内存 + `GET /dsh-rrp/activity` + 面板轮询。
+
 ## B. 从客户端以「指定 preset + 开场白」新建会话
 
 ### B4. 编程式新建会话并设置 agent preset

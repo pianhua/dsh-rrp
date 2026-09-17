@@ -1,5 +1,7 @@
 # CONTEXT_PUBLISHER_VERIFY.md — 上下文发布核验单（**已修正：append 优先于 replace**）
 
+> 📌 **2026-09-17 迁移**：发布器从 `context-publisher.ts` 改名为 `state-publisher.ts`，并**只由写者直接调用**（不再监听会话事件）；状态寄存在 `user/message` 的 `source.rrp`。本单的 append/replace 结论仍然有效。
+
 > ⚠️ **重大修正（2026-09-16）**：本单最初验证的 **replace** 方案，虽然把 surface 压到 1 份，
 > 但**摧毁了前缀 KV 缓存**（同一批会话实测：命中率从 ~90% 掉到 ~14%，`cacheRead` 卡在 1024）。
 > **已改回 append**，并保留「卡包只注入一次」这个真正的改进。正确目标见 **§10**。
@@ -173,7 +175,7 @@ Provider 是**前缀 KV 缓存**：请求只有和上一轮**逐 token 相同的
 
 ### 10.3 修正后的实现
 
-- **append，绝不 replace**（`src/context-publisher.ts`，测试含"永不发出 replace"的守卫）；
+- **append，绝不 replace**（`src/state-publisher.ts`，测试含"永不发出 replace"的守卫）；
 - **按内容去重**：卡包（会话恒定）只 append 一次；事实（摘要+状态）仅在变化时 append；
 - **接受上下文增长**：旧副本会留在历史里，但它们是**被缓存**的；真正新增的未缓存 token 每轮很小。
   宿主 compaction 会在压力时把它们折叠。

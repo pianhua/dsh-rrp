@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { SUMMARY_EVENT } from '../src/macro-summary.ts'
 import { summaryProjection } from '../src/projection/summary.ts'
 import { worldStateProjection } from '../src/projection/world-state.ts'
-import { WORLD_STATE_EVENT, emptyWorldState } from '../src/world-state.ts'
+import { rrpStateMessage } from '../src/state-payload.ts'
+import { emptyWorldState } from '../src/world-state.ts'
 
-/** One synthetic committed session event. */
+/** One synthetic committed session event (non-RP noise is a plain known event). */
 function event(type: string, data: unknown, seq: number) {
   return { type, seq, time: 0, data }
+}
+
+/** One state-bearing context message (the only way our state enters the log). */
+function stateEvent(payload: Record<string, unknown>, seq: number) {
+  return event('user/message', rrpStateMessage('m' + seq, 'context', payload), seq)
 }
 
 /** Fold a projection unit from its init over a whole log (as the host does). */
@@ -21,10 +26,10 @@ function fold(definition: typeof worldStateProjection | typeof summaryProjection
 // A parent log: two WorldState snapshots and one macro summary, plus noise.
 const prefix = [
   event('turn/start', { turn: 1 }, 0),
-  event(WORLD_STATE_EVENT, { ...emptyWorldState(), scene: { location: '归离客栈' } }, 1),
+  stateEvent({ worldState: { ...emptyWorldState(), scene: { location: '归离客栈' } } }, 1),
   event('assistant/message', {}, 2),
-  event(WORLD_STATE_EVENT, { ...emptyWorldState(), scene: { location: '枯河滩' }, flags: { 受伤: true } }, 3),
-  event(SUMMARY_EVENT, { goal: '北行', conflict: '沙盗', turningPoints: ['离开客栈'], threads: [] }, 4),
+  stateEvent({ worldState: { ...emptyWorldState(), scene: { location: '枯河滩' }, flags: { 受伤: true } } }, 3),
+  stateEvent({ summary: { goal: '北行', conflict: '沙盗', turningPoints: ['离开客栈'], threads: [] } }, 4),
 ]
 
 describe('worldline replay (fork) correctness', () => {
@@ -37,8 +42,8 @@ describe('worldline replay (fork) correctness', () => {
   })
 
   it('keeps sibling branches independent (no cross-branch leakage)', () => {
-    const branchA = [...prefix, event(WORLD_STATE_EVENT, { ...emptyWorldState(), scene: { location: 'A 分支' } }, prefix.length)]
-    const branchB = [...prefix, event(WORLD_STATE_EVENT, { ...emptyWorldState(), scene: { location: 'B 分支' } }, prefix.length)]
+    const branchA = [...prefix, stateEvent({ worldState: { ...emptyWorldState(), scene: { location: 'A 分支' } } }, prefix.length)]
+    const branchB = [...prefix, stateEvent({ worldState: { ...emptyWorldState(), scene: { location: 'B 分支' } } }, prefix.length)]
 
     expect(fold(worldStateProjection, branchA).scene.location).toBe('A 分支')
     expect(fold(worldStateProjection, branchB).scene.location).toBe('B 分支')

@@ -2,9 +2,10 @@
  * dsh-rrp — player correction write path (D6, natural-time, no locks).
  *
  * The right-sidebar panel posts the player's edited WorldState here. We
- * validate it and append it as a whole-value `rrp/world-state` event: the
- * correction is simply the last write, and the next Author step consumes the
- * newest slice. No lock, no arbitration, no conflict matrix.
+ * validate it and publish it as the newest facts context message (structured
+ * payload in the message source): the correction is simply the last write, and
+ * the next Author step consumes the newest slice. No lock, no arbitration, no
+ * conflict matrix.
  *
  * The route rides the host webserver (HOST_ALIGNMENT: only register an
  * endpoint when one is genuinely needed; never `createServer`).
@@ -13,13 +14,14 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
 import { worldStateSchema } from './projection/world-state.ts'
-import { WORLD_STATE_EVENT } from './world-state.ts'
+import { publishState } from './state-publisher.ts'
 
 const TAG = '[dsh-rrp]'
 /** Same-origin exact route the panel posts to. */
 const CORRECTION_PATH = '/dsh-rrp/world-state'
 
 interface SessionLike {
+  readonly id: string
   append(type: string, data: unknown): unknown
 }
 interface SessionsService {
@@ -41,9 +43,15 @@ interface WebServerService {
     handler: (req: RequestLike, res: ResponseLike) => void | Promise<void>
   }): () => void
 }
+interface ProjectionsService {
+  stateOf(session: unknown, key: string): unknown
+}
 interface RuntimeFaces {
   get(name: string): unknown
 }
+
+/** Projection face used when the registry is unavailable. */
+const NO_PROJECTIONS: ProjectionsService = { stateOf: () => undefined }
 
 /** Read the whole request body as UTF-8 text. */
 async function readBody(req: RequestLike): Promise<string> {
@@ -73,6 +81,7 @@ export function registerCorrectionRoute(ctx: Context): void {
     console.warn(TAG + ' player correction idle (missing webServer/sessions)')
     return
   }
+  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
 
   ctx.effect(() => {
     const dispose = webServer.register({
@@ -105,8 +114,8 @@ export function registerCorrectionRoute(ctx: Context): void {
           send(res, 404, { error: 'unknown session' })
           return
         }
-        session.append(WORLD_STATE_EVENT, state.data)
-        recordActivity(session, {
+        publishState(session, projections ?? NO_PROJECTIONS, { worldState: state.data })
+        recordActivity(request.sessionId, {
           id: randomUUID(),
           at: new Date().toISOString(),
           actor: 'player',

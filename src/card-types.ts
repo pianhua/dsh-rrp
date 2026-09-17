@@ -61,9 +61,6 @@ export interface CardContext {
   player?: CardPlayer
 }
 
-/** Session event type carrying the active card's setting (whole-value rule). */
-export const CARD_EVENT = 'rrp/card'
-
 /** Projection key for the active card. */
 export const CARD_KEY = 'rrpCard'
 

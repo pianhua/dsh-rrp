@@ -23,7 +23,7 @@ import {
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
-import { ACTIVITY_KEY, pendingActivity, type RrpActivityLog } from '../activity.ts'
+import { pendingActivity, type RrpActivityLog } from '../activity.ts'
 import {
   WORLD_STATE_KEY,
   type WorldState,
@@ -39,6 +39,10 @@ const TAB_ID = 'dsh-rrp/world-state'
 const TAB_KIND = 'dsh-rrp-worldstate'
 /** Host route that accepts a corrected WorldState. */
 const CORRECTION_PATH = '/dsh-rrp/world-state'
+/** Host route serving the host-side activity ledger. */
+const ACTIVITY_PATH = '/dsh-rrp/activity'
+/** The ledger is transient player-facing bookkeeping; a slow poll is enough. */
+const ACTIVITY_POLL_MS = 2000
 
 type Translate = (key: string) => string
 
@@ -249,9 +253,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
     ? (props.useProjection(WORLD_STATE_KEY) as WorldStateView | undefined)
     : undefined
   const sessionId = props.sessionId
-  const activity = typeof props.useProjection === 'function'
-    ? (props.useProjection(ACTIVITY_KEY) as RrpActivityLog | undefined)
-    : undefined
+  const [activity, setActivity] = useState<RrpActivityLog | undefined>(undefined)
   const recentActivity = (activity?.entries ?? []).slice(-4).reverse()
   const inferenceRunning = activity === undefined ? undefined : pendingActivity(activity, 'world-state')
 
@@ -264,6 +266,32 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
   useEffect(() => {
     if (!dirty) setDraft(draftOf(view))
   }, [view, dirty])
+
+  // The activity ledger is host-side and transient: poll it while mounted so
+  // the "最近变更" line and the running indicator stay current.
+  useEffect(() => {
+    if (sessionId === undefined) {
+      setActivity(undefined)
+      return
+    }
+    let cancelled = false
+    const load = (): void => {
+      void fetch(ACTIVITY_PATH + '?sessionId=' + encodeURIComponent(sessionId))
+        .then((response) => (response.ok ? response.json() as Promise<RrpActivityLog> : undefined))
+        .then((log) => {
+          if (!cancelled && log !== undefined) setActivity(log)
+        })
+        .catch(() => {
+          /* the ledger is best-effort */
+        })
+    }
+    load()
+    const timer = setInterval(load, ACTIVITY_POLL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [sessionId])
 
   const mutate = (change: (next: Draft) => void): void => {
     setDraft((previous) => {

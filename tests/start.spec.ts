@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { forgetActivity, readActivity } from '../src/activity.ts'
+import { forgetState } from '../src/state-publisher.ts'
 import { registerStartRoute } from '../src/start.ts'
 import { emptyWorldState } from '../src/world-state.ts'
 
@@ -47,24 +49,35 @@ function exchange(body: unknown, method = 'POST') {
   return { req, res }
 }
 
+/** Structured payload of an appended context message. */
+const payloadOf = (data: unknown) => (data as { source?: { rrp?: Record<string, unknown> } }).source?.rrp
+
 describe('card start route', () => {
-  it('writes the initial state and appends the opening as an assistant message', async () => {
+  it('publishes the initial state and appends the opening as an assistant message', async () => {
+    forgetState('s1'); forgetActivity('s1')
     const host = fakeHost()
     registerStartRoute(host.ctx as never)
     const { req, res } = exchange({ sessionId: 's1', state: STATE, opening: OPENING })
     await host.route()!.handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(host.appended.map((entry) => entry.type)).toEqual(['rrp/world-state', 'rrp/activity', 'assistant/message'])
-    expect(host.appended[0]?.data).toEqual(STATE)
-    expect((host.appended[1]?.data as { actor: string }).actor).toBe('card')
-    const data = host.appended[2]?.data as { message: { role: string; content: Array<{ text: string }> } }
+    // Facts context first (a known user/message carrying the state in its source),
+    // then the opening LAST so the live follow stream ends on it.
+    expect(host.appended.map((entry) => entry.type)).toEqual(['user/message', 'assistant/message'])
+    expect(payloadOf(host.appended[0]?.data)?.worldState).toEqual(STATE)
+
+    const activity = readActivity('s1')
+    expect(activity.entries.map((entry) => entry.phase)).toEqual(['committed'])
+    expect(activity.entries[0]?.actor).toBe('card')
+
+    const data = host.appended[1]?.data as { message: { role: string; content: Array<{ text: string }> } }
     expect(data.message.role).toBe('assistant')
     expect(data.message.content[0]?.text).toBe(OPENING)
-    expect(host.appended[2]?.intent).toEqual({ surfaceOp: 'append' })
+    expect(host.appended[1]?.intent).toEqual({ surfaceOp: 'append' })
   })
 
   it('falls back to a plugin notice when the assistant shape is rejected', async () => {
+    forgetState('s1'); forgetActivity('s1')
     const host = fakeHost({ failAssistant: true })
     registerStartRoute(host.ctx as never)
     const { req, res } = exchange({ sessionId: 's1', opening: OPENING })
@@ -72,9 +85,10 @@ describe('card start route', () => {
 
     expect(res.statusCode).toBe(200)
     expect(host.appended.map((entry) => entry.type)).toEqual(['user/message'])
-    const data = host.appended[0]?.data as { message: { source: { kind: string; form?: string } } }
-    expect(data.message.source.kind).toBe('plugin')
-    expect(data.message.source.form).toBe('notice')
+    // user/message data IS the UserMessage.
+    const data = host.appended[0]?.data as { source: { kind: string; form?: string } }
+    expect(data.source.kind).toBe('plugin')
+    expect(data.source.form).toBe('notice')
   })
 
   it('rejects an invalid state and an unknown session', async () => {
@@ -90,7 +104,8 @@ describe('card start route', () => {
     expect(missing.res.statusCode).toBe(404)
   })
 
-  it('writes the active card setting first', async () => {
+  it('publishes the active card setting first', async () => {
+    forgetState('s1'); forgetActivity('s1')
     const host = fakeHost()
     registerStartRoute(host.ctx as never)
     const { req, res } = exchange({
@@ -100,8 +115,7 @@ describe('card start route', () => {
     })
     await host.route()!.handler(req, res)
     expect(res.statusCode).toBe(200)
-    expect(host.appended[0]?.type).toBe('rrp/card')
-    expect(host.appended[0]?.data).toEqual({ id: 'c1', name: '测试卡', persona: 'P', worldCore: 'W' })
+    expect(host.appended[0]?.type).toBe('user/message')
+    expect(payloadOf(host.appended[0]?.data)?.card).toEqual({ id: 'c1', name: '测试卡', persona: 'P', worldCore: 'W' })
   })
 })
-

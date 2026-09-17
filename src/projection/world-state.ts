@@ -7,8 +7,8 @@
  * Object.is gate do zero downstream work.
  */
 import { z } from 'zod'
+import { rrpPayloadOf } from '../state-payload.ts'
 import {
-  WORLD_STATE_EVENT,
   WORLD_STATE_KEY,
   emptyWorldState,
   type WorldState,
@@ -56,9 +56,7 @@ export const worldStateProjection = {
   stateVersion: 1,
   init: (): WorldState => emptyWorldState(),
   apply: (state: WorldState, event: { type: string; data?: unknown }): WorldState =>
-    event.type === WORLD_STATE_EVENT && event.data !== undefined && event.data !== null
-      ? (event.data as WorldState)
-      : state,
+    rrpPayloadOf(event)?.worldState ?? state,
   wire: {
     viewSchema: worldStateSchema,
     view: (state: WorldState): WorldStateView => state,

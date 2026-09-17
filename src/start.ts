@@ -4,18 +4,22 @@
  * The gallery creates the session client-side
  * (ctx.sessions.create -> ctx.remote.agentPresets.select('rp') -> open), then
  * POSTs here so the HOST writes the two things the browser cannot: the card's
- * initial WorldState event and its opening as the Author's first message.
+ * initial WorldState context and its opening as the Author's first message.
  *
- * The opening is appended as a real \`assistant/message\` surface event (the
- * supported Session.append path). If the host rejects that shape, we fall back
- * to a plugin-source user/message notice, so a start never hard-fails.
+ * Both are ordinary known events: the context rides `user/message` (structured
+ * payload hidden in the message source, see ./state-payload.ts) and the opening
+ * is a real `assistant/message` surface event. The opening is appended LAST so
+ * the live follow stream ends on it, which is what makes it appear without a
+ * manual refresh. If the host rejects the assistant shape, we fall back to a
+ * plugin-source user/message notice, so a start never hard-fails.
  */
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
-import { CARD_EVENT, type CardContext } from './card-types.ts'
+import type { CardContext } from './card-types.ts'
 import { worldStateSchema } from './projection/world-state.ts'
-import { WORLD_STATE_EVENT } from './world-state.ts'
+import { publishState } from './state-publisher.ts'
+import type { WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
 const START_PATH = '/dsh-rrp/start'
@@ -55,6 +59,9 @@ interface WebServerService {
 interface RuntimeFaces {
   get(name: string): unknown
 }
+
+/** Projection face used when the registry is unavailable (card lane still works). */
+const NO_PROJECTIONS: ProjectionsService = { stateOf: () => undefined }
 
 /** Coerce a loose request value into a card context, or undefined when unusable. */
 function parseCardContext(value: unknown): CardContext | undefined {
@@ -143,7 +150,8 @@ function appendOpening(
       content: [{ type: 'text', text }],
       source: { kind: 'plugin', plugin: 'dsh-rrp', form: 'notice', summary: '序章' },
     }
-    session.append('user/message', { turn: lastTurn, step: 0, message }, { surfaceOp: 'append' })
+    // `user/message` data IS the UserMessage (no `{turn,step,message}` wrapper).
+    session.append('user/message', message, { surfaceOp: 'append' })
     return 'notice'
   } catch (error) {
     console.warn(TAG + ' opening notice rejected:', error)
@@ -198,26 +206,34 @@ export function registerStartRoute(ctx: Context): void {
           return
         }
 
-        let cardWritten = false
+        let card: CardContext | undefined
         if (request.card !== undefined && request.card !== null) {
-          const card = parseCardContext(request.card)
+          card = parseCardContext(request.card)
           if (card === undefined) {
             send(res, 400, { error: 'invalid card' })
             return
           }
-          session.append(CARD_EVENT, card)
-          cardWritten = true
         }
 
-        let stateWritten = false
+        let state: WorldState | undefined
         if (request.state !== undefined && request.state !== null) {
-          const state = worldStateSchema.safeParse(request.state)
-          if (!state.success) {
+          const validated = worldStateSchema.safeParse(request.state)
+          if (!validated.success) {
             send(res, 400, { error: 'invalid WorldState' })
             return
           }
-          session.append(WORLD_STATE_EVENT, state.data)
-          recordActivity(session, {
+          state = validated.data
+        }
+
+        // Publish the durable context FIRST (card lane + facts lane).
+        if (card !== undefined || state !== undefined) {
+          publishState(session, projections ?? NO_PROJECTIONS, {
+            ...(card === undefined ? {} : { card }),
+            ...(state === undefined ? {} : { worldState: state }),
+          })
+        }
+        if (state !== undefined) {
+          recordActivity(session.id, {
             id: randomUUID(),
             at: new Date().toISOString(),
             actor: 'card',
@@ -225,9 +241,9 @@ export function registerStartRoute(ctx: Context): void {
             phase: 'committed',
             detail: '卡包初始状态',
           })
-          stateWritten = true
         }
 
+        // Opening LAST: the live follow stream then ends on the opening line.
         let openingWritten: 'assistant' | 'notice' | 'none' = 'none'
         if (typeof request.opening === 'string' && request.opening.trim().length > 0) {
           const boundary = projections?.stateOf(session, 'turnBoundary') as { lastTurn?: number } | undefined
@@ -237,9 +253,9 @@ export function registerStartRoute(ctx: Context): void {
 
         console.log(
           TAG + ' card start ' + session.id
-          + ' (card=' + String(cardWritten) + ', state=' + String(stateWritten) + ', opening=' + openingWritten + ')',
+          + ' (card=' + String(card !== undefined) + ', state=' + String(state !== undefined) + ', opening=' + openingWritten + ')',
         )
-        send(res, 200, { ok: true, cardWritten, stateWritten, openingWritten })
+        send(res, 200, { ok: true, cardWritten: card !== undefined, stateWritten: state !== undefined, openingWritten })
       },
     })
     console.log(TAG + ' card start route armed at ' + START_PATH)

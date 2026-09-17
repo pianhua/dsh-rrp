@@ -8,12 +8,11 @@
  * Chronicler / Skills logic arrives in later stages — see docs/ACTIVE_TASK.md.
  */
 import type { Context } from '@deepseek-ai/cordis'
+import { registerActivityRoute } from './activity-route.ts'
 import { registerCardsRoute } from './cards-route.ts'
 import { registerChronicler } from './chronicler.ts'
-import { registerContextPublisher } from './context-publisher.ts'
 import { registerCorrectionRoute } from './correction.ts'
 import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
-import { activityProjection } from './projection/activity.ts'
 import { cardProjection } from './projection/card.ts'
 import { summaryProjection } from './projection/summary.ts'
 import { worldStateProjection } from './projection/world-state.ts'
@@ -50,7 +49,6 @@ interface SessionProjectionsService {
     definition:
       | typeof worldStateProjection
       | typeof summaryProjection
-      | typeof activityProjection
       | typeof cardProjection,
   ): () => void
 }
@@ -81,8 +79,6 @@ export function apply(ctx: Context): void {
     console.log(`${TAG} WorldState projection registered (key '${worldStateProjection.key}')`)
     registry.register(summaryProjection)
     console.log(`${TAG} macro-summary projection registered (key '${summaryProjection.key}')`)
-    registry.register(activityProjection)
-    console.log(`${TAG} activity ledger projection registered (key '${activityProjection.key}')`)
     registry.register(cardProjection)
     console.log(`${TAG} active-card projection registered (key '${cardProjection.key}')`)
   })
@@ -97,12 +93,6 @@ export function apply(ctx: Context): void {
     registerChronicler(scoped, PRESET_ID)
   })
 
-  // Author context: publish card + facts as durable surface messages, replacing
-  // the previous facts message so the history never accumulates stale state.
-  ctx.inject(['sessionProjections'], (scoped: Context) => {
-    registerContextPublisher(scoped, PRESET_ID)
-  })
-
   // Player correction: the panel's write path into the session log (D6).
   ctx.inject(['webServer', 'sessions'], (scoped: Context) => {
     registerCorrectionRoute(scoped)
@@ -111,6 +101,12 @@ export function apply(ctx: Context): void {
   // Card packs (Stage 6): read-only routes the gallery/start flow consumes.
   ctx.inject(['webServer'], (scoped: Context) => {
     registerCardsRoute(scoped)
+  })
+
+  // Activity ledger: the right-sidebar panel polls this host-side, in-memory
+  // ledger (it is player-facing and must never enter the session log/model).
+  ctx.inject(['webServer'], (scoped: Context) => {
+    registerActivityRoute(scoped)
   })
 
   // Card start: write the initial state and the opening the browser cannot.

@@ -16,8 +16,8 @@
 1. **fork 复制前缀**：`SessionStore.fork(source, boundary, childId)` 把源会话截至 `boundary` 的事件复制进子会话 seed，并令 `inheritedEventCount = seed.length`（`dsh-session`）。子会话的 `snapshotEvents()` 返回「继承前缀 + 自己的新事件」。
 2. **投影全量折叠**：`SessionProjectionRegistry.buildCell(def, header, inheritedEventCount, session.snapshotEvents())` 从 `init` 开始，对**整条日志**（含继承前缀）应用 `apply`。`init(header, inheritedEventCount)` 只提供元数据与切口，**不替代重放**（`dsh-session-projection`）。
 3. **本插件两个单元都是整值折叠**：
-   - `rrp/world-state` → `rrpWorldState`（`characters` / `inventory` / `scene` / `flags`）；
-   - `rrp/summary` → `rrpSummary`（四维大局观）。
+   - `user/message.source.rrp.worldState` → `rrpWorldState`（`characters` / `inventory` / `scene` / `flags`）；
+   - `user/message.source.rrp.summary` → `rrpSummary`（四维大局观）。
    事件携带**变化后的完整状态**，`apply` 只做采纳；无关事件返回**同一引用**（Object.is 闸门零下游工作）。
 4. **分支独立**：每个会话是独立 append-only 日志，玩家矫正（`/dsh-rrp/world-state` 路由）与纪事官/编年官落账都写到**当前会话**。fork 出的子会话从共享前缀起，后续写入互不可见。
 

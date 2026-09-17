@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildChroniclerPrompt, parseChroniclerReply } from '../src/agents/chronicler.ts'
+import { forgetActivity, readActivity } from '../src/activity.ts'
 import { registerChronicler } from '../src/chronicler.ts'
+import { forgetState } from '../src/state-publisher.ts'
 import { emptyWorldState } from '../src/world-state.ts'
 
 const VALID = {
@@ -79,7 +81,8 @@ function fakeHost(preset: string) {
 }
 
 describe('Chronicler trigger', () => {
-  it('inferrs and appends a complete WorldState on a completed RP turn', async () => {
+  it('infers and publishes a complete WorldState on a completed RP turn', async () => {
+    forgetState('session-1'); forgetActivity('session-1')
     const host = fakeHost('rp')
     registerChronicler(host.ctx as never, 'rp')
 
@@ -94,14 +97,14 @@ describe('Chronicler trigger', () => {
     const hooks = started!.run()
     const outcome = await hooks.done
     expect(outcome.status).toBe('completed')
-    const stateWrites = host.appended.filter((entry) => entry.type === 'rrp/world-state')
+    const stateWrites = host.appended.filter((entry) => entry.type === 'user/message')
     expect(stateWrites).toHaveLength(1)
-    expect(stateWrites[0]?.data).toEqual(VALID)
+    expect((stateWrites[0]?.data as { source: { rrp: { worldState: unknown } } }).source.rrp.worldState).toEqual(VALID)
 
     // Attribution: the ledger must show the Chronicler started and what changed.
-    const activity = host.appended.filter((entry) => entry.type === 'rrp/activity')
-    expect(activity.map((entry) => (entry.data as { phase: string }).phase)).toEqual(['started', 'committed'])
-    const committed = activity[1]?.data as { actor: string; target: string; detail?: string }
+    const activity = readActivity('session-1').entries
+    expect(activity.map((entry) => entry.phase)).toEqual(['started', 'committed'])
+    const committed = activity[1] as { actor: string; target: string; detail?: string }
     expect(committed.actor).toBe('chronicler')
     expect(committed.target).toBe('world-state')
     expect(committed.detail).toContain('新增角色「毓忻」')

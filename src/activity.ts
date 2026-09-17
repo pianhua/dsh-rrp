@@ -3,11 +3,16 @@
  *
  * The Chronicler/Summarizer run in the background (D3: body text first, state
  * inference after), so without an explicit ledger the player cannot tell which
- * agent produced a state change. Every writer appends one bounded entry to the
- * session log; the right-sidebar panel renders the tail as an attribution line.
+ * agent produced a state change. Every writer appends one bounded entry here;
+ * the right-sidebar panel renders the tail as an attribution line.
  *
- * Dependency-free: shared by host writers, the projection fold, and the client
- * bundle. Writers generate `id`/`at` (node-only crypto/time stays host-side).
+ * The ledger is HOST-SIDE, IN-MEMORY, and exposed over `GET /dsh-rrp/activity`.
+ * It is deliberately not a session event: the host refuses to load a log
+ * containing a plugin-invented event type, and the ledger is player-facing
+ * bookkeeping that must never reach the model anyway. Losing it on restart is
+ * acceptable — it only describes recent passes.
+ *
+ * Dependency-free: shared by host writers and the client bundle.
  */
 
 /** Which writer produced an entry. */
@@ -32,16 +37,10 @@ export interface RrpActivity {
   detail?: string
 }
 
-/** Session event type carrying one activity entry (append-only). */
-export const ACTIVITY_EVENT = 'rrp/activity'
-
-/** Projection key, also the client `useProjection(key)` lookup key. */
-export const ACTIVITY_KEY = 'rrpActivity'
-
 /** The panel only needs a recent tail; the ledger stays bounded. */
 export const ACTIVITY_LIMIT = 20
 
-/** The ledger projection state. */
+/** The ledger state. */
 export interface RrpActivityLog {
   entries: RrpActivity[]
 }
@@ -71,16 +70,24 @@ export function pendingActivity(log: RrpActivityLog, target: RrpTarget): RrpActi
   return last?.phase === 'started' ? last : undefined
 }
 
-/**
- * Best-effort write of one entry. The ledger must never break the writer's
- * own flow, so an append failure is swallowed.
- * @param sink - any append-capable session face.
- * @param entry - the complete entry.
- */
-export function recordActivity(sink: { append(type: string, data: unknown): unknown }, entry: RrpActivity): void {
+/** Per-session ledgers. Bounded by `ACTIVITY_LIMIT` each. */
+const LEDGERS = new Map<string, RrpActivityLog>()
+
+/** Record one entry. Never throws; the ledger must not break the writer. */
+export function recordActivity(sessionId: string, entry: RrpActivity): void {
   try {
-    sink.append(ACTIVITY_EVENT, entry)
+    LEDGERS.set(sessionId, appendActivity(LEDGERS.get(sessionId) ?? emptyActivityLog(), entry))
   } catch {
     /* the ledger is best-effort; the authoritative write already happened */
   }
+}
+
+/** Read one session's ledger tail. */
+export function readActivity(sessionId: string): RrpActivityLog {
+  return LEDGERS.get(sessionId) ?? emptyActivityLog()
+}
+
+/** Forget one session's ledger (called when a session is disposed). */
+export function forgetActivity(sessionId: string): void {
+  LEDGERS.delete(sessionId)
 }

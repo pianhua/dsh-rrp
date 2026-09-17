@@ -16,7 +16,9 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
 import { CHRONICLER_SYSTEM_PROMPT, buildChroniclerPrompt, parseChroniclerReply } from './agents/chronicler.ts'
-import { WORLD_STATE_EVENT, WORLD_STATE_KEY, diffWorldState, emptyWorldState, type WorldState } from './world-state.ts'
+import { publishState } from './state-publisher.ts'
+import { rrpPayloadOf } from './state-payload.ts'
+import { WORLD_STATE_KEY, diffWorldState, emptyWorldState, type WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'chronicler'
@@ -156,7 +158,7 @@ async function runInference(
     const transcript = latestTurnTranscriptOf(session)
     if (transcript.trim().length === 0) return { status: 'completed' }
 
-    recordActivity(session, {
+    recordActivity(session.id, {
       id: activityId, at: stamp(), actor: 'chronicler', target: 'world-state', phase: 'started',
     })
 
@@ -176,7 +178,7 @@ async function runInference(
     })
     const text = await collectText(stream)
     if (isCancelled()) {
-      recordActivity(session, {
+      recordActivity(session.id, {
         id: activityId, at: stamp(), actor: 'chronicler', target: 'world-state', phase: 'failed', detail: '已取消',
       })
       return { status: 'killed' }
@@ -184,8 +186,8 @@ async function runInference(
 
     const next = parseChroniclerReply(text)
     if (next === undefined) throw new Error('Chronicler reply was not a valid WorldState')
-    session.append(WORLD_STATE_EVENT, next)
-    recordActivity(session, {
+    publishState(session, faces.projections, { worldState: next })
+    recordActivity(session.id, {
       id: activityId,
       at: stamp(),
       actor: 'chronicler',
@@ -197,7 +199,7 @@ async function runInference(
     return { status: 'completed' }
   } catch (error) {
     console.warn(TAG + ' Chronicler inference failed:', error)
-    recordActivity(session, {
+    recordActivity(session.id, {
       id: activityId, at: stamp(), actor: 'chronicler', target: 'world-state', phase: 'failed', detail: messageOf(error),
     })
     return { status: isCancelled() ? 'killed' : 'failed' }
@@ -229,7 +231,8 @@ export function latestTurnTranscriptOf(session: SessionLike): string {
   const events = session.snapshotEvents()
   let start = 0
   for (let index = events.length - 1; index >= 0; index -= 1) {
-    if (events[index]?.type === 'user/message') {
+    const candidate = events[index]
+    if (candidate?.type === 'user/message' && rrpPayloadOf(candidate) === undefined) {
       start = index
       break
     }
@@ -238,6 +241,7 @@ export function latestTurnTranscriptOf(session: SessionLike): string {
   for (let index = start; index < events.length; index += 1) {
     const event = events[index]
     if (event?.type !== 'user/message' && event?.type !== 'assistant/message') continue
+    if (rrpPayloadOf(event) !== undefined) continue
     const blocks: string[] = []
     collectTextBlocks(event.data, blocks)
     const text = blocks.join('\n').trim()
@@ -254,6 +258,7 @@ export function transcriptOf(session: SessionLike): string {
   const parts: string[] = []
   for (const event of session.snapshotEvents()) {
     if (event.type !== 'user/message' && event.type !== 'assistant/message') continue
+    if (rrpPayloadOf(event) !== undefined) continue
     const blocks: string[] = []
     collectTextBlocks(event.data, blocks)
     const text = blocks.join('\n').trim()

@@ -2,10 +2,10 @@
  * dsh-rrp — the Summarizer runner (D11).
  *
  * Every N completed turns of an RP-preset session, schedule an async job that
- * condenses the arc into the four macro dimensions and appends it as an
- * `rrp/summary` whole-value event, driving the summary projection and the
- * Author's macro compass. The player toggles the whole feature with the
- * `/summary` command.
+ * condenses the arc into the four macro dimensions and publishes it as the
+ * newest facts context message, driving the summary projection and the Author's
+ * macro compass. The player toggles the whole feature with the `/summary`
+ * command.
  *
  * Same host seams as the Chronicler: `ctx.jobs` to schedule, `ctx.llm` to
  * infer, `Session.append` to record.
@@ -15,7 +15,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
 import { SUMMARIZER_SYSTEM_PROMPT, buildSummarizerPrompt, parseSummarizerReply } from './agents/summarizer.ts'
 import { messageOf, transcriptOf } from './chronicler.ts'
-import { SUMMARY_EVENT } from './macro-summary.ts'
+import { publishState } from './state-publisher.ts'
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'summarizer'
@@ -176,7 +176,7 @@ async function runSummary(
     if (full.trim().length === 0) return { status: 'completed' }
     const transcript = full.length > TRANSCRIPT_LIMIT ? full.slice(full.length - TRANSCRIPT_LIMIT) : full
 
-    recordActivity(session, {
+    recordActivity(session.id, {
       id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'started',
     })
 
@@ -198,7 +198,7 @@ async function runSummary(
       if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') text += chunk.text
     }
     if (isCancelled()) {
-      recordActivity(session, {
+      recordActivity(session.id, {
         id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'failed', detail: '已取消',
       })
       return { status: 'killed' }
@@ -206,8 +206,8 @@ async function runSummary(
 
     const summary = parseSummarizerReply(text)
     if (summary === undefined) throw new Error('Summarizer reply was not a valid MacroSummary')
-    session.append(SUMMARY_EVENT, summary)
-    recordActivity(session, {
+    publishState(session, faces.projections, { summary })
+    recordActivity(session.id, {
       id: activityId,
       at: stamp(),
       actor: 'summarizer',
@@ -219,7 +219,7 @@ async function runSummary(
     return { status: 'completed' }
   } catch (error) {
     console.warn(TAG + ' Summarizer failed:', error)
-    recordActivity(session, {
+    recordActivity(session.id, {
       id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'failed', detail: messageOf(error),
     })
     return { status: isCancelled() ? 'killed' : 'failed' }

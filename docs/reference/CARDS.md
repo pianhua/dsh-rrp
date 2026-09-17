@@ -112,7 +112,7 @@ opening: default
 ## 6. 初始状态（`state.json`）
 
 - 严格对齐 `worldStateSchema`（`characters/inventory/scene/flags`）。
-- 新会话启动时以一条 `rrp/world-state` 事件写入，右侧面板立即有内容。
+- 新会话启动时以一条 facts 上下文消息（`user/message` 的 `source.rrp.worldState`）写入，右侧面板立即有内容。
 - 玩家角色建议同时进入 `characters`（以 `player.name` 为键），便于 Chronicler 追踪。
 
 ---
@@ -121,9 +121,9 @@ opening: default
 
 | 卡包资产 | 落到的宿主/插件接缝 | 说明 |
 | :--- | :--- | :--- |
-| `persona` + 正文世界核心 | `rrp/card` 投影 + `author-context.ts` 的 `agent/pre-step` 注入 | 只在带该卡的会话生效，不污染 preset；模型可见、面板不显示 |
+| `persona` + 正文世界核心 | `rrpCard` 投影 + `src/state-publisher.ts` 注入 | 只在带该卡的会话生效，不污染 preset；模型可见、面板不显示 |
 | `skills/` | `mountCardSkills` 拷入 preset 技能根 → DSH Skill | 实测启动日志 `RP skills visible (6)` |
-| `state.json` | `rrp/world-state` 事件 + 现有投影 | 无需新投影 |
+| `state.json` | `user/message` 的 `source.rrp.worldState` + 现有投影 | 无需新投影 |
 | 开场白 | 新会话的首条消息 | 需宿主「以预设新建会话 + 注入首条消息」接缝（见 §9 待勘察） |
 | 卡面/列表 | 卡片展厅 UI | 复用 Slots / 右侧栏 / 顶栏入口（见 §9） |
 | 会话标题 | 宿主 session-title | 由 `name`/开场首句派生 |
@@ -191,9 +191,9 @@ opening: default
 
 - 加载器 `src/cards.ts`：纯目录解析（frontmatter 子集 / 开场白 / `state.json` / `skills`），无 HTTP、无 DB、无索引；`mountCardSkills()` 把每张卡的 `skills/*` 挂进 RP preset 的技能根（启动日志 `RP skills visible (6)`）。
 - 卡面类型 `src/card-types.ts`：依赖为零，宿主与浏览器共享。
-- **卡包设定投影** `rrp/card`（`src/projection/card.ts`）+ `renderCardContext`：Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入（`src/context-publisher.ts`，追加式去重）。
+- **卡包设定投影** `rrpCard`（`src/projection/card.ts`）+ `renderCardContext`：Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入（`src/state-publisher.ts`，追加式去重）。
 - 只读路由 `src/cards-route.ts`：`GET /dsh-rrp/cards`、`GET /dsh-rrp/cards/one?id=<id>`。
-- 开卡路由 `src/start.ts`：`POST /dsh-rrp/start` → 写 `rrp/card`、`rrp/world-state`（actor `card`）、追加开场白。
+- 开卡路由 `src/start.ts`：`POST /dsh-rrp/start` → 发布卡包 + 初始状态上下文（`source.rrp`；actor `card` 记入内存账本），**最后**追加开场白。
 - 卡片展厅 `src/client/gallery-panel.tsx`：`main` 主区面板 + 同名 `sidebar.panellist` 导航；开始流 = create → `agentPresets.select('rp')` → open → POST start。UI 用宿主原子库（搜索/封面/标签/技能卡/开场白 + 底部主操作条）。
 - **主题（已撤回 P0）**：暖纸 `overrideTokens` 层观感被所有者否决，改用 **DSH 原版亮暗**；面板自身靠 `@deepseek-ai/dsh-client-ui-primitives` 原子 + `--dsw-alias-*` token 保持原生观感（见 [UI_CEILING.md](UI_CEILING.md) §A4）。
 - 测试：`tests/cards.spec.ts`、`tests/start.spec.ts`、`tests/client.spec.ts` 等——全套 **66 用例**（`pnpm typecheck` / `build` 全绿）。

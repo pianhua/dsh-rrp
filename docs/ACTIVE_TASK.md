@@ -34,7 +34,7 @@
 
 | 反馈 | 诊断 | 处置 |
 | :--- | :--- | :--- |
-| 「状态确实有变，但不知道是写作 Agent 还是变更 Agent 做的」 | 纪事官在后台（D3），产出只有 WorldState 本身，没有任何归因记录 | 新增**活动账本**（`rrp/activity` 追加式投影）：纪事官记录 started/committed/failed + 人类可读变更摘要（`diffWorldState`），玩家矫正记录 `corrected`；右侧面板顶部展示「最近变更」与「纪事官正在推演…」，后台任务名改为可读中文 |
+| 「状态确实有变，但不知道是写作 Agent 还是变更 Agent 做的」 | 纪事官在后台（D3），产出只有 WorldState 本身，没有任何归因记录 | 新增**活动账本**（宿主内存账本 + `GET /dsh-rrp/activity`）：纪事官记录 started/committed/failed + 人类可读变更摘要（`diffWorldState`），玩家矫正记录 `corrected`；右侧面板顶部展示「最近变更」与「纪事官正在推演…」，后台任务名改为可读中文 |
 | 「目前不像 RP，还是像 coding agent；RP 以卡为基础，要有开场白」 | **卡包体系整体缺失**（Stage 6 未做）：无角色/世界卡、无开场白、无玩家角色、无初始状态、无世界知识技能 | ① 已加固 Author 人设，禁止一切元叙述/自我介绍；② 出具卡包格式提案 [CARDS.md](reference/CARDS.md)，**待所有者按 D13 拍板**后实现 |
 
 > 证据等级：归因功能为服务端注册日志 + 已构建并已 serve 的客户端 bundle 标记核验 + 40 用例全绿；面板视觉仍需实机确认。
@@ -51,7 +51,7 @@
 
 1. 发现宿主把每条 pre-step 注入以 `surfaceOp:'append'` 落盘 → 每轮追加一份过时状态；
 2. 一度改为 **replace 式发布**（surface 恒定 1 份），但实测**摧毁前缀 KV 缓存**（命中率 90%→14%，`cacheRead` 卡死 1024）——replace 会搬动消息位置，破坏"上轮请求是下轮请求前缀"；
-3. **最终定案：append + 内容去重**（`src/context-publisher.ts`）——卡包只注入一次、事实仅在变化时追加；接受上下文增长（旧副本**被缓存**，交给宿主 compaction），换取缓存连续性。
+3. **最终定案：append + 内容去重**（`src/state-publisher.ts`）——卡包只注入一次、事实仅在变化时追加；接受上下文增长（旧副本**被缓存**，交给宿主 compaction），换取缓存连续性。
 
 **真机复验 PASS**（Chrome Agent，提交 `6610e4a`）：命中率 40%→43%→74%→**82%→88%→80%**，`cacheRead` 持续增长（1024→6144），`replace=0`，`card IN LOG=1`。详见 [CONTEXT_PUBLISHER_VERIFY.md](reference/CONTEXT_PUBLISHER_VERIFY.md) §10。
 
@@ -67,6 +67,21 @@
 | 「侧边栏、选卡、开始这些 UI 太简陋，要做精美」 | 面板改用**宿主自己的原子库**：`@deepseek-ai/dsh-client-ui-primitives`（平台模块，见 [HOST_SEAMS.md](reference/HOST_SEAMS.md) §A4）——展厅加搜索/封面/标签/技能卡/开场白/底部主操作条；世界状态侧栏改为卡片化就地编辑器 + 底部保存条 + 运行中状态点 |
 
 **证据等级**：`typecheck` / `build` / `test`（66 用例）全绿；已构建客户端 bundle 已 serve 且含新标记（`linear-gradient(140deg`、`gallery.nomatch`、`world.missing`），暖纸 token 已从本插件 bundle 消失。**面板视觉与交互仍需所有者实机确认**（见 [MANUAL_TEST.md](reference/MANUAL_TEST.md) §8）。
+
+---
+
+## 会话可读性与开场白修复（2026-09-17）
+
+所有者实测发现两个严重问题，均已定位并修复：
+
+| 现象 | 根因 | 处置 |
+| :--- | :--- | :--- |
+| 所有历史记录顶部红色 `历史加载失败 … event type 'rrp/card' … not marked ignorable` | 插件自造 `rrp/card` / `rrp/world-state` / `rrp/summary` / `rrp/activity` 事件类型；宿主的持久化读路径只认**构建期词表**，且 `Session.append` **无法设置 `ignorable`** | **彻底停用自造事件**：卡包/世界状态/编年改为寄存在普通 `user/message` 的 `source.rrp`（模型只读 `content`，`source` 不进请求）。新增 `src/state-payload.ts` + `src/state-publisher.ts`；投影改折叠 `user/message` |
+| 点「开始这一局」后必须手动刷新才显示开场白 | 开场白与会话日志中的自造事件同批到达，被宿主的观察/校验拒绝；且客户端在 POST 之前就已 stage 会话 | ① 开场白改为**最后**追加；② 客户端改为 **POST 成功后再 `sessions.open()`**，一次拉全历史 |
+| 活动账本（归因）不再进日志 | 它是玩家可见、模型不可见的簿记 | 迁到宿主内存 + `GET /dsh-rrp/activity` + 面板 2s 轮询 |
+| 旧日志仍不可读 | 已有 `rrp/*` 事件缺 `ignorable` | `scripts/repair-legacy-sessions.mjs`（默认 dry-run，`--apply` 留 `*.pre-ignorable.bak`）；**多帧 zstd，第一帧必须恰好是 header 行**；RP 工作区 13 个日志已修复 |
+
+**证据等级**：`typecheck` / `test`（69 用例）/ `build` 全绿；宿主以修复后的日志**重新启动成功**（启动即校验全部 header 帧）；全量解码校验：RP 工作区 16 个日志 `header-ok 16 / unknown-required 0`。浏览器端观感与「开盘即显」仍需所有者确认（[MANUAL_TEST.md](reference/MANUAL_TEST.md) §8）。
 
 ---
 
@@ -103,7 +118,7 @@
 - ✅ **开卡新会话流**：`ctx.sessions.create` → `ctx.remote.agentPresets.select(id,'rp')` → `POST /dsh-rrp/start`（写初始状态 + 追加开场白）+ `tests/start.spec.ts`
 - ⏸️ **P0 暖纸主题（已撤回）**：曾以 `ctx.theme.overrideTokens` 实现暖纸 + 衬线 + 大行高；所有者实测后否决观感，恢复 **DSH 原版亮暗**（`src/client/theme.ts` 已删除，能力记录见 [UI_CEILING.md](reference/UI_CEILING.md)）
 - ✅ **UI 精修（宿主原子库）**：卡片展厅与「世界状态」侧栏改用平台模块 `@deepseek-ai/dsh-client-ui-primitives`（Button / Pill / Input / StateDot / Tooltip / Icon*）——搜索框、卡面封面、技能卡、开场白引用块、底部主操作条；面板**自动跟随明暗主题**（[HOST_SEAMS.md](reference/HOST_SEAMS.md) §A4）
-- ✅ **卡包设定注入**：`rrp/card` 投影（`src/projection/card.ts`）+ Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入
+- ✅ **卡包设定注入**：`rrpCard` 投影（`src/projection/card.ts`）+ Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入（状态寄存在 `user/message` 的 `source.rrp`）
 - ✅ **卡包技能挂载**：`mountCardSkills` 把 `cards/*/skills` 挂进 preset 技能根——实测启动日志 `RP skills visible (6)`
 - ⬜ **实机确认（关键）**：开场白以 `assistant/message` 追加是否被宿主接受并渲染为正文；被拒会自动回退为 plugin notice（`user/message`）
 - ⬜ **实机确认**：卡包 persona 走 `agent/pre-step` 注入是否会以 context 节点剧透（CARDS.md §11）
