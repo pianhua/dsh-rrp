@@ -7,7 +7,6 @@
 import type { RrpClientContext } from './context-types.ts'
 import { registerGallery } from './gallery-panel.tsx'
 import { registerSedimentTab } from './sediment-tab.tsx'
-import { registerStoryView } from './story-view.tsx'
 import { registerWorldStateTab } from './world-state-tab.tsx'
 
 /** Bundle id. The client-modules compose keys on the package name dsh-rrp. */
@@ -110,8 +109,6 @@ const ZH: Record<string, string> = {
   'gallery.unavailable': '会话服务不可用',
   'gallery.workspace': '工作区',
   'gallery.workspaceUngrouped': '未分组',
-  'view.story': '沉浸',
-  'story.empty': '这一局还没有正文。回到「对话」标签开始游玩，或先输入一句行动。',
 }
 
 const EN: Record<string, string> = {
@@ -192,8 +189,6 @@ const EN: Record<string, string> = {
   'gallery.unavailable': 'Session service unavailable',
   'gallery.workspace': 'Workspace',
   'gallery.workspaceUngrouped': 'Ungrouped',
-  'view.story': 'Immersion',
-  'story.empty': 'No prose yet. Switch back to Chat to play, or send an action first.',
 }
 
 /** Client plugin body. Registers only reversible effects. */
@@ -217,5 +212,4 @@ export function apply(ctx: RrpClientContext): void {
   registerWorldStateTab(ctx)
   registerSedimentTab(ctx)
   registerGallery(ctx)
-  registerStoryView(ctx)
 }
