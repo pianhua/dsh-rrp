@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   RRP_PLUGIN,
+  RRP_SETTINGS_KEY,
+  RRP_SEDIMENT_KEY,
   SUMMARY_KEY,
   WORLD_STATE_KEY,
   emptyWorldState,
@@ -14,6 +16,8 @@ describe('external read contract', () => {
   it('publishes the stable projection keys', () => {
     expect(WORLD_STATE_KEY).toBe('rrpWorldState')
     expect(SUMMARY_KEY).toBe('rrpSummary')
+    expect(RRP_SETTINGS_KEY).toBe('rrpSettings')
+    expect(RRP_SEDIMENT_KEY).toBe('rrpSediment')
   })
 
   it('round-trips a structured payload through a known user/message event', () => {

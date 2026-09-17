@@ -1,9 +1,9 @@
 /**
  * dsh-rrp — the macro-summary session-projection unit.
  *
- * Mirrors the WorldState projection: a whole-value `rrp/summary` event is
- * adopted as-is, unrelated events keep the same reference, and `wire.view`
- * reuses that reference so an unchanged summary publishes nothing.
+ * Mirrors the WorldState projection: a whole-value `source.rrp.summary`
+ * payload is adopted as-is, unrelated events keep the same reference, and
+ * `wire.view` reuses that reference so an unchanged summary publishes nothing.
  */
 import { z } from 'zod'
 import { SUMMARY_KEY, type MacroSummary } from '../macro-summary.ts'

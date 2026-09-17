@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CARD_KEY, renderCardContext, type CardContext } from '../src/card-types.ts'
 import { rrpStateMessage, type RrpStatePayload } from '../src/state-payload.ts'
 import { publishState } from '../src/state-publisher.ts'
+import { RRP_SETTINGS_KEY } from '../src/settings.ts'
 import { emptyWorldState, renderWorldState } from '../src/world-state.ts'
 
 const CARD: CardContext = { id: 'c1', name: '测试卡', persona: 'P', worldCore: 'W' }
@@ -65,6 +66,15 @@ describe('durable state publisher', () => {
     expect(factsAppends).toHaveLength(2)
   })
 
+  it('does not collapse two cards with identical rendered text', () => {
+    const { session, appended } = fakeSession('sp-card-id')
+    const samePresentation = { ...CARD, id: 'c2' }
+    publishState(session, { stateOf: () => undefined }, { card: CARD })
+    publishState(session, { stateOf: () => undefined }, { card: samePresentation })
+    expect(appended).toHaveLength(2)
+    expect(payloadOf(appended[1]?.data)?.card?.id).toBe('c2')
+  })
+
   it('NEVER emits a replace (cache continuity guard)', () => {
     const { session, appended } = fakeSession('sp-a4')
     publishState(session, { stateOf: () => undefined }, { worldState: STATE })
@@ -118,5 +128,56 @@ describe('durable state publisher', () => {
     expect(appended).toHaveLength(1)
     expect(payloadOf(appended[0]?.data)?.worldState).toEqual(STATE)
     expect(renderCardContext(CARD)).toContain('测试卡')
+  })
+
+  it('appends a settings-only change even when rendered facts stay unchanged', () => {
+    const { session, appended } = fakeSession('sp-settings')
+    const projections = {
+      stateOf: (_session: unknown, key: string) => {
+        if (key === 'rrpWorldState') return STATE
+        if (key === RRP_SETTINGS_KEY) return { summaryEnabled: true }
+        return undefined
+      },
+    }
+    publishState(session, projections, { worldState: STATE })
+    publishState(session, projections, { settings: { summaryEnabled: false } })
+
+    expect(appended).toHaveLength(2)
+    expect(payloadOf(appended[1]?.data)?.settings).toEqual({ summaryEnabled: false })
+    expect((appended[1]?.data as { content: Array<{ text: string }> }).content[0]?.text).toBe(renderWorldState(STATE))
+  })
+
+  it('always appends a sediment operation without exposing its body in content', () => {
+    const { session, appended } = fakeSession('sp-sediment')
+    const projections = { stateOf: (_session: unknown, key: string) => key === 'rrpWorldState' ? STATE : undefined }
+    publishState(session, projections, { worldState: STATE })
+    publishState(session, projections, {
+      sediment: {
+        kind: 'add',
+        skill: { name: 'hidden-lore', description: 'secret', body: 'BODY MUST STAY HIDDEN' },
+      },
+    })
+
+    expect(appended).toHaveLength(2)
+    expect(payloadOf(appended[1]?.data)?.sediment?.kind).toBe('add')
+    const text = (appended[1]?.data as { content: Array<{ text: string }> }).content[0]?.text
+    expect(text).toBe(renderWorldState(STATE))
+    expect(text).not.toContain('BODY MUST STAY HIDDEN')
+  })
+
+  it('persists a summary even when the session has no WorldState yet', () => {
+    const { session, appended } = fakeSession('sp-summary-only')
+    const summary = { goal: '目标', conflict: '矛盾', turningPoints: [], threads: [] }
+    publishState(session, { stateOf: () => undefined }, { summary })
+    expect(appended).toHaveLength(1)
+    expect(payloadOf(appended[0]?.data)?.summary).toEqual(summary)
+    expect(payloadOf(appended[0]?.data)?.worldState).toBeUndefined()
+  })
+
+  it('persists an explicit summary clear', () => {
+    const { session, appended } = fakeSession('sp-summary-clear')
+    publishState(session, { stateOf: () => undefined }, { summary: null })
+    expect(appended).toHaveLength(1)
+    expect(payloadOf(appended[0]?.data)?.summary).toBeNull()
   })
 })

@@ -7,8 +7,7 @@
  * candidate rather than inventing when the material does not support a skill.
  * The draft is never written by the model — the player confirms it first.
  */
-import type { SedimentDraft } from '../sediment.ts'
-import { SEDIMENT_LIMITS, isSedimentName } from '../sediment.ts'
+import { SEDIMENT_LIMITS, isSedimentName, type SedimentEntry as SedimentDraft } from '../sediment-state.ts'
 
 /** System prompt: one grounded skill, or nothing. */
 export const SCRIBE_SYSTEM_PROMPT = [

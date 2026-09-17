@@ -47,6 +47,12 @@ describe('card manifest', () => {
     expect(parsed?.persona).toContain('第二行规则。')
     expect(parsed?.worldCore).toContain('世界核心')
   })
+
+  it('rejects non-canonical card ids', () => {
+    expect(parseCardMarkdown(SAMPLE.replace('id: demo', 'id: Demo'))).toBeUndefined()
+    expect(parseCardMarkdown(SAMPLE.replace('id: demo', 'id: demo_card'))).toBeUndefined()
+    expect(parseCardMarkdown(SAMPLE.replace('id: demo', 'id: ../demo'))).toBeUndefined()
+  })
 })
 
 describe('the shipped test card', () => {
@@ -99,6 +105,20 @@ describe('the shipped test card', () => {
 
   it('returns undefined for an unknown card', () => {
     expect(readCard('nope')).toBeUndefined()
+  })
+
+  it('does not read outside the card root', () => {
+    const escaped = join(home, '.dsh-rrp', 'escaped')
+    mkdirSync(escaped, { recursive: true })
+    writeFileSync(join(escaped, 'card.md'), SAMPLE.replace('id: demo', 'id: escaped'))
+    expect(readCard('../escaped')).toBeUndefined()
+  })
+
+  it('ignores a card whose directory and manifest ids differ', () => {
+    const mismatched = join(home, '.dsh-rrp', 'cards', 'folder-name')
+    mkdirSync(mismatched, { recursive: true })
+    writeFileSync(join(mismatched, 'card.md'), SAMPLE.replace('id: demo', 'id: manifest-name'))
+    expect(listCards(home).map((card) => card.id)).not.toContain('manifest-name')
   })
 
   it("mounts ONE card's skills into its preset skills root", () => {

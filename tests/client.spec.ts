@@ -1,16 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as client from '../src/client/index.ts'
+import type { CardPack } from '../src/card-types.ts'
 
 /** Minimal fake of the client Context: records every registration. */
 function fakeContext() {
   const types: Array<{ id?: string; kind?: string }> = []
-  const bodies: Array<{ name?: string; key?: string; id?: string }> = []
+  const bodies: Array<{
+    name?: string
+    key?: string
+    id?: string
+    inject?: (...args: unknown[]) => Record<string, unknown>
+  }> = []
   const ctx = {
     effect(fn: () => (() => void) | void) {
       return fn()
     },
     slots: {
-      register(options: { name?: string; key?: string; id?: string }, _component: unknown) {
+      register(options: { name?: string; key?: string; id?: string; inject?: (...args: unknown[]) => Record<string, unknown> }, _component: unknown) {
         bodies.push(options)
         return () => {}
       },
@@ -34,6 +40,19 @@ function fakeContext() {
     },
   }
   return { ctx, types, bodies }
+}
+
+afterEach(() => vi.unstubAllGlobals())
+
+const CARD: CardPack = {
+  id: 'demo-card',
+  dir: '',
+  meta: { id: 'demo-card', name: 'Demo', tags: [], opening: 'default' },
+  persona: 'persona',
+  worldCore: 'world',
+  openings: [{ id: 'default', body: 'opening' }],
+  initialState: null,
+  skills: [],
 }
 
 describe('dsh-rrp client half', () => {
@@ -77,5 +96,57 @@ describe('dsh-rrp client half', () => {
     const nav = bodies.find((entry) => entry.name === 'sidebar.panellist')
     expect(nav).toBeDefined()
     expect(nav?.id).toBe('dsh-rrp/chronicle')
+  })
+
+  it('passes an optional native Workspace id into Session creation', async () => {
+    const { ctx, bodies } = fakeContext()
+    const creates: Array<Record<string, unknown>> = []
+    Object.assign(ctx, {
+      get: (name: string) => name === 'workspaces'
+        ? { list: { getSnapshot: () => ({ items: [{ workspaceId: 'workspace-1', title: 'RP', path: 'D:/rp' }] }), subscribe: () => () => {} } }
+        : undefined,
+      sessions: {
+        create: async (options: Record<string, unknown>) => { creates.push(options); return 'session-1' },
+        open() {},
+        binding: () => ({ session: { async rename() {} } }),
+      },
+      remote: { agentPresets: { select: async () => ({ ok: true }) } },
+      layout: { selectPanel() {} },
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, text: async () => '' })))
+    client.apply(ctx as never)
+
+    const injected = bodies.find((entry) => entry.name === 'main')?.inject?.() as {
+      start?: (card: CardPack, workspaceId?: string) => Promise<{ ok: boolean }>
+      workspaces?: unknown
+    }
+    expect(injected.workspaces).toBeDefined()
+    expect((await injected.start?.(CARD, 'workspace-1'))?.ok).toBe(true)
+    expect(creates).toEqual([{ workspaceId: 'workspace-1' }])
+  })
+
+  it('keeps gallery start available when the Workspace service is absent', async () => {
+    const { ctx, bodies } = fakeContext()
+    const creates: Array<Record<string, unknown>> = []
+    Object.assign(ctx, {
+      get: () => undefined,
+      sessions: {
+        create: async (options: Record<string, unknown>) => { creates.push(options); return 'session-2' },
+        open() {},
+        binding: () => ({ session: { async rename() {} } }),
+      },
+      remote: { agentPresets: { select: async () => ({ ok: true }) } },
+      layout: { selectPanel() {} },
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, text: async () => '' })))
+    client.apply(ctx as never)
+
+    const injected = bodies.find((entry) => entry.name === 'main')?.inject?.() as {
+      start?: (card: CardPack, workspaceId?: string) => Promise<{ ok: boolean }>
+      workspaces?: unknown
+    }
+    expect(injected.workspaces).toBeUndefined()
+    expect((await injected.start?.(CARD))?.ok).toBe(true)
+    expect(creates).toEqual([{}])
   })
 })

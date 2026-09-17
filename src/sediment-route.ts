@@ -9,8 +9,9 @@
  *   POST   /dsh-rrp/sediment  { action:'manual', draft } write one directly
  *   DELETE /dsh-rrp/sediment?sessionId=&name=      remove one
  *
- * Nothing is written without an explicit player action; the Scribe only ever
- * STAGES a draft. Writes are per-session and add-only (see ./sediment.ts).
+ * Nothing is committed without an explicit player action; the Scribe only
+ * STAGES a draft. Confirmed changes append to the owning Session and fold
+ * through `rrpSediment`, so native forks inherit their event prefix.
  */
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
@@ -18,18 +19,15 @@ import { recordActivity } from './activity.ts'
 import { readCard } from './cards.ts'
 import { CARD_KEY, type CardContext } from './card-types.ts'
 import { transcriptOf } from './chronicler.ts'
-import { harnessHome } from './home.ts'
 import { SCRIBE_SYSTEM_PROMPT, buildScribePrompt, parseScribeReply } from './agents/scribe.ts'
-import {
-  listSediment,
-  readSediment,
-  removeSediment,
-  sessionSedimentDir,
-  writeSediment,
-  type SedimentDraft,
-  type SedimentSkill,
-} from './sediment.ts'
 import { ensureSedimentArmed, invalidateSediment } from './sediment-runtime.ts'
+import {
+  RRP_SEDIMENT_KEY,
+  sedimentEntriesOf,
+  validateSedimentEntry,
+  type SedimentEntry,
+} from './sediment-state.ts'
+import { publishState } from './state-publisher.ts'
 import { WORLD_STATE_KEY, renderWorldState, type WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
@@ -37,7 +35,7 @@ const SEDIMENT_PATH = '/dsh-rrp/sediment'
 
 interface SessionLike {
   readonly id: string
-  append(type: string, data: unknown): unknown
+  append(type: string, data: unknown, intent?: unknown): unknown
   snapshotEvents(): readonly { type: string; data?: unknown }[]
 }
 interface SessionsService {
@@ -84,7 +82,7 @@ interface RuntimeFaces {
 }
 
 /** Staged drafts, one per session; never durable — the player confirms or drops. */
-const PENDING = new Map<string, SedimentDraft>()
+const PENDING = new Map<string, SedimentEntry>()
 /** Sessions with a Scribe pass in flight (one at a time). */
 const DRAFTING = new Set<string>()
 
@@ -112,6 +110,21 @@ function reservedNames(projections: ProjectionsService | undefined, session: Ses
   const pack = readCard(card.id)
   if (pack === undefined) return []
   return pack.skills.map((skill) => skill.name ?? skill.id).filter((name) => name.length > 0)
+}
+
+/** Current dynamic lore for exactly this Session/worldline. */
+function currentSediment(projections: ProjectionsService, session: SessionLike): SedimentEntry[] {
+  return sedimentEntriesOf(projections.stateOf(session, RRP_SEDIMENT_KEY))
+}
+
+/** Player-facing list row; bodies remain in the Skill provider, not this view. */
+function sedimentView(skill: SedimentEntry): { name: string; description: string; bytes: number; updatedAt: string } {
+  return {
+    name: skill.name,
+    description: skill.description,
+    bytes: Buffer.byteLength(skill.body, 'utf8'),
+    updatedAt: '',
+  }
 }
 
 /** Resolve the provider/model route of a session's live agent. */
@@ -171,7 +184,7 @@ async function runDraft(
     const worldState = state === undefined ? '（暂无状态）' : renderWorldState(state)
     const existing = [
       ...reservedNames(faces.projections, session),
-      ...listSediment(harnessHome(), session.id).map((skill) => skill.name),
+      ...currentSediment(faces.projections, session).map((skill) => skill.name),
     ]
     const transcript = transcriptOf(session)
     if (transcript.trim().length === 0) {
@@ -228,15 +241,15 @@ export function registerSedimentRoute(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
   const webServer = runtime.get('webServer') as WebServerService | undefined
   const sessions = runtime.get('sessions') as SessionsService | undefined
-  if (webServer === undefined || sessions === undefined) {
-    console.warn(TAG + ' sediment route idle (missing webServer/sessions)')
+  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
+  if (webServer === undefined || sessions === undefined || projections === undefined) {
+    console.warn(TAG + ' sediment route idle (missing webServer/sessions/sessionProjections)')
     return
   }
-  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
   const agents = runtime.get('agents') as AgentsService | undefined
   const llm = runtime.get('llm') as LlmService | undefined
   const jobs = runtime.get('jobs') as JobsService | undefined
-  const faces: ScribeFaces | undefined = llm === undefined || jobs === undefined || agents === undefined || projections === undefined
+  const faces: ScribeFaces | undefined = llm === undefined || jobs === undefined || agents === undefined
     ? undefined
     : { llm, jobs, agents, projections }
 
@@ -272,7 +285,7 @@ export function registerSedimentRoute(ctx: Context): void {
 
         if (req.method === 'GET') {
           send(res, 200, {
-            skills: listSediment(harnessHome(), sessionId),
+            skills: currentSediment(projections, session).map(sedimentView),
             pending: PENDING.get(sessionId) ?? null,
             drafting: DRAFTING.has(sessionId),
           })
@@ -281,9 +294,18 @@ export function registerSedimentRoute(ctx: Context): void {
 
         if (req.method === 'DELETE') {
           const name = url.searchParams.get('name') ?? ''
-          const removed = removeSediment(harnessHome(), sessionId, name)
-          if (removed) invalidateSediment(sessionId)
-          send(res, removed ? 200 : 404, { ok: removed, removed })
+          const exists = currentSediment(projections, session).some((skill) => skill.name === name)
+          if (!exists) {
+            send(res, 404, { ok: false, removed: false })
+            return
+          }
+          const published = publishState(session, projections, { sediment: { kind: 'remove', name } })
+          if (!published) {
+            send(res, 500, { error: '典籍事件写入失败' })
+            return
+          }
+          invalidateSediment(sessionId)
+          send(res, 200, { ok: true, removed: true })
           return
         }
 
@@ -313,19 +335,25 @@ export function registerSedimentRoute(ctx: Context): void {
         }
 
         if (action === 'confirm' || action === 'manual') {
-          const candidate = (request.draft ?? PENDING.get(sessionId)) as SedimentDraft | undefined
+          const candidate = (request.draft ?? PENDING.get(sessionId)) as Partial<SedimentEntry> | undefined
           if (candidate === undefined || candidate === null) {
             send(res, 400, { error: '没有待确认的草稿' })
             return
           }
-          const draft: SedimentDraft = {
-            name: String(candidate.name ?? ''),
-            description: String(candidate.description ?? ''),
-            body: String(candidate.body ?? ''),
-          }
-          const result = writeSediment(harnessHome(), sessionId, draft, reservedNames(projections, session))
+          const existing = currentSediment(projections, session)
+          const result = validateSedimentEntry(
+            candidate,
+            existing.map((skill) => skill.name),
+            reservedNames(projections, session),
+          )
           if (!result.ok) {
             send(res, 400, { error: result.error })
+            return
+          }
+          const draft = result.skill
+          const published = publishState(session, projections, { sediment: { kind: 'add', skill: draft } })
+          if (!published) {
+            send(res, 500, { error: '典籍事件写入失败' })
             return
           }
           PENDING.delete(sessionId)
@@ -335,7 +363,7 @@ export function registerSedimentRoute(ctx: Context): void {
             detail: '已沉淀：' + draft.name,
           })
           console.log(TAG + ' sediment committed for ' + sessionId + ': ' + draft.name)
-          send(res, 200, { ok: true, skill: readSediment(harnessHome(), sessionId, draft.name) ?? null })
+          send(res, 200, { ok: true, skill: sedimentView(draft) })
           return
         }
 
@@ -394,12 +422,4 @@ export function registerSedimentCommand(ctx: Context): void {
     console.log(TAG + ' /lore command armed')
     return dispose
   }, 'dsh-rrp: /lore command')
-}
-
-/** One listing entry for tests/tooling. */
-export type { SedimentSkill }
-
-/** The directory a session's sediment lives in, for diagnostics. */
-export function sedimentDirFor(sessionId: string): string {
-  return sessionSedimentDir(harnessHome(), sessionId)
 }

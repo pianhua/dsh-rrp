@@ -8,11 +8,13 @@ const STATE = { ...emptyWorldState(), scene: { location: '平民公寓 · 门口
 const OPENING = '周末的清晨……'
 
 /** Minimal fake host: records appended events and the registered route. */
-function fakeHost(options: { failAssistant?: boolean } = {}) {
+function fakeHost(options: { failAssistant?: boolean; failState?: boolean; preset?: string; headerPreset?: string } = {}) {
   const appended: Array<{ type: string; data: unknown; intent?: unknown }> = []
   const session = {
     id: 's1',
+    header: options.headerPreset === undefined ? undefined : { agentPreset: options.headerPreset },
     append(type: string, data: unknown, intent?: unknown) {
+      if (options.failState === true && type === 'user/message') throw new Error('state rejected')
       if (options.failAssistant === true && type === 'assistant/message') throw new Error('rejected')
       appended.push({ type, data, intent })
       return {}
@@ -21,7 +23,11 @@ function fakeHost(options: { failAssistant?: boolean } = {}) {
   const sessions = { get: (id: string) => (id === 's1' ? session : undefined) }
   const agents = { get: () => ({ options: { provider: 'deepseek', model: 'deepseek-chat' } }) }
   const sessionProjections = {
-    stateOf: (_session: unknown, key: string) => (key === 'turnBoundary' ? { lastTurn: 0 } : undefined),
+    stateOf: (_session: unknown, key: string) => {
+      if (key === 'turnBoundary') return { lastTurn: 0 }
+      if (key === 'agentPreset') return options.preset ?? null
+      return undefined
+    },
   }
   let route: { handler: (req: unknown, res: unknown) => unknown } | undefined
   const webServer = { register: (definition: { handler: (req: unknown, res: unknown) => unknown }) => { route = definition; return () => {} } }
@@ -104,9 +110,33 @@ describe('card start route', () => {
     expect(missing.res.statusCode).toBe(404)
   })
 
+  it('rejects a non-canonical card id before publishing it', async () => {
+    const host = fakeHost()
+    registerStartRoute(host.ctx as never)
+    const { req, res } = exchange({
+      sessionId: 's1',
+      card: { id: '../other-card', name: 'Bad', persona: '', worldCore: '' },
+    })
+    await host.route()!.handler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(host.appended).toEqual([])
+  })
+
+  it('rejects a card that does not match the Session preset', async () => {
+    const host = fakeHost({ preset: 'rp-other-card' })
+    registerStartRoute(host.ctx as never)
+    const { req, res } = exchange({
+      sessionId: 's1',
+      card: { id: 'demo-card', name: 'Demo', persona: '', worldCore: '' },
+    })
+    await host.route()!.handler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(host.appended).toEqual([])
+  })
+
   it('publishes the active card setting first', async () => {
     forgetState('s1'); forgetActivity('s1')
-    const host = fakeHost()
+    const host = fakeHost({ preset: 'rp-c1' })
     registerStartRoute(host.ctx as never)
     const { req, res } = exchange({
       sessionId: 's1',
@@ -117,5 +147,37 @@ describe('card start route', () => {
     expect(res.statusCode).toBe(200)
     expect(host.appended[0]?.type).toBe('user/message')
     expect(payloadOf(host.appended[0]?.data)?.card).toEqual({ id: 'c1', name: '测试卡', persona: 'P', worldCore: 'W' })
+  })
+
+  it('requires a selected card preset even when the immutable header is blank or stale', async () => {
+    const missing = fakeHost({ headerPreset: 'rp-demo-card' })
+    registerStartRoute(missing.ctx as never)
+    const noProjection = exchange({
+      sessionId: 's1',
+      card: { id: 'demo-card', name: 'Demo', persona: '', worldCore: '' },
+    })
+    await missing.route()!.handler(noProjection.req, noProjection.res)
+    expect(noProjection.res.statusCode).toBe(400)
+    expect(missing.appended).toEqual([])
+
+    const selected = fakeHost({ preset: 'rp-demo-card', headerPreset: 'rp-other-card' })
+    registerStartRoute(selected.ctx as never)
+    const currentProjection = exchange({
+      sessionId: 's1',
+      card: { id: 'demo-card', name: 'Demo', persona: '', worldCore: '' },
+    })
+    await selected.route()!.handler(currentProjection.req, currentProjection.res)
+    expect(currentProjection.res.statusCode).toBe(200)
+  })
+
+  it('does not append the opening or report success when initial state fails', async () => {
+    forgetState('s1'); forgetActivity('s1')
+    const host = fakeHost({ failState: true })
+    registerStartRoute(host.ctx as never)
+    const { req, res } = exchange({ sessionId: 's1', state: STATE, opening: OPENING })
+    await host.route()!.handler(req, res)
+    expect(res.statusCode).toBe(500)
+    expect(host.appended).toEqual([])
+    expect(readActivity('s1').entries).toEqual([])
   })
 })

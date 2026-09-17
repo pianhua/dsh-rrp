@@ -50,9 +50,6 @@ interface RuntimeFaces {
   get(name: string): unknown
 }
 
-/** Projection face used when the registry is unavailable. */
-const NO_PROJECTIONS: ProjectionsService = { stateOf: () => undefined }
-
 /** Read the whole request body as UTF-8 text. */
 async function readBody(req: RequestLike): Promise<string> {
   let text = ''
@@ -77,11 +74,11 @@ export function registerCorrectionRoute(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
   const webServer = runtime.get('webServer') as WebServerService | undefined
   const sessions = runtime.get('sessions') as SessionsService | undefined
-  if (webServer === undefined || sessions === undefined) {
-    console.warn(TAG + ' player correction idle (missing webServer/sessions)')
+  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
+  if (webServer === undefined || sessions === undefined || projections === undefined) {
+    console.warn(TAG + ' player correction idle (missing webServer/sessions/sessionProjections)')
     return
   }
-  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
 
   ctx.effect(() => {
     const dispose = webServer.register({
@@ -114,7 +111,11 @@ export function registerCorrectionRoute(ctx: Context): void {
           send(res, 404, { error: 'unknown session' })
           return
         }
-        publishState(session, projections ?? NO_PROJECTIONS, { worldState: state.data })
+        const published = publishState(session, projections, { worldState: state.data })
+        if (!published) {
+          send(res, 500, { error: 'WorldState write failed' })
+          return
+        }
         recordActivity(request.sessionId, {
           id: randomUUID(),
           at: new Date().toISOString(),

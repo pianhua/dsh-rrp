@@ -9,9 +9,11 @@
 
 ## 当前状态
 
-**阶段 0–9 与阶段 6 全部完成**；随后完成了 UI 精修、会话可读性修复、多卡技能作用域与 **D8 知识沉淀**。当前处于「可反复实测、按需打磨」的状态。
+阶段路线中的功能切片均已有实现；随后完成了 UI 精修、会话可读性修复、多卡技能作用域与 **D8 知识沉淀控制环**。当前不是单纯“按需打磨”，而是先依据 2026-09-17 事实审计收敛设计与宿主边界。
 
-核心环路已跑通：物化原生 RP 模式 → Author 只读消费卡包设定 / 最新 WorldState / 大局编年 → 每轮正文后纪事官异步推演状态 → 玩家在原生右侧栏就地矫正（无锁 Last-Write-Wins）→ 世界设定以 Skills 按需调取 → 每 8 回合编年官提炼四维大局观（`/summary` 可关）→ 剧情确立的新设定可经 `/lore` 审阅后沉淀为**本会话专属**技能。
+核心环路已跑通：物化原生 RP 模式 → Author 只读消费卡包设定 / 最新 WorldState / 大局编年 → 每轮正文后纪事官异步推演状态 → 玩家在原生右侧栏就地矫正（无锁 Last-Write-Wins）→ 世界设定以 Skills 按需调取 → 每 8 回合编年官提炼四维大局观（`/summary` 按局可关）→ 剧情确立的新设定可经 `/lore` 审阅后写入当前世界线，并在 fork 时继承分叉点前缀。
+
+当前已确认但尚未解决的边界：D5 动态 WorldState 仍是固定 schema；世界状态和典籍存在 2s 轮询；卡包 frontmatter 使用简化 YAML 子集解析；若干进程内 Map 尚未完整接入销毁清理。D8 已改为 Session 事件 + 纯投影，旧文件 sidecar 仅用于一次性迁移。权威现状见 [`docs/HANDOFF.md`](docs/HANDOFF.md) §0/§7 与 [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md)。
 
 | 项 | 状态 |
 | :--- | :--- |
@@ -21,7 +23,7 @@
 | **交接文档（先读这份）** | ✅ [`docs/HANDOFF.md`](docs/HANDOFF.md) |
 | 当前任务指针 | ✅ [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md) |
 | 开发环境流程 | ✅ [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
-| 生产代码 | ✅ 阶段 0–9 + 阶段 6 + UI / 可读性 / 多卡作用域 / D8 |
+| 生产代码 | ⚠️ 功能环可运行；设计与宿主边界收敛中，不能标记为规格全部完成 |
 
 ---
 
@@ -48,7 +50,7 @@ DeepSeek Harness 宿主
      ├── Author Agent      执笔智体（纯正文、只读设定）
      ├── Chronicler Agent  纪事官（异步推演世界状态）
      ├── Summarizer Agent  大局编年（可选，定期摘要）
-     ├── Scribe Agent      典籍编纂（D8：只起草一条，玩家确认才落盘）
+     ├── Scribe Agent      典籍编纂（D8：只起草一条，玩家确认才入会话）
      ├── 世界状态 / 典籍     DSH 原生右侧栏面板
      ├── 卡片展厅 + 开卡     main 面板 + 左栏导航
      └── Skills 知识体系    卡包技能（preset 作用域）+ 沉淀（会话作用域）

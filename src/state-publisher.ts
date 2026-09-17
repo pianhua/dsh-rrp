@@ -1,5 +1,5 @@
 /**
- * dsh-rrp — durable state publishing (card + facts).
+ * dsh-rrp — durable Session publishing for RP context and hidden domain state.
  *
  * Our structured state cannot live in a custom session event: the host refuses
  * to load a log containing an event type it does not know (see
@@ -12,12 +12,14 @@
  * message must keep its position across turns for the previous request to stay
  * a prefix of the next. Replacing moved the message to the tail and collapsed
  * the measured hit rate from ~90% to 27%. We therefore append and dedup by
- * content — the session-constant card is published once, and the facts lane is
- * published only when it actually changes.
+ * content — the session-constant card is published once, rendered facts are
+ * deduplicated, and hidden settings/lore operations share the facts event.
  */
 import { randomUUID } from 'node:crypto'
-import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
+import { renderCardContext, type CardContext } from './card-types.ts'
 import { SUMMARY_KEY, renderMacroSummary, type MacroSummary } from './macro-summary.ts'
+import { RRP_SETTINGS_KEY, rrpSettingsOf, type RrpSettings } from './settings.ts'
+import type { SedimentChange } from './sediment-state.ts'
 import { messageTextOf, rrpPayloadOf, rrpStateMessage, type RrpStatePayload } from './state-payload.ts'
 import { WORLD_STATE_KEY, renderWorldState, type WorldState } from './world-state.ts'
 
@@ -39,12 +41,14 @@ export interface RrpStatePatch {
   card?: CardContext
   worldState?: WorldState
   summary?: MacroSummary | null
+  settings?: RrpSettings
+  sediment?: SedimentChange
 }
 
 /** Last published text per lane, for content dedup. */
 interface Retained {
-  cardText?: string
-  factsText?: string
+  cardFingerprint?: string
+  factsFingerprint?: string
 }
 
 /** Per-session retained lanes. Bounded by the number of live sessions. */
@@ -59,13 +63,30 @@ function appendLane(session: StateSession, text: string, payload: RrpStatePayloa
  * Adopt the lanes already present in the log, so a restart/resume does not
  * republish the constant card or duplicate an unchanged facts message.
  */
-function adopt(session: StateSession): Retained {
+function factsFingerprint(text: string, settings: RrpSettings): string {
+  return text + '\u0000summary=' + String(settings.summaryEnabled)
+}
+
+function cardFingerprint(card: CardContext, text: string): string {
+  return text + '\u0000card=' + card.id
+}
+
+function adopt(session: StateSession, projections: StateProjections): Retained {
   const retained: Retained = {}
+  let factsText: string | undefined
   for (const event of session.snapshotEvents?.() ?? []) {
     const payload = rrpPayloadOf(event)
     if (payload === undefined) continue
-    if (payload.card !== undefined) retained.cardText = messageTextOf(event)
-    if (payload.worldState !== undefined || payload.summary !== undefined) retained.factsText = messageTextOf(event)
+    if (payload.card !== undefined) retained.cardFingerprint = cardFingerprint(payload.card, messageTextOf(event))
+    if (payload.worldState !== undefined || payload.summary !== undefined || payload.settings !== undefined || payload.sediment !== undefined) {
+      factsText = messageTextOf(event)
+    }
+  }
+  if (factsText !== undefined) {
+    retained.factsFingerprint = factsFingerprint(
+      factsText,
+      rrpSettingsOf(projections.stateOf(session, RRP_SETTINGS_KEY)),
+    )
   }
   return retained
 }
@@ -77,39 +98,48 @@ function adopt(session: StateSession): Retained {
  * @param projections - the session-projection read face.
  * @param patch - the writer's change set (omitted fields read from projections).
  */
-export function publishState(session: StateSession, projections: StateProjections, patch: RrpStatePatch): void {
+export function publishState(session: StateSession, projections: StateProjections, patch: RrpStatePatch): boolean {
   try {
     let retained = RETAINED.get(session.id)
     if (retained === undefined) {
-      retained = adopt(session)
+      retained = adopt(session, projections)
       RETAINED.set(session.id, retained)
     }
 
     const card = patch.card
     if (card !== undefined) {
       const cardText = renderCardContext(card)
-      if (retained.cardText !== cardText) {
+      if (retained.cardFingerprint !== cardFingerprint(card, cardText)) {
         appendLane(session, cardText, { card })
-        retained.cardText = cardText
+        retained.cardFingerprint = cardFingerprint(card, cardText)
       }
     }
 
     const state = patch.worldState ?? (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined)
-    if (state !== undefined) {
+    if (state !== undefined || patch.summary !== undefined || patch.settings !== undefined || patch.sediment !== undefined) {
       const summary = patch.summary !== undefined
         ? patch.summary
         : (projections.stateOf(session, SUMMARY_KEY) as MacroSummary | null | undefined)
+      const settings = patch.settings ?? rrpSettingsOf(projections.stateOf(session, RRP_SETTINGS_KEY))
       const parts: string[] = []
       if (summary !== null && summary !== undefined) parts.push(renderMacroSummary(summary))
-      parts.push(renderWorldState(state))
+      if (state !== undefined) parts.push(renderWorldState(state))
       const factsText = parts.join('\n\n')
-      if (retained.factsText !== factsText) {
-        appendLane(session, factsText, { worldState: state, summary: summary ?? null })
-        retained.factsText = factsText
+      const fingerprint = factsFingerprint(factsText, settings)
+      if (patch.sediment !== undefined || retained.factsFingerprint !== fingerprint) {
+        appendLane(session, factsText, {
+          ...(state === undefined ? {} : { worldState: state }),
+          ...((state !== undefined || patch.summary !== undefined) ? { summary: summary ?? null } : {}),
+          settings,
+          ...(patch.sediment === undefined ? {} : { sediment: patch.sediment }),
+        })
+        retained.factsFingerprint = fingerprint
       }
     }
+    return true
   } catch (error) {
     console.warn(TAG + ' state publish failed:', error)
+    return false
   }
 }
 

@@ -275,7 +275,7 @@ session.append('user/message', {
 
 **日志修复**：老版本写下的 `rrp/*` 事件可用 `scripts/repair-legacy-sessions.mjs` 补上 `ignorable:true`（默认 dry-run，`--apply` 会留 `*.pre-ignorable.bak`）。**注意 zstd 物理格式**：会话日志是**多帧**拼接，且宿主断言**第一帧必须恰好是一行 header**（`assertZstdHeaderFrame`）；把整个文件重压成单帧会得到 `corrupt Zstandard session log: first frame is not exactly one header line`。
 
-**旁注**：活动账本（谁改了状态）刻意**不进会话日志**——它是玩家可见、模型不可见的簿记，改为宿主内存 + `GET /dsh-rrp/activity` + 面板轮询。
+**历史实现旁注**：活动账本（谁改了状态）目前不进会话日志，而是宿主内存 + `GET /dsh-rrp/activity` + 面板 2s 轮询。2026-09-17 审计后，这只代表现状，不再视为最终 seam：运行状态与宿主 Jobs UI 重复，提交/矫正历史应评估放入现有 `user/message.source.rrp` 并由投影推送，从而避免平行状态通道。
 
 ## B. 从客户端以「指定 preset + 开场白」新建会话
 
@@ -505,7 +505,7 @@ interface JobHooks {
 **能否上报进度/中间消息？**
 - **没有 progress API，也没有运行中可变的 detail**（detail 只在 JobOutcome 结束时提供）。
 - 唯一的中间输出通道是 JobHooks.readOutput?() 的**流式增量**；它面向 ctx.jobs.read / 工具的 job_output，**头部 popover 不渲染它**。
-- 想让玩家在 UI 看到「纪事官推演中…/进度」：用**会话投影**（ctx.sessionProjections）或你自己的 client 组件读取 useProjection，而不要指望 job 行。项目现在正是这么做的：dsh-rrp/src/activity.ts + world-state-tab.tsx:245-259 的「最近变更」区块。
+- 想让玩家看到「纪事官正在运行」，原生 Jobs UI 已经显示 running/status/elapsed；它不提供细粒度进度。领域性的“谁提交了什么变化”应由会话投影推送。当前项目的 `activity.ts + /dsh-rrp/activity + world-state-tab.tsx` 实际是内存账本 + 2s HTTP 轮询，**不是投影**，与 `HOST_ALIGNMENT.md` 的无轮询目标不一致。
 - 任务完成要「对玩家可见」：job 本身只是头部一行；更可靠的是 job 的 done 里把结果写成**会话事件/投影**，再由正文或右栏渲染。
 
 ### C11. 文档里的 custom/notify 是什么？
@@ -514,7 +514,7 @@ interface JobHooks {
 
 证据：`dsh-rrp/docs/reference/dsh-plugin-development-research.md:130-137` 在「2.5 Typed Events and Dispatch Modes」用一段示意代码演示如何用 `declare module '@deepseek-ai/cordis' { interface Events { 'custom/notify'...; 'custom/intercept'... } }` 声明自定义事件——custom/notify 和 custom/intercept 都是**虚构名字**。在安装树里检索 custom/notify **零命中**。
 
-语义（若真按 Cordis 事件声明）：它是 ctx.emit 的 emit 模式同步广播（同一文档 :140-148 的模式表）。它与会话日志**无关**：不写 SessionEventMap 就不会持久化、不会渲染；若想让「状态变更通知」留档，应改用 Session.append + 自定义 SessionEventMap 事件（见 C8），或直接用会话投影。
+语义（若真按 Cordis 事件声明）：它是 ctx.emit 的 emit 模式同步广播（同一文档 :140-148 的模式表）。它与会话日志**无关**。本项目不得再发明 SessionEventMap 类型；若想让「状态变更通知」留档，应寄存在宿主已知 `user/message` 的 `source.rrp` 中，再由会话投影折叠。
 
 ---
 
@@ -590,7 +590,6 @@ interface ILayout {
 ## E. 一句话摘要
 
 - **最省事的可见化入口**：把纪事官产出写成**会话投影**（已有 ctx.sessionProjections + 右栏 tab 范式），或对**自定义会话事件**用 ctx.uiConversation.events.register + conversation.chat.node 注册一个正文卡片；「卡片展厅」最正统的落点是 **main 主区面板 + 同名 sidebar.panellist 导航**。
-- **新会话 + preset + 开场白**：ctx.sessions.create({workspaceId}) → ctx.remote.agentPresets.select(id,'rp')（空会话才可）→ ctx.sessions.binding(id).session.prompt([{type:'text',text}],'queue')；**没有「create 时带首条消息」的 API**。
+- **当前新会话流**：`ctx.sessions.create({workspaceId?})`（只选择宿主已有 Workspace）→ `ctx.remote.agentPresets.select(id, presetIdForCard(card.id))`（空会话才可）→ `POST /dsh-rrp/start` 追加卡包/初始状态与首条 `assistant/message` → 成功后 `ctx.sessions.open(id)`；**没有「create 时带首条消息」的 API**。
 - **不存在/需绕路的能力**：① 没有全局顶栏 slot（用 main/shell.overlay/会话头部代替）；② preset 目录**没有开场白/图标字段**（preset.yml 只有 name/description/order）；③ job **没有进度 API**，dsh-client-ui-jobs 只显示 kind/label/detail/status（不显示 owner、不渲染 readOutput 流）；④ custom/notify 是文档虚构示例，不是真事件；⑤ ctx.layout 不能切右栏 tab，只有 ctx.sidebarRight.openTab/focus/toggleExpanded。
 - **文档状态**：本文件为唯一产出物；未改动任何源码、未运行构建/测试。
-

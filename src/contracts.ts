@@ -37,6 +37,21 @@ export {
 } from './macro-summary.ts'
 export type { MacroSummary } from './macro-summary.ts'
 export {
+  DEFAULT_RRP_SETTINGS,
+  RRP_SETTINGS_KEY,
+  rrpSettingsOf,
+} from './settings.ts'
+export type { RrpSettings } from './settings.ts'
+export {
+  RRP_SEDIMENT_KEY,
+  SEDIMENT_LIMITS,
+  applySedimentChange,
+  isSedimentName,
+  sedimentEntriesOf,
+  validateSedimentEntry,
+} from './sediment-state.ts'
+export type { SedimentChange, SedimentEntry, SedimentValidation } from './sediment-state.ts'
+export {
   ACTIVITY_LIMIT,
   appendActivity,
   emptyActivityLog,

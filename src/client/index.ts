@@ -103,6 +103,8 @@ const ZH: Record<string, string> = {
   'gallery.started': '已开始，切回对话',
   'gallery.failed': '操作失败',
   'gallery.unavailable': '会话服务不可用',
+  'gallery.workspace': '工作区',
+  'gallery.workspaceUngrouped': '未分组',
   'view.story': '沉浸',
   'story.empty': '这一局还没有正文。回到「对话」标签开始游玩，或先输入一句行动。',
 }
@@ -178,6 +180,8 @@ const EN: Record<string, string> = {
   'gallery.started': 'Started — switch back to the chat',
   'gallery.failed': 'Failed',
   'gallery.unavailable': 'Session service unavailable',
+  'gallery.workspace': 'Workspace',
+  'gallery.workspaceUngrouped': 'Ungrouped',
   'view.story': 'Immersion',
   'story.empty': 'No prose yet. Switch back to Chat to play, or send an action first.',
 }

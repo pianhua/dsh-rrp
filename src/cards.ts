@@ -13,6 +13,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:f
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { harnessHome } from './home.ts'
+import { isCardId } from './preset-id.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 import type { WorldState } from './world-state.ts'
 
@@ -175,7 +176,7 @@ export function parseCardMarkdown(raw: string): { meta: CardMeta; persona: strin
   if (parsed === undefined) return undefined
   const id = asString(parsed.data.id)
   const name = asString(parsed.data.name)
-  if (id === undefined || id.length === 0 || name === undefined || name.length === 0) return undefined
+  if (id === undefined || !isCardId(id) || name === undefined || name.length === 0) return undefined
   const player = asObject(parsed.data.player)
   const meta: CardMeta = {
     id,
@@ -254,12 +255,12 @@ export function listCards(home: string = harnessHome()): CardMeta[] {
   for (const root of cardRoots(home)) {
     if (!existsSync(root)) continue
     for (const entry of readdirSync(root, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue
+      if (!entry.isDirectory() || !isCardId(entry.name)) continue
       const file = join(root, entry.name, 'card.md')
       if (!existsSync(file)) continue
       try {
         const parsed = parseCardMarkdown(readFileSync(file, 'utf8'))
-        if (parsed === undefined || seen.has(parsed.meta.id)) continue
+        if (parsed === undefined || parsed.meta.id !== entry.name || seen.has(parsed.meta.id)) continue
         seen.add(parsed.meta.id)
         out.push(parsed.meta)
       } catch {
@@ -277,6 +278,7 @@ export function listCards(home: string = harnessHome()): CardMeta[] {
  * @returns the parsed pack, or undefined when absent/invalid.
  */
 export function readCard(id: string, home: string = harnessHome()): CardPack | undefined {
+  if (!isCardId(id)) return undefined
   for (const root of cardRoots(home)) {
     const dir = join(root, id)
     const file = join(dir, 'card.md')

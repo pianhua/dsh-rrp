@@ -74,7 +74,7 @@ description: 塞北归离客栈的地理、规矩与常客。当剧情涉及该�
 
 ## 3. DSH 侧实现（宿主机制）
 
-DSH 已原生提供 Skills 能力，**我们不需要自己解析 Markdown 或做目录扫描**。
+DSH 已原生提供 Skills 能力。稳定卡包知识应交给官方 filesystem provider；动态来源可以实现最小 `SkillProvider`，但不应顺手扩张成通用 Markdown/YAML、目录监视或持久化框架。
 
 ### 3.1 注册表：`ctx.skills`
 
@@ -129,18 +129,18 @@ DSH 已原生提供 Skills 能力，**我们不需要自己解析 Markdown 或�
 
 - **不写正则**、不做关键词激活表；
 - 依赖 `description` 让模型自己判断何时加载；
-- 卡包携带的 skill 应落在项目/用户 skill 根下，或通过 `ctx.skills.register()` 运行时注入。
+- 卡包携带的 skill 随每卡派生 preset 物化，并由该 preset 的 `bundledSkillDir` 交给官方 filesystem provider；不要写入全局根造成跨卡串味。
 
 ### 4.2 两条注入路径
 
 | 路径 | 适用 | 机制 |
 | :--- | :--- | :--- |
-| **文件落地** | 卡包自带的静态世界知识 | 写入 `.dsh/skills/<name>/SKILL.md`（或配置 `customSkillDirs`），由 filesystem provider 自动发现 |
-| **运行时注册** | 动态产生 / 卡包内嵌、不想落盘的知识 | `ctx.skills.register(skill)`（作用域随插件生命周期） |
+| **preset standing 层** | 卡包自带的静态世界知识 | 每卡派生 `rp-<card-id>` preset；`bundledSkillDir` 指向该 preset 的 `skills/`，由 filesystem provider 发现 |
+| **agent 层 provider** | 当前会话动态产生的知识 | 在 `agent.ctx` 上注册 provider，只进入当前 agent 的技能层 |
 
-> 优先文件落地（可审阅、可版本化）；运行时注册用于动态场景。
+> 两层用途不同：卡包知识随 preset 稳定分发，动态沉淀随会话/世界线演进。不要为了“统一”把所有卡包技能塞进一个全局 provider。
 
-### 4.3 动态沉淀的受控策略（D8，**已实现**）
+### 4.3 动态沉淀的受控策略（D8，**控制环与 fork 语义已闭环**）
 
 D8 要求「可以有动态沉淀，但不能过于激烈导致世界观崩塌」。已实现的控制流：
 
@@ -150,8 +150,8 @@ D8 要求「可以有动态沉淀，但不能过于激烈导致世界观崩塌�
 Scribe Agent 只依据「最近剧情 + 当前状态 + 已有技能名」起草 **一条** 技能
    ↓ 草稿只暂存在宿主内存（绝不自动落盘）
 玩家在「典籍」面板审阅 → 确认写入 / 丢弃
-   ↓ 确认后写 <dshHome>/.dsh-rrp/sediment/sessions/<sessionId>/<name>/SKILL.md
-该会话的 per-session provider invalidate → 下一轮按需检索
+   ↓ 确认后追加 user/message.source.rrp.sediment = add
+rrpSediment 投影更新 → 当前 agent provider invalidate → 下一轮按需检索
 ```
 
 对照五条策略：
@@ -159,12 +159,19 @@ Scribe Agent 只依据「最近剧情 + 当前状态 + 已有技能名」起草 
 | 策略 | 落点 |
 | :--- | :--- |
 | 默认关闭 | 没有任何自动写入；只有 `/lore` / 面板按钮 |
-| 仅明确触发 | 触发后还要**二次确认**才写盘 |
+| 仅明确触发 | 触发后还要**二次确认**才写入 Session |
 | 只新增不覆写 | 重名（含卡包自带技能名）直接拒绝；无任何改写既有 skill 的路径 |
-| 可审阅 | 草稿预览 + 「典籍」列表 + 删除；文件本身就是普通 `SKILL.md` |
+| 可审阅 | 草稿预览 + 「典籍」列表 + 删除；投影条目保持标准 Skill 的 name/description/content 结构 |
 | 单次体量受限 | 一次只起草一条；名称/描述/正文/条数四重上限 |
 
-**作用域：按会话隔离。** 关键实现：宿主 skill registry 按 **agent 作用域** 分层，而 `agent.ctx` 是 agent 局部上下文。我们在 `agent/created`（仅 RP 家族 preset）时通过 `agent.ctx.skills.registerProvider(...)` 注册一个只读该会话沉淀目录的 provider —— 于是 A 存档沉淀的设定只对 A 可见，B 存档看不到，也不会写进 preset 目录（那样每次启动会被重刷）。
+**当前作用域：按世界线隔离。** 宿主 skill registry 按 **agent 作用域** 分层，而 `agent.ctx` 是 agent 局部上下文。实现会在 `agent/created`（仅 RP 家族 preset）时通过 `agent.ctx.get('skills').registerProvider(...)` 注册只读所属 Session 的 `rrpSediment` 投影的 provider。因此普通 A/B 会话互不可见，也不会写进 preset 目录；fork 会继承事件前缀，随后各分支独立演进。
+
+**已确认边界（2026-09-17）**：
+
+- 当前真源是 `user/message.source.rrp.sediment` 与 `rrpSediment`，不是文件目录。
+- `add/remove` 只进入当前 Session；fork 自动继承分叉点前缀，分叉后的操作互相隔离。
+- 旧 `<dshHome>/.dsh-rrp/sediment/sessions/<sessionId>/` 仅作为迁移源：合法条目写入一次 `snapshot`，成功后原目录保留为 `.legacy.bak`。
+- agent provider 只负责把当前投影适配成官方 Skill provider；它不扫描卡包、不保存状态，也不实现检索算法。
 
 ### 4.4 与摘要智体的边界
 
@@ -190,11 +197,14 @@ Scribe Agent 只依据「最近剧情 + 当前状态 + 已有技能名」起草 
 
 ---
 
-## 6. 待确认事项
+## 6. 已确认与待决
 
-实现阶段 5 前需对照最新宿主源码确认：
+已确认：
 
-1. `ctx.skills.register()` 的确切签名与 `SkillRegistration` 字段；
-2. 卡包 skill 的推荐落点（项目根 vs `customSkillDirs` vs 运行时注册）；
-3. `dsh-tool-skill` 的模型调用呈现形态（是否需要在插件侧做额外引导）；
-4. 沙箱四资产中的「知识目录」是否仍需自建，抑或完全交给 skill 列表。
+1. 卡包静态技能使用每卡 preset standing scope；动态沉淀使用 agent scope provider。
+2. `agent.ctx` 是 Cordis Proxy，读取服务必须用 `agent.ctx.get('skills')`。
+3. `registerProvider` 是可逆 effect；provider 失效后调用 control 的 `invalidate()`。
+4. 模型通过 `dsh-tool-skill` 看到摘要并按需加载正文，插件不实现关键词激活器。
+5. D8 属于 Session 世界线：fork 继承前缀，分叉后隔离；同卡新开存档也是独立 Session。
+
+刻意不做：跨 Session 共享、批量导入与自动沉淀。它们不是当前单局 RP 控制环所必需的能力。

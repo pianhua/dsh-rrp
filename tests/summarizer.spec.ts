@@ -1,6 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { buildSummarizerPrompt, parseSummarizerReply } from '../src/agents/summarizer.ts'
-import { registerSummarizer, registerSummaryCommand, isSummaryEnabled, setSummaryEnabled } from '../src/summarizer.ts'
+import { registerSummarizer, registerSummaryCommand } from '../src/summarizer.ts'
+import { RRP_SETTINGS_KEY } from '../src/settings.ts'
+import type { RrpStatePayload } from '../src/state-payload.ts'
 
 const VALID = {
   goal: '逃离塞北',
@@ -23,7 +25,7 @@ describe('Summarizer reply contract', () => {
   })
 })
 
-function fakeHost(preset: string, turn: number) {
+function fakeHost(preset: string, turn: number, summaryEnabled = true) {
   const listeners = new Map<string, (...args: unknown[]) => void>()
   const appended: Array<{ type: string; data: unknown }> = []
   let started = 0
@@ -39,6 +41,7 @@ function fakeHost(preset: string, turn: number) {
     stateOf: (_session: unknown, key: string) => {
       if (key === 'agentPreset') return preset
       if (key === 'turnBoundary') return { lastTurn: turn }
+      if (key === RRP_SETTINGS_KEY) return { summaryEnabled }
       return undefined
     },
   }
@@ -51,8 +54,6 @@ function fakeHost(preset: string, turn: number) {
 }
 
 describe('Summarizer trigger', () => {
-  beforeEach(() => setSummaryEnabled(true))
-
   it('runs on a completed RP turn at the cadence boundary', () => {
     const host = fakeHost('rp', 8)
     registerSummarizer(host.ctx as never, 'rp')
@@ -73,8 +74,7 @@ describe('Summarizer trigger', () => {
   })
 
   it('does not run while the player has it off', () => {
-    setSummaryEnabled(false)
-    const host = fakeHost('rp', 8)
+    const host = fakeHost('rp', 8, false)
     registerSummarizer(host.ctx as never, 'rp')
     host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
     expect(host.started()).toBe(0)
@@ -82,19 +82,46 @@ describe('Summarizer trigger', () => {
 })
 
 describe('Summarizer toggle command', () => {
-  beforeEach(() => setSummaryEnabled(true))
-
-  it('turns the feature off and on', () => {
-    let definition: { handler: (i: { rawInput: string }) => { kind: string; text?: string } } | undefined
+  it('writes only the invoking session and never changes another session', () => {
+    type Session = {
+      id: string
+      append(type: string, data: unknown, intent?: unknown): unknown
+      snapshotEvents(): readonly { type?: string; data?: unknown }[]
+    }
+    type Invocation = { rawInput: string; agent?: { session: Session } }
+    let definition: { handler: (i: Invocation) => { kind: string; text?: string } } | undefined
     const commands = { register: (d: typeof definition) => { definition = d; return () => {} } }
+    const writes = new Map<string, Array<{ type: string; data: unknown }>>()
+    const session = (id: string): Session => ({
+      id,
+      append(type, data) {
+        const entries = writes.get(id) ?? []
+        entries.push({ type, data })
+        writes.set(id, entries)
+        return { seq: entries.length }
+      },
+      snapshotEvents: () => [],
+    })
+    const first = session('first')
+    const second = session('second')
+    const projections = {
+      stateOf: (_session: unknown, key: string) => key === RRP_SETTINGS_KEY ? { summaryEnabled: true } : undefined,
+    }
     const ctx = {
       effect(fn: () => (() => void) | void) { return fn() },
-      get: (name: string) => (name === 'commands' ? commands : undefined),
+      get: (name: string) => ({ commands, sessionProjections: projections } as Record<string, unknown>)[name],
     }
     registerSummaryCommand(ctx as never)
-    expect(definition?.handler({ rawInput: ' off' }).kind).toBe('success')
-    expect(isSummaryEnabled()).toBe(false)
-    expect(definition?.handler({ rawInput: 'on' }).text).toContain('开启')
-    expect(isSummaryEnabled()).toBe(true)
+    expect(definition?.handler({ rawInput: ' off', agent: { session: first } }).kind).toBe('success')
+    expect(writes.get(first.id)).toHaveLength(1)
+    expect(writes.get(second.id)).toBeUndefined()
+
+    const payload = (writes.get(first.id)?.[0]?.data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp
+    expect(payload?.settings).toEqual({ summaryEnabled: false })
+
+    expect(definition?.handler({ rawInput: 'on', agent: { session: second } }).text).toContain('开启')
+    expect(writes.get(second.id)).toHaveLength(1)
+    const secondPayload = (writes.get(second.id)?.[0]?.data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp
+    expect(secondPayload?.settings).toEqual({ summaryEnabled: true })
   })
 })

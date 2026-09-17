@@ -32,7 +32,7 @@ describe('Chronicler reply contract', () => {
 })
 
 /** Minimal fake host: records the session feed listener and the started job. */
-function fakeHost(preset: string) {
+function fakeHost(preset: string, options: { failAppend?: boolean } = {}) {
   const listeners = new Map<string, (...args: unknown[]) => void>()
   const appended: Array<{ type: string; data: unknown }> = []
   let started: { kind: string; label: string; run(): { cancel(reason?: string): void; done: Promise<{ status: string }> } } | undefined
@@ -40,6 +40,7 @@ function fakeHost(preset: string) {
   const session = {
     id: 'session-1',
     append(type: string, data: unknown) {
+      if (options.failAppend === true) throw new Error('append failed')
       appended.push({ type, data })
       return { type, data }
     },
@@ -115,5 +116,15 @@ describe('Chronicler trigger', () => {
     registerChronicler(host.ctx as never, 'rp')
     host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
     expect(host.started()).toBeUndefined()
+  })
+
+  it('records a failed job instead of a committed update when append fails', async () => {
+    forgetState('session-1'); forgetActivity('session-1')
+    const host = fakeHost('rp', { failAppend: true })
+    registerChronicler(host.ctx as never, 'rp')
+    host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    const outcome = await host.started()!.run().done
+    expect(outcome.status).toBe('failed')
+    expect(readActivity('session-1').entries.map((entry) => entry.phase)).toEqual(['started', 'failed'])
   })
 })

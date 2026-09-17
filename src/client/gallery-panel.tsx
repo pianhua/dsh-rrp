@@ -25,10 +25,10 @@ import {
   StateDot,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import type { CardMeta, CardPack } from '../card-types.ts'
 import { presetIdForCard } from '../preset-id.ts'
-import type { RrpClientContext } from './context-types.ts'
+import type { RrpClientContext, RrpWorkspaceSource, RrpWorkspacesService } from './context-types.ts'
 
 /** Panel id: the \`main\` key and the \`sidebar.panellist\` id must match. */
 export const GALLERY_PANEL_ID = 'dsh-rrp/chronicle'
@@ -46,7 +46,8 @@ interface GalleryPanelProps {
   t?: Translate
   loadList?: () => Promise<CardMeta[]>
   loadCard?: (id: string) => Promise<CardPack | undefined>
-  start?: (card: CardPack) => Promise<StartOutcome>
+  start?: (card: CardPack, workspaceId?: string) => Promise<StartOutcome>
+  workspaces?: RrpWorkspaceSource
 }
 
 /** Small status line state. */
@@ -61,6 +62,18 @@ const DOT: Record<Tone, 'done' | 'warning' | 'ongoing' | 'error' | null> = {
   busy: 'ongoing',
   ok: 'done',
   error: 'error',
+}
+
+const EMPTY_WORKSPACES = Object.freeze({ items: [] as const })
+
+/** Subscribe to the optional host Workspace projection without owning it. */
+function useWorkspaces(source: RrpWorkspaceSource | undefined): readonly { workspaceId: string; path: string; title: string }[] {
+  const snapshot = useSyncExternalStore(
+    (listener) => source?.subscribe(listener) ?? (() => {}),
+    () => source?.getSnapshot() ?? EMPTY_WORKSPACES,
+    () => source?.getSnapshot() ?? EMPTY_WORKSPACES,
+  )
+  return snapshot.items
 }
 
 /**
@@ -88,7 +101,7 @@ function Cover(props: { seed: string; label: string; size: number }): ReactNode 
         ...S.cover,
         width: props.size,
         height: props.size,
-        borderRadius: Math.round(props.size * 0.3),
+        borderRadius: 8,
         background: coverGradient(props.seed),
         fontSize: Math.round(props.size * 0.42),
       }}
@@ -118,6 +131,8 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
   const [status, setStatus] = useState<Status>({ tone: 'idle', text: '' })
   const [busy, setBusy] = useState(false)
   const [query, setQuery] = useState('')
+  const [workspaceId, setWorkspaceId] = useState('')
+  const workspaces = useWorkspaces(props.workspaces)
 
   const loadList = props.loadList
   const loadCard = props.loadCard
@@ -151,11 +166,17 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
 
   useEffect(refresh, [])
 
+  useEffect(() => {
+    if (workspaceId.length > 0 && !workspaces.some((workspace) => workspace.workspaceId === workspaceId)) {
+      setWorkspaceId('')
+    }
+  }, [workspaceId, workspaces])
+
   const begin = (card: CardPack): void => {
     if (props.start === undefined) return
     setBusy(true)
     setStatus({ tone: 'busy', text: t('gallery.starting') })
-    void props.start(card)
+    void props.start(card, workspaceId.length === 0 ? undefined : workspaceId)
       .then((outcome) => {
         setStatus(outcome.ok
           ? { tone: 'ok', text: t('gallery.started') }
@@ -293,6 +314,25 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
                   {dot === null ? null : <StateDot state={dot} />}
                   <span>{status.text}</span>
                 </span>
+                {workspaces.length === 0 ? null : (
+                  <label style={S.workspacePicker}>
+                    <span style={S.workspaceLabel}>{t('gallery.workspace')}</span>
+                    <select
+                      aria-label={t('gallery.workspace')}
+                      value={workspaceId}
+                      disabled={busy}
+                      onChange={(event) => setWorkspaceId(event.target.value)}
+                      style={S.workspaceSelect}
+                    >
+                      <option value="">{t('gallery.workspaceUngrouped')}</option>
+                      {workspaces.map((workspace) => (
+                        <option key={workspace.workspaceId} value={workspace.workspaceId} title={workspace.path}>
+                          {workspace.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <Button
                   variant="primary"
                   icon={busy ? <IconLoadingOutline16 size={16} /> : <IconPlayOutline16 size={16} />}
@@ -328,7 +368,7 @@ const S: Record<string, CSSProperties> = {
   },
   listEmpty: { fontSize: 12, color: 'var(--dsw-alias-label-tertiary)', padding: '16px 8px', textAlign: 'center' },
   row: {
-    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 10,
+    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8,
     border: '1px solid transparent', background: 'transparent', cursor: 'pointer',
     textAlign: 'left', font: 'inherit', color: 'inherit', width: '100%',
   },
@@ -338,7 +378,7 @@ const S: Record<string, CSSProperties> = {
   },
   cover: {
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    color: '#fff', fontWeight: 600, letterSpacing: '0.02em', flex: '0 0 auto',
+    color: '#fff', fontWeight: 600, letterSpacing: 0, flex: '0 0 auto',
     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25)',
   },
   rowText: { display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 },
@@ -369,38 +409,43 @@ const S: Record<string, CSSProperties> = {
   sectionTitle: { fontSize: 13, fontWeight: 600 },
   skillList: { display: 'flex', flexWrap: 'wrap', gap: 8 },
   skillChip: {
-    display: 'inline-flex', flexDirection: 'column', gap: 2, padding: '7px 11px', borderRadius: 10,
+    display: 'inline-flex', flexDirection: 'column', gap: 2, padding: '7px 11px', borderRadius: 8,
     background: 'var(--dsw-alias-bg-layer-2)', border: '1px solid var(--dsw-alias-border-l1)',
     maxWidth: 240,
   },
   skillName: { fontSize: 12, fontWeight: 600 },
   skillDesc: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', lineHeight: 1.45 },
   opening: {
-    margin: 0, padding: '14px 16px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.9,
+    margin: 0, padding: '14px 16px', borderRadius: 8, fontSize: 13.5, lineHeight: 1.9,
     whiteSpace: 'pre-wrap', background: 'var(--dsw-alias-bg-layer-1)',
     border: '1px solid var(--dsw-alias-border-l1)',
     borderLeft: '3px solid var(--dsw-alias-brand-primary)',
     color: 'var(--dsw-alias-label-secondary)',
   },
   actionBar: {
-    flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 24px',
+    flex: '0 0 auto', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, padding: '12px 24px',
     borderTop: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-base)',
   },
-  status: { flex: 1, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--dsw-alias-label-tertiary)', minWidth: 0 },
+  status: {
+    flex: 1, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12,
+    color: 'var(--dsw-alias-label-tertiary)', minWidth: 120, overflow: 'hidden',
+  },
+  workspacePicker: { display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 },
+  workspaceLabel: { fontSize: 11.5, color: 'var(--dsw-alias-label-tertiary)', flex: '0 0 auto' },
+  workspaceSelect: {
+    width: 168, minWidth: 0, height: 30, padding: '0 28px 0 9px', borderRadius: 6,
+    border: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-layer-1)',
+    color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12,
+  },
 }
 
-/** Small book glyph for the left-sidebar nav entry. */
+/** Host-native archive glyph for the left-sidebar nav entry. */
 function GalleryGlyph(props: { size?: number; active?: boolean }): ReactNode {
   const size = props.size ?? 20
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15.5H6.5A2.5 2.5 0 0 0 4 21V5.5Z"
-        stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"
-        opacity={props.active === false ? 0.7 : 1}
-      />
-      <path d="M8 8h7M8 12h7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
+    <span aria-hidden="true" style={{ display: 'inline-flex', opacity: props.active === false ? 0.7 : 1 }}>
+      <IconArchiveOutline20 size={size} />
+    </span>
   )
 }
 
@@ -410,6 +455,12 @@ function GalleryGlyph(props: { size?: number; active?: boolean }): ReactNode {
  */
 export function registerGallery(ctx: RrpClientContext): void {
   const t = ctx.locale.bind('rrp') as Translate
+  let workspaces: RrpWorkspacesService | undefined
+  try {
+    workspaces = (ctx as unknown as { get?(name: string): unknown }).get?.('workspaces') as RrpWorkspacesService | undefined
+  } catch {
+    workspaces = undefined
+  }
 
   const loadList = async (): Promise<CardMeta[]> => {
     const response = await fetch('/dsh-rrp/cards')
@@ -425,11 +476,11 @@ export function registerGallery(ctx: RrpClientContext): void {
     return body.card
   }
 
-  const start = async (card: CardPack): Promise<StartOutcome> => {
+  const start = async (card: CardPack, workspaceId?: string): Promise<StartOutcome> => {
     const sessions = ctx.sessions
     const remote = ctx.remote
     if (sessions === undefined || remote === undefined) return { ok: false, message: t('gallery.unavailable') }
-    const sessionId = await sessions.create({})
+    const sessionId = await sessions.create(workspaceId === undefined ? {} : { workspaceId })
     // Each card gets its own scoped preset (rp-<card-id>) so only this card's
     // world-knowledge skills are in the session's skill scope.
     const selected = await remote.agentPresets.select(sessionId, presetIdForCard(card.id))
@@ -473,7 +524,12 @@ export function registerGallery(ctx: RrpClientContext): void {
 
   ctx.effect(() => {
     const disposeMain = ctx.slots.inject('main', () => ctx.slots.register(
-      { name: 'main', key: GALLERY_PANEL_ID, locale: 'rrp', inject: () => ({ t, loadList, loadCard, start }) },
+      {
+        name: 'main',
+        key: GALLERY_PANEL_ID,
+        locale: 'rrp',
+        inject: () => ({ t, loadList, loadCard, start, workspaces: workspaces?.list }),
+      },
       GalleryPanel as never,
     ))
     const disposeNav = ctx.slots.inject('sidebar.panellist', () => ctx.slots.register(

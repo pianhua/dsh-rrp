@@ -1,36 +1,44 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { registerSedimentRoute } from '../src/sediment-route.ts'
-import { listSediment } from '../src/sediment.ts'
+import { RRP_SEDIMENT_KEY, applySedimentChange, type SedimentEntry } from '../src/sediment-state.ts'
+import { rrpPayloadOf } from '../src/state-payload.ts'
 
-let home: string
-let previous: string | undefined
-
-beforeEach(() => {
-  previous = process.env.DSH_HOME
-  home = mkdtempSync(join(tmpdir(), 'dsh-rrp-sedroute-'))
-  process.env.DSH_HOME = home
-})
-afterEach(() => {
-  if (previous === undefined) delete process.env.DSH_HOME
-  else process.env.DSH_HOME = previous
-  rmSync(home, { recursive: true, force: true })
-})
-
-/** Minimal fake host: only the session and webserver faces are exercised. */
+/** Minimal fake host with synchronous projection folding, like Session.append. */
 function fakeHost() {
-  const sessions = {
-    get: (id: string) => (id === 's1' ? { id: 's1', append() {}, snapshotEvents: () => [] } : undefined),
+  let sediment: SedimentEntry[] = []
+  let failAppend = false
+  const appended: Array<{ type: string; data: unknown }> = []
+  const session = {
+    id: 's1',
+    append(type: string, data: unknown) {
+      if (failAppend) throw new Error('disk full')
+      appended.push({ type, data })
+      const change = rrpPayloadOf({ type, data })?.sediment
+      if (change !== undefined) sediment = applySedimentChange(sediment, change)
+      return { seq: appended.length }
+    },
+    snapshotEvents: () => appended,
   }
+  const sessions = { get: (id: string) => id === session.id ? session : undefined }
+  const projections = { stateOf: (_session: unknown, key: string) => key === RRP_SEDIMENT_KEY ? sediment : undefined }
   let route: { handler: (req: unknown, res: unknown) => unknown } | undefined
   const webServer = { register: (definition: { handler: (req: unknown, res: unknown) => unknown }) => { route = definition; return () => {} } }
   const ctx = {
     effect: (fn: () => (() => void) | void) => fn(),
-    get: (name: string) => ({ webServer, sessions, agents: { get: () => undefined } } as Record<string, unknown>)[name],
+    get: (name: string) => ({
+      webServer,
+      sessions,
+      sessionProjections: projections,
+      agents: { get: () => undefined },
+    } as Record<string, unknown>)[name],
   }
-  return { ctx, route: () => route }
+  return {
+    ctx,
+    route: () => route,
+    appended,
+    sediment: () => sediment,
+    failNextAppend: () => { failAppend = true },
+  }
 }
 
 /** A JSON request/response pair. */
@@ -54,14 +62,15 @@ function exchange(method: string, url: string, body?: unknown) {
 const DRAFT = { name: 'qingqiu-lore', description: '青丘狐族；涉及青丘时使用。', body: '# 青丘' }
 
 describe('sediment route (D8)', () => {
-  it('writes a manual draft, lists it, then deletes it', async () => {
+  it('appends a manual draft, lists the projection, then appends a removal', async () => {
     const host = fakeHost()
     registerSedimentRoute(host.ctx as never)
 
     const manual = exchange('POST', '/dsh-rrp/sediment', { sessionId: 's1', action: 'manual', draft: DRAFT })
     await host.route()!.handler(manual.req, manual.res)
     expect(manual.res.statusCode).toBe(200)
-    expect(listSediment(home, 's1').map((skill) => skill.name)).toEqual(['qingqiu-lore'])
+    expect(host.sediment().map((skill) => skill.name)).toEqual(['qingqiu-lore'])
+    expect(rrpPayloadOf(host.appended[0])?.sediment).toEqual({ kind: 'add', skill: DRAFT })
 
     const listed = exchange('GET', '/dsh-rrp/sediment?sessionId=s1')
     await host.route()!.handler(listed.req, listed.res)
@@ -72,10 +81,11 @@ describe('sediment route (D8)', () => {
     const removed = exchange('DELETE', '/dsh-rrp/sediment?sessionId=s1&name=qingqiu-lore')
     await host.route()!.handler(removed.req, removed.res)
     expect(removed.res.statusCode).toBe(200)
-    expect(listSediment(home, 's1')).toEqual([])
+    expect(host.sediment()).toEqual([])
+    expect(rrpPayloadOf(host.appended[1])?.sediment).toEqual({ kind: 'remove', name: 'qingqiu-lore' })
   })
 
-  it('is add-only: the same name twice is refused', async () => {
+  it('is add-only: the same projected name twice is refused', async () => {
     const host = fakeHost()
     registerSedimentRoute(host.ctx as never)
     const first = exchange('POST', '/dsh-rrp/sediment', { sessionId: 's1', action: 'manual', draft: DRAFT })
@@ -83,7 +93,19 @@ describe('sediment route (D8)', () => {
     const second = exchange('POST', '/dsh-rrp/sediment', { sessionId: 's1', action: 'manual', draft: DRAFT })
     await host.route()!.handler(second.req, second.res)
     expect(second.res.statusCode).toBe(400)
-    expect(listSediment(home, 's1')).toHaveLength(1)
+    expect(host.sediment()).toHaveLength(1)
+    expect(host.appended).toHaveLength(1)
+  })
+
+  it('does not claim success when the Session append fails', async () => {
+    const host = fakeHost()
+    registerSedimentRoute(host.ctx as never)
+    host.failNextAppend()
+    const manual = exchange('POST', '/dsh-rrp/sediment', { sessionId: 's1', action: 'manual', draft: DRAFT })
+    await host.route()!.handler(manual.req, manual.res)
+    expect(manual.res.statusCode).toBe(500)
+    expect(host.sediment()).toEqual([])
+    expect(host.appended).toEqual([])
   })
 
   it('rejects a confirm with no pending draft and clears on discard', async () => {

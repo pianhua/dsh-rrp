@@ -16,6 +16,7 @@ import { recordActivity } from './activity.ts'
 import { SUMMARIZER_SYSTEM_PROMPT, buildSummarizerPrompt, parseSummarizerReply } from './agents/summarizer.ts'
 import { messageOf, transcriptOf } from './chronicler.ts'
 import { matchesPreset } from './preset-id.ts'
+import { RRP_SETTINGS_KEY, rrpSettingsOf } from './settings.ts'
 import { publishState } from './state-publisher.ts'
 
 const TAG = '[dsh-rrp]'
@@ -23,20 +24,6 @@ const JOB_KIND = 'summarizer'
 /** Default cadence: summarize every N completed turns. */
 const DEFAULT_EVERY_TURNS = 8
 const TRANSCRIPT_LIMIT = 16000
-
-/** Player-controlled toggle (D11: the feature can be turned off at will). */
-let summaryEnabled = true
-
-/** Whether the macro summarizer is currently enabled. */
-export function isSummaryEnabled(): boolean {
-  return summaryEnabled
-}
-
-/** Set the toggle; returns the new state. */
-export function setSummaryEnabled(next: boolean): boolean {
-  summaryEnabled = next
-  return summaryEnabled
-}
 
 interface SessionLike {
   readonly id: string
@@ -70,7 +57,7 @@ interface CommandsService {
   register(definition: {
     name: string
     description: string
-    handler: (invocation: { rawInput: string }) => { kind: string; text?: string }
+    handler: (invocation: { rawInput: string; agent?: { session?: SessionLike } }) => { kind: string; text?: string }
   }): () => void
 }
 interface HostFaces {
@@ -108,7 +95,7 @@ export function registerSummarizer(ctx: Context, presetId: string): void {
       const event = args[1] as { type?: string; data?: { reason?: { kind?: string } } } | undefined
       if (session === undefined || event?.type !== 'turn/end') return
       if (event.data?.reason?.kind !== 'completed') return
-      if (!summaryEnabled) return
+      if (!rrpSettingsOf(projections.stateOf(session, RRP_SETTINGS_KEY)).summaryEnabled) return
       if (!matchesPreset(projections.stateOf(session, 'agentPreset') as string | undefined, presetId)) return
       const boundary = projections.stateOf(session, 'turnBoundary') as { lastTurn?: number } | undefined
       const turn = boundary?.lastTurn ?? 0
@@ -207,7 +194,9 @@ async function runSummary(
 
     const summary = parseSummarizerReply(text)
     if (summary === undefined) throw new Error('Summarizer reply was not a valid MacroSummary')
-    publishState(session, faces.projections, { summary })
+    if (!publishState(session, faces.projections, { summary })) {
+      throw new Error('MacroSummary append failed')
+    }
     recordActivity(session.id, {
       id: activityId,
       at: stamp(),
@@ -234,18 +223,24 @@ async function runSummary(
 export function registerSummaryCommand(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
   const commands = runtime.get('commands') as CommandsService | undefined
-  if (commands === undefined) {
-    console.warn(TAG + ' /summary command idle (missing commands)')
+  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
+  if (commands === undefined || projections === undefined) {
+    console.warn(TAG + ' /summary command idle (missing commands/sessionProjections)')
     return
   }
   ctx.effect(() => {
     const dispose = commands.register({
       name: 'summary',
       description: '开启或关闭大局编年摘要（/summary on|off）',
-      handler: ({ rawInput }) => {
+      handler: ({ rawInput, agent }) => {
+        const session = agent?.session
+        if (session === undefined) return { kind: 'error', text: '当前会话不可用' }
+        const current = rrpSettingsOf(projections.stateOf(session, RRP_SETTINGS_KEY))
         const argument = rawInput.trim().toLowerCase()
-        if (argument === 'on' || argument === 'off') setSummaryEnabled(argument === 'on')
-        else setSummaryEnabled(!summaryEnabled)
+        const summaryEnabled = argument === 'on' ? true : argument === 'off' ? false : !current.summaryEnabled
+        if (!publishState(session, projections, { settings: { summaryEnabled } })) {
+          return { kind: 'error', text: '大局编年设置写入失败' }
+        }
         return { kind: 'success', text: '大局编年已' + (summaryEnabled ? '开启' : '关闭') }
       },
     })

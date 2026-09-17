@@ -32,11 +32,11 @@
 3. **不新增基建**（D15 + HOST_ALIGNMENT）：卡包读取只做「读目录 → 映射到宿主既有接缝」，
    不自建数据库、不自建 HTTP、不自建索引引擎。
 4. **Skills 优先**（D7）：卡包的大段世界设定走 DSH Skills；只有必须始终遵守的「核心」才常驻注入。
-5. **可演进**：frontmatter 只声明**已知字段**；未来字段由 Chronicler 按 D5 演进，不锁死。
+5. **显式演进**：frontmatter 只声明加载器已支持的字段；新增元数据字段必须同步规范、解析与测试。D5 管的是运行时 WorldState，不负责卡包元数据迁移。
 
 ---
 
-## 3. 卡包目录结构（提案）
+## 3. 卡包目录结构（当前规范）
 
 ```text
 cards/<card-id>/
@@ -55,13 +55,13 @@ cards/<card-id>/
 
 ---
 
-## 4. `card.md` 规范（提案）
+## 4. `card.md` 规范
 
 ### 4.1 frontmatter 字段
 
 | 字段 | 必填 | 类型 | 含义 |
 | :--- | :---: | :--- | :--- |
-| `id` | ✅ | string | 唯一 id，须等于目录名 |
+| `id` | ✅ | string | 唯一规范 id：小写 kebab-case（`[a-z0-9]+(-[a-z0-9]+)*`），且必须等于目录名 |
 | `name` | ✅ | string | 显示名（卡面标题、会话标题来源） |
 | `summary` | | string | 一句话简介（展厅列表用） |
 | `tags` | | string[] | 分类标签 |
@@ -133,8 +133,9 @@ opening: default
 ## 8. 卡片展厅（Chronicle 入口，DESIGN §2.3）
 
 - 一个原生入口（顶栏或侧栏 Tab），列出可用卡包：卡面、名称、简介、标签、开场白预览。
-- 点「开始」→ 按 §9 的接缝新建会话（preset=`rp`）、写入初始状态与开场白。
-- 纯读列表来自两个目录 + 宿主 storage（如需记录最近使用）。
+- 点「开始」→ 按 §9 的接缝新建会话（preset=`rp-<card-id>`）、写入初始状态与开场白。
+- 可从宿主原生 Workspace 列表选择归属；它只影响左侧导航分组，不承载 RP 状态，也不由插件创建目录。
+- 纯读卡列表来自用户与随包两个目录；存档列表、切换与归组继续由宿主会话/Workspace UI 负责。
 
 ---
 
@@ -144,9 +145,7 @@ opening: default
    `sidebar.panellist` 导航图标（list id 必须等于 main key），切换用 `ctx.layout.selectPanel(id)`。
 2. **新建会话 + preset**：`ctx.sessions.create({ workspaceId?, cwd? })` **没有 preset 参数**；
    建后立即 `ctx.remote.agentPresets.select(sessionId, presetIdForCard(card.id))`（仅空会话可切换）；POST `/dsh-rrp/start` 之后再 `ctx.sessions.open(id)`。
-3. **开场白**：**没有「建时带首条消息」的 API**。做法是建后
-   `ctx.sessions.binding(id).session.prompt([{type:'text',text}], 'queue')`。注意这会写成一条
-   **user/message**（需带 `source` 才能与玩家发言区分）；`system/message` 会进入模型可见历史，RP 慎用。
+3. **开场白**：**没有「建时带首条消息」的 API**。`POST /dsh-rrp/start` 先发布卡包与初始状态，再通过宿主 Session 追加首条 `assistant/message`，最后客户端 `sessions.open(id)`；失败时不开盘、不报告成功。
 4. **正文可见化**：非 surface 的自定义事件默认不可见；要让卡片进正文，需
    `ctx.uiConversation.events.register(...)` + `conversation.chat.node` 注册组件（右栏投影方案最省事，已用）。
 5. **preset 目录**只认 `agent.cordis.yml` + 可选 `preset.yml{name,description,order}`，**没有开场白/图标字段**。
@@ -158,10 +157,10 @@ opening: default
 | 问题 | 采用 |
 | :--- | :--- |
 | 载体 | **目录** `cards/<id>/`，零新依赖 |
-| 开场白 | **首条起笔消息**（`session.prompt`） |
+| 开场白 | **首条 assistant 正文**（由开卡路由追加） |
 | 世界核心 | `persona` + `card.md` 正文**常驻注入**；细节走 `skills/` 按需调取 |
 | 玩家角色 | `player` → 进入初始 `characters` |
-| 卡 vs preset | 卡**不**自带 `agent.cordis.yml`；preset 仍唯一（`rp`） |
+| 卡 vs preset | 卡**不**自带 `agent.cordis.yml`；基础 `rp` 之外，每张卡派生一个 `rp-<id>` preset |
 | 根目录 | 用户 `<dshHome>/.dsh-rrp/cards/`，随包 `cards/`；用户同名覆盖 |
 
 > 这些是 v0 默认，仍可随所有者意见调整（D13 的「可演进」精神）。
@@ -183,20 +182,20 @@ opening: default
 | （无对应，我们新增） | `state.json` 初始 WorldState |
 | **丢弃** | `extensions`（`regex_scripts`、`tavern_helper` 等旧引擎私有字段，按 D14）；世界书 `keys/constant` 的**正则触发语义**降级为 Skill 的自然语义检索 |
 
-> **秘密可见性（待实机确认）**：米娅的真实身份是核心秘密，只能进「模型可见、玩家不直接看到」的层
+> **秘密可见性**：米娅的真实身份是核心秘密，只能进「模型可见、玩家不直接看到」的层
 > （`card.md` 的 persona/world core 常驻注入 + `skills/`）。`state.json` 只放玩家已知事实。
-> 当前 persona 走 `agent/pre-step` 注入（正文里显示为 context 节点）——**这一点必须实机确认是否会剧透**。
+> 当前 persona 经状态发布通道进入 Author 的模型上下文；真机长局已确认没有直接把秘密写给玩家，但新卡仍需按同一清单验收。
 
 ## 12. 实现现状（2026-09-17）
 
-- 加载器 `src/cards.ts`：纯目录解析（frontmatter 子集 / 开场白 / `state.json` / `skills`），无 HTTP、无 DB、无索引；`mountSkillsForCard()` 把**一张卡**的 `skills/*` 挂进**它自己的** preset 技能根。
+- 加载器 `src/cards.ts`：纯目录解析（YAML-like frontmatter 子集 / 开场白 / `state.json` / `skills`），无 HTTP、无 DB、无索引；`mountSkillsForCard()` 把**一张卡**的 `skills/*` 挂进**它自己的** preset 技能根。目录名与 manifest id 必须是同一个规范 kebab-case id，非法/不一致目录不会进入列表，直接读取也会拒绝，避免路径穿越与归一化碰撞。当前 frontmatter 解析只支持项目示例使用的有限语法，不是完整 YAML，待替换为正式 YAML 解析器。
 - 卡面类型 `src/card-types.ts`：依赖为零，宿主与浏览器共享。
 - **卡包设定投影** `rrpCard`（`src/projection/card.ts`）+ `renderCardContext`：Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入（`src/state-publisher.ts`，追加式去重）。
 - 只读路由 `src/cards-route.ts`：`GET /dsh-rrp/cards`、`GET /dsh-rrp/cards/one?id=<id>`。
 - 开卡路由 `src/start.ts`：`POST /dsh-rrp/start` → 发布卡包 + 初始状态上下文（`source.rrp`；actor `card` 记入内存账本），**最后**追加开场白。
 - 卡片展厅 `src/client/gallery-panel.tsx`：`main` 主区面板 + 同名 `sidebar.panellist` 导航；开始流 = create → `agentPresets.select(presetIdForCard(card.id))` → POST start → open。UI 用宿主原子库（搜索/封面/标签/技能卡/开场白 + 底部主操作条）。
 - **主题（已撤回 P0）**：暖纸 `overrideTokens` 层观感被所有者否决，改用 **DSH 原版亮暗**；面板自身靠 `@deepseek-ai/dsh-client-ui-primitives` 原子 + `--dsw-alias-*` token 保持原生观感（见 [UI_CEILING.md](UI_CEILING.md) §A4）。
-- 测试：`tests/cards.spec.ts`、`tests/start.spec.ts`、`tests/client.spec.ts` 等——全套 **66 用例**（`pnpm typecheck` / `build` 全绿）。
+- 当前验证：`tests/cards.spec.ts`、`tests/start.spec.ts`、`tests/client.spec.ts` 覆盖规范 id、开卡失败传播与可选 Workspace 归属；最新全量数字以 [`ACTIVE_TASK.md`](../ACTIVE_TASK.md) 的事实基线为准。
 - **已实机确认**：开场白被宿主原生接受为**正文第一条**；卡包 persona 注入**零剧透**（见 [MANUAL_TEST.md](MANUAL_TEST.md)）。
 - ✅ **技能作用域（已修）**：每张卡一个 `rp-<card-id>` preset（`src/preset-id.ts`），绑定卡包开局时 `agentPresets.select` 选它；基础 `rp` 无卡包设定。宿主启动日志会逐个打印各 preset 的技能表。
 - **待优化**：P4 输入区接管；多卡体系下的卡面封面图；第二张官方测试卡。

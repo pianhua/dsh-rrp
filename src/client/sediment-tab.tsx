@@ -203,7 +203,7 @@ function SedimentPanel(props: SedimentPanelProps): ReactNode {
                 size="sm"
                 icon={<IconCheckOutline16 size={16} />}
                 disabled={busy}
-                onClick={() => { setStatus(''); post({ action: 'confirm' }, t('sediment.saved')) }}
+                onClick={() => { setStatus(''); post({ action: 'confirm' }, t('sediment.written')) }}
               >
                 {t('sediment.confirm')}
               </Button>

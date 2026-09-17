@@ -15,22 +15,29 @@
 /** Base RP preset id; also the fallback for a cardless session. */
 export const BASE_PRESET_ID = 'rp'
 
-/** The host's preset-id grammar: lowercase, digits, and single hyphens. */
-const UNSAFE = /[^a-z0-9]+/g
+/** Canonical card ids are already legal, lossless preset-id suffixes. */
+const CARD_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
-/** Normalize one card id into a legal preset-id suffix. */
+/** Whether a value is a canonical card id and therefore a safe directory name. */
+export function isCardId(value: string): boolean {
+  return CARD_ID.test(value)
+}
+
+/** Return the card's lossless preset suffix, rejecting aliases and paths. */
 export function cardPresetSuffix(cardId: string): string {
-  return cardId.trim().toLowerCase().replace(UNSAFE, '-').replace(/^-+|-+$/g, '')
+  if (!isCardId(cardId)) throw new Error('invalid card id: ' + cardId)
+  return cardId
 }
 
 /**
  * Derive the preset id for one card.
  * @param cardId - the card's id (its directory name).
- * @returns `rp-<sanitized-id>`, or the base preset when the id sanitizes away.
+ * @returns `rp-<card-id>`.
+ * @throws when the id is not canonical; lossy normalization would allow two
+ *   cards to address the same preset directory.
  */
 export function presetIdForCard(cardId: string): string {
-  const suffix = cardPresetSuffix(cardId)
-  return suffix.length === 0 ? BASE_PRESET_ID : BASE_PRESET_ID + '-' + suffix
+  return BASE_PRESET_ID + '-' + cardPresetSuffix(cardId)
 }
 
 /**

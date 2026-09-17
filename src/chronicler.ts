@@ -3,9 +3,9 @@
  *
  * On a completed turn of an RP-preset session, schedule an async background job
  * (D3: body text first, state inference after) that asks the Chronicler to fold
- * the turn into a complete WorldState, then appends it as an rrp/world-state
- * session event (D5/D6: the projection adopts whole values; the player can
- * correct afterwards).
+ * the turn into a complete WorldState, then appends it through the shared
+ * `user/message.source.rrp` state publisher (D5/D6: the projection adopts
+ * whole values; the player can correct afterwards).
  *
  * Host-first: scheduled through ctx.jobs, inferred through ctx.llm, and
  * recorded into the session log via Session.append. The plugin attaches its own
@@ -187,7 +187,9 @@ async function runInference(
 
     const next = parseChroniclerReply(text)
     if (next === undefined) throw new Error('Chronicler reply was not a valid WorldState')
-    publishState(session, faces.projections, { worldState: next })
+    if (!publishState(session, faces.projections, { worldState: next })) {
+      throw new Error('WorldState append failed')
+    }
     recordActivity(session.id, {
       id: activityId,
       at: stamp(),

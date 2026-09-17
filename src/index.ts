@@ -1,11 +1,12 @@
 /**
  * dsh-rrp — host half.
  *
- * Stage 2 materializes the RP mode (a native DSH agent preset carrying the
- * Author persona — see presets/rp/). Stage 3 registers the WorldState session
- * projection the right-sidebar panel reads.
+ * The host half materializes the RP preset family, registers the five pure
+ * Session projections, and wires the DSH-native routes/jobs/agent scopes used
+ * by the card, WorldState, summary, and sediment flows.
  *
- * Chronicler / Skills logic arrives in later stages — see docs/ACTIVE_TASK.md.
+ * Every registration is capability-gated and reversible; the client half owns
+ * only Slot/right-sidebar UI (see src/client/index.ts).
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { registerActivityRoute } from './activity-route.ts'
@@ -19,6 +20,8 @@ import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
 import { presetIdForCard } from './preset-id.ts'
 import { cardProjection } from './projection/card.ts'
 import { summaryProjection } from './projection/summary.ts'
+import { settingsProjection } from './projection/settings.ts'
+import { sedimentProjection } from './projection/sediment.ts'
 import { worldStateProjection } from './projection/world-state.ts'
 import { registerStartRoute } from './start.ts'
 import { registerSummarizer, registerSummaryCommand } from './summarizer.ts'
@@ -53,6 +56,8 @@ interface SessionProjectionsService {
     definition:
       | typeof worldStateProjection
       | typeof summaryProjection
+      | typeof settingsProjection
+      | typeof sedimentProjection
       | typeof cardProjection,
   ): () => void
 }
@@ -83,6 +88,10 @@ export function apply(ctx: Context): void {
     console.log(`${TAG} WorldState projection registered (key '${worldStateProjection.key}')`)
     registry.register(summaryProjection)
     console.log(`${TAG} macro-summary projection registered (key '${summaryProjection.key}')`)
+    registry.register(settingsProjection)
+    console.log(`${TAG} RP settings projection registered (key '${settingsProjection.key}')`)
+    registry.register(sedimentProjection)
+    console.log(`${TAG} sediment projection registered (key '${sedimentProjection.key}')`)
     registry.register(cardProjection)
     console.log(`${TAG} active-card projection registered (key '${cardProjection.key}')`)
   })
@@ -98,7 +107,7 @@ export function apply(ctx: Context): void {
   })
 
   // Player correction: the panel's write path into the session log (D6).
-  ctx.inject(['webServer', 'sessions'], (scoped: Context) => {
+  ctx.inject(['webServer', 'sessions', 'sessionProjections'], (scoped: Context) => {
     registerCorrectionRoute(scoped)
   })
 
@@ -113,10 +122,10 @@ export function apply(ctx: Context): void {
     registerActivityRoute(scoped)
   })
 
-  // Knowledge sedimentation (D8): per-session skills staged behind a player
-  // confirmation. The runtime arms the agent-scoped provider; the route drives
-  // the Scribe draft and the add-only writes.
-  ctx.inject(['agents'], (scoped: Context) => {
+  // Knowledge sedimentation (D8): worldline skills staged behind a player
+  // confirmation. The runtime arms the agent-scoped provider; confirmed
+  // changes live in the Session projection and therefore follow native forks.
+  ctx.inject(['agents', 'sessionProjections'], (scoped: Context) => {
     registerSedimentRuntime(scoped)
   })
   ctx.inject(['webServer', 'sessions', 'sessionProjections', 'agents', 'llm', 'jobs'], (scoped: Context) => {
@@ -127,7 +136,7 @@ export function apply(ctx: Context): void {
   })
 
   // Card start: write the initial state and the opening the browser cannot.
-  ctx.inject(['webServer', 'sessions'], (scoped: Context) => {
+  ctx.inject(['webServer', 'sessions', 'sessionProjections'], (scoped: Context) => {
     registerStartRoute(scoped)
   })
 
@@ -135,7 +144,7 @@ export function apply(ctx: Context): void {
   ctx.inject(['jobs', 'llm', 'agents', 'sessionProjections'], (scoped: Context) => {
     registerSummarizer(scoped, PRESET_ID)
   })
-  ctx.inject(['commands'], (scoped: Context) => {
+  ctx.inject(['commands', 'sessionProjections'], (scoped: Context) => {
     registerSummaryCommand(scoped)
   })
 }

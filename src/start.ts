@@ -1,10 +1,10 @@
 /**
  * dsh-rrp — the card start route (Stage 6 / P2).
  *
- * The gallery creates the session client-side
- * (ctx.sessions.create -> ctx.remote.agentPresets.select('rp') -> open), then
- * POSTs here so the HOST writes the two things the browser cannot: the card's
- * initial WorldState context and its opening as the Author's first message.
+ * The gallery creates the Session client-side
+ * (ctx.sessions.create -> ctx.remote.agentPresets.select('rp-<card>') -> open), then
+ * POSTs here so the HOST writes the card's durable context and its opening as
+ * the Author's first message.
  *
  * Both are ordinary known events: the context rides `user/message` (structured
  * payload hidden in the message source, see ./state-payload.ts) and the opening
@@ -17,6 +17,7 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
 import type { CardContext } from './card-types.ts'
+import { isCardId, presetIdForCard } from './preset-id.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 import { publishState } from './state-publisher.ts'
 import type { WorldState } from './world-state.ts'
@@ -60,14 +61,11 @@ interface RuntimeFaces {
   get(name: string): unknown
 }
 
-/** Projection face used when the registry is unavailable (card lane still works). */
-const NO_PROJECTIONS: ProjectionsService = { stateOf: () => undefined }
-
 /** Coerce a loose request value into a card context, or undefined when unusable. */
 function parseCardContext(value: unknown): CardContext | undefined {
   if (value === null || typeof value !== 'object') return undefined
   const record = value as Record<string, unknown>
-  if (typeof record.id !== 'string' || record.id.length === 0) return undefined
+  if (typeof record.id !== 'string' || !isCardId(record.id)) return undefined
   if (typeof record.name !== 'string' || record.name.length === 0) return undefined
   const player = record.player
   const context: CardContext = {
@@ -167,12 +165,12 @@ export function registerStartRoute(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
   const webServer = runtime.get('webServer') as WebServerService | undefined
   const sessions = runtime.get('sessions') as SessionsService | undefined
-  if (webServer === undefined || sessions === undefined) {
-    console.warn(TAG + ' card start route idle (missing webServer/sessions)')
+  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
+  if (webServer === undefined || sessions === undefined || projections === undefined) {
+    console.warn(TAG + ' card start route idle (missing webServer/sessions/sessionProjections)')
     return
   }
   const agents = runtime.get('agents') as AgentsService | undefined
-  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
 
   ctx.effect(() => {
     const dispose = webServer.register({
@@ -213,6 +211,13 @@ export function registerStartRoute(ctx: Context): void {
             send(res, 400, { error: 'invalid card' })
             return
           }
+          // Preset selection is a durable event after Session creation. The
+          // immutable header is only the creation fact and is often empty.
+          const preset = projections.stateOf(session, 'agentPreset')
+          if (preset !== presetIdForCard(card.id)) {
+            send(res, 400, { error: 'card does not match Session preset' })
+            return
+          }
         }
 
         let state: WorldState | undefined
@@ -227,10 +232,14 @@ export function registerStartRoute(ctx: Context): void {
 
         // Publish the durable context FIRST (card lane + facts lane).
         if (card !== undefined || state !== undefined) {
-          publishState(session, projections ?? NO_PROJECTIONS, {
+          const published = publishState(session, projections, {
             ...(card === undefined ? {} : { card }),
             ...(state === undefined ? {} : { worldState: state }),
           })
+          if (!published) {
+            send(res, 500, { error: 'initial RP state write failed' })
+            return
+          }
         }
         if (state !== undefined) {
           recordActivity(session.id, {
@@ -246,7 +255,7 @@ export function registerStartRoute(ctx: Context): void {
         // Opening LAST: the live follow stream then ends on the opening line.
         let openingWritten: 'assistant' | 'notice' | 'none' = 'none'
         if (typeof request.opening === 'string' && request.opening.trim().length > 0) {
-          const boundary = projections?.stateOf(session, 'turnBoundary') as { lastTurn?: number } | undefined
+          const boundary = projections.stateOf(session, 'turnBoundary') as { lastTurn?: number } | undefined
           const lastTurn = boundary?.lastTurn ?? 0
           openingWritten = appendOpening(session, request.opening.trim(), routeOf(agents, session.id), lastTurn)
         }

@@ -60,7 +60,7 @@ pnpm run link:dev          # = node scripts/link-dev.mjs [profile]
 
 ```bash
 pnpm run typecheck                              # 类型检查（含 tests）
-pnpm test                                       # vitest：21 文件 / 91 用例（含 HMR 无残留）
+pnpm test                                       # vitest：以当前输出为准（含 HMR 无残留）
 pnpm run build                                  # 构建 host + client
 dsh --profile rp-dev --port 3099 --no-open      # 真实宿主验证
 node scripts/inspect-context.mjs --latest       # 需要时：解码日志、统计上下文与缓存
@@ -72,9 +72,11 @@ node scripts/inspect-context.mjs --latest       # 需要时：解码日志、统
 [dsh-rrp] RP preset refreshed at <dshHome>\.agent-presets\rp
 [dsh-rrp] WorldState projection registered (key rrpWorldState)
 [dsh-rrp] macro-summary projection registered (key rrpSummary)
+[dsh-rrp] RP settings projection registered (key rrpSettings)
+[dsh-rrp] sediment projection registered (key rrpSediment)
 [dsh-rrp] active-card projection registered (key rrpCard)
 [dsh-rrp] Chronicler armed for preset rp
-[dsh-rrp] sediment runtime armed (per-session scoping via agent.ctx)
+[dsh-rrp] sediment runtime armed (worldline scoping via agent.ctx + Session projection)
 [dsh-rrp] sediment route armed at /dsh-rrp/sediment
 [dsh-rrp] RP skills visible (0): (none)
 [dsh-rrp] card preset rp-maid-heiress skills (6): maid-apartment, …, maid-world-setting

@@ -1,15 +1,15 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  SEDIMENT_LIMITS,
-  isSedimentName,
-  listSediment,
-  readSediment,
-  removeSediment,
-  writeSediment,
+  backupLegacySediment,
+  legacySessionSedimentDir,
+  listLegacySediment,
+  readLegacySediment,
+  renderSediment,
 } from '../src/sediment.ts'
+import { SEDIMENT_LIMITS, applySedimentChange, isSedimentName, validateSedimentEntry } from '../src/sediment-state.ts'
 
 const homes: string[] = []
 function tempHome(): string {
@@ -21,76 +21,58 @@ afterEach(() => {
   for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true })
 })
 
-function draft(overrides: Record<string, string> = {}) {
-  return {
-    name: 'qingqiu-fox-clan',
-    description: '青丘狐族的规矩与人物；涉及青丘、狐族时使用。',
-    body: '# 青丘\n\n- 九尾为尊。',
-    ...overrides,
-  }
+const ENTRY = {
+  name: 'qingqiu-fox-clan',
+  description: '青丘狐族的规矩与人物；涉及青丘、狐族时使用。',
+  body: '# 青丘\n\n- 九尾为尊。',
 }
 
-describe('sediment storage (D8)', () => {
-  it('adds, lists, reads and removes one skill', () => {
-    const home = tempHome()
-    const written = writeSediment(home, 's1', draft())
-    expect(written.ok).toBe(true)
+function writeLegacy(home: string, sessionId: string, entry = ENTRY): void {
+  const dir = join(legacySessionSedimentDir(home, sessionId), entry.name)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'SKILL.md'), renderSediment(entry), 'utf8')
+}
 
-    const list = listSediment(home, 's1')
-    expect(list.map((skill) => skill.name)).toEqual(['qingqiu-fox-clan'])
-    expect(list[0]?.description).toContain('狐族')
-    expect(list[0]?.bytes).toBeGreaterThan(0)
-
-    const read = readSediment(home, 's1', 'qingqiu-fox-clan')
-    expect(read?.body).toContain('九尾为尊')
-
-    expect(removeSediment(home, 's1', 'qingqiu-fox-clan')).toBe(true)
-    expect(listSediment(home, 's1')).toEqual([])
-    expect(removeSediment(home, 's1', 'qingqiu-fox-clan')).toBe(false)
-  })
-
-  it('is add-only: an existing name is refused, never overwritten', () => {
-    const home = tempHome()
-    expect(writeSediment(home, 's1', draft()).ok).toBe(true)
-    const again = writeSediment(home, 's1', draft({ body: '# 改写' }))
-    expect(again.ok).toBe(false)
-    expect(readSediment(home, 's1', 'qingqiu-fox-clan')?.body).toContain('九尾为尊')
-  })
-
-  it('refuses reserved names (the active card bundled skills)', () => {
-    const home = tempHome()
-    const result = writeSediment(home, 's1', draft({ name: 'maid-mia' }), ['maid-mia'])
-    expect(result.ok).toBe(false)
-    expect(listSediment(home, 's1')).toEqual([])
-  })
-
-  it('rejects illegal names and oversized fields', () => {
-    const home = tempHome()
+describe('sediment event vocabulary and legacy adapter', () => {
+  it('validates and normalizes one bounded entry', () => {
     expect(isSedimentName('Good')).toBe(false)
     expect(isSedimentName('a b')).toBe(false)
     expect(isSedimentName('a--b')).toBe(false)
     expect(isSedimentName('ok-name')).toBe(true)
-    expect(writeSediment(home, 's1', draft({ name: 'Bad Name' })).ok).toBe(false)
-    expect(writeSediment(home, 's1', draft({ description: '' })).ok).toBe(false)
-    expect(writeSediment(home, 's1', draft({ body: 'x'.repeat(SEDIMENT_LIMITS.bodyChars + 1) })).ok).toBe(false)
-    expect(listSediment(home, 's1')).toEqual([])
+    expect(validateSedimentEntry({ ...ENTRY, name: ' qingqiu-fox-clan ' })).toEqual({ ok: true, skill: ENTRY })
+    expect(validateSedimentEntry({ ...ENTRY, description: '' }).ok).toBe(false)
+    expect(validateSedimentEntry({ ...ENTRY, body: 'x'.repeat(SEDIMENT_LIMITS.bodyChars + 1) }).ok).toBe(false)
   })
 
-  it('isolates sessions from each other', () => {
-    const home = tempHome()
-    writeSediment(home, 's1', draft({ name: 'alpha-lore' }))
-    writeSediment(home, 's2', draft({ name: 'beta-lore' }))
-    expect(listSediment(home, 's1').map((skill) => skill.name)).toEqual(['alpha-lore'])
-    expect(listSediment(home, 's2').map((skill) => skill.name)).toEqual(['beta-lore'])
-    expect(readSediment(home, 's2', 'alpha-lore')).toBeUndefined()
+  it('refuses an existing, reserved, or overflowing entry', () => {
+    expect(validateSedimentEntry(ENTRY, [ENTRY.name]).ok).toBe(false)
+    expect(validateSedimentEntry(ENTRY, [], [ENTRY.name]).ok).toBe(false)
+    const full = Array.from({ length: SEDIMENT_LIMITS.skillsPerSession }, (_, index) => 'lore-' + String(index))
+    expect(validateSedimentEntry(ENTRY, full).ok).toBe(false)
   })
 
-  it('caps the number of skills per session', () => {
+  it('reads old SKILL.md files only through the legacy adapter', () => {
     const home = tempHome()
-    for (let index = 0; index < SEDIMENT_LIMITS.skillsPerSession; index += 1) {
-      expect(writeSediment(home, 's1', draft({ name: 'lore-' + String(index) })).ok).toBe(true)
-    }
-    const overflow = writeSediment(home, 's1', draft({ name: 'one-too-many' }))
-    expect(overflow.ok).toBe(false)
+    writeLegacy(home, 's1')
+    expect(listLegacySediment(home, 's1').map((skill) => skill.name)).toEqual([ENTRY.name])
+    expect(readLegacySediment(home, 's1', ENTRY.name)).toEqual(ENTRY)
+    expect(readLegacySediment(home, 's2', ENTRY.name)).toBeUndefined()
+  })
+
+  it('renames one old Session directory to a recoverable backup', () => {
+    const home = tempHome()
+    writeLegacy(home, 's1')
+    const source = legacySessionSedimentDir(home, 's1')
+    const backup = backupLegacySediment(home, 's1')
+    expect(backup).toBe(source + '.legacy.bak')
+    expect(existsSync(source)).toBe(false)
+    expect(existsSync(backup!)).toBe(true)
+    expect(backupLegacySediment(home, 's1')).toBeUndefined()
+  })
+
+  it('preserves projection identity for duplicate adds and absent removals', () => {
+    const state = [ENTRY]
+    expect(applySedimentChange(state, { kind: 'add', skill: ENTRY })).toBe(state)
+    expect(applySedimentChange(state, { kind: 'remove', name: 'missing-lore' })).toBe(state)
   })
 })

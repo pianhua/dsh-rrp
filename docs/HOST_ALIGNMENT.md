@@ -21,6 +21,7 @@
 | :--- | :--- | :--- | :--- |
 | **HTTP 路由** | 宿主 Web Server | `@deepseek-ai/dsh-host-webserver` → `ctx.webServer.register` | 只有确需独立端点时才注册路由，**绝不 `createServer`** |
 | **前端 UI** | Slot 注册表 | `@deepseek-ai/dsh-client-ui-slots` → `ctx.slots.register` | 状态看板、卡片展厅全部做成 Slot 组件（React 18） |
+| **工作区导航** | 原生 Workspace 列表与会话归属 | `ctx.workspaces` / `ctx.sessions.create({ workspaceId })` | 展厅只选择宿主已有工作区；不创建 RP 工作目录、不把 Workspace 当状态库 |
 | **右侧栏** | 原生右侧栏 Tab | `ctx.sidebarRightTabs` / `ctx.sidebarRight` | WorldState 看板注册为原生 Tab，**不自绘面板** |
 | **会话真源** | 仅追加事件日志 | `@deepseek-ai/dsh-session` | 正文与分支以 Session 为唯一权威；`Session.fork` = 世界线分支 |
 | **状态投影** | 投影驱动注册表 | `@deepseek-ai/dsh-session-projection` → `ctx.sessionProjections.register` | WorldState 写 `init/apply` 纯函数，宿主自动驱动 + 推送 |
@@ -38,6 +39,25 @@
 | **国际化** | 地区字典 | `@deepseek-ai/dsh-client-locale` → `ctx.locale.register` | 所有文案走 locale，不硬编码字符串 |
 | **配置存储** | 设置服务 | `@deepseek-ai/dsh-settings` | 插件配置用官方 settings，不自建配置文件管理 |
 | **原子写** | 原子文件写 | `@deepseek-ai/dsh-atomic-write` | 确需文件落盘时使用（如卡包索引） |
+
+### 2.1 当前实现符合度（2026-09-17 事实审计）
+
+整体结论：**主架构符合，局部实现待收敛**。下表只记录已从源码与当前安装宿主包验证的事实；“待决策”不是授权绕开宿主继续扩展。
+
+| 项 | 现状 | 结论 |
+| :--- | :--- | :--- |
+| Cordis 插件与 bundle | `package.json.dsh.bundle.patch` + `cordis.patch.yml`；host/client 分包 | ✅ 符合 |
+| UI | 原生 slots、右侧栏、session/controller 与 primitives；无独立 SPA | ✅ 符合 |
+| 会话状态 | 已知 `user/message.source.rrp` + 五个纯投影（Card / WorldState / Summary / Settings / Sediment）；无自造必需事件类型 | ✅ 符合 |
+| 后台推演 | Chronicler / Summarizer / Scribe 走 `ctx.jobs + ctx.llm`；没有自建队列或 Agent loop | ✅ 符合 |
+| 卡包 Skills | 每卡派生 `rp-<card>` preset，利用官方 standing scope 隔离 | ✅ 符合，不是重复造轮子 |
+| 投影注册生命周期 | `sessionProjections.register()` 在宿主中本身是 calling-fiber effect；未保存提前 disposer 不等于 HMR 泄漏 | ✅ 符合 |
+| D8 持久化 | `source.rrp.sediment` 操作事件 + `rrpSediment` 纯投影；agent provider 读取所属会话投影 | ✅ 符合；旧 sidecar 仅在首次访问时迁移并备份为 `.legacy.bak` |
+| 后台状态 UI | 世界状态活动与典籍草稿各自 2s HTTP 轮询 | ⚠️ 偏移：运行态应优先复用 Jobs/宿主推送，领域历史应优先走投影 |
+| Frontmatter | `cards.ts` 自行实现 YAML-like 子集解析 | ⚠️ 小型重复实现：不具备完整 YAML 语义 |
+| 进程内状态 | `RETAINED`、`LEDGERS`、`PENDING` 等 Map 未全部接入生产销毁路径 | ⚠️ 低风险生命周期债务 |
+
+D8 的语义已经确定：沉淀属于世界线，子会话继承分叉点前的事件前缀，分叉后的新增/删除只影响各自分支。实现复用 Session 日志与投影，不复制目录、不自建分支存储。Workspace 只承担宿主导航与归组，不参与这一状态语义。
 
 ---
 
@@ -117,7 +137,7 @@
 - DSH 相关包一律放 `peerDependencies`（可选能力标记 `peerDependenciesMeta.optional`），**绝不把宿主巨石打进 dependencies**；
 - 插件可导出两种形态，**不可混用**：service 类默认导出；function 插件具名导出 `name` / `inject` / `Config` / `apply`；
 - 可选服务用 `ctx.get(name)` 探测，声明依赖才用 `ctx.<name>`；
-- 所有注册返回 disposer，绑定 effect 生命周期。
+- 所有注册必须绑定 effect 生命周期；宿主 API 若已把注册实现为 calling-fiber effect，可依赖其自动卸载，返回 disposer 仅用于提前释放。
 
 ---
 

@@ -76,6 +76,24 @@ export interface RrpSessionsService {
   binding(id: string): RrpSessionBindingFace | undefined
 }
 
+/** One native DSH Workspace row used by the optional gallery picker. */
+export interface RrpWorkspaceView {
+  workspaceId: string
+  path: string
+  title: string
+}
+
+/** Observable native Workspace list. */
+export interface RrpWorkspaceSource {
+  getSnapshot(): { readonly items: readonly RrpWorkspaceView[] }
+  subscribe(listener: () => void): () => void
+}
+
+/** Optional face of `@deepseek-ai/dsh-api-workspace-controller`. */
+export interface RrpWorkspacesService {
+  readonly list: RrpWorkspaceSource
+}
+
 /** Remote RPC face (subset of dsh-api-remotes). */
 export interface RrpRemoteService {
   /** Host-side preset roster commands. */
@@ -115,4 +133,6 @@ export type RrpClientContext = CordisContext & {
   layout?: RrpLayoutService
   /** Present whenever the conversation assembly core is loaded. */
   uiConversation?: RrpUiConversationService
+  /** Optional host capability; read through `ctx.get` to avoid a hard inject. */
+  workspaces?: RrpWorkspacesService
 }

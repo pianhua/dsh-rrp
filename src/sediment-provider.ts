@@ -1,17 +1,16 @@
 /**
- * dsh-rrp — the per-session sediment skill provider.
+ * dsh-rrp — the worldline-scoped sediment skill provider.
  *
  * Registered through the AGENT-scoped context (`agent.ctx`), so its layer is
- * visible to exactly one session: the one whose worldline produced the lore.
+ * visible to exactly one agent/session: the one whose worldline produced the lore.
  * That is the host's own scoping mechanism — no per-session preset, no global
  * leak.
  *
- * The provider reads the session's sediment directory on every catalog read, so
- * a write needs no re-registration: the writer just calls the registration's
- * `invalidate()` and the next step re-snapshots.
+ * The provider reads the owning Session's projection on every catalog read.
+ * A write only invalidates the official skill catalog; no sidecar store exists
+ * on the active path.
  */
-import { harnessHome } from './home.ts'
-import { listSediment, readSediment, sessionSedimentDir } from './sediment.ts'
+import type { SedimentEntry } from './sediment-state.ts'
 
 /** Unique provider name within one agent layer. */
 export const SEDIMENT_PROVIDER = 'dsh-rrp-sediment'
@@ -52,29 +51,27 @@ export interface SedimentProviderControl {
 }
 
 /**
- * Build the provider for one session.
- * @param options.sessionId - the owning session.
- * @param options.home - harness home override.
- * @returns a read-only provider over that session's sediment directory.
+ * Build the provider for one worldline.
+ * @param options.sessionId - the owning Session id.
+ * @param options.read - live read of the owning Session projection.
+ * @returns a read-only provider over that Session's dynamic lore.
  */
-export function createSedimentProvider(options: { sessionId: string; home?: string }): SedimentProvider {
-  const home = options.home
+export function createSedimentProvider(options: { sessionId: string; read: () => readonly SedimentEntry[] }): SedimentProvider {
   return {
     name: SEDIMENT_PROVIDER,
     async list(): Promise<readonly SedimentCandidate[]> {
-      return listSediment(home ?? harnessHome(), options.sessionId).map((skill) => ({
+      return options.read().map((skill) => ({
         name: skill.name,
         description: skill.description,
         invocation: { modelInvocable: true, userInvocable: true },
         source: SEDIMENT_SOURCE,
         provider: SEDIMENT_PROVIDER,
         rank: SEDIMENT_RANK,
-        locator: skill.path,
-        path: skill.path,
+        locator: skill.name,
       }))
     },
     async get(candidate: SedimentCandidate): Promise<SedimentDefinition | undefined> {
-      const draft = readSediment(home ?? harnessHome(), options.sessionId, candidate.name)
+      const draft = options.read().find((skill) => skill.name === candidate.name)
       if (draft === undefined) return undefined
       return {
         name: draft.name,
@@ -85,7 +82,6 @@ export function createSedimentProvider(options: { sessionId: string; home?: stri
         provider: SEDIMENT_PROVIDER,
         rank: SEDIMENT_RANK,
         locator: candidate.locator,
-        resourceBase: { kind: 'directory', path: sessionSedimentDir(home ?? harnessHome(), options.sessionId) },
       }
     },
   }

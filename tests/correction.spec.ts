@@ -6,10 +6,17 @@ import { emptyWorldState } from '../src/world-state.ts'
 
 const VALID = { ...emptyWorldState(), scene: { location: '归离客栈' } }
 
-function fakeHost() {
+function fakeHost(failAppend = false) {
   const appended: Array<{ type: string; data: unknown }> = []
   const sessions = {
-    get: (id: string) => (id === 's1' ? { id: 's1', append: (type: string, data: unknown) => { appended.push({ type, data }); return {} } } : undefined),
+    get: (id: string) => (id === 's1' ? {
+      id: 's1',
+      append: (type: string, data: unknown) => {
+        if (failAppend) throw new Error('append failed')
+        appended.push({ type, data })
+        return {}
+      },
+    } : undefined),
   }
   let route: { handler: (req: unknown, res: unknown) => unknown } | undefined
   const webServer = {
@@ -18,14 +25,28 @@ function fakeHost() {
       return () => {}
     },
   }
+  const sessionProjections = { stateOf: () => undefined }
   const ctx = {
     effect(fn: () => (() => void) | void) {
       return fn()
     },
-    get: (name: string) => ({ webServer, sessions } as Record<string, unknown>)[name],
+    get: (name: string) => ({ webServer, sessions, sessionProjections } as Record<string, unknown>)[name],
   }
   return { ctx, appended, route: () => route }
 }
+
+it('keeps the correction route idle until the projection registry is available', () => {
+  let registered = false
+  const ctx = {
+    effect: (fn: () => unknown) => fn(),
+    get: (name: string) => ({
+      webServer: { register: () => { registered = true; return () => {} } },
+      sessions: { get: () => undefined },
+    } as Record<string, unknown>)[name],
+  }
+  registerCorrectionRoute(ctx as never)
+  expect(registered).toBe(false)
+})
 
 function fakeExchange(body: unknown, method = 'POST') {
   const req = {
@@ -79,5 +100,16 @@ describe('player correction route', () => {
     await host.route()!.handler(req, res)
     expect(res.statusCode).toBe(404)
     expect(host.appended).toHaveLength(0)
+  })
+
+  it('reports a failed append and does not record a correction', async () => {
+    forgetState('s1'); forgetActivity('s1')
+    const host = fakeHost(true)
+    registerCorrectionRoute(host.ctx as never)
+    const { req, res } = fakeExchange({ sessionId: 's1', state: VALID })
+    await host.route()!.handler(req, res)
+    expect(res.statusCode).toBe(500)
+    expect(host.appended).toEqual([])
+    expect(readActivity('s1').entries).toEqual([])
   })
 })

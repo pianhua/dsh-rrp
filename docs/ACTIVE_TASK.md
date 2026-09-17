@@ -1,16 +1,32 @@
 # 当前任务（ACTIVE_TASK.md）
 
 > 更新时间：2026-09-17  
-> **交接总入口：[`HANDOFF.md`](HANDOFF.md)**  
+> **交接总入口：[`HANDOFF.md`](HANDOFF.md) · [`NEXT_AI_HANDOFF.md`](NEXT_AI_HANDOFF.md)**
 > 规格基线：[`DESIGN.md`](DESIGN.md) · 宿主映射：[`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md) · 开发流程：[`DEVELOPMENT.md`](DEVELOPMENT.md)
 
 ---
 
 ## 任务状态
 
-- **阶段**：阶段 0–9 与阶段 6 **全部完成**；随后完成 UI 精修、会话可读性修复、多卡技能作用域、D8 知识沉淀
-- **状态**：可反复实测、按需打磨；后续候选见文末「下一步候选」
+- **阶段**：完成卡牌/存档/世界线隔离与 Workspace 适配重构；D5 动态状态及若干宿主边界仍未闭环
+- **状态**：本轮重构已完成自动验证；真实宿主 UI、旧数据迁移与 fork 交互仍待人工验收，之后按“先架构收敛、后功能扩展”的顺序推进
+- **后续执行**：当前 AI 已停止后续开发；下一位 AI 的唯一执行队列见 [`NEXT_AI_HANDOFF.md`](NEXT_AI_HANDOFF.md)，外部测试者负责自动与 `rp-dev` 验收
 - **原则**：先锁定形态与宿主映射，再落实现；每阶段回读本文件
+
+### 当前事实基线
+
+| 项 | 结论 |
+| :--- | :--- |
+| 审计起点 | `main` @ `4abe489`，44 次提交，审计前工作区干净 |
+| 自动验证 | `pnpm test`：Vitest **21 文件 / 117 用例全绿**；另有 `pnpm run typecheck`、`pnpm run build`、`git diff --check` 全绿 |
+| 架构总评 | 主骨架符合 DSH 薄插件：未发现自建 server、数据库、任务队列、Agent loop、会话 DAG 或独立 SPA |
+| 规格缺口 | D5 文档要求动态结构，当前 WorldState schema/UI 仍固定四域 |
+| 世界线 | Card / WorldState / Summary / Settings / Sediment 均由 Session 投影重放；fork 继承分叉点前缀，分叉后独立 |
+| Preset 真源 | 当前 preset 只读宿主 `agentPreset` 投影；Session header 仅是创建事实，不能用于后续 `agentPresets.select` 的鉴权或运行态武装 |
+| 宿主边界 | D8 已收回会话事件/投影；仍有世界状态与典籍 2s 轮询、YAML 子集解析与进程 Map 生命周期债务 |
+| 正确性风险 | 写入失败已向开卡、矫正、D8 与后台智体传播；推演期间仍可保存矫正，D6 顺序窗口尚未封口 |
+
+> 本表是接下来开发的唯一任务入口。历史章节保留当时证据，不代表上述问题已经解决。
 
 ---
 
@@ -93,6 +109,7 @@
 **方案：每张卡一个派生 preset。**
 
 - id 规则：基础 `rp`（无卡包设定）+ `rp-<card-id>`（只含该卡技能），见 `src/preset-id.ts`（依赖为零，宿主与浏览器共用）；
+- card id 必须是规范小写 kebab-case，且目录名与 manifest id 完全一致；不再做会碰撞的有损归一化，并在读取入口拒绝非法路径；
 - 物化：`materializePreset` 物化基础 preset + 每张卡一个；`mountSkillsForCard(dir, cardId)` 只拷当前卡的技能；
 - 选择：卡片展厅开局时 `agentPresets.select(sessionId, presetIdForCard(card.id))`；
 - 触发：纪事官/编年官按 **preset family** 匹配（`matchesPreset(id, 'rp')`），`rp-*` 同样受管；
@@ -106,20 +123,30 @@
 
 ## 知识沉淀 D8（2026-09-17）
 
-**目标**：剧情中确立的新设定 → **会话专属**技能；受控、可审阅、渐进。
+**目标**：剧情中确立的新设定 → **世界线专属**技能；受控、可审阅、渐进。
 
 **实现**：
 
-- `src/sediment.ts`：按会话存储 `<dshHome>/.dsh-rrp/sediment/sessions/<sessionId>/<name>/SKILL.md`；只新增、四重上限、临时文件 + rename 原子写；
-- `src/sediment-provider.ts`：只读该会话目录的 skill provider；
-- `src/sediment-runtime.ts`：`agent/created`（仅 RP 家族 preset）时经 **`agent.ctx.skills.registerProvider`** 注册。宿主 skill registry 按 **agent 作用域**分层，而 `agent.ctx` 是 agent 局部上下文 —— 因此**天然按会话隔离**，且不写 preset 目录（避免每次启动被重刷）；
+- `src/sediment-state.ts` + `src/projection/sediment.ts`：`snapshot/add/remove` 词汇、上限与 `rrpSediment` 纯折叠；
+- `src/sediment-provider.ts`：只读所属 Session 的沉淀投影并适配为 agent scope Skill provider；
+- `src/sediment-runtime.ts`：`agent/created`（仅 RP 家族 preset）时经 **`agent.ctx.get('skills').registerProvider`** 注册。普通会话互相隔离，fork 继承分叉点前缀，分叉后独立；旧 sidecar 只在投影为空时迁移为一次 `snapshot`，成功后备份为 `.legacy.bak`；
 - `src/agents/scribe.ts`：Scribe 提示词 + 解析；只依据已发生事实起草一条，材料不足返回空草稿；
-- `src/sediment-route.ts`：`GET/POST/DELETE /dsh-rrp/sediment`（list / draft / confirm / discard / manual / delete）+ `/lore` 命令；草稿只暂存宿主内存，**确认才写盘**；
+- `src/sediment-route.ts`：`GET/POST/DELETE /dsh-rrp/sediment`（list / draft / confirm / discard / manual / delete）+ `/lore` 命令；草稿只暂存宿主内存，**确认/删除才写 Session 事件**；
 - 客户端新增右侧「典籍」tab：话题输入 + 起草、草稿预览 + 确认/丢弃、已沉淀列表 + 删除；归因进活动账本（actor `scribe`/`player`，target `sediment`）。
 
-**证据**：89 用例全绿（存储 add-only/上限/会话隔离、provider 隔离、Scribe 解析、路由四动作）；真机启动日志 `sediment runtime armed` / `/lore command armed` / `sediment route armed`。**待实机确认**：写入后下一轮 `available_skills` 是否出现该技能（需真实一轮）。
+**历史证据**：文件版 D8 落地时 89 用例通过，事实审计基线为 91 用例。当前实现另有投影重放、兄弟分支隔离、旧数据迁移成功/失败与写入失败传播测试；真实宿主上的迁移与 fork UI 流仍需本轮人工验收。
 
 **控制策略映射**：默认关闭 / 二次确认 / 只新增（含卡包自带重名拒绝）/ 可看可删 / 单次一条。
+
+---
+
+## 存档隔离与 Workspace 适配（2026-09-17）
+
+- **卡**是静态内容身份：一个规范 `cardId` 对应一个 `rp-<cardId>` preset，卡间 Skills 不共享。
+- **存档**是原生 Session：同一张卡每次「开始」都新建 Session，WorldState、Summary、Settings 与 Sediment 全部独立。
+- **分支**是原生 `Session.fork`：继承切点前全部 RP 投影，之后各自追加，禁止自建槽位/目录复制/DAG。
+- **Workspace**只复用宿主已有列表作为新存档归组参数。展厅在服务存在且有条目时显示紧凑选择器；宿主不提供该能力时无损退化为未分组会话。
+- `/summary on|off` 已从进程全局变量迁为 `rrpSettings` 会话投影，因此同卡不同存档互不影响，fork 语义也自然正确。
 
 ---
 
@@ -130,7 +157,7 @@
 | **0–5** | 骨架 → RP 模式 → 投影看板 → 纪事官 → Skills | ✅ 完成 |
 | **5.5** | 闭环补完：Author 消费 + 玩家矫正（D6） | ✅ 完成 |
 | **7** | Summarizer Agent（可选大局观，按轮触发） | ✅ 完成 |
-| **8** | Session.fork 世界线 + `dsh-synapse` 协同 | ✅ 完成 |
+| **8** | Session.fork 世界线 + `dsh-synapse` 协同 | ✅ Card / WorldState / Summary / Settings / Sediment 均纳入原生 fork 前缀重放 |
 | **9** | 外部记忆扩展接入（EverOS 方向，纯扩展） | ✅ 完成 |
 | 6 | 原生卡包格式重制 + 卡片展厅 | ✅ **完成**：格式/加载器/只读路由/首个测试卡/**展厅**/**开卡流**/**UI 精修（宿主原子库）**/**卡包设定注入**/**技能挂载**/**P3 沉浸视图**均已落地；P0 暖纸主题已撤回、P1（shadow 正文节点）评估后不做 |
 
@@ -173,8 +200,8 @@
 
 ## 验收标准
 
-- 阶段 1–5、5.5、7、8、9（已达成）：真实 `dsh web` 加载、RP 环路、纪事官、Skills、编年官、fork 重放、外部契约，均无报错；`pnpm run typecheck` / `build` / `test`（**91 用例**）全绿
-- 全程：不触犯 [`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md) 第 4 节任一红线
+- 已验证：历史真实 `dsh web` 加载、RP 环路、纪事官、Skills 与编年官；自动回归覆盖五个 RP 投影的 fork 重放、卡 id 隔离、preset 后选时序、旧 D8 迁移、可选 Workspace 与写入失败传播。本轮 `pnpm test` 为 21 文件 / 117 用例，`typecheck` / `build` / `diff --check` 均通过
+- 尚未达成：D5 动态结构、零自写轮询、正式 YAML 解析、生命周期清理与本轮真实宿主 UI/迁移验收；见 [`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md) §2.1
 - 每阶段：代码保持轻量透明，无并发/分布式/多用户复杂度
 
 ---
@@ -183,9 +210,11 @@
 
 | 优先级 | 事项 | 说明 |
 | :--- | :--- | :--- |
-| 中 | **第二张官方测试卡** | 目前只有 `maid-heiress`；多卡技能作用域需要第二张卡才能肉眼验证 |
-| 中 | **P4 输入区接管** | `conversation.composer`（chain）：行动 / 对白 / 继续 / 导演指令 |
-| 低 | `/summary` 开关持久化 | 现为进程内状态，可挂 `ctx.settings` |
+| 高 | **D5 规格收敛** | 实现受控扩展结构，或由所有者明确收窄 D5；不得继续保持文档与 schema 冲突 |
+| 高 | **矫正时序** | 按 D6 自然顺序封住推演中保存窗口，不引入 CAS |
+| 中 | **宿主边界收敛** | 去掉两条轮询、替换 YAML 子集解析、补生命周期清理 |
+| 中 | **第二张官方测试卡** | 架构收敛后再补；目前只有 `maid-heiress` |
+| 低 | **P4 输入区接管** | 架构收敛后再扩展 `conversation.composer` |
 | 低 | 沉淀草稿在线编辑 | 面板加可编辑字段（草稿已在内存） |
 | 低 | 多语言与文案打磨 | locale 字典已分 ZH/EN |
 
@@ -195,5 +224,6 @@
 
 - **人工验证项**：真实模型推演、Author 消费、面板渲染、长线游玩——必须人工/浏览器 Agent 实测；单测用结构化替身，覆盖不到 Cordis 代理与生命周期行为（见 [HANDOFF.md](HANDOFF.md) §5）。
 - **旧会话兼容**：2026-09-17 之前的会话其 `rrp/*` 事件已按 `ignorable` 忽略，**世界状态面板为空**（正文与历史可读）。
-- **活动账本**：刻意只存宿主内存，重启清空。
-- **D8 沉淀**：已实现并实测通过（含跨会话隔离）；「写入后下一轮可检索」已由浏览器实测确认（见 [MANUAL_TEST.md](reference/MANUAL_TEST.md) §9）。
+- **活动账本**：当前只存宿主内存并由客户端 2s 轮询；这是现状，不再视为最终设计。
+- **D8 迁移**：旧 sidecar 自动迁移已有单测；真实旧局迁移后 provider 可见性与 `.legacy.bak` 仍需在 `rp-dev` 人工确认。
+- **D6 时序**：规范要求“纪事官更新 → 玩家查看并矫正 → 下一轮”；当前 UI 在纪事官运行期间仍允许保存，属于可达但未封口的顺序窗口。
