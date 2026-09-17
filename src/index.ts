@@ -11,6 +11,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import { registerActivityRoute } from './activity-route.ts'
 import { listCards } from './cards.ts'
 import { registerCardsRoute } from './cards-route.ts'
+import { registerSedimentCommand, registerSedimentRoute } from './sediment-route.ts'
+import { registerSedimentRuntime } from './sediment-runtime.ts'
 import { registerChronicler } from './chronicler.ts'
 import { registerCorrectionRoute } from './correction.ts'
 import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
@@ -109,6 +111,19 @@ export function apply(ctx: Context): void {
   // ledger (it is player-facing and must never enter the session log/model).
   ctx.inject(['webServer'], (scoped: Context) => {
     registerActivityRoute(scoped)
+  })
+
+  // Knowledge sedimentation (D8): per-session skills staged behind a player
+  // confirmation. The runtime arms the agent-scoped provider; the route drives
+  // the Scribe draft and the add-only writes.
+  ctx.inject(['agents'], (scoped: Context) => {
+    registerSedimentRuntime(scoped)
+  })
+  ctx.inject(['webServer', 'sessions', 'sessionProjections', 'agents', 'llm', 'jobs'], (scoped: Context) => {
+    registerSedimentRoute(scoped)
+  })
+  ctx.inject(['commands', 'llm', 'jobs', 'agents', 'sessionProjections'], (scoped: Context) => {
+    registerSedimentCommand(scoped)
   })
 
   // Card start: write the initial state and the opening the browser cannot.

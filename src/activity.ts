@@ -16,10 +16,10 @@
  */
 
 /** Which writer produced an entry. */
-export type RrpActor = 'chronicler' | 'summarizer' | 'player' | 'card'
+export type RrpActor = 'chronicler' | 'summarizer' | 'player' | 'card' | 'scribe'
 
 /** Which artifact the writer touched. */
-export type RrpTarget = 'world-state' | 'summary'
+export type RrpTarget = 'world-state' | 'summary' | 'sediment'
 
 /** Lifecycle of one writer pass. */
 export type RrpPhase = 'started' | 'committed' | 'failed' | 'corrected'

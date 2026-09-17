@@ -6,6 +6,7 @@
  */
 import type { RrpClientContext } from './context-types.ts'
 import { registerGallery } from './gallery-panel.tsx'
+import { registerSedimentTab } from './sediment-tab.tsx'
 import { registerStoryView } from './story-view.tsx'
 import { registerWorldStateTab } from './world-state-tab.tsx'
 
@@ -70,6 +71,23 @@ const ZH: Record<string, string> = {
   'phase.corrected': '已就地矫正',
   'phase.failed': '推演失败',
   'actor.card': '卡包',
+  'actor.scribe': '典籍编纂',
+  'sediment.title': '典籍',
+  'sediment.guide': '把剧情里确立的新设定沉淀为本会话专属的知识；只新增、可审阅、可删除。',
+  'sediment.topicPlaceholder': '想沉淀什么？（可留空）',
+  'sediment.draft': '沉淀最近的新设定',
+  'sediment.drafting': '编纂中…',
+  'sediment.staged': '已生成草稿，等待确认',
+  'sediment.confirm': '确认写入',
+  'sediment.discard': '丢弃',
+  'sediment.discarded': '已丢弃草稿',
+  'sediment.confirmHint': '确认后本会话下一轮即可按需检索',
+  'sediment.written': '已沉淀',
+  'sediment.empty': '本会话还没有沉淀任何设定',
+  'sediment.removed': '已删除',
+  'sediment.delete': '删除',
+  'sediment.failed': '操作失败',
+  'sediment.noDraft': '目前没有待确认草稿',
   'gallery.title': '卡片展厅',
   'gallery.reload': '刷新',
   'gallery.loading': '加载中…',
@@ -128,6 +146,23 @@ const EN: Record<string, string> = {
   'phase.corrected': 'corrected in place',
   'phase.failed': 'inference failed',
   'actor.card': 'Card',
+  'actor.scribe': 'Scribe',
+  'sediment.title': 'Lore',
+  'sediment.guide': 'Sediment newly established lore into this session only; add-only, reviewable, deletable.',
+  'sediment.topicPlaceholder': 'What to sediment? (optional)',
+  'sediment.draft': 'Sediment recent lore',
+  'sediment.drafting': 'Drafting…',
+  'sediment.staged': 'Draft staged — waiting for review',
+  'sediment.confirm': 'Confirm write',
+  'sediment.discard': 'Discard',
+  'sediment.discarded': 'Draft discarded',
+  'sediment.confirmHint': 'Effective in this session from the next turn',
+  'sediment.written': 'Written',
+  'sediment.empty': 'No sedimented lore in this session yet',
+  'sediment.removed': 'Removed',
+  'sediment.delete': 'Delete',
+  'sediment.failed': 'Failed',
+  'sediment.noDraft': 'No draft awaiting review',
   'gallery.title': 'Card Gallery',
   'gallery.reload': 'Refresh',
   'gallery.loading': 'Loading…',
@@ -166,6 +201,7 @@ export function apply(ctx: RrpClientContext): void {
   }, 'dsh-rrp: locale dictionaries')
 
   registerWorldStateTab(ctx)
+  registerSedimentTab(ctx)
   registerGallery(ctx)
   registerStoryView(ctx)
 }

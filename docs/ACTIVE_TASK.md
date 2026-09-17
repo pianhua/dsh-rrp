@@ -103,6 +103,25 @@
 
 ---
 
+## 知识沉淀 D8（2026-09-17）
+
+**目标**：剧情中确立的新设定 → **会话专属**技能；受控、可审阅、渐进。
+
+**实现**：
+
+- `src/sediment.ts`：按会话存储 `<dshHome>/.dsh-rrp/sediment/sessions/<sessionId>/<name>/SKILL.md`；只新增、四重上限、临时文件 + rename 原子写；
+- `src/sediment-provider.ts`：只读该会话目录的 skill provider；
+- `src/sediment-runtime.ts`：`agent/created`（仅 RP 家族 preset）时经 **`agent.ctx.skills.registerProvider`** 注册。宿主 skill registry 按 **agent 作用域**分层，而 `agent.ctx` 是 agent 局部上下文 —— 因此**天然按会话隔离**，且不写 preset 目录（避免每次启动被重刷）；
+- `src/agents/scribe.ts`：Scribe 提示词 + 解析；只依据已发生事实起草一条，材料不足返回空草稿；
+- `src/sediment-route.ts`：`GET/POST/DELETE /dsh-rrp/sediment`（list / draft / confirm / discard / manual / delete）+ `/lore` 命令；草稿只暂存宿主内存，**确认才写盘**；
+- 客户端新增右侧「典籍」tab：话题输入 + 起草、草稿预览 + 确认/丢弃、已沉淀列表 + 删除；归因进活动账本（actor `scribe`/`player`，target `sediment`）。
+
+**证据**：89 用例全绿（存储 add-only/上限/会话隔离、provider 隔离、Scribe 解析、路由四动作）；真机启动日志 `sediment runtime armed` / `/lore command armed` / `sediment route armed`。**待实机确认**：写入后下一轮 `available_skills` 是否出现该技能（需真实一轮）。
+
+**控制策略映射**：默认关闭 / 二次确认 / 只新增（含卡包自带重名拒绝）/ 可看可删 / 单次一条。
+
+---
+
 ## 阶段路线
 
 | 阶段 | 主题 | 状态 |
