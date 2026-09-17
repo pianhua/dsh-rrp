@@ -162,7 +162,7 @@ function scheduleDraft(faces: ScribeFaces, session: SessionLike, topic: string):
     faces.jobs.start({
       kind: 'scribe',
       label: '典籍编纂 Scribe · ' + session.id.slice(0, 8),
-      run: () => ({ done: runDraft(faces, session, route, topic, activityId) }),
+      run: () => ({ cancel: () => {}, done: runDraft(faces, session, route, topic, activityId) }),
     })
   } catch (error) {
     DRAFTING.delete(session.id)
