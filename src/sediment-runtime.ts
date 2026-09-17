@@ -24,7 +24,10 @@ interface SkillsServiceLike {
   registerProvider(create: (control: SedimentProviderControl) => unknown): () => void
 }
 interface AgentContextLike {
+  /** Cordis property access; throws without a declared inject on the context. */
   skills?: SkillsServiceLike
+  /** Inject-free service read; the returned service is still traced to this context. */
+  get?(name: string): unknown
 }
 interface AgentLike {
   id: string
@@ -42,13 +45,31 @@ interface RuntimeFaces {
 /** Live per-session provider controls, so a write can invalidate its catalog. */
 const ARMED = new Map<string, SedimentProviderControl>()
 
+/**
+ * Read the skill registry from an agent context.
+ *
+ * Cordis refuses `agent.ctx.skills` property access unless the accessing fiber
+ * declared the dependency ("cannot get property \"skills\" without inject") —
+ * and the agent's context declares nothing for us. `ctx.get(name)` is the
+ * inject-free read, and it still traces the service to THIS context, so the
+ * registration files into the agent scope exactly as the property would.
+ */
+function skillsOf(ctx: AgentContextLike | undefined): SkillsServiceLike | undefined {
+  if (ctx === undefined) return undefined
+  if (typeof ctx.get === 'function') return ctx.get('skills') as SkillsServiceLike | undefined
+  // Only reached by structural test doubles, never by a real Cordis context.
+  return ctx.skills
+}
+
 /** Arm one agent when it belongs to the RP family and is not armed already. */
 function maybeArm(agent: AgentLike): void {
-  if (ARMED.has(agent.id)) return
-  if (!belongsToRpPreset(agent.session?.header?.agentPreset)) return
-  const skills = agent.ctx?.skills
-  if (skills === undefined) return
+  // agent/created listeners run inside session creation: a throw here would
+  // fail the whole create, so nothing may escape.
   try {
+    if (ARMED.has(agent.id)) return
+    if (!belongsToRpPreset(agent.session?.header?.agentPreset)) return
+    const skills = skillsOf(agent.ctx)
+    if (skills === undefined) return
     skills.registerProvider((control) => {
       ARMED.set(agent.id, control)
       return createSedimentProvider({ sessionId: agent.id })
