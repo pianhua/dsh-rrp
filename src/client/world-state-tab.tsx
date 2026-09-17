@@ -26,10 +26,14 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { pendingActivity, type RrpActivityLog } from '../activity.ts'
 import {
   WORLD_STATE_KEY,
+  getDynamicKeys,
+  isValidFieldId,
+  createDynamicField,
   type WorldState,
   type WorldStateCharacter,
   type WorldStateItem,
   type WorldStateView,
+  type DynamicFieldValue,
 } from '../world-state.ts'
 import type { RrpClientContext } from './context-types.ts'
 
@@ -69,15 +73,36 @@ interface FlagRow {
   key: string
   value: string
 }
+interface DynamicFieldRow {
+  id: string
+  type: 'number' | 'string' | 'boolean'
+  value: string  // Always string in UI, parsed on save
+  min?: string
+  max?: string
+}
 interface Draft {
   characters: CharacterRow[]
   inventory: ItemRow[]
   flags: FlagRow[]
   scene: { location: string; time: string; weather: string }
+  dynamicFields: DynamicFieldRow[]
 }
 
 /** Project the read-only slice into an array-based draft for stable editing. */
 function draftOf(view: WorldStateView | undefined): Draft {
+  // Extract dynamic fields
+  const dynamicKeys = view ? getDynamicKeys(view) : []
+  const dynamicFields: DynamicFieldRow[] = dynamicKeys.map(id => {
+    const field = view![id] as DynamicFieldValue
+    return {
+      id,
+      type: field.type,
+      value: String(field.value),
+      min: field.min !== undefined ? String(field.min) : undefined,
+      max: field.max !== undefined ? String(field.max) : undefined,
+    }
+  })
+  
   return {
     characters: Object.entries(view?.characters ?? {}).map(([name, value]) => ({
       name,
@@ -97,6 +122,7 @@ function draftOf(view: WorldStateView | undefined): Draft {
       time: view?.scene?.time ?? '',
       weather: view?.scene?.weather ?? '',
     },
+    dynamicFields,
   }
 }
 
@@ -108,6 +134,7 @@ function isEmptyDraft(draft: Draft): boolean {
     && draft.scene.location.length === 0
     && draft.scene.time.length === 0
     && draft.scene.weather.length === 0
+    && draft.dynamicFields.length === 0
 }
 
 /** Parse a free-text flag value into string | number | boolean. */
@@ -153,7 +180,41 @@ function stateOfDraft(draft: Draft): WorldState {
   if (draft.scene.location.trim().length > 0) scene.location = draft.scene.location.trim()
   if (draft.scene.time.trim().length > 0) scene.time = draft.scene.time.trim()
   if (draft.scene.weather.trim().length > 0) scene.weather = draft.scene.weather.trim()
-  return { characters, inventory, flags, scene }
+  
+  // Build base state
+  const state: WorldState = { characters, inventory, flags, scene }
+  
+  // Add dynamic fields
+  for (const row of draft.dynamicFields) {
+    const id = row.id.trim()
+    if (id.length === 0 || !isValidFieldId(id)) continue
+    
+    let value: number | string | boolean
+    const valueStr = row.value.trim()
+    
+    if (row.type === 'number') {
+      value = Number(valueStr)
+      if (Number.isNaN(value)) value = 0
+    } else if (row.type === 'boolean') {
+      value = valueStr === 'true' || valueStr === '1'
+    } else {
+      value = valueStr
+    }
+    
+    const constraints: { min?: number; max?: number } = {}
+    if (row.min !== undefined && row.min.trim().length > 0) {
+      const min = Number(row.min)
+      if (!Number.isNaN(min)) constraints.min = min
+    }
+    if (row.max !== undefined && row.max.trim().length > 0) {
+      const max = Number(row.max)
+      if (!Number.isNaN(max)) constraints.max = max
+    }
+    
+    state[id] = createDynamicField(row.type, value, constraints)
+  }
+  
+  return state
 }
 
 const S: Record<string, CSSProperties> = {
@@ -202,6 +263,33 @@ const S: Record<string, CSSProperties> = {
     borderTop: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-base)',
   },
   status: { flex: 1, minWidth: 0, fontSize: 11.5, color: 'var(--dsw-alias-label-tertiary)', lineHeight: 1.4 },
+  collapsible: { marginBottom: 16 },
+  collapseHeader: {
+    display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', cursor: 'pointer',
+    userSelect: 'none' as const,
+  },
+  collapseArrow: { 
+    fontSize: 12, color: 'var(--dsw-alias-label-tertiary)', 
+    transition: 'transform 0.2s',
+  },
+  collapseArrowExpanded: { transform: 'rotate(90deg)' },
+  collapseTitle: { fontSize: 13, fontWeight: 600, color: 'var(--dsw-alias-label-primary)' },
+  collapseContent: { paddingLeft: 20 },
+  dynamicFieldCard: {
+    display: 'flex', flexDirection: 'column' as const, gap: 8, padding: '10px 11px', marginBottom: 8,
+    borderRadius: 10, background: 'var(--dsw-alias-bg-layer-1)',
+    border: '1px solid var(--dsw-alias-border-l1)',
+  },
+  dynamicFieldHeader: { display: 'flex', alignItems: 'center', gap: 8 },
+  dynamicFieldId: { fontSize: 12, fontWeight: 600, fontFamily: 'monospace', flex: 1 },
+  dynamicFieldType: { fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--dsw-alias-bg-layer-2)', color: 'var(--dsw-alias-label-secondary)' },
+  addFieldForm: {
+    padding: '12px', marginBottom: 12, borderRadius: 10,
+    background: 'var(--dsw-alias-bg-layer-1)', border: '1px dashed var(--dsw-alias-border-l2)',
+  },
+  formRow: { display: 'flex', gap: 8, marginBottom: 8 },
+  formField: { flex: 1, minWidth: 0 },
+  formActions: { display: 'flex', gap: 8, justifyContent: 'flex-end' },
 }
 
 /** Local wall-clock label for a ledger entry. */
@@ -259,6 +347,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
 
   const [draft, setDraft] = useState<Draft>(() => draftOf(view))
   const [dirty, setDirty] = useState(false)
+  const [showAddField, setShowAddField] = useState(false)
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState('')
 
@@ -359,6 +448,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
           ))}
         </div>
 
+        <CollapsibleSection title={t('section.coreState') || '核心状态'} defaultExpanded={true}>
         <div style={S.section}><span style={S.sectionTitle}>{t('section.scene')}</span></div>
         <div style={S.card}>
           <Field label={t('scene.location')} value={draft.scene.location} onChange={(v) => mutate((d) => { d.scene.location = v })} />
@@ -438,6 +528,45 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
             <Field label={t('flag.value')} value={row.value} onChange={(v) => mutate((d) => { d.flags[index].value = v })} />
           </div>
         ))}
+        </CollapsibleSection>
+
+        {/* Dynamic Fields Section */}
+        <CollapsibleSection title={t('section.dynamicFields') || '自定义字段'} defaultExpanded={true}>
+          {showAddField ? (
+            <AddFieldForm
+              onAdd={(newField) => {
+                mutate((d) => { d.dynamicFields.push(newField) })
+                setShowAddField(false)
+              }}
+              onCancel={() => setShowAddField(false)}
+            />
+          ) : (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              icon={<IconPlusOutline16 size={16} />}
+              onClick={() => setShowAddField(true)}
+              style={{ marginBottom: 12 }}
+            >
+              {t('add') || '添加字段'}
+            </Button>
+          )}
+          
+          {draft.dynamicFields.length === 0 && !showAddField && (
+            <div style={{ fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', padding: '8px 0' }}>
+              暂无自定义字段
+            </div>
+          )}
+          
+          {draft.dynamicFields.map((field, index) => (
+            <DynamicFieldEditor
+              key={field.id}
+              field={field}
+              onChange={(updated) => mutate((d) => { d.dynamicFields[index] = updated })}
+              onDelete={() => mutate((d) => { d.dynamicFields.splice(index, 1) })}
+            />
+          ))}
+        </CollapsibleSection>
       </div>
 
       <div style={S.footer}>
@@ -474,4 +603,190 @@ export function registerWorldStateTab(ctx: RrpClientContext): void {
       disposeType()
     }
   }, 'dsh-rrp: WorldState tab')
+}
+
+
+/** Collapsible section component */
+function CollapsibleSection(props: { 
+  title: string; 
+  defaultExpanded?: boolean; 
+  children: ReactNode 
+}): ReactNode {
+  const [expanded, setExpanded] = useState(props.defaultExpanded ?? true)
+  
+  return (
+    <div style={S.collapsible}>
+      <div 
+        style={S.collapseHeader} 
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span style={{ ...S.collapseArrow, ...(expanded ? S.collapseArrowExpanded : {}) }}>
+          ▶
+        </span>
+        <span style={S.collapseTitle}>{props.title}</span>
+      </div>
+      {expanded && <div style={S.collapseContent}>{props.children}</div>}
+    </div>
+  )
+}
+
+/** Dynamic field editor */
+function DynamicFieldEditor(props: {
+  field: DynamicFieldRow;
+  onChange: (updated: DynamicFieldRow) => void;
+  onDelete: () => void;
+}): ReactNode {
+  const { field, onChange, onDelete } = props
+  
+  return (
+    <div style={S.dynamicFieldCard}>
+      <div style={S.dynamicFieldHeader}>
+        <span style={S.dynamicFieldId}>{field.id}</span>
+        <span style={S.dynamicFieldType}>{field.type}</span>
+        <Tooltip label="删除字段">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            icon={<IconTrashOutline16 size={14} />} 
+            onClick={onDelete}
+          />
+        </Tooltip>
+      </div>
+      
+      {field.type === 'number' && (
+        <div style={S.grid2}>
+          <div style={S.half}>
+            <label style={S.field}>
+              <span style={S.fieldLabel}>值</span>
+              <Input 
+                type="number"
+                value={field.value} 
+                onChange={(e) => onChange({ ...field, value: e.target.value })}
+              />
+            </label>
+          </div>
+          <div style={S.half}>
+            <div style={S.grid2}>
+              <label style={S.field}>
+                <span style={S.fieldLabel}>最小值</span>
+                <Input 
+                  type="number"
+                  value={field.min ?? ''} 
+                  placeholder="无限制"
+                  onChange={(e) => onChange({ ...field, min: e.target.value })}
+                />
+              </label>
+              <label style={S.field}>
+                <span style={S.fieldLabel}>最大值</span>
+                <Input 
+                  type="number"
+                  value={field.max ?? ''} 
+                  placeholder="无限制"
+                  onChange={(e) => onChange({ ...field, max: e.target.value })}
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {field.type === 'string' && (
+        <label style={S.field}>
+          <span style={S.fieldLabel}>值</span>
+          <Input 
+            value={field.value} 
+            onChange={(e) => onChange({ ...field, value: e.target.value })}
+          />
+        </label>
+      )}
+      
+      {field.type === 'boolean' && (
+        <label style={S.field}>
+          <span style={S.fieldLabel}>值</span>
+          <Input 
+            value={field.value} 
+            placeholder="true / false"
+            onChange={(e) => onChange({ ...field, value: e.target.value })}
+          />
+        </label>
+      )}
+    </div>
+  )
+}
+
+/** Add new field form */
+function AddFieldForm(props: { onAdd: (field: DynamicFieldRow) => void; onCancel: () => void }): ReactNode {
+  const [id, setId] = useState('')
+  const [type, setType] = useState<'number' | 'string' | 'boolean'>('number')
+  const [value, setValue] = useState('')
+  const [error, setError] = useState('')
+  
+  const handleAdd = () => {
+    const trimmedId = id.trim()
+    if (!trimmedId) {
+      setError('字段 ID 不能为空')
+      return
+    }
+    if (!isValidFieldId(trimmedId)) {
+      setError('字段 ID 只能包含字母、数字、下划线')
+      return
+    }
+    
+    props.onAdd({
+      id: trimmedId,
+      type,
+      value: value || (type === 'number' ? '0' : type === 'boolean' ? 'false' : ''),
+      min: undefined,
+      max: undefined,
+    })
+    
+    setId('')
+    setValue('')
+    setError('')
+  }
+  
+  return (
+    <div style={S.addFieldForm}>
+      {error && <div style={{ fontSize: 11, color: 'var(--dsw-alias-status-error)', marginBottom: 8 }}>{error}</div>}
+      <div style={S.formRow}>
+        <label style={{ ...S.field, ...S.formField }}>
+          <span style={S.fieldLabel}>字段 ID</span>
+          <Input 
+            value={id} 
+            placeholder="magic_power" 
+            onChange={(e) => setId(e.target.value)}
+          />
+        </label>
+        <label style={{ ...S.field, flex: '0 0 120px' }}>
+          <span style={S.fieldLabel}>类型</span>
+          <select 
+            value={type} 
+            onChange={(e) => setType(e.target.value as any)}
+            style={{
+              width: '100%', height: 32, padding: '0 8px', borderRadius: 6,
+              border: '1px solid var(--dsw-alias-border-l1)',
+              background: 'var(--dsw-alias-bg-base)',
+              color: 'var(--dsw-alias-label-primary)',
+            }}
+          >
+            <option value="number">number</option>
+            <option value="string">string</option>
+            <option value="boolean">boolean</option>
+          </select>
+        </label>
+        <label style={{ ...S.field, ...S.formField }}>
+          <span style={S.fieldLabel}>初始值</span>
+          <Input 
+            value={value} 
+            placeholder={type === 'number' ? '0' : type === 'boolean' ? 'true/false' : ''}
+            onChange={(e) => setValue(e.target.value)}
+          />
+        </label>
+      </div>
+      <div style={S.formActions}>
+        <Button variant="ghost" size="sm" onClick={props.onCancel}>取消</Button>
+        <Button variant="primary" size="sm" onClick={handleAdd}>添加</Button>
+      </div>
+    </div>
+  )
 }
