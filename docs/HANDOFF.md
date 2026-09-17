@@ -97,9 +97,9 @@ dsh-rrp 插件
 ├── client half（src/client/index.ts 入口，React 18 + 宿主原子库）
 │   ├── 世界状态 tab      world-state-tab.tsx
 │   ├── 典籍 tab          sediment-tab.tsx
-│   ├── 卡片展厅 / 开卡    gallery-panel.tsx
-│   └── 沉浸视图          story-view.tsx
-└── 随包分发：presets/rp（基础 RP 模式）、cards/*（官方卡包）
+│   └── 卡片展厅 / 开卡    gallery-panel.tsx
+├── 随包分发：presets/rp（基础 RP 模式）、cards/*（官方卡包）
+└── 协同插件：dsh-synapse-rp（RP 剧情地图，独立 fork；见 reference/SYNAPSE_RP_CHANGES.md）
 ~~~
 
 ### 一次游玩的完整数据流
@@ -154,7 +154,6 @@ dsh-rrp 插件
 | `client/world-state-tab.tsx` | 世界状态：结构化就地编辑 + 活动账本（轮询） |
 | `client/sediment-tab.tsx` | 典籍：起草 / 审阅 / 确认丢弃 / 列表删除；当前 2s 轮询草稿状态 |
 | `client/gallery-panel.tsx` | 卡片展厅 + 开卡流（搜索 / 封面 / 技能 / 开场白 / 可选原生 Workspace 归组 / 主操作条） |
-| `client/story-view.tsx` | 「沉浸」视图（纯增量，不改宿主渲染） |
 | `scripts/inspect-context.mjs` | 解码会话日志、折叠 surface、统计上下文重复与缓存命中 |
 | `scripts/repair-legacy-sessions.mjs` | 修复旧 `rrp/*` 事件日志（补 `ignorable`，保留多帧 zstd） |
 | `scripts/link-dev.mjs` | 把本仓库 junction 进 `rp-dev` profile |
@@ -261,7 +260,7 @@ provider 缓存是**前缀缓存**。replace 会把消息搬到队尾、破坏�
 
 ### 刻意不做（不是遗漏）
 
-- **P1 正文节点 shadow**：替换宿主正文渲染，风险高、收益低；改走纯增量的「沉浸」视图。
+- **P1 正文节点 shadow**：替换宿主正文渲染，风险高、收益低；「沉浸」视图已整体移除，正文用宿主原生渲染。
 - **沉淀草稿在线编辑**：当前只支持「确认 / 丢弃」；编辑可后续加（草稿已在内存，改字段即可）。
 
 > 活动账本是否持久化尚不是重点；重点是去掉“内存 Map + HTTP 轮询”的平行状态通道。可否利用现有 `source.rrp` 元数据与会话投影，需要在实现前单独设计。
@@ -270,15 +269,16 @@ provider 缓存是**前缀缓存**。replace 会把消息搬到队尾、破坏�
 
 | 优先级 | 事项 | 说明 |
 | :--- | :--- | :--- |
-| 高 | **兑现或收窄 D5** | 当前 zod/UI 固定为 `characters / inventory / scene / flags`，与“动态新增结构与公式”不一致 |
-| 高 | **封住 D6 时序窗口** | 纪事官推演期间 UI 仍允许保存，可能出现旧推演结果最后覆盖玩家修改；不得用 CAS，按自然时序做简单封口 |
-| 中 | **移除两条客户端轮询** | 运行态优先复用 Jobs；领域变更历史优先走投影/宿主推送 |
-| 中 | **收回通用解析能力** | frontmatter 改正式 YAML；不要继续扩展当前 YAML-like 子集 |
-| 中 | **补生命周期清理** | `RETAINED`、`LEDGERS`、`PENDING` 等需要与真实会话/agent 生命周期对齐 |
-| 中 | **第二张官方测试卡** | 目前只有 `maid-heiress`，多卡作用域需要第二张卡才能肉眼验证 |
+| 中 | **移除两条客户端轮询（P3.1）** | 运行态优先复用 Jobs；领域变更历史优先走投影/宿主推送 |
+| 中 | **D5 端到端集成测试** | 目前仅由真机覆盖 Chronicler 动态建字段 |
+| 低 | **Synapse 旧缓存加固** | `normalizeState` / `messagesFor` 追加 `isRpInjectionText`，免手动删缓存 |
+| 低 | **第二张官方测试卡** | 目前只有 `maid-heiress`，多卡作用域需要第二张卡才能肉眼验证 |
 | 低 | **P4 输入区接管** | 先完成架构收敛，再扩展 `conversation.composer` |
 | 低 | 沉淀的 Scribe 草稿可编辑 | 面板加可编辑字段 |
 | 低 | 多语言 / 文案打磨 | locale 字典已分 ZH/EN |
+| 低 | Synapse 微状态标签 / 世界线命名 | 见 `reference/SYNAPSE_RP_VERIFICATION.md` |
+
+> **已完成（不再是待办）**：D5 动态字段、D6 时序窗口、P3.2 生命周期清理、P4 官方 YAML 解析器。
 
 ### 已知的「正常异常」
 
@@ -320,6 +320,7 @@ provider 缓存是**前缀缓存**。replace 会把消息搬到队尾、破坏�
 | Skills 与 D8 沉淀 | [`reference/SKILLS.md`](reference/SKILLS.md) §4.3 |
 | fork / 世界线 | [`reference/WORLDLINES.md`](reference/WORLDLINES.md) |
 | 记忆边界 | [`reference/MEMORY.md`](reference/MEMORY.md) · `dsh-rrp/contracts` |
+| 剧情地图 / 分支回溯 | [`reference/SYNAPSE_RP_CHANGES.md`](reference/SYNAPSE_RP_CHANGES.md) · [`reference/SYNAPSE_RP_VERIFICATION.md`](reference/SYNAPSE_RP_VERIFICATION.md) |
 | 术语表 | [`reference/GLOSSARY.md`](reference/GLOSSARY.md) |
 | 旧项目教训 | [`reference/LESSONS.md`](reference/LESSONS.md) |
 
@@ -343,6 +344,7 @@ See `docs/COMPLETION_ASSESSMENT.md` for detailed evaluation.
 - D6: Natural-time sequencing window (UI gate, no locks)
 - P3.2/P4: Technical debt cleanup
 - 19/19 real-device test scenarios pass
+- `dsh-synapse-rp` RP story map integrated (5/5 real-device pass)
 - UI/UX aligned with DSH native design
 
 **Quality Metrics**:

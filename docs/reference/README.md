@@ -26,6 +26,9 @@
 | [`SKILLS.md`](SKILLS.md) | Skills 是什么？如何替代 Lorebook？D8 沉淀怎么控？ | 做知识体系前 |
 | [`CARDS.md`](CARDS.md) | 卡包格式、目录契约与开卡流 | 做卡包/开卡前 |
 | [`WORLDLINES.md`](WORLDLINES.md) | 为什么 fork 后状态不穿帮？与 synapse 的边界 | 涉及分支/重放时 |
+| [`SYNAPSE_RP_ADAPTATION.md`](SYNAPSE_RP_ADAPTATION.md) | dsh-synapse 改造成 RP 剧情地图是否可行？改哪里？ | 动剧情地图前 |
+| [`SYNAPSE_RP_CHANGES.md`](SYNAPSE_RP_CHANGES.md) | 我们实际改造了什么？如何安装与验证？ | 维护/同步 fork 时 |
+| [`SYNAPSE_RP_VERIFICATION.md`](SYNAPSE_RP_VERIFICATION.md) | 实机验证结果？还留了哪些隐患与建议？ | 接手剧情地图前 |
 | [`MEMORY.md`](MEMORY.md) | 记忆放哪？外部记忆插件如何接入？我们绝不做什么 | 涉及记忆/检索时 |
 | [`UI_CEILING.md`](UI_CEILING.md) | DSH 原始 UI 能改装到什么程度？ | 做界面改造前 |
 | [`MANUAL_TEST.md`](MANUAL_TEST.md) | 实机验收清单与历史结果 | 每次涉及 UI/宿主行为后 |
