@@ -14,8 +14,8 @@ const VALID = {
 
 describe('Chronicler reply contract', () => {
   it('parses a bare JSON object and tolerates surrounding prose', () => {
-    expect(parseChroniclerReply(JSON.stringify(VALID))).toEqual(VALID)
-    expect(parseChroniclerReply('好的，结果如下：\n' + JSON.stringify(VALID) + '\n以上。')).toEqual(VALID)
+    expect(parseChroniclerReply(JSON.stringify(VALID))).toEqual({ state: VALID })
+    expect(parseChroniclerReply('好的，结果如下：\n' + JSON.stringify(VALID) + '\n以上。')).toEqual({ state: VALID })
   })
 
   it('rejects unusable replies', () => {

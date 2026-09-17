@@ -5,14 +5,18 @@
  * session-projection whole-value rule), so this fold simply adopts it.
  * Unrelated events return the SAME state reference, letting the registry's
  * Object.is gate do zero downstream work.
+ *
+ * D5: Automatic migration from legacy format to current format.
  */
 import { z } from 'zod'
 import { rrpPayloadOf } from '../state-payload.ts'
 import {
   WORLD_STATE_KEY,
   emptyWorldState,
+  isCoreKey,
   type WorldState,
   type WorldStateView,
+  type DynamicFieldValue,
 } from '../world-state.ts'
 
 const characterSchema = z.object({
@@ -35,28 +39,38 @@ const sceneSchema = z.object({
 
 const flagSchema = z.union([z.string(), z.number(), z.boolean()])
 
-/** Runtime state/view validator (zod 4, matching the host's dependency). */
+/** D5: DynamicFieldValue schema. */
+const dynamicFieldValueSchema = z.object({
+  type: z.enum(['number', 'string', 'boolean']),
+  value: z.union([z.number(), z.string(), z.boolean()]),
+  min: z.number().optional(),
+  max: z.number().optional(),
+})
+
+/** Runtime state/view validator. */
 export const worldStateSchema = z.object({
   characters: z.record(z.string(), characterSchema),
   inventory: z.record(z.string(), itemSchema),
   scene: sceneSchema,
   flags: z.record(z.string(), flagSchema),
-})
+}).catchall(dynamicFieldValueSchema)
 
 /**
  * The projection definition registered into `ctx.sessionProjections`.
- *
- * `wire.view` returns the state itself: the raw view reference is stable
- * exactly while `apply` keeps the state reference stable, which is what
- * suppresses redundant client publication.
  */
 export const worldStateProjection = {
   key: WORLD_STATE_KEY,
   stateSchema: worldStateSchema,
   stateVersion: 1,
   init: (): WorldState => emptyWorldState(),
-  apply: (state: WorldState, event: { type: string; data?: unknown }): WorldState =>
-    rrpPayloadOf(event)?.worldState ?? state,
+  apply: (state: WorldState, event: { type: string; data?: unknown }): WorldState => {
+    const payload = rrpPayloadOf(event)
+    if (!payload?.worldState) return state
+    
+    // D5: payload.worldState should already be in correct format
+    // (writers use createWorldState or direct construction)
+    return payload.worldState as WorldState
+  },
   wire: {
     viewSchema: worldStateSchema,
     view: (state: WorldState): WorldStateView => state,

@@ -4,9 +4,13 @@
  * Dependency-free vocabulary shared by the host projection fold
  * (src/projection/world-state.ts) and the client panel. Keep this module free
  * of node/zod imports: it is part of the CLIENT-reachable bundle.
+ *
+ * D5: Unified flat model. Core domains (characters/inventory/scene/flags) and
+ * dynamic fields share the same Record structure. Use helper functions to
+ * distinguish between them.
  */
 
-/** One character's live state. The Chronicler may add keys over time (D5). */
+/** One character's live state. */
 export interface WorldStateCharacter {
   affinity?: number
   mood?: string
@@ -30,39 +34,104 @@ export interface WorldStateScene {
 /** A flag: a secret learned, a promise made, an event triggered. */
 export type WorldStateFlag = string | number | boolean
 
-/** The world's factual slice — the player's correction surface (D6). */
+/**
+ * D5: Dynamic field types. Extensible for future types.
+ */
+export type DynamicFieldType = 'number' | 'string' | 'boolean'
+
+/**
+ * D5: A dynamic field value with optional constraints.
+ */
+export interface DynamicFieldValue {
+  type: DynamicFieldType
+  value: number | string | boolean
+  min?: number  // Only valid for type: 'number'
+  max?: number  // Only valid for type: 'number'
+}
+
+/**
+ * D5: WorldState — unified flat model.
+ * Core domains use their original types.
+ * Dynamic fields use DynamicFieldValue.
+ */
 export interface WorldState {
   characters: Record<string, WorldStateCharacter>
   inventory: Record<string, WorldStateItem>
   scene: WorldStateScene
   flags: Record<string, WorldStateFlag>
+  
+  /** D5: Dynamic fields stored as Record<string, DynamicFieldValue> */
+  [key: string]: 
+    | Record<string, WorldStateCharacter>
+    | Record<string, WorldStateItem>
+    | WorldStateScene
+    | Record<string, WorldStateFlag>
+    | DynamicFieldValue
 }
 
-/** The client-visible view. Identical today; a separate name allows versioning. */
+/** Core domain keys (reserved). */
+export const CORE_DOMAIN_KEYS = ['characters', 'inventory', 'scene', 'flags'] as const
+
+/** Check if a key is a core domain. */
+export function isCoreKey(key: string): boolean {
+  return CORE_DOMAIN_KEYS.includes(key as typeof CORE_DOMAIN_KEYS[number])
+}
+
+/** Get all dynamic field keys from a WorldState. */
+export function getDynamicKeys(state: WorldState): string[] {
+  return Object.keys(state).filter(k => !isCoreKey(k))
+}
+
+/** The client-visible view. */
 export type WorldStateView = WorldState
 
-/** Projection key, also the client `useProjection(key)` lookup key. */
+/** Projection key. */
 export const WORLD_STATE_KEY = 'rrpWorldState'
 
-/** A fresh empty state (never share one object across sessions). */
+/** A fresh empty state. */
 export function emptyWorldState(): WorldState {
-  return { characters: {}, inventory: {}, scene: {}, flags: {} }
+  return { 
+    characters: {}, 
+    inventory: {}, 
+    scene: {}, 
+    flags: {} 
+  }
 }
 
 /**
- * Safety caps. WorldState is the CURRENT slice, not an unbounded event log:
- * long play must not grow the injected fact baseline forever. Writers order
- * entries by importance, so a cap keeps the head.
+ * D5: Validate dynamic field ID (must be valid identifier, not reserved).
+ */
+export function isValidFieldId(id: string): boolean {
+  if (!/^[a-zA-Z0-9_]+$/.test(id)) return false
+  if (isCoreKey(id)) return false
+  return true
+}
+
+/**
+ * D5: Apply constraints to a dynamic field value.
+ */
+export function applyConstraints(field: DynamicFieldValue): DynamicFieldValue {
+  if (field.type === 'number' && typeof field.value === 'number') {
+    let value = field.value
+    if (field.min !== undefined && value < field.min) value = field.min
+    if (field.max !== undefined && value > field.max) value = field.max
+    if (value !== field.value) return { ...field, value }
+  }
+  return field
+}
+
+/**
+ * Safety caps.
  */
 export const WORLD_STATE_LIMITS = {
   characters: 24,
   inventory: 40,
   flags: 16,
-  /** Longest stored string value for one flag. */
   flagValueChars: 160,
+  dynamicFields: 32,
 } as const
 
-/** Keep at most `limit` entries of a record, preserving key order. */
+/** Keep at most `limit` entries, preserving key order. */
 function capRecord<T>(record: Record<string, T>, limit: number): Record<string, T> {
   const keys = Object.keys(record)
   if (keys.length <= limit) return record
@@ -71,22 +140,20 @@ function capRecord<T>(record: Record<string, T>, limit: number): Record<string, 
   return capped
 }
 
-/** Bound one flag value's length so a single verbose flag cannot dominate. */
+/** Bound one flag value's length. */
 function capFlagValue(value: WorldStateFlag): WorldStateFlag {
   if (typeof value !== 'string' || value.length <= WORLD_STATE_LIMITS.flagValueChars) return value
   return value.slice(0, WORLD_STATE_LIMITS.flagValueChars) + '…'
 }
 
 /**
- * Bound a state to the safety caps. Pure; returns the SAME reference when the
- * state is already within limits (so the projection's Object.is gate holds).
- * @param state - the state to bound.
- * @returns the bounded state, or the input when nothing changed.
+ * Bound a state to the safety caps. Pure; returns SAME reference when within limits.
  */
 export function pruneWorldState(state: WorldState): WorldState {
   const characters = capRecord(state.characters, WORLD_STATE_LIMITS.characters)
   const inventory = capRecord(state.inventory, WORLD_STATE_LIMITS.inventory)
   const head = capRecord(state.flags, WORLD_STATE_LIMITS.flags)
+  
   let flags = head
   for (const [key, value] of Object.entries(head)) {
     const capped = capFlagValue(value)
@@ -95,11 +162,32 @@ export function pruneWorldState(state: WorldState): WorldState {
       flags[key] = capped
     }
   }
-  if (characters === state.characters && inventory === state.inventory && flags === state.flags) return state
-  return { ...state, characters, inventory, flags }
+  
+  // Cap dynamic fields count and apply constraints
+  const dynamicKeys = getDynamicKeys(state)
+  let pruned: WorldState = { ...state, characters, inventory, flags }
+  let changed = characters !== state.characters || inventory !== state.inventory || flags !== state.flags
+  
+  if (dynamicKeys.length > WORLD_STATE_LIMITS.dynamicFields) {
+    changed = true
+    for (const key of dynamicKeys.slice(WORLD_STATE_LIMITS.dynamicFields)) {
+      delete pruned[key]
+    }
+  }
+  
+  for (const key of dynamicKeys.slice(0, WORLD_STATE_LIMITS.dynamicFields)) {
+    const field = state[key] as DynamicFieldValue
+    const constrained = applyConstraints(field)
+    if (constrained !== field) {
+      changed = true
+      pruned[key] = constrained
+    }
+  }
+  
+  return changed ? pruned : state
 }
 
-/** Recursively sort object keys so only real changes alter the rendered text. */
+/** Recursively sort object keys. */
 function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys)
   if (value !== null && typeof value === 'object') {
@@ -111,25 +199,16 @@ function sortKeys(value: unknown): unknown {
   return value
 }
 
-/**
- * Deterministic JSON (sorted keys). Key-order-only churn (the Chronicler
- * re-ordering "by importance") must NOT change the injected text: an unstable
- * rendering would invalidate the provider's prefix KV cache every turn.
- */
+/** Deterministic JSON (sorted keys). */
 function stableJson(value: unknown): string {
   return JSON.stringify(sortKeys(value))
 }
 
 /**
- * Render the state as the Author's fact baseline. Dependency-free so the
- * host injector and any client preview can share one wording.
- * The output is deterministic for a given state (see {@link stableJson}) so
- * unchanged state keeps the request prefix cacheable.
- * @param state - the current WorldState.
- * @returns the context text handed to the Author before a step.
+ * Render the state as the Author's fact baseline.
  */
 export function renderWorldState(state: WorldState): string {
-  return [
+  const lines = [
     '【世界状态 · 事实基准】',
     '以下是你执笔时必须遵守的当前事实（由纪事官维护，玩家可能已就地修正）。不要把它写进正文，也不要输出这段文字。',
     '',
@@ -137,7 +216,20 @@ export function renderWorldState(state: WorldState): string {
     'inventory: ' + stableJson(state.inventory),
     'scene: ' + stableJson(state.scene),
     'flags: ' + stableJson(state.flags),
-  ].join('\n')
+  ]
+  
+  // D5: Render dynamic fields
+  const dynamicKeys = getDynamicKeys(state).sort()
+  if (dynamicKeys.length > 0) {
+    lines.push('')
+    lines.push('# 自定义状态字段')
+    for (const key of dynamicKeys) {
+      const field = state[key] as DynamicFieldValue
+      lines.push(key + ': ' + stableJson(field.value))
+    }
+  }
+  
+  return lines.join('\n')
 }
 
 /** Placeholder shown when a field had no value. */
@@ -159,13 +251,7 @@ function unionKeys<T>(before: Record<string, T>, after: Record<string, T>): stri
 }
 
 /**
- * Human-readable digest of the difference between two states. This is what
- * makes a background state write attributable: the ledger stores it beside the
- * writer's name, so the player sees WHAT the Chronicler changed.
- * Dependency-free so host writers and the client panel share one wording.
- * @param prior - the state before the pass.
- * @param next - the state after the pass.
- * @returns a short clause list, or the no-change placeholder.
+ * Human-readable digest of the difference between two states.
  */
 export function diffWorldState(prior: WorldState, next: WorldState): string {
   const clauses: string[] = []
@@ -176,8 +262,8 @@ export function diffWorldState(prior: WorldState, next: WorldState): string {
     ['weather', '天气'],
   ]
   for (const [field, label] of sceneFields) {
-    if (prior.scene?.[field] !== next.scene?.[field]) {
-      clauses.push(label + ' ' + showField(prior.scene?.[field]) + ' → ' + showField(next.scene?.[field]))
+    if (prior.scene[field] !== next.scene[field]) {
+      clauses.push(label + ' ' + showField(prior.scene[field]) + ' → ' + showField(next.scene[field]))
     }
   }
 
@@ -238,7 +324,30 @@ export function diffWorldState(prior: WorldState, next: WorldState): string {
       clauses.push('移除事件「' + key + '」')
       continue
     }
-    if (before !== after) clauses.push('事件「' + key + '」' + showField(before) + ' → ' + showField(after))
+    if (before !== after) {
+      clauses.push('事件「' + key + '」' + showField(before) + ' → ' + showField(after))
+    }
+  }
+  
+  // D5: Diff dynamic fields
+  const priorDynamic = getDynamicKeys(prior)
+  const nextDynamic = getDynamicKeys(next)
+  const allDynamic = [...new Set([...priorDynamic, ...nextDynamic])]
+  
+  for (const key of allDynamic) {
+    const before = prior[key] as DynamicFieldValue | undefined
+    const after = next[key] as DynamicFieldValue | undefined
+    if (before === undefined) {
+      clauses.push('新增字段「' + key + '」')
+      continue
+    }
+    if (after === undefined) {
+      clauses.push('移除字段「' + key + '」')
+      continue
+    }
+    if (before.value !== after.value) {
+      clauses.push('字段「' + key + '」' + showField(before.value) + ' → ' + showField(after.value))
+    }
   }
 
   if (clauses.length === 0) return NO_WORLD_STATE_CHANGE
@@ -246,4 +355,18 @@ export function diffWorldState(prior: WorldState, next: WorldState): string {
   return clauses.length > shown.length
     ? shown.join('；') + '；…共 ' + clauses.length + ' 处变化'
     : shown.join('；')
+}
+
+/**
+ * D5: Helper to create a dynamic field.
+ */
+export function createDynamicField(
+  type: DynamicFieldType,
+  value: number | string | boolean,
+  constraints?: { min?: number; max?: number }
+): DynamicFieldValue {
+  const field: DynamicFieldValue = { type, value }
+  if (constraints?.min !== undefined) field.min = constraints.min
+  if (constraints?.max !== undefined) field.max = constraints.max
+  return applyConstraints(field)
 }

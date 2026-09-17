@@ -30,6 +30,6 @@ describe('WorldState pruning', () => {
     for (let index = 0; index < WORLD_STATE_LIMITS.flags + 10; index += 1) flags['f' + index] = true
     const reply = JSON.stringify({ characters: {}, inventory: {}, scene: {}, flags })
     const parsed = parseChroniclerReply(reply)
-    expect(Object.keys(parsed?.flags ?? {})).toHaveLength(WORLD_STATE_LIMITS.flags)
+    expect(Object.keys(parsed?.state?.flags ?? {})).toHaveLength(WORLD_STATE_LIMITS.flags)
   })
 })

@@ -4,9 +4,11 @@
  * D4: the Chronicler is a judgment-bearing agent, not a JSON extractor. The
  * prompt says what to record and what to ignore; the reply contract is a
  * COMPLETE WorldState (the session-projection whole-value rule).
+ *
+ * D5: Chronicler can create new dynamic fields when needed.
  */
 import { worldStateSchema } from '../projection/world-state.ts'
-import { pruneWorldState, type WorldState } from '../world-state.ts'
+import { pruneWorldState, isValidFieldId, createDynamicField, type WorldState, type DynamicFieldValue } from '../world-state.ts'
 
 /** The Chronicler's persona and rules. */
 export const CHRONICLER_SYSTEM_PROMPT = [
@@ -27,13 +29,22 @@ export const CHRONICLER_SYSTEM_PROMPT = [
   '6. 如实反映玩家行动造成的后果，但绝不替玩家角色杜撰新的行动、对白或心理。',
   '7. 忠于既有设定；可以补充合理的细节，但不得改写世界观。',
   '',
+  '【D5】自定义状态字段（动态扩展）：',
+  '- 当需要追踪四域（characters/inventory/scene/flags）无法容纳的状态时，可以创建自定义字段。',
+  '- 适用场景：魔法值、关系网络矩阵、声望等级、时间线事件等数值或特殊状态。',
+  '- 创建语法见 "chronicler-field-syntax" Skill（需要时调用该 Skill 查看详细规则）。',
+  '- 简要规则：字段 ID 只能用英文字母、数字、下划线；禁止同义重复；同一概念只创建一次。',
+  '',
   '输出格式（严格遵守）：',
   '- 只输出一个 JSON 对象，不要任何解释、Markdown 或代码围栏。',
-  '- 对象必须包含且仅包含四个字段：characters、inventory、scene、flags。',
+  '- 基础字段（必须包含）：characters、inventory、scene、flags。',
+  '- 可选字段：createFields（数组，创建新的自定义字段）。',
+  '- 自定义字段直接作为对象的顶层键值对。',
   '- characters 是「角色名 → { affinity?: number, mood?: string, appearance?: string, condition?: string }」的对象。',
   '- inventory 是「物品名 → { quantity?: number, note?: string }」的对象。',
   '- scene 是 { location?: string, time?: string, weather?: string }。',
   '- flags 是「长期事实名 → 简短事实值（string | number | boolean）」的对象；不要用它记流水账。',
+  '- createFields 是数组，格式：[{ "id": "字段名", "type": "number"|"string"|"boolean", "value": 初始值, "min": 最小值?, "max": 最大值? }]',
   '- 该 JSON 必须是变化后的完整状态（当前切面），而不是增量，也不是历史记录。',
 ].join('\n')
 
@@ -54,26 +65,87 @@ export function buildChroniclerPrompt(input: ChroniclerPromptInput): string {
     '以下是最近的剧情：',
     input.transcript,
     '',
-    '请据此输出更新后的完整 WorldState JSON（保留未被改变的词条）。只输出 JSON。',
+    '请据此输出更新后的完整 WorldState JSON（保留未被改变的词条）。',
+    '如需创建新的自定义字段，使用 createFields 数组。只输出 JSON。',
   ].join('\n')
 }
 
 /**
- * Parse the Chronicler's reply into a validated WorldState.
+ * D5: Field creation request from Chronicler.
+ */
+export interface CreateFieldRequest {
+  id: string
+  type: 'number' | 'string' | 'boolean'
+  value: number | string | boolean
+  min?: number
+  max?: number
+}
+
+/**
+ * D5: Chronicler reply with optional field creation.
+ */
+export interface ChroniclerReply {
+  state: WorldState
+  createFields?: CreateFieldRequest[]
+}
+
+/**
+ * Parse the Chronicler's reply into a validated WorldState with optional field creation.
  * Tolerates surrounding prose; rejects an invalid shape.
  * @param reply - the raw model output.
- * @returns the validated complete state, or undefined when unusable.
+ * @returns the validated state and field creation requests, or undefined when unusable.
  */
-export function parseChroniclerReply(reply: string): WorldState | undefined {
+export function parseChroniclerReply(reply: string): ChroniclerReply | undefined {
   const start = reply.indexOf('{')
   const end = reply.lastIndexOf('}')
   if (start === -1 || end <= start) return undefined
+  
   let parsed: unknown
   try {
     parsed = JSON.parse(reply.slice(start, end + 1))
   } catch {
     return undefined
   }
-  const result = worldStateSchema.safeParse(parsed)
-  return result.success ? pruneWorldState(result.data) : undefined
+  
+  if (!parsed || typeof parsed !== 'object') return undefined
+  const obj = parsed as Record<string, unknown>
+  
+  // Extract createFields if present
+  const createFields = obj.createFields as CreateFieldRequest[] | undefined
+  delete obj.createFields  // Remove from state object
+  
+  // Validate base state
+  const result = worldStateSchema.safeParse(obj)
+  if (!result.success) return undefined
+  
+  const state = pruneWorldState(result.data)
+  
+  // Validate and apply createFields
+  if (createFields && Array.isArray(createFields)) {
+    const validatedFields: CreateFieldRequest[] = []
+    
+    for (const req of createFields) {
+      // Validate field request
+      if (!req.id || typeof req.id !== 'string') continue
+      if (!isValidFieldId(req.id)) continue  // Check naming rules
+      if (req.id in state) continue  // Skip if field already exists
+      if (!['number', 'string', 'boolean'].includes(req.type)) continue
+      
+      // Check for duplicate with existing fields (prevent synonyms)
+      const existing = Object.keys(state).filter(k => !['characters', 'inventory', 'scene', 'flags'].includes(k))
+      const normalized = req.id.toLowerCase().replace(/_/g, '')
+      const isDuplicate = existing.some(k => k.toLowerCase().replace(/_/g, '') === normalized)
+      if (isDuplicate) continue
+      
+      validatedFields.push(req)
+      
+      // Apply to state
+      const field = createDynamicField(req.type, req.value, { min: req.min, max: req.max })
+      state[req.id] = field
+    }
+    
+    return { state, createFields: validatedFields.length > 0 ? validatedFields : undefined }
+  }
+  
+  return { state }
 }

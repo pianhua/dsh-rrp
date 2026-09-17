@@ -185,9 +185,16 @@ async function runInference(
       return { status: 'killed' }
     }
 
-    const next = parseChroniclerReply(text)
-    if (next === undefined) throw new Error('Chronicler reply was not a valid WorldState')
-    if (!publishState(session, faces.projections, { worldState: next })) {
+    const reply = parseChroniclerReply(text)
+    if (reply === undefined) throw new Error('Chronicler reply was not a valid WorldState')
+    
+    // D5: Log field creation if present
+    if (reply.createFields && reply.createFields.length > 0) {
+      const fieldNames = reply.createFields.map(f => f.id).join(', ')
+      console.log(TAG + ' Chronicler created new fields: ' + fieldNames)
+    }
+    
+    if (!publishState(session, faces.projections, { worldState: reply.state })) {
       throw new Error('WorldState append failed')
     }
     recordActivity(session.id, {
@@ -196,7 +203,7 @@ async function runInference(
       actor: 'chronicler',
       target: 'world-state',
       phase: 'committed',
-      detail: diffWorldState(prior, next),
+      detail: diffWorldState(prior, reply.state),
     })
     console.log(TAG + ' Chronicler committed WorldState for session ' + session.id)
     return { status: 'completed' }
