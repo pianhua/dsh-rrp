@@ -28,6 +28,7 @@ import {
   WORLD_STATE_KEY,
   getDynamicKeys,
   isValidFieldId,
+  isCoreKey,
   createDynamicField,
   type WorldState,
   type WorldStateCharacter,
@@ -743,6 +744,10 @@ function AddFieldForm(props: { onAdd: (field: DynamicFieldRow) => void; onCancel
     const trimmedId = id.trim()
     if (!trimmedId) {
       setError('字段 ID 不能为空')
+      return
+    }
+    if (isCoreKey(trimmedId)) {
+      setError('字段 ID 不能使用保留名称（characters, inventory, scene, flags）')
       return
     }
     if (!isValidFieldId(trimmedId)) {
