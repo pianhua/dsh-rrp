@@ -356,6 +356,20 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
     if (!dirty) setDraft(draftOf(view))
   }, [view, dirty])
 
+  // D6: When Chronicler finishes, reload projection to avoid stale edits
+  const [wasInferring, setWasInferring] = useState(false)
+  useEffect(() => {
+    if (inferenceRunning !== undefined) {
+      setWasInferring(true)
+    } else if (wasInferring) {
+      // Chronicler just finished, reload from projection
+      setDraft(draftOf(view))
+      setDirty(false)
+      setWasInferring(false)
+      setStatus(t('chronicler.completed') || '纪事官已更新状态')
+    }
+  }, [inferenceRunning, wasInferring, view, t])
+
   // The activity ledger is host-side and transient: poll it while mounted so
   // the "最近变更" line and the running indicator stay current.
   useEffect(() => {
@@ -570,11 +584,15 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
       </div>
 
       <div style={S.footer}>
-        <span style={S.status}>{status}</span>
+        <span style={S.status}>
+          {inferenceRunning !== undefined 
+            ? (t('chronicler.running') || '纪事官推演中，请稍候...') 
+            : status}
+        </span>
         <Button
           variant="primary"
           icon={saving ? <IconLoadingOutline16 size={16} /> : undefined}
-          disabled={sessionId === undefined || saving}
+          disabled={sessionId === undefined || saving || inferenceRunning !== undefined}
           onClick={save}
         >
           {saving ? t('saving') : t('save')}
