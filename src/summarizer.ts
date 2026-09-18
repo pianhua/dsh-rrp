@@ -172,7 +172,7 @@ async function runSummary(
   const activityId = randomUUID()
   const stamp = (): string => new Date().toISOString()
   try {
-    const full = transcriptOf(session)
+    const full = transcriptOf(session, TRANSCRIPT_LIMIT)
     if (full.trim().length === 0) return { status: 'completed' }
     const transcript = full.length > TRANSCRIPT_LIMIT ? full.slice(full.length - TRANSCRIPT_LIMIT) : full
 

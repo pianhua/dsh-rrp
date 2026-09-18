@@ -23,8 +23,10 @@ import { NO_WORLD_STATE_CHANGE, WORLD_STATE_KEY, diffWorldState, emptyWorldState
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'chronicler'
-/** Cap the transcript handed to the Chronicler (characters, tail-biased). */
-const TRANSCRIPT_LIMIT = 8000
+/** Default cap for broad transcript rendered for summarization / sediment. */
+export const DEFAULT_TRANSCRIPT_LIMIT = 16000
+/** Cap the latest turn transcript handed to the Chronicler (characters, tail-biased). */
+export const CHRONICLER_TRANSCRIPT_LIMIT = 8000
 
 /** Structural host faces, kept local so the bundle imports no host package. */
 interface SessionLike {
@@ -289,12 +291,12 @@ export function latestTurnTranscriptOf(session: SessionLike): string {
     parts.push('【' + (event.type === 'user/message' ? '玩家' : '叙述') + '】\n' + text)
   }
   const joined = parts.join('\n\n')
-  return joined.length > TRANSCRIPT_LIMIT ? joined.slice(joined.length - TRANSCRIPT_LIMIT) : joined
+  return joined.length > CHRONICLER_TRANSCRIPT_LIMIT ? joined.slice(joined.length - CHRONICLER_TRANSCRIPT_LIMIT) : joined
 }
 
 /** Render the session's user/assistant text blocks, tail-biased and capped.
  * Exported so the Summarizer consumes the same rendering. */
-export function transcriptOf(session: SessionLike): string {
+export function transcriptOf(session: SessionLike, limit: number = DEFAULT_TRANSCRIPT_LIMIT): string {
   const parts: string[] = []
   for (const event of session.snapshotEvents()) {
     if (event.type !== 'user/message' && event.type !== 'assistant/message') continue
@@ -306,7 +308,7 @@ export function transcriptOf(session: SessionLike): string {
     parts.push('【' + (event.type === 'user/message' ? '玩家' : '叙述') + '】\n' + text)
   }
   const joined = parts.join('\n\n')
-  return joined.length > TRANSCRIPT_LIMIT ? joined.slice(joined.length - TRANSCRIPT_LIMIT) : joined
+  return joined.length > limit ? joined.slice(joined.length - limit) : joined
 }
 
 /** Recursively collect { type: 'text', text } blocks from an event payload. */
