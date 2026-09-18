@@ -15,6 +15,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 import { publishState } from './state-publisher.ts'
+import { pruneWorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
 /** Same-origin exact route the panel posts to. */
@@ -111,7 +112,8 @@ export function registerCorrectionRoute(ctx: Context): void {
           send(res, 404, { error: 'unknown session' })
           return
         }
-        const published = publishState(session, projections, { worldState: state.data })
+        const pruned = pruneWorldState(state.data)
+        const published = publishState(session, projections, { worldState: pruned })
         if (!published) {
           send(res, 500, { error: 'WorldState write failed' })
           return
