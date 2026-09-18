@@ -35,6 +35,15 @@ export interface RrpActivity {
   phase: RrpPhase
   /** Human change digest (committed/corrected), error text (failed), or none. */
   detail?: string
+  /**
+   * Locale key of a FIXED phrase (client translates via `t(detailKey)`), so
+   * host-side writers never hardcode player-facing copy. `{name}` in the
+   * translated text is replaced with `detailName`. Dynamic digests and error
+   * text stay in `detail` untranslated.
+   */
+  detailKey?: string
+  /** Name interpolated into the `detailKey` template. */
+  detailName?: string
 }
 
 /** The panel only needs a recent tail; the ledger stays bounded. */

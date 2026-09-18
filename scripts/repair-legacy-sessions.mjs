@@ -19,6 +19,11 @@
  *   node scripts/repair-legacy-sessions.mjs --apply               # rewrite + .bak
  *   node scripts/repair-legacy-sessions.mjs --workspace <dir>     # one workspace
  *   node scripts/repair-legacy-sessions.mjs --apply --workspace --D-projects-dsh-rrp--
+ *
+ * ONE-SHOT TOOL: this rewrites host session logs directly (no host API can
+ * mark events ignorable), which is only justified because the host itself
+ * cannot load these legacy logs at all. Run once per affected machine, verify
+ * the sessions load, then retire this script — do not build on it.
  */
 import { copyFileSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'

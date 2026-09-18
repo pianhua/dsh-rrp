@@ -16,7 +16,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
-import type { CardContext } from './card-types.ts'
+import { interpolateCardText, type CardContext } from './card-types.ts'
 import { isCardId, presetIdForCard } from './preset-id.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 import { publishState } from './state-publisher.ts'
@@ -257,7 +257,8 @@ export function registerStartRoute(ctx: Context): void {
         if (typeof request.opening === 'string' && request.opening.trim().length > 0) {
           const boundary = projections.stateOf(session, 'turnBoundary') as { lastTurn?: number } | undefined
           const lastTurn = boundary?.lastTurn ?? 0
-          openingWritten = appendOpening(session, request.opening.trim(), routeOf(agents, session.id), lastTurn)
+          const opening = interpolateCardText(request.opening.trim(), card?.player)
+          openingWritten = appendOpening(session, opening, routeOf(agents, session.id), lastTurn)
         }
 
         console.log(

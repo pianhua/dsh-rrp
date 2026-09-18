@@ -17,7 +17,7 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
 import { readCard } from './cards.ts'
-import { CARD_KEY, type CardContext } from './card-types.ts'
+import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
 import { transcriptOf } from './chronicler.ts'
 import { SCRIBE_SYSTEM_PROMPT, buildScribePrompt, parseScribeReply } from './agents/scribe.ts'
 import { ensureSedimentArmed, invalidateSediment } from './sediment-runtime.ts'
@@ -174,11 +174,24 @@ function scheduleDraft(faces: ScribeFaces, session: SessionLike, topic: string):
   recordActivity(session.id, {
     id: activityId, at: new Date().toISOString(), actor: 'scribe', target: 'sediment', phase: 'started',
   })
+  const owner = faces.agents.get(session.id)
   try {
     faces.jobs.start({
       kind: 'scribe',
       label: '典籍编纂 Scribe · ' + session.id.slice(0, 8),
-      run: () => ({ cancel: () => {}, done: runDraft(faces, session, route, topic, activityId) }),
+      ...(owner === undefined ? {} : { owner }),
+      run: () => {
+        const controller = new AbortController()
+        let cancelled = false
+        const done = runDraft(faces, session, route, topic, activityId, controller.signal, () => cancelled)
+        return {
+          cancel: () => {
+            cancelled = true
+            controller.abort()
+          },
+          done,
+        }
+      },
     })
   } catch (error) {
     DRAFTING.delete(session.id)
@@ -193,18 +206,22 @@ async function runDraft(
   route: { provider: string; model: string },
   topic: string,
   activityId: string,
+  signal: AbortSignal,
+  isCancelled: () => boolean,
 ): Promise<{ status: string }> {
   const stamp = (): string => new Date().toISOString()
   try {
     const state = faces.projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined
     const worldState = state === undefined ? '（暂无状态）' : renderWorldState(state)
+    const card = faces.projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
+    const cardBaseline = card === null || card === undefined ? '' : renderCardContext(card)
     const existing = [
       ...reservedNames(faces.projections, session),
       ...currentSediment(faces.projections, session).map((skill) => skill.name),
     ]
     const transcript = transcriptOf(session)
     if (transcript.trim().length === 0) {
-      recordActivity(session.id, { id: activityId, at: stamp(), actor: 'scribe', target: 'sediment', phase: 'failed', detail: '没有可用的剧情' })
+      recordActivity(session.id, { id: activityId, at: stamp(), actor: 'scribe', target: 'sediment', phase: 'failed', detailKey: 'detail.noTranscript' })
       return { status: 'completed' }
     }
 
@@ -215,35 +232,42 @@ async function runDraft(
       messages: [{
         id: randomUUID(),
         role: 'user',
-        content: [{ type: 'text', text: buildScribePrompt({ topic, transcript, worldState, existing }) }],
+        content: [{ type: 'text', text: buildScribePrompt({ topic, transcript, worldState, cardBaseline, existing }) }],
         source: { kind: 'plugin', plugin: 'dsh-rrp' },
       }],
       sessionId: session.id,
+      signal,
     })
     let text = ''
     for await (const chunk of stream) {
       if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') text += chunk.text
     }
+    if (isCancelled()) {
+      recordActivity(session.id, { id: activityId, at: stamp(), actor: 'scribe', target: 'sediment', phase: 'failed', detailKey: 'detail.cancelled' })
+      return { status: 'killed' }
+    }
     const draft = parseScribeReply(text)
     if (draft === undefined) {
       recordActivity(session.id, {
-        id: activityId, at: stamp(), actor: 'scribe', target: 'sediment', phase: 'failed', detail: '没有可沉淀的稳定设定',
+        id: activityId, at: stamp(), actor: 'scribe', target: 'sediment', phase: 'failed', detailKey: 'detail.nothingToSediment',
       })
       return { status: 'completed' }
     }
     PENDING.set(session.id, draft)
     recordActivity(session.id, {
       id: activityId, at: stamp(), actor: 'scribe', target: 'sediment', phase: 'committed',
-      detail: '草稿：' + draft.name + '（待确认）',
+      detailKey: 'detail.stagedDraft', detailName: draft.name,
     })
     console.log(TAG + ' Scribe staged a draft for ' + session.id + ': ' + draft.name)
     return { status: 'completed' }
   } catch (error) {
     recordActivity(session.id, {
       id: activityId, at: stamp(), actor: 'scribe', target: 'sediment', phase: 'failed',
-      detail: String((error as { message?: string })?.message ?? error),
+      ...(isCancelled()
+        ? { detailKey: 'detail.cancelled' }
+        : { detail: String((error as { message?: string })?.message ?? error) }),
     })
-    return { status: 'failed' }
+    return { status: isCancelled() ? 'killed' : 'failed' }
   } finally {
     DRAFTING.delete(session.id)
   }
@@ -274,7 +298,13 @@ export function registerSedimentRoute(ctx: Context): void {
       kind: 'exact',
       path: SEDIMENT_PATH,
       handler: async (req, res) => {
-        const url = new URL(req.url ?? '', 'http://localhost')
+        let url: URL
+        try {
+          url = new URL(req.url ?? '', 'http://localhost')
+        } catch {
+          send(res, 400, { error: 'invalid URL' })
+          return
+        }
         let parsed: unknown
         if (req.method === 'POST') {
           try {
@@ -299,91 +329,97 @@ export function registerSedimentRoute(ctx: Context): void {
         }
         ensureSedimentArmed(ctx, sessionId)
 
-        if (req.method === 'GET') {
-          send(res, 200, {
-            skills: currentSediment(projections, session).map(sedimentView),
-            pending: PENDING.get(sessionId) ?? null,
-            drafting: DRAFTING.has(sessionId),
-          })
-          return
-        }
-
-        if (req.method === 'DELETE') {
-          const name = url.searchParams.get('name') ?? ''
-          const exists = currentSediment(projections, session).some((skill) => skill.name === name)
-          if (!exists) {
-            send(res, 404, { ok: false, removed: false })
+        try {
+          if (req.method === 'GET') {
+            send(res, 200, {
+              skills: currentSediment(projections, session).map(sedimentView),
+              pending: PENDING.get(sessionId) ?? null,
+              drafting: DRAFTING.has(sessionId),
+            })
             return
           }
-          const published = publishState(session, projections, { sediment: { kind: 'remove', name } })
-          if (!published) {
-            send(res, 500, { error: '典籍事件写入失败' })
+
+          if (req.method === 'DELETE') {
+            const name = url.searchParams.get('name') ?? ''
+            const exists = currentSediment(projections, session).some((skill) => skill.name === name)
+            if (!exists) {
+              send(res, 404, { ok: false, removed: false })
+              return
+            }
+            const published = publishState(session, projections, { sediment: { kind: 'remove', name } })
+            if (!published) {
+              send(res, 500, { error: '典籍事件写入失败' })
+              return
+            }
+            invalidateSediment(sessionId)
+            send(res, 200, { ok: true, removed: true })
             return
           }
-          invalidateSediment(sessionId)
-          send(res, 200, { ok: true, removed: true })
-          return
-        }
 
-        if (req.method !== 'POST') {
-          send(res, 405, { error: 'method not allowed' })
-          return
-        }
-
-        const request = parsed as { action?: unknown; topic?: unknown; draft?: unknown }
-        const action = typeof request.action === 'string' ? request.action : ''
-
-        if (action === 'draft') {
-          if (faces === undefined) {
-            send(res, 503, { error: 'scribe unavailable' })
+          if (req.method !== 'POST') {
+            send(res, 405, { error: 'method not allowed' })
             return
           }
-          const topic = typeof request.topic === 'string' ? request.topic : ''
-          scheduleDraft(faces, session, topic)
-          send(res, 200, { ok: true, drafting: DRAFTING.has(sessionId) })
-          return
-        }
 
-        if (action === 'discard') {
-          PENDING.delete(sessionId)
-          send(res, 200, { ok: true })
-          return
-        }
+          const request = parsed as { action?: unknown; topic?: unknown; draft?: unknown }
+          const action = typeof request.action === 'string' ? request.action : ''
 
-        if (action === 'confirm' || action === 'manual') {
-          const candidate = (request.draft ?? PENDING.get(sessionId)) as Partial<SedimentEntry> | undefined
-          if (candidate === undefined || candidate === null) {
-            send(res, 400, { error: '没有待确认的草稿' })
+          if (action === 'draft') {
+            if (faces === undefined) {
+              send(res, 503, { error: 'scribe unavailable' })
+              return
+            }
+            const topic = typeof request.topic === 'string' ? request.topic : ''
+            scheduleDraft(faces, session, topic)
+            send(res, 200, { ok: true, drafting: DRAFTING.has(sessionId) })
             return
           }
-          const existing = currentSediment(projections, session)
-          const result = validateSedimentEntry(
-            candidate,
-            existing.map((skill) => skill.name),
-            reservedNames(projections, session),
-          )
-          if (!result.ok) {
-            send(res, 400, { error: result.error })
-            return
-          }
-          const draft = result.skill
-          const published = publishState(session, projections, { sediment: { kind: 'add', skill: draft } })
-          if (!published) {
-            send(res, 500, { error: '典籍事件写入失败' })
-            return
-          }
-          PENDING.delete(sessionId)
-          invalidateSediment(sessionId)
-          recordActivity(sessionId, {
-            id: randomUUID(), at: new Date().toISOString(), actor: 'player', target: 'sediment', phase: 'corrected',
-            detail: '已沉淀：' + draft.name,
-          })
-          console.log(TAG + ' sediment committed for ' + sessionId + ': ' + draft.name)
-          send(res, 200, { ok: true, skill: sedimentView(draft) })
-          return
-        }
 
-        send(res, 400, { error: 'unknown action' })
+          if (action === 'discard') {
+            PENDING.delete(sessionId)
+            send(res, 200, { ok: true })
+            return
+          }
+
+          if (action === 'confirm' || action === 'manual') {
+            const candidate = (request.draft ?? PENDING.get(sessionId)) as Partial<SedimentEntry> | undefined
+            if (candidate === undefined || candidate === null) {
+              send(res, 400, { error: '没有待确认的草稿' })
+              return
+            }
+            const existing = currentSediment(projections, session)
+            const result = validateSedimentEntry(
+              candidate,
+              existing.map((skill) => skill.name),
+              reservedNames(projections, session),
+            )
+            if (!result.ok) {
+              send(res, 400, { error: result.error })
+              return
+            }
+            const draft = result.skill
+            const published = publishState(session, projections, { sediment: { kind: 'add', skill: draft } })
+            if (!published) {
+              send(res, 500, { error: '典籍事件写入失败' })
+              return
+            }
+            PENDING.delete(sessionId)
+            invalidateSediment(sessionId)
+            recordActivity(sessionId, {
+              id: randomUUID(), at: new Date().toISOString(), actor: 'player', target: 'sediment', phase: 'corrected',
+              detailKey: 'detail.sedimented', detailName: draft.name,
+            })
+            console.log(TAG + ' sediment committed for ' + sessionId + ': ' + draft.name)
+            send(res, 200, { ok: true, skill: sedimentView(draft) })
+            return
+          }
+
+          send(res, 400, { error: 'unknown action' })
+        } catch (error) {
+          // Projection reads / card reads must never escape as an unhandled
+          // rejection; degrade to a JSON 500 like the sibling routes.
+          send(res, 500, { error: String((error as { message?: string })?.message ?? error) })
+        }
       },
     })
     console.log(TAG + ' sediment route armed at ' + SEDIMENT_PATH)

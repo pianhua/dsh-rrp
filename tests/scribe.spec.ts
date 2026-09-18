@@ -32,4 +32,16 @@ describe('Scribe reply contract', () => {
     expect(prompt).toContain('青丘的使者来了')
     expect(SCRIBE_SYSTEM_PROMPT).toContain('只新增')
   })
+
+  it('carries the card baseline (worldCore + persona) when supplied', () => {
+    const prompt = buildScribePrompt({
+      topic: '',
+      transcript: '【叙述】\n青丘的使者来了。',
+      worldState: 'characters: {}',
+      cardBaseline: '【当前卡包 · 设定基准】\n卡包：女仆与继承人\n—— 世界核心 ——\n青丘法则',
+      existing: [],
+    })
+    expect(prompt).toContain('青丘法则')
+    expect(prompt).toContain('不得违背')
+  })
 })

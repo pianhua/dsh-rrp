@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { listCards, mountSkillsForCard, parseCardMarkdown, parseFrontmatter, readCard } from '../src/cards.ts'
+import { interpolateCardText } from '../src/card-types.ts'
 
 const SAMPLE = `---
 id: demo
@@ -22,6 +23,16 @@ persona: |
 
 正文。
 `
+
+describe('player variable interpolation', () => {
+  it('resolves {{player.*}} and leaves unknown variables untouched', () => {
+    const player = { name: '无名客', description: '独行者' }
+    expect(interpolateCardText('你好，{{player.name}}——{{player.description}}', player)).toBe('你好，无名客——独行者')
+    expect(interpolateCardText('{{player.name}}与{{unknown.var}}', player)).toBe('无名客与{{unknown.var}}')
+    expect(interpolateCardText('没有变量', undefined)).toBe('没有变量')
+    expect(interpolateCardText('{{player.name}}', undefined)).toBe('')
+  })
+})
 
 describe('card frontmatter parser', () => {
   it('parses inline arrays, one nesting level, and a block scalar', () => {
@@ -73,6 +84,18 @@ describe('the shipped test card', () => {
 
   it('is discoverable from the shipped root', () => {
     expect(listCards().map((card) => card.id)).toContain('maid-heiress')
+    expect(listCards().map((card) => card.id)).toContain('yanmen-inn')
+  })
+
+  it('parses the second shipped card: wuxia mystery pack with its own skills', () => {
+    const pack = readCard('yanmen-inn')
+    expect(pack).toBeDefined()
+    expect(pack?.meta.name).toBe('雪夜雁门客栈')
+    expect(pack?.meta.player?.name).toBe('无名客')
+    expect(pack?.worldCore).toContain('暴雪封山')
+    expect(pack?.openings[0]?.body).toContain('{{player.name}}')
+    expect(pack?.initialState?.scene?.location).toContain('孤灯客栈')
+    expect(pack?.skills.map((skill) => skill.id).sort()).toEqual(['inn', 'old-sword', 'world-setting'])
   })
 
   it('parses the whole pack: opening, initial state, and skills', () => {

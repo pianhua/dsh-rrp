@@ -26,7 +26,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { listCards, mountSkillsForCard } from './cards.ts'
 import { harnessHome } from './home.ts'
-import { BASE_PRESET_ID, belongsToRpPreset, presetIdForCard } from './preset-id.ts'
+import { BASE_PRESET_ID, belongsToRpPreset, isCardId, presetIdForCard } from './preset-id.ts'
 
 /** Base preset id, also the directory name; must satisfy the roster's PRESET_ID. */
 export const PRESET_ID = BASE_PRESET_ID
@@ -137,6 +137,27 @@ function materializeOne(dir: string, cardId: string | undefined, home: string | 
   const marker = { managedBy: MANAGED_BY, files: contentHashes(dir) }
   writeFileSync(join(dir, MARKER_FILE), JSON.stringify(marker, null, 2) + '\n')
   return { dir, action: existed ? 'refreshed' : 'created' }
+}
+
+/**
+ * Materialize one card's preset when it is missing — a card dropped into
+ * `cards/` after the plugin booted has no `rp-<card-id>` preset yet, and the
+ * gallery's start flow (`agentPresets.select`) needs it to exist. Called from
+ * the read-only cards route so discovery of a new card makes it startable
+ * without a plugin reload. Existing presets are left untouched (user edits
+ * win; stale own-copies refresh at the next boot).
+ * @param cardId - the card's canonical id.
+ * @param home - harness home override; defaults to DSH_HOME or ~/.dsh.
+ * @returns the materialization action (`exists` when already materialized),
+ *   or undefined for an illegal id.
+ */
+export function ensureCardPreset(cardId: string, home?: string): MaterializeOutcome['action'] | 'exists' | undefined {
+  if (!isCardId(cardId)) return undefined
+  const dir = presetDir(home, presetIdForCard(cardId))
+  if (existsSync(dir)) {
+    return isOursUnmodified(dir) ? 'exists' : 'left-user'
+  }
+  return materializeOne(dir, cardId, home).action
 }
 
 /**

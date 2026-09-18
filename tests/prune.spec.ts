@@ -17,11 +17,11 @@ describe('WorldState pruning', () => {
     expect(pruned.flags['事件' + (WORLD_STATE_LIMITS.flags + 4)]).toBeUndefined()
   })
 
-  it('caps a single verbose flag value', () => {
+  it('caps a single verbose flag value, ellipsis included in the limit', () => {
     const long = 'x'.repeat(WORLD_STATE_LIMITS.flagValueChars + 20)
     const pruned = pruneWorldState({ ...emptyWorldState(), flags: { 秘密: long } })
     const value = pruned.flags['秘密'] as string
-    expect(value.length).toBe(WORLD_STATE_LIMITS.flagValueChars + 1)
+    expect(value.length).toBe(WORLD_STATE_LIMITS.flagValueChars)
     expect(value.endsWith('…')).toBe(true)
   })
 

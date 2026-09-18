@@ -76,26 +76,36 @@ describe('Chronicler reply contract', () => {
 })
 
 /** Minimal fake host: records the session feed listener and the started job. */
-function fakeHost(preset: string, options: { failAppend?: boolean; stateOf?: (session: unknown, key: string) => unknown } = {}) {
+function fakeHost(preset: string, options: {
+  failAppend?: boolean
+  stateOf?: (session: unknown, key: string) => unknown
+  events?: Array<{ type: string; data: unknown }>
+  llm?: unknown
+} = {}) {
   const listeners = new Map<string, (...args: unknown[]) => void>()
   const appended: Array<{ type: string; data: unknown }> = []
+  let startCount = 0
   let started: { kind: string; label: string; run(): { cancel(reason?: string): void; done: Promise<{ status: string }> } } | undefined
+
+  const events = options.events ?? [
+    { type: 'user/message', data: { content: [{ type: 'text', text: '我推门而入。' }] } },
+    { type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟，暖意扑面。' }] } },
+    { type: 'step/end', data: { turn: 1, step: 0 } },
+  ]
 
   const session = {
     id: 'session-1',
     append(type: string, data: unknown) {
       if (options.failAppend === true) throw new Error('append failed')
       appended.push({ type, data })
+      // The real host's snapshot reflects every appended event, state writes included.
+      events.push({ type, data })
       return { type, data }
     },
-    snapshotEvents: () => [
-      { type: 'user/message', data: { content: [{ type: 'text', text: '我推门而入。' }] } },
-      { type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟，暖意扑面。' }] } },
-      { type: 'step/end', data: { turn: 1, step: 0 } },
-    ],
+    snapshotEvents: () => events,
   }
 
-  const llm = {
+  const llm = options.llm ?? {
     async *stream() {
       yield { type: 'text-delta', text: JSON.stringify(VALID) }
     },
@@ -103,6 +113,7 @@ function fakeHost(preset: string, options: { failAppend?: boolean; stateOf?: (se
   const jobs = {
     attachController: () => () => {},
     start(spec: typeof started) {
+      startCount += 1
       started = spec
       return 'chronicler-1'
     },
@@ -127,7 +138,7 @@ function fakeHost(preset: string, options: { failAppend?: boolean; stateOf?: (se
       return () => {}
     },
   }
-  return { ctx, session, listeners, appended, started: () => started }
+  return { ctx, session, listeners, appended, started: () => started, startCount: () => startCount }
 }
 
 describe('Chronicler trigger', () => {
@@ -158,6 +169,55 @@ describe('Chronicler trigger', () => {
     expect(committed.actor).toBe('chronicler')
     expect(committed.target).toBe('world-state')
     expect(committed.detail).toContain('新增角色「毓忻」')
+  })
+
+  it('serializes rapid turns: the deferred one becomes a covering rerun', async () => {
+    forgetState('session-1'); forgetActivity('session-1')
+    const events = [
+      { type: 'user/message', data: { content: [{ type: 'text', text: '我推门而入。' }] } },
+      { type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟，暖意扑面。' }] } },
+    ]
+    const prompts: string[] = []
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    let calls = 0
+    const llm = {
+      async *stream(options: { messages: Array<{ content: Array<{ type: string; text: string }> }> }) {
+        calls += 1
+        prompts.push(options.messages[0]?.content[0]?.text ?? '')
+        await gate
+        const reply = calls === 1 ? VALID : { ...VALID, flags: { 已知晓密道: true, 第二轮已处理: true } }
+        yield { type: 'text-delta', text: JSON.stringify(reply) }
+      },
+    }
+    const host = fakeHost('rp', { events, llm })
+    registerChronicler(host.ctx as never, 'rp')
+    const feed = host.listeners.get('session/event')!
+
+    // Turn 1 starts; while it is still streaming, turn 2 completes.
+    feed?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    events.push(
+      { type: 'user/message', data: { content: [{ type: 'text', text: '我转身离开。' }] } },
+      { type: 'assistant/message', data: { content: [{ type: 'text', text: '她目送我远去。' }] } },
+    )
+    feed?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    expect(host.startCount()).toBe(1)
+
+    // Finish turn 1: the queued rerun must start by itself...
+    release()
+    const first = await host.started()!.run().done
+    expect(first.status).toBe('completed')
+    expect(host.startCount()).toBe(2)
+    // ...and fold turn 2 into a second state write.
+    const second = await host.started()!.run().done
+    expect(second.status).toBe('completed')
+    const stateWrites = host.appended.filter((entry) => entry.type === 'user/message')
+    expect(stateWrites).toHaveLength(2)
+    const secondState = (stateWrites[1]?.data as { source: { rrp: { worldState: { flags: Record<string, unknown> } } } }).source.rrp.worldState
+    expect(secondState.flags['第二轮已处理']).toBe(true)
+    // The rerun's prompt covers the unprocessed turn 2 prose, not turn 1 again.
+    expect(prompts[1]).toContain('我转身离开')
+    expect(prompts[1]).not.toContain('我推门而入')
   })
 
   it('ignores sessions on other presets', () => {
@@ -202,7 +262,7 @@ describe('Chronicler trigger', () => {
     expect(host.appended.filter((entry) => entry.type === 'user/message')).toHaveLength(0)
     const activity = readActivity('session-1').entries
     expect(activity.map((entry) => entry.phase)).toEqual(['started', 'stale'])
-    expect(activity[1]?.detail).toContain('玩家已就地矫正')
+    expect(activity[1]?.detailKey).toBe('detail.staleDiscarded')
   })
 
   it('skips publish and marks ledger as no change when inferred state matches prior', async () => {
@@ -222,7 +282,7 @@ describe('Chronicler trigger', () => {
     expect(host.appended.filter((entry) => entry.type === 'user/message')).toHaveLength(0)
     const activity = readActivity('session-1').entries
     expect(activity.map((entry) => entry.phase)).toEqual(['started', 'committed'])
-    expect(activity[1]?.detail).toBe('（无实质变化）')
+    expect(activity[1]?.detailKey).toBe('detail.noChange')
   })
 })
 

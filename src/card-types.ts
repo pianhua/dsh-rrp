@@ -65,6 +65,21 @@ export interface CardContext {
 export const CARD_KEY = 'rrpCard'
 
 /**
+ * Substitute the minimal card template variables in a free-text field.
+ * Supported: `{{player.name}}`, `{{player.description}}` (empty string when
+ * the card declares no player). Unknown variables are left untouched.
+ * @param text - card-authored text (opening, persona, world core).
+ * @param player - the declared player character, if any.
+ * @returns the text with player variables resolved.
+ */
+export function interpolateCardText(text: string, player: CardPlayer | undefined): string {
+  if (!text.includes('{{')) return text
+  return text
+    .replaceAll('{{player.name}}', player?.name ?? '')
+    .replaceAll('{{player.description}}', player?.description ?? '')
+}
+
+/**
  * Render the card setting as the Author's immutable world baseline.
  * Dependency-free so host and any client preview share one wording.
  * @param card - the active card context.
@@ -75,8 +90,8 @@ export function renderCardContext(card: CardContext): string {
   if (card.player !== undefined) {
     lines.push('玩家角色：' + card.player.name + (card.player.description === undefined ? '' : ' — ' + card.player.description))
   }
-  if (card.worldCore.length > 0) lines.push('', '—— 世界核心 ——', card.worldCore)
-  if (card.persona.length > 0) lines.push('', '—— 人设与规则 ——', card.persona)
+  if (card.worldCore.length > 0) lines.push('', '—— 世界核心 ——', interpolateCardText(card.worldCore, card.player))
+  if (card.persona.length > 0) lines.push('', '—— 人设与规则 ——', interpolateCardText(card.persona, card.player))
   lines.push('', '以上是本次游玩的既定设定，必须遵守；不要把它们当作正文输出。')
   return lines.join('\n')
 }

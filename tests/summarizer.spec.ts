@@ -117,11 +117,53 @@ describe('Summarizer toggle command', () => {
     expect(writes.get(second.id)).toBeUndefined()
 
     const payload = (writes.get(first.id)?.[0]?.data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp
-    expect(payload?.settings).toEqual({ summaryEnabled: false })
+    expect(payload?.settings).toEqual({ summaryEnabled: false, summaryEveryTurns: 8 })
 
     expect(definition?.handler({ rawInput: 'on', agent: { session: second } }).text).toContain('开启')
     expect(writes.get(second.id)).toHaveLength(1)
     const secondPayload = (writes.get(second.id)?.[0]?.data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp
-    expect(secondPayload?.settings).toEqual({ summaryEnabled: true })
+    expect(secondPayload?.settings).toEqual({ summaryEnabled: true, summaryEveryTurns: 8 })
+  })
+
+  it('sets the cadence with /summary every N, clamped to the legal range', () => {
+    type Session = {
+      id: string
+      append(type: string, data: unknown, intent?: unknown): unknown
+      snapshotEvents(): readonly { type?: string; data?: unknown }[]
+    }
+    type Invocation = { rawInput: string; agent?: { session: Session } }
+    let definition: { handler: (i: Invocation) => { kind: string; text?: string } } | undefined
+    const commands = { register: (d: typeof definition) => { definition = d; return () => {} } }
+    const writes: Array<{ type: string; data: unknown }> = []
+    const session: Session = {
+      id: 's1',
+      append(type, data) { writes.push({ type, data }); return { seq: writes.length } },
+      snapshotEvents: () => [],
+    }
+    const projections = {
+      stateOf: (_session: unknown, key: string) => key === RRP_SETTINGS_KEY ? { summaryEnabled: true, summaryEveryTurns: 4 } : undefined,
+    }
+    const ctx = {
+      effect(fn: () => (() => void) | void) { return fn() },
+      get: (name: string) => ({ commands, sessionProjections: projections } as Record<string, unknown>)[name],
+    }
+    registerSummaryCommand(ctx as never)
+
+    const reply = definition?.handler({ rawInput: 'every 5', agent: { session } })
+    expect(reply?.kind).toBe('success')
+    expect(reply?.text).toContain('5')
+    const payload = (writes[0]?.data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp
+    expect(payload?.settings).toEqual({ summaryEnabled: true, summaryEveryTurns: 5 })
+
+    // Out-of-range values clamp instead of failing. (Distinct session: the
+    // publisher dedups same-render writes within one session.)
+    const other: Session = {
+      id: 's2',
+      append(type, data) { writes.push({ type, data }); return { seq: writes.length } },
+      snapshotEvents: () => [],
+    }
+    definition?.handler({ rawInput: 'every 999', agent: { session: other } })
+    const clamped = (writes[1]?.data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp
+    expect(clamped?.settings?.summaryEveryTurns).toBe(50)
   })
 })

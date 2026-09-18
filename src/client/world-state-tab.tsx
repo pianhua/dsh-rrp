@@ -22,8 +22,9 @@ import {
   StateDot,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { pendingActivity, type RrpActivityLog } from '../activity.ts'
+import type { RrpUseSessions, RrpJobView } from './context-types.ts'
 import {
   WORLD_STATE_KEY,
   getDynamicKeys,
@@ -46,7 +47,7 @@ const TAB_KIND = 'dsh-rrp-worldstate'
 const CORRECTION_PATH = '/dsh-rrp/world-state'
 /** Host route serving the host-side activity ledger. */
 const ACTIVITY_PATH = '/dsh-rrp/activity'
-/** The ledger is transient player-facing bookkeeping; a slow poll is enough. */
+/** Fallback poll interval, used only when the host jobs mirror is unavailable. */
 const ACTIVITY_POLL_MS = 2000
 
 type Translate = (key: string) => string
@@ -55,6 +56,7 @@ type Translate = (key: string) => string
 interface WorldStatePanelProps {
   t?: Translate
   useProjection?: (key: string) => unknown
+  useSessions?: RrpUseSessions
   sessionId?: string
 }
 
@@ -386,10 +388,18 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
     ? (props.useProjection('agentPreset') as string | undefined)
     : undefined
   const sessionId = props.sessionId
+  // The host pushes job state per session (`jobsBySession` mirror): the
+  // Chronicler's in-flight state needs no ledger round-trips where available.
+  const chroniclerJobs = typeof props.useSessions === 'function' && sessionId !== undefined
+    ? props.useSessions((state) => state.jobsBySession[sessionId]) as readonly RrpJobView[] | undefined
+    : undefined
+  const jobsInferring = chroniclerJobs === undefined
+    ? undefined
+    : chroniclerJobs.some((job) => job.kind === 'chronicler' && (job.status === 'running' || job.status === 'stopping'))
   const [activity, setActivity] = useState<RrpActivityLog | undefined>(undefined)
   const recentActivity = (activity?.entries ?? []).slice(-4).reverse()
-  const inferenceRunning = activity === undefined ? undefined : pendingActivity(activity, 'world-state')
-  const isInferring = inferenceRunning !== undefined
+  const ledgerInferring = activity === undefined ? undefined : pendingActivity(activity, 'world-state') !== undefined
+  const isInferring = jobsInferring ?? ledgerInferring ?? false
 
   const [draft, setDraft] = useState<Draft>(() => draftOf(view))
   const [dirty, setDirty] = useState(false)
@@ -402,45 +412,63 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
     if (!dirty) setDraft(draftOf(view))
   }, [view, dirty])
 
-  // D6: When Chronicler finishes, reload projection to avoid stale edits
+  // D6: When Chronicler finishes, reload the projection — but never clobber
+  // unsaved player edits: keep the draft and let the player decide to save.
   const [wasInferring, setWasInferring] = useState(false)
   useEffect(() => {
-    if (inferenceRunning !== undefined) {
+    if (isInferring) {
       setWasInferring(true)
     } else if (wasInferring) {
-      // Chronicler just finished, reload from projection
-      setDraft(draftOf(view))
-      setDirty(false)
       setWasInferring(false)
-      setStatus(t('chronicler.completed') || '纪事官已更新状态')
+      if (dirty) {
+        setStatus(t('chronicler.completed') + ' · ' + t('unsaved.kept'))
+      } else {
+        // Chronicler just finished, reload from projection
+        setDraft(draftOf(view))
+        setStatus(t('chronicler.completed'))
+      }
     }
-  }, [inferenceRunning, wasInferring, view, t])
+  }, [isInferring, wasInferring, view, t, dirty])
 
-  // The activity ledger is host-side and transient: poll it while mounted so
-  // the "最近变更" line and the running indicator stay current.
+  // The activity ledger is host-side and transient. Push-first: load once,
+  // refresh once when the Chronicler settles. The 2s timer survives ONLY as a
+  // fallback for hosts where the jobs mirror is not injected into this seat.
+  const loadActivity = (): void => {
+    if (sessionId === undefined) return
+    void fetch(ACTIVITY_PATH + '?sessionId=' + encodeURIComponent(sessionId))
+      .then((response) => (response.ok ? response.json() as Promise<RrpActivityLog> : undefined))
+      .then((log) => {
+        if (log !== undefined) setActivity(log)
+      })
+      .catch(() => {
+        /* the ledger is best-effort */
+      })
+  }
   useEffect(() => {
     if (sessionId === undefined) {
       setActivity(undefined)
       return
     }
-    let cancelled = false
-    const load = (): void => {
-      void fetch(ACTIVITY_PATH + '?sessionId=' + encodeURIComponent(sessionId))
-        .then((response) => (response.ok ? response.json() as Promise<RrpActivityLog> : undefined))
-        .then((log) => {
-          if (!cancelled && log !== undefined) setActivity(log)
-        })
-        .catch(() => {
-          /* the ledger is best-effort */
-        })
-    }
-    load()
-    const timer = setInterval(load, ACTIVITY_POLL_MS)
+    loadActivity()
+    if (typeof props.useSessions === 'function') return
+    const timer = setInterval(loadActivity, ACTIVITY_POLL_MS)
     return () => {
-      cancelled = true
       clearInterval(timer)
     }
-  }, [sessionId])
+  }, [sessionId, props.useSessions])
+
+  // Chronicler settled → one one-shot ledger refresh.
+  const wasJobsInferring = useRef(false)
+  useEffect(() => {
+    if (jobsInferring === true) {
+      wasJobsInferring.current = true
+      return
+    }
+    if (wasJobsInferring.current) {
+      wasJobsInferring.current = false
+      loadActivity()
+    }
+  }, [jobsInferring])
 
   const mutate = (change: (next: Draft) => void): void => {
     if (isInferring) return
@@ -481,7 +509,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
       <div style={S.header}>
         <span style={S.title}>{t('title')}</span>
         {sessionPreset !== undefined && sessionPreset.length > 0 ? (
-          <Tooltip label={t('preset.hint') || '本会话的 Agent 预设（与设置里的全局默认不同）'}>
+          <Tooltip label={t('preset.hint')}>
             <span style={S.presetTag}>{sessionPreset}</span>
           </Tooltip>
         ) : null}
@@ -496,7 +524,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
 
         <div style={S.activity}>
           <div style={S.activityHead}>{t('activity.title')}</div>
-          {inferenceRunning !== undefined ? (
+          {isInferring ? (
             <div style={S.running}>
               <StateDot state="ongoing" />
               <span>{t('activity.running')}</span>
@@ -508,14 +536,18 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
               <span style={S.activityWho}>{t('actor.' + entry.actor)}</span>
               <span style={S.activityWhat}>
                 {t('phase.' + entry.phase)}
-                {entry.detail !== undefined && entry.detail.length > 0 ? ' · ' + entry.detail : ''}
+                {entry.detailKey !== undefined
+                  ? ' · ' + t(entry.detailKey).replaceAll('{name}', entry.detailName ?? '')
+                  : entry.detail !== undefined && entry.detail.length > 0
+                    ? ' · ' + entry.detail
+                    : ''}
               </span>
               <span style={S.activityWhen}>{clockOf(entry.at)}</span>
             </div>
           ))}
         </div>
 
-        <CollapsibleSection title={t('section.coreState') || '核心状态'} defaultExpanded={true}>
+        <CollapsibleSection title={t('section.coreState')} defaultExpanded={true}>
         <div style={S.section}><span style={S.sectionTitle}>{t('section.scene')}</span></div>
         <div style={S.card}>
           <Field disabled={isInferring} label={t('scene.location')} value={draft.scene.location} onChange={(v) => mutate((d) => { d.scene.location = v })} />
@@ -601,9 +633,11 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
         </CollapsibleSection>
 
         {/* Dynamic Fields Section */}
-        <CollapsibleSection title={t('section.dynamicFields') || '自定义字段'} defaultExpanded={true}>
+        <CollapsibleSection title={t('section.dynamicFields')} defaultExpanded={true}>
           {showAddField ? (
             <AddFieldForm
+              t={t}
+              existingIds={draft.dynamicFields.map((field) => field.id)}
               disabled={isInferring}
               onAdd={(newField) => {
                 mutate((d) => { d.dynamicFields.push(newField) })
@@ -620,19 +654,20 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
               onClick={() => setShowAddField(true)}
               style={{ marginBottom: 12 }}
             >
-              {t('add') || '添加字段'}
+              {t('add')}
             </Button>
           )}
           
           {draft.dynamicFields.length === 0 && !showAddField && (
             <div style={{ fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', padding: '8px 0' }}>
-              暂无自定义字段
+              {t('dynamicFields.none')}
             </div>
           )}
           
           {draft.dynamicFields.map((field, index) => (
             <DynamicFieldEditor
               key={field.id}
+              t={t}
               field={field}
               disabled={isInferring}
               onChange={(updated) => mutate((d) => { d.dynamicFields[index] = updated })}
@@ -644,14 +679,14 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
 
       <div style={S.footer}>
         <span style={S.status}>
-          {inferenceRunning !== undefined 
-            ? (t('chronicler.running') || '纪事官推演中，请稍候...') 
+          {isInferring
+            ? t('chronicler.running')
             : status}
         </span>
         <Button
           variant="primary"
           icon={saving ? <IconLoadingOutline16 size={16} /> : undefined}
-          disabled={sessionId === undefined || saving || inferenceRunning !== undefined}
+          disabled={sessionId === undefined || saving || isInferring}
           onClick={save}
         >
           {saving ? t('saving') : t('save')}
@@ -672,7 +707,7 @@ export function registerWorldStateTab(ctx: RrpClientContext): void {
       guide: [{ order: 50, title: () => t('title'), description: () => t('guide.description') }],
     })
     const disposeBody = ctx.slots.register(
-      { name: 'sidebar.right.pane.tab', key: TAB_ID, locale: 'rrp', inject: () => ({ t }) },
+      { name: 'sidebar.right.pane.tab', key: TAB_ID, locale: 'rrp', inject: (sessionId: unknown) => ({ t, sessionId }) },
       WorldStatePanel,
     )
     return () => {
@@ -709,19 +744,20 @@ function CollapsibleSection(props: {
 
 /** Dynamic field editor */
 function DynamicFieldEditor(props: {
+  t: Translate
   field: DynamicFieldRow
   disabled?: boolean
   onChange: (updated: DynamicFieldRow) => void
   onDelete: () => void
 }): ReactNode {
-  const { field, disabled, onChange, onDelete } = props
+  const { t, field, disabled, onChange, onDelete } = props
   
   return (
     <div style={S.dynamicFieldCard}>
       <div style={S.dynamicFieldHeader}>
         <span style={S.dynamicFieldId}>{field.id}</span>
         <span style={S.dynamicFieldType}>{field.type}</span>
-        <Tooltip label="删除字段">
+        <Tooltip label={t('dynamicFields.remove')}>
           <Button 
             variant="ghost" 
             size="sm" 
@@ -736,7 +772,7 @@ function DynamicFieldEditor(props: {
         <div style={S.grid2}>
           <div style={S.half}>
             <label style={S.field}>
-              <span style={S.fieldLabel}>值</span>
+              <span style={S.fieldLabel}>{t('dynamicFields.value')}</span>
               <Input 
                 type="number"
                 value={field.value} 
@@ -748,21 +784,21 @@ function DynamicFieldEditor(props: {
           <div style={S.half}>
             <div style={S.grid2}>
               <label style={S.field}>
-                <span style={S.fieldLabel}>最小值</span>
+                <span style={S.fieldLabel}>{t('dynamicFields.min')}</span>
                 <Input 
                   type="number"
                   value={field.min ?? ''} 
-                  placeholder="无限制"
+                  placeholder={t('dynamicFields.unbounded')}
                   disabled={disabled}
                   onChange={(e) => onChange({ ...field, min: e.target.value })}
                 />
               </label>
               <label style={S.field}>
-                <span style={S.fieldLabel}>最大值</span>
+                <span style={S.fieldLabel}>{t('dynamicFields.max')}</span>
                 <Input 
                   type="number"
                   value={field.max ?? ''} 
-                  placeholder="无限制"
+                  placeholder={t('dynamicFields.unbounded')}
                   disabled={disabled}
                   onChange={(e) => onChange({ ...field, max: e.target.value })}
                 />
@@ -774,7 +810,7 @@ function DynamicFieldEditor(props: {
       
       {field.type === 'string' && (
         <label style={S.field}>
-          <span style={S.fieldLabel}>值</span>
+          <span style={S.fieldLabel}>{t('dynamicFields.value')}</span>
           <Input 
             value={field.value} 
             disabled={disabled}
@@ -785,7 +821,7 @@ function DynamicFieldEditor(props: {
       
       {field.type === 'boolean' && (
         <label style={S.field}>
-          <span style={S.fieldLabel}>值</span>
+          <span style={S.fieldLabel}>{t('dynamicFields.value')}</span>
           <Input 
             value={field.value} 
             placeholder="true / false"
@@ -800,11 +836,14 @@ function DynamicFieldEditor(props: {
 
 /** Add new field form */
 function AddFieldForm(props: {
+  t: Translate
+  /** Ids already present in the draft; duplicates are refused (React key + overwrite). */
+  existingIds: readonly string[]
   disabled?: boolean
   onAdd: (field: DynamicFieldRow) => void
   onCancel: () => void
 }): ReactNode {
-  const { disabled } = props
+  const { t, existingIds, disabled } = props
   const [id, setId] = useState('')
   const [type, setType] = useState<'number' | 'string' | 'boolean'>('number')
   const [value, setValue] = useState('')
@@ -814,15 +853,19 @@ function AddFieldForm(props: {
     if (disabled) return
     const trimmedId = id.trim()
     if (!trimmedId) {
-      setError('字段 ID 不能为空')
+      setError(t('dynamicFields.idRequired'))
       return
     }
     if (isCoreKey(trimmedId)) {
-      setError('字段 ID 不能使用保留名称（characters, inventory, scene, flags）')
+      setError(t('dynamicFields.idReserved'))
       return
     }
     if (!isValidFieldId(trimmedId)) {
-      setError('字段 ID 只能包含字母、数字、下划线')
+      setError(t('dynamicFields.idInvalid'))
+      return
+    }
+    if (existingIds.includes(trimmedId)) {
+      setError(t('dynamicFields.idDuplicate'))
       return
     }
     
@@ -844,7 +887,7 @@ function AddFieldForm(props: {
       {error && <div style={{ fontSize: 11, color: 'var(--dsw-alias-status-error)', marginBottom: 8 }}>{error}</div>}
       <div style={S.formRow}>
         <label style={{ ...S.field, ...S.formField }}>
-          <span style={S.fieldLabel}>字段 ID</span>
+          <span style={S.fieldLabel}>{t('dynamicFields.id')}</span>
           <Input 
             value={id} 
             placeholder="magic_power" 
@@ -853,7 +896,7 @@ function AddFieldForm(props: {
           />
         </label>
         <label style={{ ...S.field, flex: '0 0 120px' }}>
-          <span style={S.fieldLabel}>类型</span>
+          <span style={S.fieldLabel}>{t('dynamicFields.type')}</span>
           <select 
             value={type} 
             disabled={disabled}
@@ -871,7 +914,7 @@ function AddFieldForm(props: {
           </select>
         </label>
         <label style={{ ...S.field, ...S.formField }}>
-          <span style={S.fieldLabel}>初始值</span>
+          <span style={S.fieldLabel}>{t('dynamicFields.initial')}</span>
           <Input 
             value={value} 
             placeholder={type === 'number' ? '0' : type === 'boolean' ? 'true/false' : ''}
@@ -881,8 +924,8 @@ function AddFieldForm(props: {
         </label>
       </div>
       <div style={S.formActions}>
-        <Button variant="ghost" size="sm" disabled={disabled} onClick={props.onCancel}>取消</Button>
-        <Button variant="primary" size="sm" disabled={disabled} onClick={handleAdd}>添加</Button>
+        <Button variant="ghost" size="sm" disabled={disabled} onClick={props.onCancel}>{t('dynamicFields.cancel')}</Button>
+        <Button variant="primary" size="sm" disabled={disabled} onClick={handleAdd}>{t('add')}</Button>
       </div>
     </div>
   )

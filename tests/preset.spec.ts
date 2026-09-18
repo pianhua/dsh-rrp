@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { PRESET_ID, materializePreset, presetDir, removeAllPresets, removePreset } from '../src/preset.ts'
+import { PRESET_ID, ensureCardPreset, materializePreset, presetDir, removeAllPresets, removePreset } from '../src/preset.ts'
 
 const homes: string[] = []
 
@@ -74,5 +74,24 @@ describe('RP preset materialization', () => {
   it('is a no-op when nothing was materialized', () => {
     const home = tempHome()
     expect(removePreset(home)).toBe('absent')
+  })
+
+  it('ensureCardPreset materializes a missing card preset on demand', () => {
+    const home = tempHome()
+    const dir = presetDir(home, 'rp-maid-heiress')
+    expect(existsSync(dir)).toBe(false)
+
+    expect(ensureCardPreset('maid-heiress', home)).toBe('created')
+    expect(existsSync(dir)).toBe(true)
+    expect(existsSync(join(dir, 'skills', 'mia', 'SKILL.md'))).toBe(true)
+
+    // Second call is a no-op; user-edited presets are left alone.
+    expect(ensureCardPreset('maid-heiress', home)).toBe('exists')
+    const composition = join(dir, 'agent.cordis.yml')
+    writeFileSync(composition, readFileSync(composition, 'utf8') + '\n# user edit\n')
+    expect(ensureCardPreset('maid-heiress', home)).toBe('left-user')
+
+    // Illegal ids never touch the filesystem.
+    expect(ensureCardPreset('../escape', home)).toBeUndefined()
   })
 })

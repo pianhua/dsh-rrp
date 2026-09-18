@@ -14,7 +14,7 @@ import { listCards } from './cards.ts'
 import { registerCardsRoute } from './cards-route.ts'
 import { registerSedimentCommand, registerSedimentRoute } from './sediment-route.ts'
 import { registerSedimentRuntime } from './sediment-runtime.ts'
-import { registerChronicler } from './chronicler.ts'
+import { registerChronicler, forgetInference } from './chronicler.ts'
 import { registerCorrectionRoute } from './correction.ts'
 import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
 import { presetIdForCard } from './preset-id.ts'
@@ -83,21 +83,27 @@ export function apply(ctx: Context): void {
 
   // Optional capability: `ctx.inject` defers registration until the registry
   // exists and ties the registration to this plugin's lifetime.
+  const projectionDisposers: Array<() => void> = []
   ctx.inject(['sessionProjections'], (scoped: Context) => {
     const readable = scoped as unknown as { get(name: string): unknown }
     const registry = readable.get('sessionProjections') as SessionProjectionsService | undefined
     if (registry === undefined) return
-    registry.register(worldStateProjection)
+    projectionDisposers.push(registry.register(worldStateProjection))
     console.log(`${TAG} WorldState projection registered (key '${worldStateProjection.key}')`)
-    registry.register(summaryProjection)
+    projectionDisposers.push(registry.register(summaryProjection))
     console.log(`${TAG} macro-summary projection registered (key '${summaryProjection.key}')`)
-    registry.register(settingsProjection)
+    projectionDisposers.push(registry.register(settingsProjection))
     console.log(`${TAG} RP settings projection registered (key '${settingsProjection.key}')`)
-    registry.register(sedimentProjection)
+    projectionDisposers.push(registry.register(sedimentProjection))
     console.log(`${TAG} sediment projection registered (key '${sedimentProjection.key}')`)
-    registry.register(cardProjection)
+    projectionDisposers.push(registry.register(cardProjection))
     console.log(`${TAG} active-card projection registered (key '${cardProjection.key}')`)
   })
+  ctx.effect(() => {
+    return () => {
+      while (projectionDisposers.length > 0) projectionDisposers.pop()?.()
+    }
+  }, 'dsh-rrp: projection registrations')
 
   // Roster probe: deferred until agent-presets activates, disposed with this fiber.
   ctx.inject(['agentPresets'], (scoped: Context) => {
@@ -179,6 +185,7 @@ export function cleanupSession(sessionId: string): void {
   forgetActivity(sessionId)
   forgetSediment(sessionId)
   forgetSummary(sessionId)
+  forgetInference(sessionId)
 }
 
 /** Resolve a Session id from an event payload. */

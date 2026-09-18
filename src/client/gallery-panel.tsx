@@ -25,7 +25,7 @@ import {
   StateDot,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import type { CardMeta, CardPack } from '../card-types.ts'
 import { presetIdForCard } from '../preset-id.ts'
 import type { RrpClientContext, RrpWorkspaceSource, RrpWorkspacesService } from './context-types.ts'
@@ -136,16 +136,23 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
 
   const loadList = props.loadList
   const loadCard = props.loadCard
+  // Latest-wins guard: two quick clicks must not let the slower response win.
+  const selectSeq = useRef(0)
+  const selectedRef = useRef<CardPack | null>(null)
+  selectedRef.current = selected
 
-  const select = (id: string): void => {
+  const select = (id: string, quiet = false): void => {
     if (loadCard === undefined) return
-    setStatus({ tone: 'busy', text: t('gallery.loading') })
+    const seq = ++selectSeq.current
+    if (!quiet) setStatus({ tone: 'busy', text: t('gallery.loading') })
     void loadCard(id)
       .then((card) => {
+        if (seq !== selectSeq.current) return
         setSelected(card ?? null)
-        setStatus(card === undefined ? { tone: 'error', text: t('gallery.failed') } : { tone: 'idle', text: '' })
+        if (!quiet) setStatus(card === undefined ? { tone: 'error', text: t('gallery.failed') } : { tone: 'idle', text: '' })
       })
       .catch((error: unknown) => {
+        if (seq !== selectSeq.current) return
         setStatus({ tone: 'error', text: t('gallery.failed') + ': ' + String((error as { message?: string })?.message ?? error) })
       })
   }
@@ -157,7 +164,14 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
       .then((list) => {
         setCards(list)
         setStatus(list.length === 0 ? { tone: 'idle', text: t('gallery.empty') } : { tone: 'idle', text: '' })
-        if (list.length > 0) select(list[0]!.id)
+        if (list.length === 0) {
+          setSelected(null)
+          return
+        }
+        // Keep the player's current pick when it survived the reload.
+        const currentId = selectedRef.current?.meta.id
+        const stillThere = currentId !== undefined && list.some((card) => card.id === currentId)
+        select(stillThere ? currentId! : list[0]!.id, true)
       })
       .catch((error: unknown) => {
         setStatus({ tone: 'error', text: t('gallery.failed') + ': ' + String((error as { message?: string })?.message ?? error) })
@@ -455,11 +469,15 @@ function GalleryGlyph(props: { size?: number; active?: boolean }): ReactNode {
  */
 export function registerGallery(ctx: RrpClientContext): void {
   const t = ctx.locale.bind('rrp') as Translate
-  let workspaces: RrpWorkspacesService | undefined
-  try {
-    workspaces = (ctx as unknown as { get?(name: string): unknown }).get?.('workspaces') as RrpWorkspacesService | undefined
-  } catch {
-    workspaces = undefined
+  // Probe LAZILY (inside the slot-inject callback): the workspace controller
+  // may mount after this plugin, so an apply-time probe can miss it forever.
+  const probeWorkspaces = (): RrpWorkspaceSource | undefined => {
+    try {
+      const service = (ctx as unknown as { get?(name: string): unknown }).get?.('workspaces') as RrpWorkspacesService | undefined
+      return service?.list
+    } catch {
+      return undefined
+    }
   }
 
   const loadList = async (): Promise<CardMeta[]> => {
@@ -481,10 +499,30 @@ export function registerGallery(ctx: RrpClientContext): void {
     const remote = ctx.remote
     if (sessions === undefined || remote === undefined) return { ok: false, message: t('gallery.unavailable') }
     const sessionId = await sessions.create(workspaceId === undefined ? {} : { workspaceId })
+    // Best-effort orphan cleanup: the session exists on the host now, so any
+    // later failure must not leave a preset-bound empty session behind.
+    const abortStart = async (reason: string): Promise<StartOutcome> => {
+      let recovered = false
+      try {
+        const destroy = (sessions as unknown as {
+          dispose?: (id: string) => unknown
+          remove?: (id: string) => unknown
+        })
+        const fn = destroy.dispose ?? destroy.remove
+        if (typeof fn === 'function') {
+          await fn.call(sessions, sessionId)
+          recovered = true
+        }
+      } catch {
+        /* fall through to the manual-cleanup hint */
+      }
+      const suffix = recovered ? '' : t('gallery.orphanSession') + sessionId
+      return { ok: false, message: t('gallery.failed') + ': ' + reason + suffix }
+    }
     // Each card gets its own scoped preset (rp-<card-id>) so only this card's
     // world-knowledge skills are in the session's skill scope.
     const selected = await remote.agentPresets.select(sessionId, presetIdForCard(card.id))
-    if (selected.ok === false) return { ok: false, message: selected.error?.message ?? 'agentPresets.select failed' }
+    if (selected.ok === false) return abortStart(selected.error?.message ?? t('gallery.selectFailed'))
 
     // The card name is the story's name; a rename is a nicety, never fatal.
     const binding = sessions.binding(sessionId)
@@ -513,7 +551,7 @@ export function registerGallery(ctx: RrpClientContext): void {
         },
       }),
     })
-    if (!response.ok) return { ok: false, message: await response.text() }
+    if (!response.ok) return abortStart(await response.text())
     // Stage the session only AFTER the log is complete: the conversation view
     // then pulls the whole history (card context + facts + opening) in one go,
     // instead of racing the host's live follow stream for the opening.
@@ -528,7 +566,7 @@ export function registerGallery(ctx: RrpClientContext): void {
         name: 'main',
         key: GALLERY_PANEL_ID,
         locale: 'rrp',
-        inject: () => ({ t, loadList, loadCard, start, workspaces: workspaces?.list }),
+        inject: () => ({ t, loadList, loadCard, start, workspaces: probeWorkspaces() }),
       },
       GalleryPanel as never,
     ))

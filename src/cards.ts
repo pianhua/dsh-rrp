@@ -78,7 +78,12 @@ export function parseFrontmatter(raw: string): { data: Frontmatter; body: string
   
   const yamlText = lines.slice(1, close).join('\n')
   try {
-    const data = parseYAML(yamlText) as Frontmatter
+    // An empty/whitespace document parses to null: normalize any non-object
+    // result so callers never dereference `data.name` on null.
+    const parsed = parseYAML(yamlText) as unknown
+    const data: Frontmatter = (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed))
+      ? parsed as Frontmatter
+      : {}
     return { data, body: lines.slice(close + 1).join('\n') }
   } catch {
     return undefined

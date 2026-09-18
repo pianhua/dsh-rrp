@@ -30,9 +30,9 @@ export const CHRONICLER_SYSTEM_PROMPT = [
   '3. 你维护的是「当前切面」，不是事件流水账：仍会影响后续剧情的事项要保留；已解决、已无关或被后续发展取代的条目应当移除（它们的历史由「大局编年」承载，不会丢失）。',
   '4. flags 是「长期事实表」，绝不是「本幕发生了什么」：',
   '   - ✅ 只记跨轮次仍然成立、且后续会用到的长期事实：已揭示的秘密、做出的承诺、不可逆的变化、关系里程碑、持续存在的威胁或误会。',
-  '   - ❌ 不记只对刚过去那一幕有意义的桥段。反例：「米娅对旧式洗衣机不熟悉」「米娅差点说漏嘴」「米娅已陪主人出门采购」「房租危机已解决」——这些属于正文或大局编年，不属于状态。',
+  '   - ❌ 不记只对刚过去那一幕有意义的桥段。反例：「某角色对某物不熟悉」「某角色差点说漏嘴」「某角色已陪某人出门」「某危机已解决」——这些属于正文或大局编年，不属于状态。',
   '   - 判断法：如果一件事下一幕就不再影响局面，就不要写进 flags。',
-  '   - 写法：优先写「键 → 简短事实」，而不是「键 → true」。例：「米娅的真实身份」→「财阀千金（玩家尚未知情）」。',
+  '   - 写法：优先写「键 → 简短事实」，而不是「键 → true」。例：「某人的真实身份」→「某隐秘身份（玩家尚未知情）」。',
   '   - 保持精简（≤ 12 条），按重要度从高到低排列。',
   '5. characters / inventory 同样只保留当前仍然有效的状态，并按重要度排序。',
   '6. 如实反映玩家行动造成的后果，但绝不替玩家角色杜撰新的行动、对白或心理。',
@@ -138,12 +138,15 @@ export function parseChroniclerReply(reply: string, existingState?: WorldState):
 
       let value: number | string | boolean = val
       if (type === 'number' && typeof val !== 'number') {
-        const num = Number(val)
+        // Number('') is 0: an empty string must NOT silently become zero.
+        const text = String(val).trim()
+        const num = text.length > 0 ? Number(text) : Number.NaN
         if (!Number.isNaN(num)) value = num
       } else if (type === 'string' && typeof val !== 'string') {
         value = String(val)
       } else if (type === 'boolean' && typeof val !== 'boolean') {
-        value = Boolean(val)
+        // Boolean('false') is true: parse the negation, never coerce blindly.
+        value = typeof val === 'string' ? val.trim().toLowerCase() === 'true' : Boolean(val)
       }
 
       const field: DynamicFieldValue = { type, value }

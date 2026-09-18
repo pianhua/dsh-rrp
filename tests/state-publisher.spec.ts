@@ -140,10 +140,10 @@ describe('durable state publisher', () => {
       },
     }
     publishState(session, projections, { worldState: STATE })
-    publishState(session, projections, { settings: { summaryEnabled: false } })
+    publishState(session, projections, { settings: { summaryEnabled: false, summaryEveryTurns: 8 } })
 
     expect(appended).toHaveLength(2)
-    expect(payloadOf(appended[1]?.data)?.settings).toEqual({ summaryEnabled: false })
+    expect(payloadOf(appended[1]?.data)?.settings).toEqual({ summaryEnabled: false, summaryEveryTurns: 8 })
     expect((appended[1]?.data as { content: Array<{ text: string }> }).content[0]?.text).toBe(renderWorldState(STATE))
   })
 

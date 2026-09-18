@@ -89,12 +89,18 @@ export function registerChronicler(ctx: Context, presetId: string): void {
   ctx.effect(() => {
     const disposeController = jobs.attachController('dsh-rrp')
     const disposeListener = runtime.on('session/event', (...args: unknown[]) => {
-      const session = args[0] as SessionLike | undefined
-      const event = args[1] as { type?: string; data?: { reason?: { kind?: string } } } | undefined
-      if (session === undefined || event?.type !== 'turn/end') return
-      if (event.data?.reason?.kind !== 'completed') return
-      if (!matchesPreset(projections.stateOf(session, 'agentPreset') as string | undefined, presetId)) return
-      scheduleInference(faces, session)
+      // Host projection reads may throw (e.g. racing session disposal); a
+      // listener throw would escape into the host event bus, so never let one.
+      try {
+        const session = args[0] as SessionLike | undefined
+        const event = args[1] as { type?: string; data?: { reason?: { kind?: string } } } | undefined
+        if (session === undefined || event?.type !== 'turn/end') return
+        if (event.data?.reason?.kind !== 'completed') return
+        if (!matchesPreset(projections.stateOf(session, 'agentPreset') as string | undefined, presetId)) return
+        scheduleInference(faces, session)
+      } catch (error) {
+        console.warn(TAG + ' Chronicler trigger failed:', error)
+      }
     })
     console.log(TAG + ' Chronicler armed for preset ' + presetId)
     return () => {
@@ -115,12 +121,22 @@ function routeFor(owner: AgentLike | undefined): { provider: string; model: stri
 
 /** Schedule one background inference job. Never throws into the session feed. */
 function scheduleInference(faces: HostFaces, session: SessionLike): void {
+  // Concurrency guard: rapid successive turns must never run two inferences
+  // for one session in parallel (the stale check cannot see same-state races,
+  // so the later job could overwrite the earlier one's folds). Defer instead:
+  // queue one rerun that covers everything not yet state-written.
+  if (INFERENCE_IN_FLIGHT.has(session.id)) {
+    RERUN_PENDING.add(session.id)
+    console.log(TAG + ' Chronicler busy for ' + session.id + '; queued a covering rerun')
+    return
+  }
   const owner = faces.agents.get(session.id)
   const route = routeFor(owner)
   if (route === undefined) {
     console.warn(TAG + ' Chronicler skipped ' + session.id + ': no provider/model route')
     return
   }
+  INFERENCE_IN_FLIGHT.add(session.id)
   try {
     faces.jobs.start({
       kind: JOB_KIND,
@@ -129,7 +145,7 @@ function scheduleInference(faces: HostFaces, session: SessionLike): void {
       run: () => {
         const controller = new AbortController()
         let cancelled = false
-        const done = runInference(faces, session, route, controller.signal, () => cancelled)
+        const done = runInference(faces, session, route, controller.signal, () => cancelled, false)
         return {
           cancel: () => {
             cancelled = true
@@ -140,8 +156,19 @@ function scheduleInference(faces: HostFaces, session: SessionLike): void {
       },
     })
   } catch (error) {
+    INFERENCE_IN_FLIGHT.delete(session.id)
     console.warn(TAG + ' Chronicler could not start a job:', error)
   }
+}
+
+/** Sessions with an inference currently in flight, and queued covering reruns. */
+const INFERENCE_IN_FLIGHT = new Set<string>()
+const RERUN_PENDING = new Set<string>()
+
+/** Drop the concurrency markers when a session is disposed. */
+export function forgetInference(sessionId: string): void {
+  INFERENCE_IN_FLIGHT.delete(sessionId)
+  RERUN_PENDING.delete(sessionId)
 }
 
 /** One inference pass: prompt -> model -> parse -> append. */
@@ -151,6 +178,7 @@ async function runInference(
   route: { provider: string; model: string },
   signal: AbortSignal,
   isCancelled: () => boolean,
+  coveringRerun: boolean,
 ): Promise<{ status: string }> {
   const activityId = randomUUID()
   const stamp = (): string => new Date().toISOString()
@@ -158,7 +186,10 @@ async function runInference(
     const prior = (faces.projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ?? emptyWorldState()
     // The Chronicler already receives the complete prior state, so it only
     // needs THIS turn's prose — re-feeding older turns is pure token waste.
-    const transcript = latestTurnTranscriptOf(session)
+    // A covering rerun instead folds everything not yet state-written.
+    const transcript = coveringRerun
+      ? unprocessedTranscriptOf(session)
+      : latestTurnTranscriptOf(session)
     if (transcript.trim().length === 0) return { status: 'completed' }
 
     recordActivity(session.id, {
@@ -182,7 +213,7 @@ async function runInference(
     const text = await collectText(stream)
     if (isCancelled()) {
       recordActivity(session.id, {
-        id: activityId, at: stamp(), actor: 'chronicler', target: 'world-state', phase: 'failed', detail: '已取消',
+        id: activityId, at: stamp(), actor: 'chronicler', target: 'world-state', phase: 'failed', detailKey: 'detail.cancelled',
       })
       return { status: 'killed' }
     }
@@ -200,7 +231,7 @@ async function runInference(
         actor: 'chronicler',
         target: 'world-state',
         phase: 'stale',
-        detail: '玩家已就地矫正，推演结果作废',
+        detailKey: 'detail.staleDiscarded',
       })
       console.log(TAG + ' Chronicler inferred state is stale (player corrected), discarding for session ' + session.id)
       return { status: 'stale' }
@@ -220,7 +251,7 @@ async function runInference(
         actor: 'chronicler',
         target: 'world-state',
         phase: 'committed',
-        detail: NO_WORLD_STATE_CHANGE,
+        detailKey: 'detail.noChange',
       })
       console.log(TAG + ' Chronicler skipped publish (no state change) for session ' + session.id)
       return { status: 'completed' }
@@ -245,6 +276,11 @@ async function runInference(
       id: activityId, at: stamp(), actor: 'chronicler', target: 'world-state', phase: 'failed', detail: messageOf(error),
     })
     return { status: isCancelled() ? 'killed' : 'failed' }
+  } finally {
+    INFERENCE_IN_FLIGHT.delete(session.id)
+    // A turn ended while this pass was running: fold everything since the
+    // last state write so no turn's changes are lost to the deferral.
+    if (RERUN_PENDING.delete(session.id) && !isCancelled()) scheduleInference(faces, session)
   }
 }
 
@@ -279,11 +315,40 @@ export function latestTurnTranscriptOf(session: SessionLike): string {
       break
     }
   }
+  return renderEventsTranscript(events, start)
+}
+
+/**
+ * Render every user/assistant turn AFTER the most recent state-bearing write —
+ * i.e. everything the Chronicler has not folded yet. Used by covering reruns
+ * queued while a pass was still in flight, so deferred turns lose no changes.
+ * @param session - the session whose unprocessed prose is rendered.
+ * @returns the unprocessed prose, tail-biased and capped.
+ */
+export function unprocessedTranscriptOf(session: SessionLike): string {
+  const events = session.snapshotEvents()
+  let start = 0
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const candidate = events[index]
+    if (candidate?.type === 'user/message' && rrpPayloadOf(candidate) !== undefined) {
+      start = index + 1
+      break
+    }
+  }
+  return renderEventsTranscript(events, start)
+}
+
+/** Shared renderer: user/assistant text blocks from `start` onward, capped. */
+function renderEventsTranscript(
+  events: readonly { type: string; data?: unknown }[],
+  start: number,
+): string {
   const parts: string[] = []
   for (let index = start; index < events.length; index += 1) {
     const event = events[index]
     if (event?.type !== 'user/message' && event?.type !== 'assistant/message') continue
     if (rrpPayloadOf(event) !== undefined) continue
+    if (isPluginNotice(event)) continue
     const blocks: string[] = []
     collectTextBlocks(event.data, blocks)
     const text = blocks.join('\n').trim()
@@ -301,6 +366,7 @@ export function transcriptOf(session: SessionLike, limit: number = DEFAULT_TRANS
   for (const event of session.snapshotEvents()) {
     if (event.type !== 'user/message' && event.type !== 'assistant/message') continue
     if (rrpPayloadOf(event) !== undefined) continue
+    if (isPluginNotice(event)) continue
     const blocks: string[] = []
     collectTextBlocks(event.data, blocks)
     const text = blocks.join('\n').trim()
@@ -311,9 +377,18 @@ export function transcriptOf(session: SessionLike, limit: number = DEFAULT_TRANS
   return joined.length > limit ? joined.slice(joined.length - limit) : joined
 }
 
+/**
+ * True for plugin-issued notices WITHOUT an rrp payload (e.g. the opening
+ * fallback notice appended by start.ts): they are bookkeeping, never player
+ * prose, and must not reach the Chronicler/Summarizer/Scribe as 【玩家】 text.
+ */
+function isPluginNotice(event: { type: string; data?: unknown }): boolean {
+  const source = (event.data as { source?: { kind?: unknown } } | undefined)?.source
+  return source?.kind === 'plugin' && rrpPayloadOf(event) === undefined
+}
+
 /** Recursively collect { type: 'text', text } blocks from an event payload. */
-function collectTextBlocks(value: unknown, out: string[]): void {
-  if (value === null || value === undefined) return
+function collectTextBlocks(value: unknown, out: string[]): void {  if (value === null || value === undefined) return
   if (Array.isArray(value)) {
     for (const item of value) collectTextBlocks(item, out)
     return

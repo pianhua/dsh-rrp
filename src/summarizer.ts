@@ -16,13 +16,11 @@ import { recordActivity } from './activity.ts'
 import { SUMMARIZER_SYSTEM_PROMPT, buildSummarizerPrompt, parseSummarizerReply } from './agents/summarizer.ts'
 import { messageOf, transcriptOf } from './chronicler.ts'
 import { matchesPreset } from './preset-id.ts'
-import { RRP_SETTINGS_KEY, rrpSettingsOf } from './settings.ts'
+import { RRP_SETTINGS_KEY, clampSummaryEveryTurns, rrpSettingsOf } from './settings.ts'
 import { publishState } from './state-publisher.ts'
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'summarizer'
-/** Default cadence: summarize every N completed turns. */
-const DEFAULT_EVERY_TURNS = 8
 const TRANSCRIPT_LIMIT = 16000
 
 interface SessionLike {
@@ -103,20 +101,28 @@ export function registerSummarizer(ctx: Context, presetId: string): void {
 
   ctx.effect(() => {
     const dispose = runtime.on('session/event', (...args: unknown[]) => {
-      const session = args[0] as SessionLike | undefined
-      const event = args[1] as { type?: string; data?: { reason?: { kind?: string } } } | undefined
-      if (session === undefined || event?.type !== 'turn/end') return
-      if (event.data?.reason?.kind !== 'completed') return
-      if (!rrpSettingsOf(projections.stateOf(session, RRP_SETTINGS_KEY)).summaryEnabled) return
-      if (!matchesPreset(projections.stateOf(session, 'agentPreset') as string | undefined, presetId)) return
-      const boundary = projections.stateOf(session, 'turnBoundary') as { lastTurn?: number } | undefined
-      const turn = boundary?.lastTurn ?? 0
-      if (turn === 0 || turn % DEFAULT_EVERY_TURNS !== 0) return
-      if (LAST_SUMMARIZED.get(session.id) === turn) return
-      LAST_SUMMARIZED.set(session.id, turn)
-      scheduleSummary(faces, session, turn)
+      // Host projection reads may throw (e.g. racing session disposal); a
+      // listener throw would escape into the host event bus, so never let one.
+      try {
+        const session = args[0] as SessionLike | undefined
+        const event = args[1] as { type?: string; data?: { reason?: { kind?: string } } } | undefined
+        if (session === undefined || event?.type !== 'turn/end') return
+        if (event.data?.reason?.kind !== 'completed') return
+        if (!matchesPreset(projections.stateOf(session, 'agentPreset') as string | undefined, presetId)) return
+        const settings = rrpSettingsOf(projections.stateOf(session, RRP_SETTINGS_KEY))
+        if (!settings.summaryEnabled) return
+        const boundary = projections.stateOf(session, 'turnBoundary') as { lastTurn?: number } | undefined
+        const turn = boundary?.lastTurn ?? 0
+        if (turn === 0 || turn % settings.summaryEveryTurns !== 0) return
+        if (LAST_SUMMARIZED.get(session.id) === turn) return
+        // Mark only once the job is actually scheduled, so a transient route
+        // or job-start failure does not skip this turn's summary forever.
+        if (scheduleSummary(faces, session, turn)) LAST_SUMMARIZED.set(session.id, turn)
+      } catch (error) {
+        console.warn(TAG + ' Summarizer trigger failed:', error)
+      }
     })
-    console.log(TAG + ' Summarizer armed for preset ' + presetId + ' every ' + DEFAULT_EVERY_TURNS + ' turns')
+    console.log(TAG + ' Summarizer armed for preset ' + presetId + ' (cadence configurable via /summary every N)')
     return dispose
   }, 'dsh-rrp: Summarizer trigger')
 }
@@ -130,13 +136,14 @@ function routeFor(owner: AgentLike | undefined): { provider: string; model: stri
   return { provider, model }
 }
 
-/** Schedule one summarization job. Never throws into the session feed. */
-function scheduleSummary(faces: HostFaces, session: SessionLike, turn: number): void {
+/** Schedule one summarization job. Never throws into the session feed.
+ * @returns whether the job actually started (false = no route / start failure) */
+function scheduleSummary(faces: HostFaces, session: SessionLike, turn: number): boolean {
   const owner = faces.agents.get(session.id)
   const route = routeFor(owner)
   if (route === undefined) {
     console.warn(TAG + ' Summarizer skipped ' + session.id + ': no provider/model route')
-    return
+    return false
   }
   try {
     faces.jobs.start({
@@ -156,8 +163,10 @@ function scheduleSummary(faces: HostFaces, session: SessionLike, turn: number): 
         }
       },
     })
+    return true
   } catch (error) {
     console.warn(TAG + ' Summarizer could not start a job:', error)
+    return false
   }
 }
 
@@ -199,7 +208,7 @@ async function runSummary(
     }
     if (isCancelled()) {
       recordActivity(session.id, {
-        id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'failed', detail: '已取消',
+        id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'failed', detailKey: 'detail.cancelled',
       })
       return { status: 'killed' }
     }
@@ -243,17 +252,23 @@ export function registerSummaryCommand(ctx: Context): void {
   ctx.effect(() => {
     const dispose = commands.register({
       name: 'summary',
-      description: '开启或关闭大局编年摘要（/summary on|off）',
+      description: '大局编年：/summary on|off 开关，/summary every N 设置周期（默认 8 轮）',
       handler: ({ rawInput, agent }) => {
         const session = agent?.session
         if (session === undefined) return { kind: 'error', text: '当前会话不可用' }
         const current = rrpSettingsOf(projections.stateOf(session, RRP_SETTINGS_KEY))
         const argument = rawInput.trim().toLowerCase()
-        const summaryEnabled = argument === 'on' ? true : argument === 'off' ? false : !current.summaryEnabled
-        if (!publishState(session, projections, { settings: { summaryEnabled } })) {
+        const everyMatch = /^every\s+(\d{1,3})$/.exec(argument)
+        const next = everyMatch !== null
+          ? { ...current, summaryEveryTurns: clampSummaryEveryTurns(Number(everyMatch[1])) }
+          : { ...current, summaryEnabled: argument === 'on' ? true : argument === 'off' ? false : !current.summaryEnabled }
+        if (!publishState(session, projections, { settings: next })) {
           return { kind: 'error', text: '大局编年设置写入失败' }
         }
-        return { kind: 'success', text: '大局编年已' + (summaryEnabled ? '开启' : '关闭') }
+        const text = everyMatch !== null
+          ? '大局编年：每 ' + next.summaryEveryTurns + ' 轮提炼一次'
+          : '大局编年已' + (next.summaryEnabled ? '开启' : '关闭')
+        return { kind: 'success', text }
       },
     })
     console.log(TAG + ' /summary toggle armed')

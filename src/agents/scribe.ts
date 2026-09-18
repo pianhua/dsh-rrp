@@ -36,6 +36,8 @@ export function buildScribePrompt(input: {
   topic: string
   transcript: string
   worldState: string
+  /** Rendered card baseline (worldCore + persona + player); empty when no card. */
+  cardBaseline?: string
   existing: readonly string[]
 }): string {
   return [
@@ -44,6 +46,9 @@ export function buildScribePrompt(input: {
     '',
     '【已有技能名（不得重名）】',
     input.existing.length > 0 ? input.existing.join(', ') : '（无）',
+    '',
+    '【卡包设定基准（世界观与人设不得违背）】',
+    input.cardBaseline !== undefined && input.cardBaseline.trim().length > 0 ? input.cardBaseline : '（无）',
     '',
     '【当前世界状态】',
     input.worldState,

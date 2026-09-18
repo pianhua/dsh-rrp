@@ -140,10 +140,10 @@ function capRecord<T>(record: Record<string, T>, limit: number): Record<string, 
   return capped
 }
 
-/** Bound one flag value's length. */
+/** Bound one flag value's length, ellipsis included. */
 function capFlagValue(value: WorldStateFlag): WorldStateFlag {
   if (typeof value !== 'string' || value.length <= WORLD_STATE_LIMITS.flagValueChars) return value
-  return value.slice(0, WORLD_STATE_LIMITS.flagValueChars) + '…'
+  return value.slice(0, WORLD_STATE_LIMITS.flagValueChars - 1) + '…'
 }
 
 /**
@@ -347,6 +347,12 @@ export function diffWorldState(prior: WorldState, next: WorldState): string {
     }
     if (before.value !== after.value) {
       clauses.push('字段「' + key + '」' + showField(before.value) + ' → ' + showField(after.value))
+      continue
+    }
+    // Value unchanged but bounds retuned (e.g. via createFields min/max):
+    // surfaced so a constraints-only change is not silently swallowed.
+    if (before.min !== after.min || before.max !== after.max) {
+      clauses.push('字段「' + key + '」约束 ' + showField(before.min) + '~' + showField(before.max) + ' → ' + showField(after.min) + '~' + showField(after.max))
     }
   }
 

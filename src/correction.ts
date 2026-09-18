@@ -13,6 +13,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
+import { belongsToRpPreset } from './preset-id.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 import { publishState } from './state-publisher.ts'
 import { pruneWorldState } from './world-state.ts'
@@ -112,6 +113,13 @@ export function registerCorrectionRoute(ctx: Context): void {
           send(res, 404, { error: 'unknown session' })
           return
         }
+        // Write-path guard: only RP-family sessions accept RRP state writes.
+        // (undefined preset: legacy/uncategorized sessions stay writable.)
+        const preset = projections.stateOf(session, 'agentPreset')
+        if (typeof preset === 'string' && !belongsToRpPreset(preset)) {
+          send(res, 403, { error: 'not an RP session' })
+          return
+        }
         const pruned = pruneWorldState(state.data)
         const published = publishState(session, projections, { worldState: pruned })
         if (!published) {
@@ -124,7 +132,7 @@ export function registerCorrectionRoute(ctx: Context): void {
           actor: 'player',
           target: 'world-state',
           phase: 'corrected',
-          detail: '玩家就地矫正',
+          detailKey: 'detail.playerCorrected',
         })
         console.log(TAG + ' player correction committed for session ' + request.sessionId)
         send(res, 200, { ok: true })

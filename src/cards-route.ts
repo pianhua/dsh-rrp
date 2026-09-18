@@ -9,6 +9,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { listCards, readCard } from './cards.ts'
+import { ensureCardPreset } from './preset.ts'
 
 const TAG = '[dsh-rrp]'
 /** Exact read paths; the list returns summaries, \`one\` takes the whole pack. */
@@ -64,7 +65,11 @@ export function registerCardsRoute(ctx: Context): void {
           return
         }
         try {
-          send(res, 200, { cards: listCards() })
+          const cards = listCards()
+          // A card added after boot has no rp-<id> preset yet; make it
+          // startable (agentPresets.select) without a plugin reload.
+          for (const card of cards) ensureCardPreset(card.id)
+          send(res, 200, { cards })
         } catch (error) {
           send(res, 500, { error: String(error) })
         }

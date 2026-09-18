@@ -4,6 +4,15 @@
  * Player-facing control surface for knowledge sedimentation: trigger a Scribe
  * draft, review it, confirm or discard, and delete what is already written.
  * Reads/writes the host routes; the panel never touches the session log.
+ *
+ * Data flow is PUSH-first (HOST_ALIGNMENT: no self-invented polling):
+ *   - written skills arrive through the host-pushed `rrpSediment` projection
+ *     (`useProjection`), the same wire the skill provider reads;
+ *   - the Scribe's in-flight state is derived from the host-pushed jobs
+ *     mirror (`useSessions` → `jobsBySession`); when it settles, one one-shot
+ *     GET picks up the staged draft;
+ *   - the 2s timer survives ONLY as a fallback for hosts where the jobs
+ *     mirror is not injected into this seat.
  */
 import {
   Button,
@@ -17,8 +26,9 @@ import {
   StateDot,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
-import type { RrpClientContext } from './context-types.ts'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { RRP_SEDIMENT_KEY, type SedimentEntry } from '../sediment-state.ts'
+import type { RrpClientContext, RrpJobView, RrpUseProjection, RrpUseSessions } from './context-types.ts'
 
 /** Implementation identity; also the key the body registers under. */
 const TAB_ID = 'dsh-rrp/sediment'
@@ -26,7 +36,7 @@ const TAB_ID = 'dsh-rrp/sediment'
 const TAB_KIND = 'dsh-rrp-sediment'
 /** Host routes driving the controlled flow. */
 const SEDIMENT_PATH = '/dsh-rrp/sediment'
-/** The draft lives on the host; a slow poll picks it up when the job settles. */
+/** Fallback poll interval, only used when the host jobs mirror is unavailable. */
 const POLL_MS = 2000
 
 type Translate = (key: string) => string
@@ -55,6 +65,20 @@ interface SedList {
 interface SedimentPanelProps {
   t?: Translate
   sessionId?: string
+  useProjection?: RrpUseProjection
+  useSessions?: RrpUseSessions
+}
+
+const byteLengthOf = (text: string): number => new TextEncoder().encode(text).length
+
+/** Host-pushed projection rows → panel rows (same shape the route used to send). */
+function skillRows(entries: readonly SedimentEntry[]): SedSkill[] {
+  return entries.map((entry) => ({
+    name: entry.name,
+    description: entry.description,
+    bytes: byteLengthOf(entry.body),
+    updatedAt: '',
+  }))
 }
 
 const S: Record<string, CSSProperties> = {
@@ -98,36 +122,58 @@ const S: Record<string, CSSProperties> = {
 function SedimentPanel(props: SedimentPanelProps): ReactNode {
   const t: Translate = typeof props.t === 'function' ? props.t : (key) => key
   const sessionId = props.sessionId
-  const [skills, setSkills] = useState<SedSkill[]>([])
-  const [pending, setPending] = useState<SedDraft | null>(null)
-  const [drafting, setDrafting] = useState(false)
+  // Push-first data sources (absent on hosts that do not inject them into this seat).
+  const projected = typeof props.useProjection === 'function'
+    ? props.useProjection(RRP_SEDIMENT_KEY) as SedimentEntry[] | undefined
+    : undefined
+  const scribeJobs = typeof props.useSessions === 'function' && sessionId !== undefined
+    ? props.useSessions((state) => state.jobsBySession[sessionId]) as readonly RrpJobView[] | undefined
+    : undefined
+  const scribeRunning = scribeJobs?.some((job) =>
+    job.kind === 'scribe' && (job.status === 'running' || job.status === 'stopping'))
+
+  // The staged draft is host-side bookkeeping (never eventized), so it still
+  // travels over the route — but only as one-shot fetches, not a timer.
+  const [fetched, setFetched] = useState<SedList | undefined>(undefined)
   const [topic, setTopic] = useState('')
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
+  const skills = projected !== undefined ? skillRows(projected) : fetched?.skills ?? []
+  const pending = fetched?.pending ?? null
+  const drafting = scribeRunning ?? fetched?.drafting ?? false
 
-  // Poll while mounted: the Scribe runs host-side, so the draft appears when it
-  // settles; writes made elsewhere also show up.
+  const refresh = (): void => {
+    if (sessionId === undefined) return
+    void fetch(SEDIMENT_PATH + '?sessionId=' + encodeURIComponent(sessionId))
+      .then((response) => (response.ok ? response.json() as Promise<SedList> : undefined))
+      .then((body) => { if (body !== undefined) setFetched(body) })
+      .catch(() => { /* best-effort */ })
+  }
+
+  // Initial load; the fallback timer runs only without the jobs mirror.
   useEffect(() => {
     if (sessionId === undefined) {
-      setSkills([]); setPending(null); setDrafting(false)
+      setFetched(undefined)
       return
     }
-    let cancelled = false
-    const load = (): void => {
-      void fetch(SEDIMENT_PATH + '?sessionId=' + encodeURIComponent(sessionId))
-        .then((response) => (response.ok ? response.json() as Promise<SedList> : undefined))
-        .then((body) => {
-          if (cancelled || body === undefined) return
-          setSkills(body.skills ?? [])
-          setPending(body.pending ?? null)
-          setDrafting(body.drafting === true)
-        })
-        .catch(() => { /* best-effort */ })
+    refresh()
+    if (typeof props.useSessions === 'function') return
+    const timer = setInterval(refresh, POLL_MS)
+    return () => { clearInterval(timer) }
+  }, [sessionId, props.useSessions])
+
+  // Scribe settled → one one-shot fetch picks up the staged draft.
+  const wasScribeRunning = useRef(false)
+  useEffect(() => {
+    if (scribeRunning === true) {
+      wasScribeRunning.current = true
+      return
     }
-    load()
-    const timer = setInterval(load, POLL_MS)
-    return () => { cancelled = true; clearInterval(timer) }
-  }, [sessionId])
+    if (wasScribeRunning.current) {
+      wasScribeRunning.current = false
+      refresh()
+    }
+  }, [scribeRunning])
 
   const post = (body: Record<string, unknown>, done: string): void => {
     if (sessionId === undefined) return
@@ -140,7 +186,7 @@ function SedimentPanel(props: SedimentPanelProps): ReactNode {
       .then(async (response) => {
         const payload = await response.json().catch(() => ({})) as { error?: string; drafting?: boolean }
         if (!response.ok) throw new Error(payload.error ?? String(response.status))
-        if (payload.drafting === true) setDrafting(true)
+        if (payload.drafting === true) setFetched((current) => current === undefined ? current : { ...current, drafting: true })
         else setStatus(done)
       })
       .catch((error: unknown) => setStatus(t('sediment.failed') + ': ' + String((error as { message?: string })?.message ?? error)))
@@ -153,7 +199,7 @@ function SedimentPanel(props: SedimentPanelProps): ReactNode {
     void fetch(SEDIMENT_PATH + '?sessionId=' + encodeURIComponent(sessionId) + '&name=' + encodeURIComponent(name), { method: 'DELETE' })
       .then((response) => {
         if (!response.ok) throw new Error(String(response.status))
-        setSkills((current) => current.filter((skill) => skill.name !== name))
+        refresh()
         setStatus(t('sediment.removed'))
       })
       .catch((error: unknown) => setStatus(t('sediment.failed') + ': ' + String((error as { message?: string })?.message ?? error)))
@@ -229,7 +275,7 @@ function SedimentPanel(props: SedimentPanelProps): ReactNode {
           <div key={skill.name} style={S.card}>
             <div style={S.cardHead}>
               <span style={S.cardName}>{skill.name}</span>
-              <Pill>{String(Math.max(1, Math.round(skill.bytes / 1024))) + ' KB'}</Pill>
+              <Pill>{skill.bytes >= 1024 ? String(Math.round(skill.bytes / 1024)) + ' KB' : String(skill.bytes) + ' B'}</Pill>
               <Tooltip label={t('sediment.delete')}>
                 <Button
                   variant="ghost"
@@ -266,7 +312,7 @@ export function registerSedimentTab(ctx: RrpClientContext): void {
     })
     const disposeBody = ctx.slots.register(
       { name: 'sidebar.right.pane.tab', key: TAB_ID, locale: 'rrp', inject: (sessionId: unknown) => ({ t, sessionId }) },
-      SedimentPanel,
+      SedimentPanel as never,
     )
     return () => {
       disposeBody()

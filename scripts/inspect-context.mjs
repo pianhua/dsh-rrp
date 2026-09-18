@@ -10,10 +10,12 @@
  * the host does, and reports how many of dsh-rrp's context messages are still
  * ON THE SURFACE (model-visible) vs merely present in the append-only log.
  *
- * Expected after the replace-based publisher:
- *   on-surface card  = 1
- *   on-surface facts = 1
- *   replace events   >= 1   (proves the host accepted a replace)
+ * Expected under the CURRENT append-only publisher (replace was retired: it
+ * broke the prefix cache, measured hit rate 90% -> 27%):
+ *   on-surface card  = 1        (deduped: the card context is appended once)
+ *   on-surface facts >= 1       (one per state change; old copies leave the
+ *                                surface via host compaction, not replace)
+ *   replace events   = 0        (any replace here means a regression)
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'

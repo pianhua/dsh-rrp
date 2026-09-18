@@ -120,6 +120,32 @@ export interface RrpLayoutService {
   selectPanel(panelId: string | null): void
 }
 
+/** One job row mirrored to the client by the host Session Controller (`jobs` frames). */
+export interface RrpJobView {
+  id: string
+  kind: string
+  label: string
+  status: 'running' | 'stopping' | 'completed' | 'killed' | 'failed'
+  detail?: string
+  startedAt: number
+  finishedAt?: number
+}
+
+/** The slice of the host session-list state this plugin consumes. */
+export interface RrpSessionListState {
+  jobsBySession: Readonly<Record<string, readonly RrpJobView[]>>
+}
+
+/**
+ * The host's pushed session-list mirror (`useSessions`): subscribe with a
+ * selector; the component re-renders only when the selected slice changes.
+ * Push-fed by the host — no polling behind it.
+ */
+export type RrpUseSessions = <T>(selector: (state: RrpSessionListState) => T) => T
+
+/** The host's pushed per-session projection hook (`useProjection`). */
+export type RrpUseProjection = (key: string) => unknown
+
 /** The Context the client half sees. */
 export type RrpClientContext = CordisContext & {
   slots: RrpSlotsService

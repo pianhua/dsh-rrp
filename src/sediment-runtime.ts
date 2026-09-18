@@ -163,19 +163,24 @@ export function registerSedimentRuntime(ctx: Context): void {
       if (agent !== undefined) maybeArm(agent, projections)
     })
     const disposeSelected = runtime.on('agent-preset/selected', (...args: unknown[]) => {
-      const sessionId = args[0]
-      if (typeof sessionId !== 'string') return
-      const agent = agents.get(sessionId)
-      if (agent === undefined) {
-        if (!belongsToRpPreset(typeof args[1] === 'string' ? args[1] : undefined)) disarm(sessionId)
-        return
+      // Same lifecycle rule as agent/created: nothing may escape this listener.
+      try {
+        const sessionId = args[0]
+        if (typeof sessionId !== 'string') return
+        const agent = agents.get(sessionId)
+        if (agent === undefined) {
+          if (!belongsToRpPreset(typeof args[1] === 'string' ? args[1] : undefined)) disarm(sessionId)
+          return
+        }
+        const preset = projections.stateOf(agent.session, 'agentPreset')
+        if (typeof preset !== 'string' || !belongsToRpPreset(preset)) {
+          disarm(sessionId)
+          return
+        }
+        maybeArm(agent, projections)
+      } catch (error) {
+        console.warn(TAG + ' sediment preset-switch handling failed:', error)
       }
-      const preset = projections.stateOf(agent.session, 'agentPreset')
-      if (typeof preset !== 'string' || !belongsToRpPreset(preset)) {
-        disarm(sessionId)
-        return
-      }
-      maybeArm(agent, projections)
     })
     const disposeDisposed = runtime.on('agent/disposed', (...args: unknown[]) => {
       const agent = (args[0] as { agent?: AgentLike } | undefined)?.agent
