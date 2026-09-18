@@ -71,10 +71,23 @@ interface RuntimeFaces {
   on(event: string, listener: (...args: unknown[]) => void): () => void
 }
 
+/** Last summarized turn per session, to prevent duplicate runs on the same turn. */
+const LAST_SUMMARIZED = new Map<string, number>()
+
+/** Forget last-summarized turn watermark when a session is disposed. */
+export function forgetSummary(sessionId: string): void {
+  LAST_SUMMARIZED.delete(sessionId)
+}
+
+/** Check last-summarized turn watermark (for testing / inspection). */
+export function getLastSummarizedTurn(sessionId: string): number | undefined {
+  return LAST_SUMMARIZED.get(sessionId)
+}
+
 /**
- * Arm the macro summarizer for one preset.
- * @param ctx - the host context owning the registration.
- * @param presetId - only sessions composed from this preset are summarized.
+ * Trigger the Summarizer on completed RP turns at the cadence boundary.
+ * @param ctx - the Cordis context hosting the plugin.
+ * @param presetId - the RP mode id whose sessions we watch.
  */
 export function registerSummarizer(ctx: Context, presetId: string): void {
   const runtime = ctx as unknown as RuntimeFaces
@@ -87,7 +100,6 @@ export function registerSummarizer(ctx: Context, presetId: string): void {
     return
   }
   const faces: HostFaces = { llm, jobs, agents, projections }
-  const lastSummarized = new Map<string, number>()
 
   ctx.effect(() => {
     const dispose = runtime.on('session/event', (...args: unknown[]) => {
@@ -100,8 +112,8 @@ export function registerSummarizer(ctx: Context, presetId: string): void {
       const boundary = projections.stateOf(session, 'turnBoundary') as { lastTurn?: number } | undefined
       const turn = boundary?.lastTurn ?? 0
       if (turn === 0 || turn % DEFAULT_EVERY_TURNS !== 0) return
-      if (lastSummarized.get(session.id) === turn) return
-      lastSummarized.set(session.id, turn)
+      if (LAST_SUMMARIZED.get(session.id) === turn) return
+      LAST_SUMMARIZED.set(session.id, turn)
       scheduleSummary(faces, session, turn)
     })
     console.log(TAG + ' Summarizer armed for preset ' + presetId + ' every ' + DEFAULT_EVERY_TURNS + ' turns')

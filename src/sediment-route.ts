@@ -86,6 +86,22 @@ const PENDING = new Map<string, SedimentEntry>()
 /** Sessions with a Scribe pass in flight (one at a time). */
 const DRAFTING = new Set<string>()
 
+/** Forget staged drafts and in-flight drafting state when a session is disposed. */
+export function forgetSediment(sessionId: string): void {
+  PENDING.delete(sessionId)
+  DRAFTING.delete(sessionId)
+}
+
+/** Check whether a session has pending or drafting state (for testing / inspection). */
+export function hasSedimentDraft(sessionId: string): boolean {
+  return PENDING.has(sessionId) || DRAFTING.has(sessionId)
+}
+
+/** Set staged draft for testing. */
+export function stageSedimentDraftForTesting(sessionId: string, entry: SedimentEntry): void {
+  PENDING.set(sessionId, entry)
+}
+
 /** Respond with a JSON body. */
 function send(res: ResponseLike, status: number, payload: unknown): void {
   res.statusCode = status

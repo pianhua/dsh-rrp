@@ -24,7 +24,10 @@ import { settingsProjection } from './projection/settings.ts'
 import { sedimentProjection } from './projection/sediment.ts'
 import { worldStateProjection } from './projection/world-state.ts'
 import { registerStartRoute } from './start.ts'
-import { registerSummarizer, registerSummaryCommand } from './summarizer.ts'
+import { registerSummarizer, registerSummaryCommand, forgetSummary } from './summarizer.ts'
+import { forgetActivity } from './activity.ts'
+import { forgetSediment } from './sediment-route.ts'
+import { forgetState } from './state-publisher.ts'
 
 /** Loader row id. Keep in sync with cordis.patch.yml. */
 export const name = 'dsh-rrp'
@@ -147,6 +150,56 @@ export function apply(ctx: Context): void {
   ctx.inject(['commands', 'sessionProjections'], (scoped: Context) => {
     registerSummaryCommand(scoped)
   })
+
+  // Lifecycle cleanup (P0-4): clean up in-memory caches when sessions or agents are disposed.
+  ctx.inject(['sessions'], (scoped: Context) => {
+    scoped.effect(() => {
+      const runtime = scoped as unknown as { on(event: string, listener: (...args: unknown[]) => void): () => void }
+      return runtime.on('session/disposed', (...args: unknown[]) => {
+        const sessionId = extractSessionId(args[0])
+        if (sessionId !== undefined) cleanupSession(sessionId)
+      })
+    }, 'dsh-rrp: session disposal cleanup')
+  })
+
+  ctx.inject(['agents'], (scoped: Context) => {
+    scoped.effect(() => {
+      const runtime = scoped as unknown as { on(event: string, listener: (...args: unknown[]) => void): () => void }
+      return runtime.on('agent/disposed', (...args: unknown[]) => {
+        const sessionId = extractSessionId(args[0])
+        if (sessionId !== undefined) cleanupSession(sessionId)
+      })
+    }, 'dsh-rrp: agent disposal cleanup')
+  })
+}
+
+/** Clean up all in-memory state and caches associated with a session (P0-4). */
+export function cleanupSession(sessionId: string): void {
+  forgetState(sessionId)
+  forgetActivity(sessionId)
+  forgetSediment(sessionId)
+  forgetSummary(sessionId)
+}
+
+/** Resolve a Session id from an event payload. */
+export function extractSessionId(arg: unknown): string | undefined {
+  if (typeof arg === 'string' && arg.length > 0) return arg
+  if (!arg || typeof arg !== 'object') return undefined
+  const obj = arg as Record<string, unknown>
+  if (typeof obj.id === 'string' && obj.id.length > 0) return obj.id
+  if (obj.session && typeof obj.session === 'object') {
+    const session = obj.session as Record<string, unknown>
+    if (typeof session.id === 'string' && session.id.length > 0) return session.id
+  }
+  if (obj.agent && typeof obj.agent === 'object') {
+    const agent = obj.agent as Record<string, unknown>
+    if (agent.session && typeof agent.session === 'object') {
+      const session = agent.session as Record<string, unknown>
+      if (typeof session.id === 'string' && session.id.length > 0) return session.id
+    }
+    if (typeof agent.id === 'string' && agent.id.length > 0) return agent.id
+  }
+  return undefined
 }
 
 /** Comma-joined skill names, or `(none)`. */

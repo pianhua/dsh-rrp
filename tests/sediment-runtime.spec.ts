@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { legacySessionSedimentDir, renderSediment } from '../src/sediment.ts'
 import { SEDIMENT_LIMITS, applySedimentChange, type SedimentEntry } from '../src/sediment-state.ts'
 import { invalidateSediment, migrateLegacySediment, registerSedimentRuntime } from '../src/sediment-runtime.ts'
+import { hasSedimentDraft, stageSedimentDraftForTesting } from '../src/sediment-route.ts'
 import { rrpPayloadOf } from '../src/state-payload.ts'
 
 const homes: string[] = []
@@ -139,6 +140,20 @@ describe('sediment runtime arming', () => {
     setPreset('session-selected', 'standard')
     listeners.get('agent-preset/selected')?.('session-selected', 'standard')
     expect(disposed).toBe(1)
+  })
+
+  it('cleans up staged sediment drafts on agent/disposed', () => {
+    const { ctx, listeners } = fakeRuntime()
+    registerSedimentRuntime(ctx as never)
+    stageSedimentDraftForTesting('session-disposed-test', {
+      name: 'temp-lore',
+      description: 'temp',
+      body: 'temp',
+    })
+    expect(hasSedimentDraft('session-disposed-test')).toBe(true)
+
+    listeners.get('agent/disposed')?.({ agent: { session: { id: 'session-disposed-test' } } })
+    expect(hasSedimentDraft('session-disposed-test')).toBe(false)
   })
 })
 

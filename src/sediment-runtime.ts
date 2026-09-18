@@ -19,6 +19,7 @@ import { backupLegacySediment, listLegacySediment } from './sediment.ts'
 import { RRP_SEDIMENT_KEY, sedimentEntriesOf } from './sediment-state.ts'
 import { rrpPayloadOf } from './state-payload.ts'
 import { publishState, type StateSession } from './state-publisher.ts'
+import { forgetSediment } from './sediment-route.ts'
 
 const TAG = '[dsh-rrp]'
 
@@ -178,14 +179,21 @@ export function registerSedimentRuntime(ctx: Context): void {
     })
     const disposeDisposed = runtime.on('agent/disposed', (...args: unknown[]) => {
       const agent = (args[0] as { agent?: AgentLike } | undefined)?.agent
-      if (agent !== undefined) disarm(agent.session?.id ?? agent.id)
+      const sessionId = agent?.session?.id ?? agent?.id
+      if (sessionId !== undefined) {
+        disarm(sessionId)
+        forgetSediment(sessionId)
+      }
     })
     console.log(TAG + ' sediment runtime armed (worldline scoping via agent.ctx + Session projection)')
     return () => {
       disposeCreated()
       disposeSelected()
       disposeDisposed()
-      for (const sessionId of [...ARMED.keys()]) disarm(sessionId)
+      for (const sessionId of [...ARMED.keys()]) {
+        disarm(sessionId)
+        forgetSediment(sessionId)
+      }
     }
   }, 'dsh-rrp: sediment runtime')
 }
