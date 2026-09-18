@@ -309,13 +309,20 @@ function clockOf(at: string): string {
 }
 
 /** One labelled text field. */
-function Field(props: { label: string; value: string; placeholder?: string; onChange: (next: string) => void }): ReactNode {
+function Field(props: {
+  label: string
+  value: string
+  placeholder?: string
+  disabled?: boolean
+  onChange: (next: string) => void
+}): ReactNode {
   return (
     <label style={S.field}>
       <span style={S.fieldLabel}>{props.label}</span>
       <Input
         value={props.value}
         placeholder={props.placeholder}
+        disabled={props.disabled}
         onChange={(event) => props.onChange(event.target.value)}
       />
     </label>
@@ -323,13 +330,25 @@ function Field(props: { label: string; value: string; placeholder?: string; onCh
 }
 
 /** A section heading with a count and an add action. */
-function SectionHead(props: { title: string; count: number; addLabel: string; onAdd: () => void }): ReactNode {
+function SectionHead(props: {
+  title: string
+  count: number
+  addLabel: string
+  disabled?: boolean
+  onAdd: () => void
+}): ReactNode {
   return (
     <div style={S.section}>
       <span style={S.sectionTitle}>{props.title}</span>
       <Pill>{String(props.count)}</Pill>
       <span style={S.spacer} />
-      <Button variant="ghost" size="sm" icon={<IconPlusOutline16 size={16} />} onClick={props.onAdd}>
+      <Button
+        variant="ghost"
+        size="sm"
+        icon={<IconPlusOutline16 size={16} />}
+        disabled={props.disabled}
+        onClick={props.onAdd}
+      >
         {props.addLabel}
       </Button>
     </div>
@@ -337,10 +356,21 @@ function SectionHead(props: { title: string; count: number; addLabel: string; on
 }
 
 /** The remove control shared by every editable card. */
-function RemoveButton(props: { label: string; onClick: () => void }): ReactNode {
+function RemoveButton(props: {
+  label: string
+  disabled?: boolean
+  onClick: () => void
+}): ReactNode {
   return (
     <Tooltip label={props.label}>
-      <Button variant="ghost" size="sm" icon={<IconTrashOutline16 size={16} />} aria-label={props.label} onClick={props.onClick} />
+      <Button
+        variant="ghost"
+        size="sm"
+        icon={<IconTrashOutline16 size={16} />}
+        aria-label={props.label}
+        disabled={props.disabled}
+        onClick={props.onClick}
+      />
     </Tooltip>
   )
 }
@@ -359,6 +389,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
   const [activity, setActivity] = useState<RrpActivityLog | undefined>(undefined)
   const recentActivity = (activity?.entries ?? []).slice(-4).reverse()
   const inferenceRunning = activity === undefined ? undefined : pendingActivity(activity, 'world-state')
+  const isInferring = inferenceRunning !== undefined
 
   const [draft, setDraft] = useState<Draft>(() => draftOf(view))
   const [dirty, setDirty] = useState(false)
@@ -412,6 +443,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
   }, [sessionId])
 
   const mutate = (change: (next: Draft) => void): void => {
+    if (isInferring) return
     setDraft((previous) => {
       const next = structuredClone(previous)
       change(next)
@@ -486,13 +518,13 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
         <CollapsibleSection title={t('section.coreState') || '核心状态'} defaultExpanded={true}>
         <div style={S.section}><span style={S.sectionTitle}>{t('section.scene')}</span></div>
         <div style={S.card}>
-          <Field label={t('scene.location')} value={draft.scene.location} onChange={(v) => mutate((d) => { d.scene.location = v })} />
+          <Field disabled={isInferring} label={t('scene.location')} value={draft.scene.location} onChange={(v) => mutate((d) => { d.scene.location = v })} />
           <div style={S.grid2}>
             <div style={S.half}>
-              <Field label={t('scene.time')} value={draft.scene.time} onChange={(v) => mutate((d) => { d.scene.time = v })} />
+              <Field disabled={isInferring} label={t('scene.time')} value={draft.scene.time} onChange={(v) => mutate((d) => { d.scene.time = v })} />
             </div>
             <div style={S.half}>
-              <Field label={t('scene.weather')} value={draft.scene.weather} onChange={(v) => mutate((d) => { d.scene.weather = v })} />
+              <Field disabled={isInferring} label={t('scene.weather')} value={draft.scene.weather} onChange={(v) => mutate((d) => { d.scene.weather = v })} />
             </div>
           </div>
         </div>
@@ -501,25 +533,26 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
           title={t('section.characters')}
           count={draft.characters.length}
           addLabel={t('add')}
+          disabled={isInferring}
           onAdd={() => mutate((d) => { d.characters.push({ name: '', affinity: '', mood: '', appearance: '', condition: '' }) })}
         />
         {draft.characters.map((row, index) => (
           <div key={index} style={S.card}>
             <div style={S.cardHead}>
               <span style={S.cardLabel}>{t('section.characters') + ' ' + String(index + 1)}</span>
-              <RemoveButton label={t('remove')} onClick={() => mutate((d) => { d.characters.splice(index, 1) })} />
+              <RemoveButton disabled={isInferring} label={t('remove')} onClick={() => mutate((d) => { d.characters.splice(index, 1) })} />
             </div>
-            <Field label={t('name')} value={row.name} onChange={(v) => mutate((d) => { d.characters[index].name = v })} />
+            <Field disabled={isInferring} label={t('name')} value={row.name} onChange={(v) => mutate((d) => { d.characters[index].name = v })} />
             <div style={S.grid2}>
               <div style={S.half}>
-                <Field label={t('field.affinity')} value={row.affinity} onChange={(v) => mutate((d) => { d.characters[index].affinity = v })} />
+                <Field disabled={isInferring} label={t('field.affinity')} value={row.affinity} onChange={(v) => mutate((d) => { d.characters[index].affinity = v })} />
               </div>
               <div style={S.half}>
-                <Field label={t('field.mood')} value={row.mood} onChange={(v) => mutate((d) => { d.characters[index].mood = v })} />
+                <Field disabled={isInferring} label={t('field.mood')} value={row.mood} onChange={(v) => mutate((d) => { d.characters[index].mood = v })} />
               </div>
             </div>
-            <Field label={t('field.appearance')} value={row.appearance} onChange={(v) => mutate((d) => { d.characters[index].appearance = v })} />
-            <Field label={t('field.condition')} value={row.condition} onChange={(v) => mutate((d) => { d.characters[index].condition = v })} />
+            <Field disabled={isInferring} label={t('field.appearance')} value={row.appearance} onChange={(v) => mutate((d) => { d.characters[index].appearance = v })} />
+            <Field disabled={isInferring} label={t('field.condition')} value={row.condition} onChange={(v) => mutate((d) => { d.characters[index].condition = v })} />
           </div>
         ))}
 
@@ -527,21 +560,22 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
           title={t('section.inventory')}
           count={draft.inventory.length}
           addLabel={t('add')}
+          disabled={isInferring}
           onAdd={() => mutate((d) => { d.inventory.push({ name: '', quantity: '', note: '' }) })}
         />
         {draft.inventory.map((row, index) => (
           <div key={index} style={S.card}>
             <div style={S.cardHead}>
               <span style={S.cardLabel}>{t('section.inventory') + ' ' + String(index + 1)}</span>
-              <RemoveButton label={t('remove')} onClick={() => mutate((d) => { d.inventory.splice(index, 1) })} />
+              <RemoveButton disabled={isInferring} label={t('remove')} onClick={() => mutate((d) => { d.inventory.splice(index, 1) })} />
             </div>
-            <Field label={t('name')} value={row.name} onChange={(v) => mutate((d) => { d.inventory[index].name = v })} />
+            <Field disabled={isInferring} label={t('name')} value={row.name} onChange={(v) => mutate((d) => { d.inventory[index].name = v })} />
             <div style={S.grid2}>
               <div style={S.half}>
-                <Field label={t('field.quantity')} value={row.quantity} onChange={(v) => mutate((d) => { d.inventory[index].quantity = v })} />
+                <Field disabled={isInferring} label={t('field.quantity')} value={row.quantity} onChange={(v) => mutate((d) => { d.inventory[index].quantity = v })} />
               </div>
               <div style={S.half}>
-                <Field label={t('field.note')} value={row.note} onChange={(v) => mutate((d) => { d.inventory[index].note = v })} />
+                <Field disabled={isInferring} label={t('field.note')} value={row.note} onChange={(v) => mutate((d) => { d.inventory[index].note = v })} />
               </div>
             </div>
           </div>
@@ -551,16 +585,17 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
           title={t('section.flags')}
           count={draft.flags.length}
           addLabel={t('add')}
+          disabled={isInferring}
           onAdd={() => mutate((d) => { d.flags.push({ key: '', value: '' }) })}
         />
         {draft.flags.map((row, index) => (
           <div key={index} style={S.card}>
             <div style={S.cardHead}>
               <span style={S.cardLabel}>{t('section.flags') + ' ' + String(index + 1)}</span>
-              <RemoveButton label={t('remove')} onClick={() => mutate((d) => { d.flags.splice(index, 1) })} />
+              <RemoveButton disabled={isInferring} label={t('remove')} onClick={() => mutate((d) => { d.flags.splice(index, 1) })} />
             </div>
-            <Field label={t('flag.key')} value={row.key} onChange={(v) => mutate((d) => { d.flags[index].key = v })} />
-            <Field label={t('flag.value')} value={row.value} onChange={(v) => mutate((d) => { d.flags[index].value = v })} />
+            <Field disabled={isInferring} label={t('flag.key')} value={row.key} onChange={(v) => mutate((d) => { d.flags[index].key = v })} />
+            <Field disabled={isInferring} label={t('flag.value')} value={row.value} onChange={(v) => mutate((d) => { d.flags[index].value = v })} />
           </div>
         ))}
         </CollapsibleSection>
@@ -569,6 +604,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
         <CollapsibleSection title={t('section.dynamicFields') || '自定义字段'} defaultExpanded={true}>
           {showAddField ? (
             <AddFieldForm
+              disabled={isInferring}
               onAdd={(newField) => {
                 mutate((d) => { d.dynamicFields.push(newField) })
                 setShowAddField(false)
@@ -580,6 +616,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
               variant="ghost" 
               size="sm" 
               icon={<IconPlusOutline16 size={16} />}
+              disabled={isInferring}
               onClick={() => setShowAddField(true)}
               style={{ marginBottom: 12 }}
             >
@@ -597,6 +634,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
             <DynamicFieldEditor
               key={field.id}
               field={field}
+              disabled={isInferring}
               onChange={(updated) => mutate((d) => { d.dynamicFields[index] = updated })}
               onDelete={() => mutate((d) => { d.dynamicFields.splice(index, 1) })}
             />
@@ -671,11 +709,12 @@ function CollapsibleSection(props: {
 
 /** Dynamic field editor */
 function DynamicFieldEditor(props: {
-  field: DynamicFieldRow;
-  onChange: (updated: DynamicFieldRow) => void;
-  onDelete: () => void;
+  field: DynamicFieldRow
+  disabled?: boolean
+  onChange: (updated: DynamicFieldRow) => void
+  onDelete: () => void
 }): ReactNode {
-  const { field, onChange, onDelete } = props
+  const { field, disabled, onChange, onDelete } = props
   
   return (
     <div style={S.dynamicFieldCard}>
@@ -687,6 +726,7 @@ function DynamicFieldEditor(props: {
             variant="ghost" 
             size="sm" 
             icon={<IconTrashOutline16 size={14} />} 
+            disabled={disabled}
             onClick={onDelete}
           />
         </Tooltip>
@@ -700,6 +740,7 @@ function DynamicFieldEditor(props: {
               <Input 
                 type="number"
                 value={field.value} 
+                disabled={disabled}
                 onChange={(e) => onChange({ ...field, value: e.target.value })}
               />
             </label>
@@ -712,6 +753,7 @@ function DynamicFieldEditor(props: {
                   type="number"
                   value={field.min ?? ''} 
                   placeholder="无限制"
+                  disabled={disabled}
                   onChange={(e) => onChange({ ...field, min: e.target.value })}
                 />
               </label>
@@ -721,6 +763,7 @@ function DynamicFieldEditor(props: {
                   type="number"
                   value={field.max ?? ''} 
                   placeholder="无限制"
+                  disabled={disabled}
                   onChange={(e) => onChange({ ...field, max: e.target.value })}
                 />
               </label>
@@ -734,6 +777,7 @@ function DynamicFieldEditor(props: {
           <span style={S.fieldLabel}>值</span>
           <Input 
             value={field.value} 
+            disabled={disabled}
             onChange={(e) => onChange({ ...field, value: e.target.value })}
           />
         </label>
@@ -745,6 +789,7 @@ function DynamicFieldEditor(props: {
           <Input 
             value={field.value} 
             placeholder="true / false"
+            disabled={disabled}
             onChange={(e) => onChange({ ...field, value: e.target.value })}
           />
         </label>
@@ -754,13 +799,19 @@ function DynamicFieldEditor(props: {
 }
 
 /** Add new field form */
-function AddFieldForm(props: { onAdd: (field: DynamicFieldRow) => void; onCancel: () => void }): ReactNode {
+function AddFieldForm(props: {
+  disabled?: boolean
+  onAdd: (field: DynamicFieldRow) => void
+  onCancel: () => void
+}): ReactNode {
+  const { disabled } = props
   const [id, setId] = useState('')
   const [type, setType] = useState<'number' | 'string' | 'boolean'>('number')
   const [value, setValue] = useState('')
   const [error, setError] = useState('')
   
   const handleAdd = () => {
+    if (disabled) return
     const trimmedId = id.trim()
     if (!trimmedId) {
       setError('字段 ID 不能为空')
@@ -797,6 +848,7 @@ function AddFieldForm(props: { onAdd: (field: DynamicFieldRow) => void; onCancel
           <Input 
             value={id} 
             placeholder="magic_power" 
+            disabled={disabled}
             onChange={(e) => setId(e.target.value)}
           />
         </label>
@@ -804,6 +856,7 @@ function AddFieldForm(props: { onAdd: (field: DynamicFieldRow) => void; onCancel
           <span style={S.fieldLabel}>类型</span>
           <select 
             value={type} 
+            disabled={disabled}
             onChange={(e) => setType(e.target.value as any)}
             style={{
               width: '100%', height: 32, padding: '0 8px', borderRadius: 6,
@@ -822,13 +875,14 @@ function AddFieldForm(props: { onAdd: (field: DynamicFieldRow) => void; onCancel
           <Input 
             value={value} 
             placeholder={type === 'number' ? '0' : type === 'boolean' ? 'true/false' : ''}
+            disabled={disabled}
             onChange={(e) => setValue(e.target.value)}
           />
         </label>
       </div>
       <div style={S.formActions}>
-        <Button variant="ghost" size="sm" onClick={props.onCancel}>取消</Button>
-        <Button variant="primary" size="sm" onClick={handleAdd}>添加</Button>
+        <Button variant="ghost" size="sm" disabled={disabled} onClick={props.onCancel}>取消</Button>
+        <Button variant="primary" size="sm" disabled={disabled} onClick={handleAdd}>添加</Button>
       </div>
     </div>
   )
