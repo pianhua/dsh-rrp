@@ -185,7 +185,7 @@ async function runInference(
       return { status: 'killed' }
     }
 
-    const reply = parseChroniclerReply(text)
+    const reply = parseChroniclerReply(text, prior)
     if (reply === undefined) throw new Error('Chronicler reply was not a valid WorldState')
     
     // D5: Log field creation if present

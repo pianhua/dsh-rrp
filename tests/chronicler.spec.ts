@@ -29,6 +29,50 @@ describe('Chronicler reply contract', () => {
     expect(prompt).toContain('characters')
     expect(prompt).toContain('我推门而入。')
   })
+
+  it('automatically wraps bare scalars in dynamic fields into DynamicFieldValue format', () => {
+    const replyWithScalars = JSON.stringify({
+      ...VALID,
+      magic_power: 45,
+      reputation_rank: 'S',
+      is_cursed: false,
+    })
+    const parsed = parseChroniclerReply(replyWithScalars)
+    expect(parsed).toBeDefined()
+    expect(parsed?.state.magic_power).toEqual({ type: 'number', value: 45 })
+    expect(parsed?.state.reputation_rank).toEqual({ type: 'string', value: 'S' })
+    expect(parsed?.state.is_cursed).toEqual({ type: 'boolean', value: false })
+  })
+
+  it('infers dynamic field type and preserves constraints from existing state', () => {
+    const priorState = {
+      ...emptyWorldState(),
+      magic_power: { type: 'number' as const, value: 30, min: 0, max: 100 },
+    }
+    const reply = JSON.stringify({
+      ...VALID,
+      magic_power: 120, // exceeds max 100
+    })
+    const parsed = parseChroniclerReply(reply, priorState)
+    expect(parsed).toBeDefined()
+    // Constraint min: 0, max: 100 applied by pruneWorldState
+    expect(parsed?.state.magic_power).toEqual({ type: 'number', value: 100, min: 0, max: 100 })
+  })
+
+  it('combines createFields constraints with top-level bare scalars', () => {
+    const reply = JSON.stringify({
+      ...VALID,
+      stamina: 80,
+      createFields: [
+        { id: 'stamina', type: 'number', value: 80, min: 0, max: 100 },
+      ],
+    })
+    const parsed = parseChroniclerReply(reply)
+    expect(parsed).toBeDefined()
+    expect(parsed?.state.stamina).toEqual({ type: 'number', value: 80, min: 0, max: 100 })
+    expect(parsed?.createFields).toHaveLength(1)
+    expect(parsed?.createFields?.[0]?.id).toBe('stamina')
+  })
 })
 
 /** Minimal fake host: records the session feed listener and the started job. */

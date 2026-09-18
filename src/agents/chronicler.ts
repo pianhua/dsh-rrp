@@ -8,7 +8,16 @@
  * D5: Chronicler can create new dynamic fields when needed.
  */
 import { worldStateSchema } from '../projection/world-state.ts'
-import { pruneWorldState, isValidFieldId, createDynamicField, type WorldState, type DynamicFieldValue } from '../world-state.ts'
+import {
+  pruneWorldState,
+  isValidFieldId,
+  createDynamicField,
+  isCoreKey,
+  applyConstraints,
+  type WorldState,
+  type DynamicFieldValue,
+  type DynamicFieldType,
+} from '../world-state.ts'
 
 /** The Chronicler's persona and rules. */
 export const CHRONICLER_SYSTEM_PROMPT = [
@@ -95,7 +104,7 @@ export interface ChroniclerReply {
  * @param reply - the raw model output.
  * @returns the validated state and field creation requests, or undefined when unusable.
  */
-export function parseChroniclerReply(reply: string): ChroniclerReply | undefined {
+export function parseChroniclerReply(reply: string, existingState?: WorldState): ChroniclerReply | undefined {
   const start = reply.indexOf('{')
   const end = reply.lastIndexOf('}')
   if (start === -1 || end <= start) return undefined
@@ -113,6 +122,35 @@ export function parseChroniclerReply(reply: string): ChroniclerReply | undefined
   // Extract createFields if present
   const createFields = obj.createFields as CreateFieldRequest[] | undefined
   delete obj.createFields  // Remove from state object
+
+  // Preprocess dynamic fields: wrap bare scalars into DynamicFieldValue format
+  for (const key of Object.keys(obj)) {
+    if (isCoreKey(key)) continue
+    const val = obj[key]
+    if (typeof val === 'number' || typeof val === 'string' || typeof val === 'boolean') {
+      const existing = existingState?.[key] as DynamicFieldValue | undefined
+      const type: DynamicFieldType = (existing && typeof existing === 'object' && (existing.type === 'number' || existing.type === 'string' || existing.type === 'boolean'))
+        ? existing.type
+        : (typeof val as DynamicFieldType)
+
+      let value: number | string | boolean = val
+      if (type === 'number' && typeof val !== 'number') {
+        const num = Number(val)
+        if (!Number.isNaN(num)) value = num
+      } else if (type === 'string' && typeof val !== 'string') {
+        value = String(val)
+      } else if (type === 'boolean' && typeof val !== 'boolean') {
+        value = Boolean(val)
+      }
+
+      const field: DynamicFieldValue = { type, value }
+      if (existing && typeof existing === 'object') {
+        if (existing.min !== undefined) field.min = existing.min
+        if (existing.max !== undefined) field.max = existing.max
+      }
+      obj[key] = field
+    }
+  }
   
   // Validate base state
   const result = worldStateSchema.safeParse(obj)
@@ -128,7 +166,16 @@ export function parseChroniclerReply(reply: string): ChroniclerReply | undefined
       // Validate field request
       if (!req.id || typeof req.id !== 'string') continue
       if (!isValidFieldId(req.id)) continue  // Check naming rules
-      if (req.id in state) continue  // Skip if field already exists
+      if (req.id in state) {
+        const existingField = state[req.id] as DynamicFieldValue
+        if (typeof existingField === 'object' && existingField !== null) {
+          if (req.min !== undefined) existingField.min = req.min
+          if (req.max !== undefined) existingField.max = req.max
+          state[req.id] = applyConstraints(existingField)
+        }
+        validatedFields.push(req)
+        continue
+      }
       if (!['number', 'string', 'boolean'].includes(req.type)) continue
       
       // Check for duplicate with existing fields (prevent synonyms)
