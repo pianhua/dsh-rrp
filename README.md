@@ -1,6 +1,6 @@
 # dsh-rrp · DSH-Chronicle
 
-面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的**正统薄插件**：个人单机沉浸式角色扮演与交互小说引擎。复用宿主的会话、Agent、投影、右侧栏与后台任务，只做「角色扮演与动态世界模拟」这一层。
+基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的沉浸式角色扮演与交互小说插件，面向个人单机游玩。会话、Agent、投影、界面与后台任务都交给宿主，插件只提供叙事智能体、世界状态与卡包体系。
 
 ## 特性
 
