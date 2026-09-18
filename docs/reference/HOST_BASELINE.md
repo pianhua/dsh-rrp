@@ -58,6 +58,15 @@
 `0.1.6-alpha.2` 起 plugin-manager 支持运行时卸载插件：卸载路径必须真释放一切。
 本仓库：全部注册挂在 `ctx.effect`/`ctx.inject`；模块级会话缓存在 `session/disposed` 清理之外，另由 `cleanupAllSessions()` 在卸载 effect 中清空（`src/index.ts`）。
 
+## 查询宿主源码
+
+- **源码克隆**：`D:\projects\deepseek-harness`（与安装版本同 tag）。所有宿主问题先查源码，不读 npm 发布产物（客户端尤其只有压缩 bundle）。
+- **codegraph 索引**：只索引宿主克隆（`.codegraph/codegraph.db`，6,601 文件约 10s 建完；本仓库不索引）。
+  - CLI：`codegraph query <symbol> --json` / `callers` / `callees` / `impact` / `affected <file>`。
+  - MCP：`mcp__codegraph__*` 已配进 `~/.kimi-code/mcp.json`（stdio 起 `codegraph serve --mcp`）。**MCP 服务器只加入配置后新建的会话**——会话中途配置需新开会话生效。
+  - 升级宿主后 `codegraph init` 刷新索引。
+- 图谱答「谁调用谁 / 影响面」；精确文本、locale、配置仍走 Grep/Glob。
+
 ## 升级流程
 
 1. `npm i -g @deepseek-ai/dsh@<目标版本>`（宿主若在运行先关闭，Windows 会锁安装目录）。

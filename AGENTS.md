@@ -45,6 +45,7 @@ dsh-rrp/
 │   ├── HOST_ALIGNMENT.md        # 宿主能力映射与反重复造轮子红线
 │   ├── DEVELOPMENT.md           # 开发环境与日常循环
 │   └── reference/               # 为什么这么设计：决策/术语/经验/技能
+│       └── HOST_BASELINE.md     # 宿主版本基线、seam 清单与升级流程（升级宿主前必读）
 ├── src/                         # 源码
 │   ├── index.ts                 # 插件后端入口 (Cordis 插件)
 │   ├── preset.ts / preset-id.ts # RP 模式物化（基础 rp + 每卡 rp-<id>）与 id 规则

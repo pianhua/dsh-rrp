@@ -9,13 +9,22 @@
 
 | 项 | 值 |
 | :--- | :--- |
-| `dsh` CLI | 0.1.5-rc.1 |
-| 宿主包（`@deepseek-ai/dsh-*`） | 0.1.5-rc.2（嵌在全局 dsh 安装内，非顶层包） |
+| `dsh` CLI | 0.1.6-alpha.2 |
+| 宿主包（`@deepseek-ai/dsh-*`） | 0.1.6-alpha.2（嵌在全局 dsh 安装内，非顶层包） |
+| 宿主源码克隆 | `D:\projects\deepseek-harness` @ tag `dsh-v0.1.6-alpha.2` |
 | Node | v24.16.0 |
 | 包管理器 | pnpm 10.14.0 |
 | 构建 | tsdown 0.23.0 + typescript 5.9 |
 
-> `docs/reference/dsh-plugin-development-research.md` 基于 **0.1.6-alpha.1** 编写，比本机宿主新一档；涉及宿主细节时以本机实测为准。
+> 版本对账的唯一入口是 [`reference/HOST_BASELINE.md`](reference/HOST_BASELINE.md)：安装版本 ↔ 源码 tag ↔ seam 清单 ↔ 废弃债务。**升级宿主先读它。**
+
+---
+
+## 1.5 宿主源码与索引（2026-09 基建）
+
+- **源码克隆**：`D:\projects\deepseek-harness`，必须与安装版本同 tag（升级宿主时先 `git fetch && git checkout dsh-v<版本>`）。宿主问题一律读源码，不读 `AppData` 里的编译产物。
+- **codegraph 索引**：只对宿主克隆建索引（本仓库不索引）。`codegraph query/callers/callees/impact` CLI 即查；MCP 形态（`mcp__codegraph__*`）已写入 `~/.kimi-code/mcp.json`——**MCP 服务器只加入配置之后新建的会话**，中途配的需新开会话才能用。索引随宿主升级用 `codegraph init` 刷新。
+- 图谱负责「谁调用谁 / 影响面」类问题；精确文本与配置仍走 Grep/Glob。
 
 ---
 
@@ -75,6 +84,7 @@ node scripts/inspect-context.mjs --latest       # 需要时：解码日志、统
 [dsh-rrp] RP settings projection registered (key rrpSettings)
 [dsh-rrp] sediment projection registered (key rrpSediment)
 [dsh-rrp] active-card projection registered (key rrpCard)
+[dsh-rrp] transcript projection registered (key rrpTranscript)
 [dsh-rrp] Chronicler armed for preset rp
 [dsh-rrp] sediment runtime armed (worldline scoping via agent.ctx + Session projection)
 [dsh-rrp] sediment route armed at /dsh-rrp/sediment
