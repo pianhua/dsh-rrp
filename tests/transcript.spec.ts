@@ -34,4 +34,23 @@ describe('Chronicler transcript selection', () => {
     const only = latestTurnTranscriptOf(fakeSession([{ type: 'assistant/message', data: text('只有叙述。') }]))
     expect(only).toContain('只有叙述')
   })
+
+  it('supports up to 16000 characters by default and respects custom limit without 8000 cap', () => {
+    const longText = 'A'.repeat(10000)
+    const session = fakeSession([
+      { type: 'user/message', data: text(longText) },
+    ])
+    // latestTurnTranscriptOf caps at 8000
+    const latest = latestTurnTranscriptOf(session)
+    expect(latest.length).toBeLessThanOrEqual(8000)
+
+    // transcriptOf supports 16000 by default, so 10000 chars + prefix is NOT capped
+    const broad = transcriptOf(session)
+    expect(broad).toContain(longText)
+
+    // Custom limit is respected
+    const capped = transcriptOf(session, 5000)
+    expect(capped.length).toBe(5000)
+  })
 })
+
