@@ -42,9 +42,11 @@ export interface TranscriptSlice {
   facts?: { text: string }
   /** Any rrp payload with sediment !== undefined, ever. */
   sedimentSeen: boolean
+  /** Turn number of the latest summary publish, -1 when none (durable watermark). */
+  lastSummaryTurn: number
 }
 
 /** The empty slice: no events folded yet. */
 export function emptyTranscriptSlice(): TranscriptSlice {
-  return { entries: [], lastStateSeq: -1, sedimentSeen: false }
+  return { entries: [], lastStateSeq: -1, sedimentSeen: false, lastSummaryTurn: -1 }
 }

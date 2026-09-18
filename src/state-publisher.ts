@@ -26,6 +26,9 @@ import { WORLD_STATE_KEY, renderWorldState, type WorldState } from './world-stat
 
 const TAG = '[dsh-rrp]'
 
+/** Model-facing breadcrumb for metadata-only facts publishes (see publishState). */
+const LORE_ONLY_NOTICE = '【dsh-rrp】世界知识条目已更新（内容经系统技能注入，上文状态未变）。'
+
 /** The session face this module writes through. */
 export interface StateSession {
   readonly id: string
@@ -41,6 +44,8 @@ export interface RrpStatePatch {
   card?: CardContext
   worldState?: WorldState
   summary?: MacroSummary | null
+  /** Turn that produced `summary`; persisted as the durable Summarizer watermark. */
+  summaryTurn?: number
   settings?: RrpSettings
   sediment?: SedimentChange
 }
@@ -66,7 +71,9 @@ function appendLane(session: StateSession, text: string, payload: RrpStatePayloa
  * the old missing snapshot: nothing is retained.
  */
 function factsFingerprint(text: string, settings: RrpSettings): string {
-  return text + '\u0000summary=' + String(settings.summaryEnabled)
+  // summaryEveryTurns included: a cadence-only change must still republish,
+  // otherwise /summary every N never reaches the log and is lost on restart.
+  return text + '\u0000summary=' + String(settings.summaryEnabled) + '\u0000every=' + String(settings.summaryEveryTurns)
 }
 
 function cardFingerprint(card: CardContext, text: string): string {
@@ -127,9 +134,17 @@ export function publishState(session: StateSession, projections: StateProjection
       const factsText = parts.join('\n\n')
       const fingerprint = factsFingerprint(factsText, settings)
       if (patch.sediment !== undefined || retained.factsFingerprint !== fingerprint) {
-        appendLane(session, factsText, {
+        // Metadata-only publish (e.g. a confirmed lore entry whose state text is
+        // unchanged): keep the model-visible content to one breadcrumb line
+        // instead of re-rendering the full state — the sediment data itself
+        // rides the hidden source.rrp payload and reaches the model via skills.
+        const text = patch.sediment !== undefined && retained.factsFingerprint === fingerprint
+          ? LORE_ONLY_NOTICE
+          : factsText
+        appendLane(session, text, {
           ...(state === undefined ? {} : { worldState: state }),
           ...((state !== undefined || patch.summary !== undefined) ? { summary: summary ?? null } : {}),
+          ...(patch.summaryTurn === undefined ? {} : { summaryTurn: patch.summaryTurn }),
           settings,
           ...(patch.sediment === undefined ? {} : { sediment: patch.sediment }),
         })

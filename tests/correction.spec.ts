@@ -84,6 +84,38 @@ describe('player correction route', () => {
     expect(activity.entries[0]?.phase).toBe('corrected')
   })
 
+  it('returns 200 without appending when the correction changes nothing (issue #12)', async () => {
+    forgetState('s1'); forgetActivity('s1')
+    // The projection already holds the identical state: a stray save must not
+    // append a facts message nor touch the ledger.
+    const appended: Array<{ type: string; data: unknown }> = []
+    const sessions = {
+      get: (id: string) => (id === 's1' ? {
+        id: 's1',
+        append: (type: string, data: unknown) => { appended.push({ type, data }); return {} },
+      } : undefined),
+    }
+    let route: { handler: (req: unknown, res: unknown) => unknown } | undefined
+    const webServer = {
+      register: (definition: { handler: (req: unknown, res: unknown) => unknown }) => {
+        route = definition
+        return () => {}
+      },
+    }
+    const sessionProjections = { stateOf: (_s: unknown, key: string) => key === 'rrpWorldState' ? VALID : undefined }
+    const ctx = {
+      effect(fn: () => (() => void) | void) { return fn() },
+      get: (name: string) => ({ webServer, sessions, sessionProjections } as Record<string, unknown>)[name],
+    }
+    registerCorrectionRoute(ctx as never)
+    const { req, res } = fakeExchange({ sessionId: 's1', state: VALID })
+    await route!.handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(appended).toHaveLength(0)
+    expect(readActivity('s1').entries).toHaveLength(0)
+  })
+
   it('rejects an invalid state without appending', async () => {
     const host = fakeHost()
     registerCorrectionRoute(host.ctx as never)

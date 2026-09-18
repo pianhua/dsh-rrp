@@ -16,7 +16,7 @@ import { recordActivity } from './activity.ts'
 import { belongsToRpPreset } from './preset-id.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 import { publishState } from './state-publisher.ts'
-import { pruneWorldState } from './world-state.ts'
+import { WORLD_STATE_KEY, diffWorldState, NO_WORLD_STATE_CHANGE, pruneWorldState, type WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
 /** Same-origin exact route the panel posts to. */
@@ -121,6 +121,13 @@ export function registerCorrectionRoute(ctx: Context): void {
           return
         }
         const pruned = pruneWorldState(state.data)
+        // No-change short-circuit: a stray click on "save" with an identical
+        // state must not append a facts message (log noise + wasted tokens).
+        const prior = projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined
+        if (prior !== undefined && diffWorldState(prior, pruned) === NO_WORLD_STATE_CHANGE) {
+          send(res, 200, { ok: true, unchanged: true })
+          return
+        }
         const published = publishState(session, projections, { worldState: pruned })
         if (!published) {
           send(res, 500, { error: 'WorldState write failed' })

@@ -158,9 +158,23 @@ describe('durable state publisher', () => {
 
     expect(appended).toHaveLength(2)
     expect(payloadOf(appended[1]?.data)?.sediment?.kind).toBe('add')
+    // Metadata-only publish: model-visible content is the one-line breadcrumb,
+    // not a full state re-render; the sediment body stays in the hidden payload.
     const text = (appended[1]?.data as { content: Array<{ text: string }> }).content[0]?.text
-    expect(text).toBe(renderWorldState(STATE))
+    expect(text).not.toBe(renderWorldState(STATE))
+    expect(text).toContain('dsh-rrp')
     expect(text).not.toContain('BODY MUST STAY HIDDEN')
+    // Hidden payload still carries the whole world state (fork/replay rule).
+    expect(payloadOf(appended[1]?.data)?.worldState).toEqual(STATE)
+  })
+
+  it('republishes when only the summary cadence changes (issue #9)', () => {
+    const { session, appended } = fakeSession('sp-cadence')
+    const projections = { stateOf: () => undefined }
+    publishState(session, projections, { settings: { summaryEnabled: true, summaryEveryTurns: 8 } })
+    publishState(session, projections, { settings: { summaryEnabled: true, summaryEveryTurns: 4 } })
+    expect(appended).toHaveLength(2)
+    expect(payloadOf(appended[1]?.data)?.settings?.summaryEveryTurns).toBe(4)
   })
 
   it('persists a summary even when the session has no WorldState yet', () => {

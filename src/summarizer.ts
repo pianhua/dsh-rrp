@@ -15,9 +15,11 @@ import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
 import { SUMMARIZER_SYSTEM_PROMPT, buildSummarizerPrompt, parseSummarizerReply } from './agents/summarizer.ts'
 import { messageOf, transcriptOf } from './chronicler.ts'
+import { SUMMARY_KEY, diffMacroSummary, NO_SUMMARY_CHANGE, type MacroSummary } from './macro-summary.ts'
 import { matchesPreset } from './preset-id.ts'
 import { RRP_SETTINGS_KEY, clampSummaryEveryTurns, rrpSettingsOf } from './settings.ts'
 import { publishState } from './state-publisher.ts'
+import { TRANSCRIPT_KEY, type TranscriptSlice } from './transcript.ts'
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'summarizer'
@@ -119,6 +121,11 @@ export function registerSummarizer(ctx: Context, presetId: string): void {
         const turn = boundary?.lastTurn ?? 0
         if (turn === 0 || turn % settings.summaryEveryTurns !== 0) return
         if (LAST_SUMMARIZED.get(session.id) === turn) return
+        // Restart-proof watermark: the transcript slice durably records which
+        // turn the last published summary covered, so a process restart does
+        // not re-run a boundary turn that was already summarized.
+        const slice = projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined
+        if (slice?.lastSummaryTurn === turn) return
         // Mark only once the job is actually scheduled, so a transient route
         // or job-start failure does not skip this turn's summary forever.
         if (scheduleSummary(faces, session, turn)) LAST_SUMMARIZED.set(session.id, turn)
@@ -157,7 +164,7 @@ function scheduleSummary(faces: HostFaces, session: SessionLike, turn: number): 
       run: () => {
         const controller = new AbortController()
         let cancelled = false
-        const done = runSummary(faces, session, route, controller.signal, () => cancelled)
+        const done = runSummary(faces, session, turn, route, controller.signal, () => cancelled)
         return {
           cancel: () => {
             cancelled = true
@@ -174,10 +181,12 @@ function scheduleSummary(faces: HostFaces, session: SessionLike, turn: number): 
   }
 }
 
-/** One summarization pass: prompt -> model -> parse -> append. */
+/** One summarization pass: prompt -> model -> parse -> append.
+ * @param turn - the completed turn this pass covers (durable watermark). */
 async function runSummary(
   faces: HostFaces,
   session: SessionLike,
+  turn: number,
   route: { provider: string; model: string },
   signal: AbortSignal,
   isCancelled: () => boolean,
@@ -185,9 +194,10 @@ async function runSummary(
   const activityId = randomUUID()
   const stamp = (): string => new Date().toISOString()
   try {
-    const full = transcriptOf(faces.projections, session, TRANSCRIPT_LIMIT)
-    if (full.trim().length === 0) return { status: 'completed' }
-    const transcript = full.length > TRANSCRIPT_LIMIT ? full.slice(full.length - TRANSCRIPT_LIMIT) : full
+    // transcriptOf already caps at whole-entry boundaries (prefix-cache stable);
+    // no second char-level cut here.
+    const transcript = transcriptOf(faces.projections, session, TRANSCRIPT_LIMIT)
+    if (transcript.trim().length === 0) return { status: 'completed' }
 
     recordActivity(session.id, {
       id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'started',
@@ -219,7 +229,20 @@ async function runSummary(
 
     const summary = parseSummarizerReply(text)
     if (summary === undefined) throw new Error('Summarizer reply was not a valid MacroSummary')
-    if (!publishState(session, faces.projections, { summary })) {
+    // Short-circuit like the Chronicler: a reworded-but-identical summary must
+    // not trigger a facts republish (wasted tokens and log noise).
+    const priorSummary = faces.projections.stateOf(session, SUMMARY_KEY) as MacroSummary | null | undefined
+    if (priorSummary !== null && priorSummary !== undefined) {
+      const diff = diffMacroSummary(priorSummary, summary)
+      if (diff === NO_SUMMARY_CHANGE) {
+        recordActivity(session.id, {
+          id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'committed', detailKey: 'detail.noChange',
+        })
+        console.log(TAG + ' Summarizer skipped publish (no summary change) for session ' + session.id)
+        return { status: 'completed' }
+      }
+    }
+    if (!publishState(session, faces.projections, { summary, summaryTurn: turn })) {
       throw new Error('MacroSummary append failed')
     }
     recordActivity(session.id, {

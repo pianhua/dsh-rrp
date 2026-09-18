@@ -33,6 +33,8 @@ export interface RrpStatePayload {
   worldState?: WorldState
   /** Complete post-change macro summary; explicit `null` clears it. */
   summary?: MacroSummary | null
+  /** Turn number that produced this summary (durable Summarizer watermark). */
+  summaryTurn?: number
   /** Complete player settings for this Session. */
   settings?: RrpSettings
   /** One incremental dynamic-lore operation for this worldline. */

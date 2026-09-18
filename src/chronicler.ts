@@ -316,7 +316,10 @@ function transcriptSliceOf(projections: Pick<ProjectionsService, 'stateOf'>, ses
   }
 }
 
-/** Shared renderer: non-empty slice entries as 【玩家】/【叙述】 parts, tail-capped. */
+/** Shared renderer: non-empty slice entries as 【玩家】/【叙述】 parts, tail-capped.
+ * The cap drops whole entries from the front instead of slicing mid-string, so
+ * the retained head stays byte-identical across runs and keeps its prefix-cache
+ * alignment for the Summarizer (H1: sliding char windows destroyed that). */
 function renderSliceTranscript(slice: TranscriptSlice, fromIndex: number, minSeq: number, limit: number): string {
   const parts: string[] = []
   for (let index = fromIndex; index < slice.entries.length; index += 1) {
@@ -325,8 +328,16 @@ function renderSliceTranscript(slice: TranscriptSlice, fromIndex: number, minSeq
     if (entry.text.length === 0) continue
     parts.push('【' + (entry.role === 'user' ? '玩家' : '叙述') + '】\n' + entry.text)
   }
-  const joined = parts.join('\n\n')
-  return joined.length > limit ? joined.slice(joined.length - limit) : joined
+  // Entry-aligned tail cap: skip leading parts until the remainder fits. Whole
+  // parts only — never a mid-text cut — so surviving bytes are prefix-stable.
+  let total = parts.length > 0 ? parts.length * 2 - 2 : 0
+  for (const part of parts) total += part.length
+  let start = 0
+  while (start < parts.length && total > limit) {
+    total -= (parts[start]?.length ?? 0) + 2
+    start += 1
+  }
+  return parts.slice(start).join('\n\n')
 }
 
 /**

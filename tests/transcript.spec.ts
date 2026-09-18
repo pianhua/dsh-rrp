@@ -49,8 +49,24 @@ describe('Chronicler transcript selection', () => {
     const broad = transcriptOf(projections, SESSION)
     expect(broad).toContain(longText)
 
-    // Custom limit is respected
+    // Custom limit is respected and cuts only at entry boundaries (never
+    // mid-text) so the retained head stays byte-identical across runs.
     const capped = transcriptOf(projections, SESSION, 5000)
-    expect(capped.length).toBe(5000)
+    expect(capped.length).toBeLessThanOrEqual(5000)
+    // One oversized entry under the limit: dropped whole, nothing partial.
+    expect(capped).toBe('')
+  })
+
+  it('cuts at entry boundaries so the surviving head is byte-stable', () => {
+    const first = 'A'.repeat(3000)
+    const second = 'B'.repeat(3000)
+    const projections = fakeProjections([
+      { type: 'user/message', data: text(first) },
+      { type: 'assistant/message', data: text(second) },
+    ])
+    const capped = transcriptOf(projections, SESSION, 5000)
+    // Keeping both parts would be 6002 chars; entry-aligned drop removes the
+    // first part whole and keeps the second byte-identical.
+    expect(capped).toBe('【叙述】\n' + second)
   })
 })

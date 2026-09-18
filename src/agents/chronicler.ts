@@ -68,17 +68,20 @@ export interface ChroniclerPromptInput {
   transcript: string
 }
 
-/** Build the single user message describing the task. Pure. */
+/** Build the single user message describing the task. Pure.
+ * Layout: the static instruction head comes FIRST so consecutive runs share a
+ * byte-stable prefix (the volatile prior JSON and transcript trail at the end);
+ * rewriting it per turn would forfeit the provider's prefix cache (M1). */
 export function buildChroniclerPrompt(input: ChroniclerPromptInput): string {
   return [
-    '这是此前的世界状态（完整 JSON）：',
+    '任务：根据【最近的剧情】推演世界与人物实际发生的变化，输出更新后的完整 WorldState JSON（保留未被改变的词条）。',
+    '如需创建新的自定义字段，使用 createFields 数组。只输出 JSON，不要任何解释。',
+    '',
+    '【此前的世界状态（完整 JSON）】',
     JSON.stringify(input.prior, null, 2),
     '',
-    '以下是最近的剧情：',
+    '【最近的剧情】',
     input.transcript,
-    '',
-    '请据此输出更新后的完整 WorldState JSON（保留未被改变的词条）。',
-    '如需创建新的自定义字段，使用 createFields 数组。只输出 JSON。',
   ].join('\n')
 }
 

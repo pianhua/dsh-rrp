@@ -33,6 +33,8 @@ export const transcriptSchema = z.object({
   card: z.object({ fingerprint: z.string() }).optional(),
   facts: z.object({ text: z.string() }).optional(),
   sedimentSeen: z.boolean(),
+  // .catch: rows persisted before the watermark field default to "none".
+  lastSummaryTurn: z.number().int().catch(-1),
 })
 
 /**
@@ -86,6 +88,10 @@ export const transcriptProjection = {
         next.facts = { text: messageTextOf(event) }
       }
       if (payload.sediment !== undefined) next.sedimentSeen = true
+      // Durable Summarizer watermark: the turn that produced this summary.
+      if (payload.summary !== undefined && typeof payload.summaryTurn === 'number') {
+        next.lastSummaryTurn = payload.summaryTurn
+      }
       return next
     }
 

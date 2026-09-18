@@ -26,11 +26,11 @@ describe('Summarizer reply contract', () => {
   })
 })
 
-function fakeHost(preset: string, turn: number, summaryEnabled = true) {
+function fakeHost(preset: string, turn: number, summaryEnabled = true, seed?: Array<{ type: string; data: unknown }>) {
   const listeners = new Map<string, (...args: unknown[]) => void>()
   const appended: Array<{ type: string; data: unknown }> = []
   let started = 0
-  const proseSeed = [{ type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟。' }] } }]
+  const proseSeed = seed ?? [{ type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟。' }] } }]
   const session = {
     id: 's1',
     append(type: string, data: unknown) { appended.push({ type, data }); return {} },
@@ -77,6 +77,35 @@ describe('Summarizer trigger', () => {
     registerSummarizer(host.ctx as never, 'rp')
     host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
     expect(host.started()).toBe(0)
+  })
+
+  it('does not re-run a boundary turn already covered before a restart (issue #13)', () => {
+    // The transcript slice durably folds the summary publish: a restart loses
+    // the in-memory watermark but not the slice, so turn 8 is recognized.
+    const host = fakeHost('rp', 8, true, [{
+      type: 'user/message',
+      data: {
+        content: [{ type: 'text', text: '【大局编年】更新' }],
+        source: { rrp: { summary: VALID, summaryTurn: 8, settings: { summaryEnabled: true, summaryEveryTurns: 8 } } },
+      },
+    }])
+    registerSummarizer(host.ctx as never, 'rp')
+    host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    expect(host.started()).toBe(0)
+  })
+})
+
+describe('diffMacroSummary (issue #10)', () => {
+  it('returns the no-change sentinel for an identical summary', async () => {
+    const { diffMacroSummary, NO_SUMMARY_CHANGE } = await import('../src/macro-summary.ts')
+    expect(diffMacroSummary(VALID, { ...VALID })).toBe(NO_SUMMARY_CHANGE)
+  })
+  it('digests a changed dimension', async () => {
+    const { diffMacroSummary, NO_SUMMARY_CHANGE } = await import('../src/macro-summary.ts')
+    const next = { ...VALID, conflict: '追兵已至' }
+    const diff = diffMacroSummary(VALID, next)
+    expect(diff).not.toBe(NO_SUMMARY_CHANGE)
+    expect(diff).toContain('核心矛盾')
   })
 })
 
