@@ -23,3 +23,9 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Local-only working docs and test evidence (not distributed)
+docs/DEVELOPMENT.md
+docs/reference/
+docs/superpowers/
+dsh-rrp-test-report/

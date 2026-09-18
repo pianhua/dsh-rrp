@@ -1,106 +1,41 @@
 # dsh-rrp · DSH-Chronicle
 
-> 面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的**正统薄插件** —— 个人单机沉浸式角色扮演与交互小说引擎。
+面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的**正统薄插件**：个人单机沉浸式角色扮演与交互小说引擎。复用宿主的会话、Agent、投影、右侧栏与后台任务，只做「角色扮演与动态世界模拟」这一层。
 
-**这不是第二个 Harness，也不是第二个 Web 应用。**  
-它是一组严格挂在 DSH 宿主之上的插件：复用宿主的会话、Agent、投影、右侧栏与后台任务，只把「角色扮演与动态世界模拟」这一层做到极致。
+## 特性
 
----
+- **开卡即玩**：宿主左栏「卡片展厅」选卡开局，内置两张官方卡（落魄大小姐女仆 · 米娅 / 雪夜雁门客栈）
+- **三智体分立**：Author 纯正文（零代打）→ Chronicler 每轮异步推演世界状态 → Summarizer 大局编年（`/summary` 按局开关、周期可调）
+- **无锁矫正**：右栏世界状态就地修改即生效（Last-Write-Wins），下一轮执笔以最新切面为准
+- **Skills 知识体系**：卡包设定全量 Skill 化、按需调取；剧情新设定经 `/lore` 或典籍面板审阅后沉淀进当前世界线
+- **原生世界线**：分支 = DSH `Session.fork`，状态由会话投影纯数学重放，零幽灵状态
 
-## 当前状态
+## 环境要求
 
-阶段路线中的功能切片均已实现并经真机验收：卡包/存档/世界线隔离、UI 精修、D5 动态状态、D6 时序窗口、P4 官方 YAML 解析、D8 知识沉淀控制环、写作质量技能，以及 2026-09-18 稳健性审计修复（P0-1 ~ P1-8）。已完成内容统一归档于 [`docs/reference/COMPLETED_WORK.md`](docs/reference/COMPLETED_WORK.md)。
+- DeepSeek Harness `0.1.6-alpha.2`
+- Node.js `^22.19.0 || >=24.0.0`
 
-核心环路已跑通：物化原生 RP 模式 → Author 只读消费卡包设定 / 最新 WorldState / 大局编年 → 每轮正文后纪事官异步推演状态 → 玩家在原生右侧栏就地矫正（无锁 Last-Write-Wins）→ 世界设定以 Skills 按需调取 → 每 8 回合编年官提炼四维大局观（`/summary` 按局可关）→ 剧情确立的新设定可经 `/lore` 审阅后写入当前世界线，并在 fork 时继承分叉点前缀。
+## 使用
 
-当前已确认但尚未解决的边界：世界状态和典籍面板各有一条 2s 客户端轮询（待收敛到宿主 Jobs / 投影推送 seam）。
+将本包安装为 DSH profile 的插件后启动宿主：左栏「**卡片展厅**」→ 选卡 → 「**开始这一局**」。
 
-| 项 | 状态 |
-| :--- | :--- |
-| 产品设计规格 | ✅ [`docs/DESIGN.md`](docs/DESIGN.md) |
-| 宿主能力映射 | ✅ [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) |
-| 协作与红线准则 | ✅ [`AGENTS.md`](AGENTS.md) |
-| 开发环境流程 | ✅ [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
-| 生产代码 | ✅ 功能环已真机验收；剩余项均为可选增强 |
+## 开发
 
----
-
-## 它要解决什么
-
-传统酒馆（SillyTavern）式 RP 有五个结构性硬伤，`dsh-rrp` 逐条根除：
-
-| 酒馆劣根性 | `dsh-rrp` 的正统解法 |
-| :--- | :--- |
-| 上下文无脑堆砌 | 拥抱现代模型原生的 **Skills 按需调取** |
-| 死板正则世界书 | 设定 Markdown Skill 化，语义自主检索 |
-| 气泡翻页伪分支 + 幽灵状态 | 映射 DSH 原生 `Session.fork` + 会话投影重放 |
-| 长线剧情流水账 | 独立 **Summarizer Agent** 定期提炼大局观（可关） |
-| 模型替玩家代打 | Author Agent 权能硬隔离，严禁代打 |
-
----
-
-## 架构一览
-
-```text
-DeepSeek Harness 宿主
-├── 会话日志 / Agent 循环 / 后台任务 / 右侧栏 / 会话投影   ← 宿主负责
-└── dsh-rrp 插件
-     ├── Author Agent      执笔智体（纯正文、只读设定）
-     ├── Chronicler Agent  纪事官（异步推演世界状态）
-     ├── Summarizer Agent  大局编年（可选，定期摘要）
-     ├── Scribe Agent      典籍编纂（D8：只起草一条，玩家确认才入会话）
-     ├── 世界状态 / 典籍     DSH 原生右侧栏面板
-     ├── 卡片展厅 + 开卡     main 面板 + 左栏导航
-     └── Skills 知识体系    卡包技能（preset 作用域）+ 沉淀（会话作用域）
+```bash
+pnpm install
+pnpm run build        # 产物 lib/（host ESM + client bundle）
+pnpm run typecheck
+pnpm test
 ```
 
-核心理念：**领域只写纯数学，驱动权归宿主。**
+真实宿主验证：`node scripts/link-dev.mjs` 把本仓库链接进 `$DSH_HOME/profiles/rp-dev`，随后 `dsh --profile rp-dev --port 3099 --no-open`。
 
----
+## 文档
 
-## 设计哲学（四条铁律）
+- [`docs/DESIGN.md`](docs/DESIGN.md) — 唯一产品目标规格
+- [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) — 宿主能力映射与反重复造轮子红线
+- [`AGENTS.md`](AGENTS.md) — 协作准则与红线
 
-1. **个人玩具定位** —— 纯单机、单人部署；拒绝分布式锁、并发压测、多租户等企业级过度工程。
-2. **100% 正统 DSH 插件** —— 绝不自建 HTTP 服务器、自建前端、自建数据库引擎；一切复用宿主能力。
-3. **自然时序流，无锁矫正** —— AI 更新状态 → 玩家随手修正 → 下一轮直接消费最新值；废除 CAS 锁与永久保护盾。
-4. **轻量透明** —— 每一行代码都直接服务于游玩体验，拒绝为「架构完整性」脑补基建。
+## 许可
 
----
-
-## 文档索引
-
-> **接手先读 [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md)**（宿主能力映射与红线）与 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)（开发循环）；宿主接缝证据链见 [`docs/reference/HOST_SEAMS.md`](docs/reference/HOST_SEAMS.md)。
-> 契约层三份：[`AGENTS.md`](AGENTS.md) → [`docs/DESIGN.md`](docs/DESIGN.md) → [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md)。
-
-| 顺序 | 文档 | 作用 |
-| ---: | :--- | :--- |
-| 1 | [`AGENTS.md`](AGENTS.md) | 协作准则、红线、开工协议 |
-| 2 | [`docs/DESIGN.md`](docs/DESIGN.md) | 唯一产品目标规格 |
-| 3 | [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) | 宿主能力映射 + 反重复造轮子红线 |
-| 4 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | 开发环境、日常循环、真实宿主验证 |
-
-工程与开发环境：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) —— 构建、`rp-dev` 开发 profile、真实宿主验证流程。  
-扩展契约：`dsh-rrp/contracts`（外部记忆/分析插件读取 WorldState 与大局编年）；边界见 [`docs/reference/MEMORY.md`](docs/reference/MEMORY.md)。
-
-参考资料层（回答「为什么」，防漂移）：[`docs/reference/README.md`](docs/reference/README.md)
-
-其中**动设计前必读**两份：
-
-- [`docs/reference/DECISIONS.md`](docs/reference/DECISIONS.md) —— 15 条关键决策与理由
-- [`docs/reference/GLOSSARY.md`](docs/reference/GLOSSARY.md) —— 标准术语与禁用旧词
-
----
-
-## 与旧项目的关系
-
-本仓库是 **完全重启**，不复用旧实现的代码或格式：
-
-- 旧仓 `D:\projects\dsh-custom-agent`（约 4.9 万行）仅作为**灵感与经验来源**，其中大量自建平台代码已被判定为「重复造轮子」，**不迁移**；
-- 卡包格式、状态 Schema 等**重新制定**，不受旧格式约束；
-- 不兼容传统酒馆卡生态；未来通过独立转换 Skill 做单向转译。
-
----
-
-## 许可证
-
-MIT
+[MIT](LICENSE)

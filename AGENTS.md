@@ -3,7 +3,7 @@
 > **项目代号**：`dsh-rrp`（DSH-Chronicle 现代重启版 · 个人单机沉浸式 RP 插件）  
 > **核心定位**：面向 DeepSeek Harness（DSH）的**正统薄插件**，专为个人单机游玩打造的高品质角色扮演与交互小说引擎。  
 > **设计基准**：严格以 [`docs/DESIGN.md`](docs/DESIGN.md) 为唯一目标规格，以 [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) 为宿主能力映射准则。  
-> **防漂移记录**：[`docs/reference/`](docs/reference/README.md) 保存决策理由、标准术语、社区经验与旧项目教训；**改动设计前必读 [`DECISIONS.md`](docs/reference/DECISIONS.md)**。
+> **防漂移记录**：`docs/reference/` 保存决策理由、标准术语、社区经验与旧项目教训（**本地开发工作区，不随仓库分发**）；**改动设计前必读其中的 `DECISIONS.md`**。
 
 ---
 

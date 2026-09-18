@@ -12,8 +12,10 @@
     "cards",
     "cordis.patch.yml",
     "README.md",
+    "LICENSE",
     "AGENTS.md",
-    "docs",
+    "docs/DESIGN.md",
+    "docs/HOST_ALIGNMENT.md",
     "presets"
   ],
   "exports": {
