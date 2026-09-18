@@ -22,7 +22,7 @@ export type RrpActor = 'chronicler' | 'summarizer' | 'player' | 'card' | 'scribe
 export type RrpTarget = 'world-state' | 'summary' | 'sediment'
 
 /** Lifecycle of one writer pass. */
-export type RrpPhase = 'started' | 'committed' | 'failed' | 'corrected'
+export type RrpPhase = 'started' | 'committed' | 'failed' | 'corrected' | 'stale'
 
 /** One attribution entry. */
 export interface RrpActivity {

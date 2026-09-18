@@ -76,7 +76,7 @@ describe('Chronicler reply contract', () => {
 })
 
 /** Minimal fake host: records the session feed listener and the started job. */
-function fakeHost(preset: string, options: { failAppend?: boolean } = {}) {
+function fakeHost(preset: string, options: { failAppend?: boolean; stateOf?: (session: unknown, key: string) => unknown } = {}) {
   const listeners = new Map<string, (...args: unknown[]) => void>()
   const appended: Array<{ type: string; data: unknown }> = []
   let started: { kind: string; label: string; run(): { cancel(reason?: string): void; done: Promise<{ status: string }> } } | undefined
@@ -108,7 +108,12 @@ function fakeHost(preset: string, options: { failAppend?: boolean } = {}) {
     },
   }
   const agents = { get: () => ({ options: { provider: 'deepseek', model: 'deepseek-chat' } }) }
-  const projections = { stateOf: (_session: unknown, key: string) => (key === 'agentPreset' ? preset : undefined) }
+  const projections = {
+    stateOf: (session: unknown, key: string) => {
+      if (options.stateOf) return options.stateOf(session, key)
+      return key === 'agentPreset' ? preset : undefined
+    },
+  }
 
   const ctx = {
     effect(fn: () => (() => void) | void) {
@@ -170,5 +175,33 @@ describe('Chronicler trigger', () => {
     const outcome = await host.started()!.run().done
     expect(outcome.status).toBe('failed')
     expect(readActivity('session-1').entries.map((entry) => entry.phase)).toEqual(['started', 'failed'])
+  })
+
+  it('discards inference and marks as stale when player corrected world state during inference', async () => {
+    forgetState('session-1'); forgetActivity('session-1')
+    let callCount = 0
+    const host = fakeHost('rp', {
+      stateOf: (_session, key) => {
+        if (key === 'agentPreset') return 'rp'
+        if (key === 'rrpWorldState') {
+          callCount++
+          // First call is prior (empty); second call simulates player correction during inference
+          if (callCount === 1) return emptyWorldState()
+          return {
+            ...emptyWorldState(),
+            characters: { 玩家角色: { mood: '从容' } },
+          }
+        }
+        return undefined
+      },
+    })
+    registerChronicler(host.ctx as never, 'rp')
+    host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    const outcome = await host.started()!.run().done
+    expect(outcome.status).toBe('stale')
+    expect(host.appended.filter((entry) => entry.type === 'user/message')).toHaveLength(0)
+    const activity = readActivity('session-1').entries
+    expect(activity.map((entry) => entry.phase)).toEqual(['started', 'stale'])
+    expect(activity[1]?.detail).toContain('玩家已就地矫正')
   })
 })

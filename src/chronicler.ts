@@ -19,7 +19,7 @@ import { CHRONICLER_SYSTEM_PROMPT, buildChroniclerPrompt, parseChroniclerReply }
 import { matchesPreset } from './preset-id.ts'
 import { publishState } from './state-publisher.ts'
 import { rrpPayloadOf } from './state-payload.ts'
-import { WORLD_STATE_KEY, diffWorldState, emptyWorldState, type WorldState } from './world-state.ts'
+import { NO_WORLD_STATE_CHANGE, WORLD_STATE_KEY, diffWorldState, emptyWorldState, type WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'chronicler'
@@ -188,6 +188,22 @@ async function runInference(
     const reply = parseChroniclerReply(text, prior)
     if (reply === undefined) throw new Error('Chronicler reply was not a valid WorldState')
     
+    // D6: Temporal race check. If the player corrected the state while inference was running,
+    // discard the Chronicler's result to ensure player edits always take precedence.
+    const currentPrior = (faces.projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ?? emptyWorldState()
+    if (prior !== currentPrior && (diffWorldState(prior, currentPrior) !== NO_WORLD_STATE_CHANGE || JSON.stringify(prior) !== JSON.stringify(currentPrior))) {
+      recordActivity(session.id, {
+        id: activityId,
+        at: stamp(),
+        actor: 'chronicler',
+        target: 'world-state',
+        phase: 'stale',
+        detail: '玩家已就地矫正，推演结果作废',
+      })
+      console.log(TAG + ' Chronicler inferred state is stale (player corrected), discarding for session ' + session.id)
+      return { status: 'stale' }
+    }
+
     // D5: Log field creation if present
     if (reply.createFields && reply.createFields.length > 0) {
       const fieldNames = reply.createFields.map(f => f.id).join(', ')
