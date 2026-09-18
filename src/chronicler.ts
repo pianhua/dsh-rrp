@@ -209,6 +209,20 @@ async function runInference(
       const fieldNames = reply.createFields.map(f => f.id).join(', ')
       console.log(TAG + ' Chronicler created new fields: ' + fieldNames)
     }
+
+    const diff = diffWorldState(prior, reply.state)
+    if (diff === NO_WORLD_STATE_CHANGE) {
+      recordActivity(session.id, {
+        id: activityId,
+        at: stamp(),
+        actor: 'chronicler',
+        target: 'world-state',
+        phase: 'committed',
+        detail: NO_WORLD_STATE_CHANGE,
+      })
+      console.log(TAG + ' Chronicler skipped publish (no state change) for session ' + session.id)
+      return { status: 'completed' }
+    }
     
     if (!publishState(session, faces.projections, { worldState: reply.state })) {
       throw new Error('WorldState append failed')
@@ -219,7 +233,7 @@ async function runInference(
       actor: 'chronicler',
       target: 'world-state',
       phase: 'committed',
-      detail: diffWorldState(prior, reply.state),
+      detail: diff,
     })
     console.log(TAG + ' Chronicler committed WorldState for session ' + session.id)
     return { status: 'completed' }
