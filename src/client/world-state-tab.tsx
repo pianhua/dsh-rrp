@@ -91,6 +91,9 @@ interface Draft {
   dynamicFields: DynamicFieldRow[]
 }
 
+/** The three row lists that need generated React keys (see WorldStatePanel). */
+type RowListName = 'characters' | 'inventory' | 'flags'
+
 /** Project the read-only slice into an array-based draft for stable editing. */
 function draftOf(view: WorldStateView | undefined): Draft {
   // Extract dynamic fields
@@ -407,9 +410,48 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState('')
 
+  // Stable React keys for the three editable row lists. Rows carry no id of
+  // their own and `mutate` deep-clones the draft, so identity cannot key them;
+  // a parallel key array kept in the same operations as push/splice survives
+  // both. React docs: index keys mis-associate state on mid-list deletion.
+  const rowKeySeq = useRef(0)
+  const nextRowKey = (): string => {
+    rowKeySeq.current += 1
+    return 'row-' + String(rowKeySeq.current)
+  }
+  const fitRowKeys = (keys: readonly string[], length: number): string[] => {
+    if (keys.length === length) return [...keys]
+    if (keys.length > length) return keys.slice(0, length)
+    return [...keys, ...Array.from({ length: length - keys.length }, nextRowKey)]
+  }
+  const [rowKeys, setRowKeys] = useState<Record<RowListName, string[]>>(() => {
+    const initial = draftOf(view)
+    return {
+      characters: fitRowKeys([], initial.characters.length),
+      inventory: fitRowKeys([], initial.inventory.length),
+      flags: fitRowKeys([], initial.flags.length),
+    }
+  })
+  const adoptDraft = (next: Draft): void => {
+    setDraft(next)
+    setRowKeys((previous) => ({
+      characters: fitRowKeys(previous.characters, next.characters.length),
+      inventory: fitRowKeys(previous.inventory, next.inventory.length),
+      flags: fitRowKeys(previous.flags, next.flags.length),
+    }))
+  }
+  const addRowKey = (list: RowListName): void => {
+    if (isInferring) return
+    setRowKeys((previous) => ({ ...previous, [list]: [...previous[list], nextRowKey()] }))
+  }
+  const removeRowKey = (list: RowListName, index: number): void => {
+    if (isInferring) return
+    setRowKeys((previous) => ({ ...previous, [list]: previous[list].filter((_, at) => at !== index) }))
+  }
+
   // Follow the authoritative projection until the player starts editing.
   useEffect(() => {
-    if (!dirty) setDraft(draftOf(view))
+    if (!dirty) adoptDraft(draftOf(view))
   }, [view, dirty])
 
   // D6: When Chronicler finishes, reload the projection — but never clobber
@@ -424,7 +466,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
         setStatus(t('chronicler.completed') + ' · ' + t('unsaved.kept'))
       } else {
         // Chronicler just finished, reload from projection
-        setDraft(draftOf(view))
+        adoptDraft(draftOf(view))
         setStatus(t('chronicler.completed'))
       }
     }
@@ -566,13 +608,19 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
           count={draft.characters.length}
           addLabel={t('add')}
           disabled={isInferring}
-          onAdd={() => mutate((d) => { d.characters.push({ name: '', affinity: '', mood: '', appearance: '', condition: '' }) })}
+          onAdd={() => {
+            mutate((d) => { d.characters.push({ name: '', affinity: '', mood: '', appearance: '', condition: '' }) })
+            addRowKey('characters')
+          }}
         />
         {draft.characters.map((row, index) => (
-          <div key={index} style={S.card}>
+          <div key={rowKeys.characters[index]} style={S.card}>
             <div style={S.cardHead}>
               <span style={S.cardLabel}>{t('section.characters') + ' ' + String(index + 1)}</span>
-              <RemoveButton disabled={isInferring} label={t('remove')} onClick={() => mutate((d) => { d.characters.splice(index, 1) })} />
+              <RemoveButton disabled={isInferring} label={t('remove')} onClick={() => {
+                mutate((d) => { d.characters.splice(index, 1) })
+                removeRowKey('characters', index)
+              }} />
             </div>
             <Field disabled={isInferring} label={t('name')} value={row.name} onChange={(v) => mutate((d) => { d.characters[index].name = v })} />
             <div style={S.grid2}>
@@ -593,13 +641,19 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
           count={draft.inventory.length}
           addLabel={t('add')}
           disabled={isInferring}
-          onAdd={() => mutate((d) => { d.inventory.push({ name: '', quantity: '', note: '' }) })}
+          onAdd={() => {
+            mutate((d) => { d.inventory.push({ name: '', quantity: '', note: '' }) })
+            addRowKey('inventory')
+          }}
         />
         {draft.inventory.map((row, index) => (
-          <div key={index} style={S.card}>
+          <div key={rowKeys.inventory[index]} style={S.card}>
             <div style={S.cardHead}>
               <span style={S.cardLabel}>{t('section.inventory') + ' ' + String(index + 1)}</span>
-              <RemoveButton disabled={isInferring} label={t('remove')} onClick={() => mutate((d) => { d.inventory.splice(index, 1) })} />
+              <RemoveButton disabled={isInferring} label={t('remove')} onClick={() => {
+                mutate((d) => { d.inventory.splice(index, 1) })
+                removeRowKey('inventory', index)
+              }} />
             </div>
             <Field disabled={isInferring} label={t('name')} value={row.name} onChange={(v) => mutate((d) => { d.inventory[index].name = v })} />
             <div style={S.grid2}>
@@ -618,13 +672,19 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
           count={draft.flags.length}
           addLabel={t('add')}
           disabled={isInferring}
-          onAdd={() => mutate((d) => { d.flags.push({ key: '', value: '' }) })}
+          onAdd={() => {
+            mutate((d) => { d.flags.push({ key: '', value: '' }) })
+            addRowKey('flags')
+          }}
         />
         {draft.flags.map((row, index) => (
-          <div key={index} style={S.card}>
+          <div key={rowKeys.flags[index]} style={S.card}>
             <div style={S.cardHead}>
               <span style={S.cardLabel}>{t('section.flags') + ' ' + String(index + 1)}</span>
-              <RemoveButton disabled={isInferring} label={t('remove')} onClick={() => mutate((d) => { d.flags.splice(index, 1) })} />
+              <RemoveButton disabled={isInferring} label={t('remove')} onClick={() => {
+                mutate((d) => { d.flags.splice(index, 1) })
+                removeRowKey('flags', index)
+              }} />
             </div>
             <Field disabled={isInferring} label={t('flag.key')} value={row.key} onChange={(v) => mutate((d) => { d.flags[index].key = v })} />
             <Field disabled={isInferring} label={t('flag.value')} value={row.value} onChange={(v) => mutate((d) => { d.flags[index].value = v })} />
