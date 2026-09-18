@@ -15,6 +15,7 @@ import { registerCorrectionRoute } from '../src/correction.ts'
 import { worldStateProjection } from '../src/projection/world-state.ts'
 import { forgetActivity } from '../src/activity.ts'
 import { forgetState } from '../src/state-publisher.ts'
+import { transcriptProjections } from './stubs/transcript-projections.ts'
 import {
   WORLD_STATE_KEY,
   emptyWorldState,
@@ -37,6 +38,13 @@ function fakeHost(options: { reply: () => unknown } = { reply: () => BASE }) {
   const appended: Array<{ type: string; data: unknown }> = []
   let started: { kind: string; label: string; run(): { cancel(reason?: string): void; done: Promise<{ status: string }> } } | undefined
 
+  // The fixed prose tail the Chronicler reads through the transcript slice.
+  const proseSeed = [
+    { type: 'user/message', data: { content: [{ type: 'text', text: '我推门而入。' }] } },
+    { type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟，暖意扑面。' }] } },
+    { type: 'step/end', data: { turn: 1, step: 0 } },
+  ]
+
   const session = {
     id: 'dyn-session',
     append(type: string, data: unknown) {
@@ -45,11 +53,6 @@ function fakeHost(options: { reply: () => unknown } = { reply: () => BASE }) {
       folded = worldStateProjection.apply(folded, { type, data })
       return { type, data }
     },
-    snapshotEvents: () => [
-      { type: 'user/message', data: { content: [{ type: 'text', text: '我推门而入。' }] } },
-      { type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟，暖意扑面。' }] } },
-      { type: 'step/end', data: { turn: 1, step: 0 } },
-    ],
   }
 
   const llm = {
@@ -65,10 +68,8 @@ function fakeHost(options: { reply: () => unknown } = { reply: () => BASE }) {
     },
   }
   const agents = { get: () => ({ options: { provider: 'deepseek', model: 'deepseek-chat' } }) }
-  const projections = {
-    stateOf: (_session: unknown, key: string) =>
-      key === 'agentPreset' ? 'rp' : key === WORLD_STATE_KEY ? folded : undefined,
-  }
+  const projections = transcriptProjections(proseSeed, (_session: unknown, key: string) =>
+    key === 'agentPreset' ? 'rp' : key === WORLD_STATE_KEY ? folded : undefined)
   const ctx = {
     effect(fn: () => (() => void) | void) { return fn() },
     get(name: string): unknown {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { registerSedimentRoute } from '../src/sediment-route.ts'
 import { RRP_SEDIMENT_KEY, applySedimentChange, type SedimentEntry } from '../src/sediment-state.ts'
 import { rrpPayloadOf } from '../src/state-payload.ts'
+import { transcriptProjections } from './stubs/transcript-projections.ts'
 
 /** Minimal fake host with synchronous projection folding, like Session.append. */
 function fakeHost() {
@@ -17,10 +18,10 @@ function fakeHost() {
       if (change !== undefined) sediment = applySedimentChange(sediment, change)
       return { seq: appended.length }
     },
-    snapshotEvents: () => appended,
   }
   const sessions = { get: (id: string) => id === session.id ? session : undefined }
-  const projections = { stateOf: (_session: unknown, key: string) => key === RRP_SEDIMENT_KEY ? sediment : undefined }
+  const projections = transcriptProjections(appended, (_session: unknown, key: string) =>
+    key === RRP_SEDIMENT_KEY ? sediment : undefined)
   let route: { handler: (req: unknown, res: unknown) => unknown } | undefined
   const webServer = { register: (definition: { handler: (req: unknown, res: unknown) => unknown }) => { route = definition; return () => {} } }
   const ctx = {

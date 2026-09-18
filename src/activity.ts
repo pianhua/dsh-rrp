@@ -100,3 +100,8 @@ export function readActivity(sessionId: string): RrpActivityLog {
 export function forgetActivity(sessionId: string): void {
   LEDGERS.delete(sessionId)
 }
+
+/** Drop every ledger (plugin unload must not leave stale sessions behind). */
+export function forgetAllActivity(): void {
+  LEDGERS.clear()
+}

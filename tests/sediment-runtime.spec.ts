@@ -7,6 +7,7 @@ import { SEDIMENT_LIMITS, applySedimentChange, type SedimentEntry } from '../src
 import { invalidateSediment, migrateLegacySediment, registerSedimentRuntime } from '../src/sediment-runtime.ts'
 import { hasSedimentDraft, stageSedimentDraftForTesting } from '../src/sediment-route.ts'
 import { rrpPayloadOf } from '../src/state-payload.ts'
+import { transcriptProjections } from './stubs/transcript-projections.ts'
 
 const homes: string[] = []
 afterEach(() => {
@@ -179,9 +180,9 @@ describe('legacy sediment migration', () => {
         if (change !== undefined) state = applySedimentChange(state, change)
         return { seq: events.length }
       },
-      snapshotEvents: () => events,
     }
-    const projections = { stateOf: (_session: unknown, key: string) => key === 'rrpSediment' ? state : undefined }
+    const projections = transcriptProjections(events, (_session: unknown, key: string) =>
+      key === 'rrpSediment' ? state : undefined)
     return { home, source, entry, session, projections, events, state: () => state }
   }
 

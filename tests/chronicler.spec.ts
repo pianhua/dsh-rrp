@@ -4,6 +4,7 @@ import { forgetActivity, readActivity } from '../src/activity.ts'
 import { registerChronicler } from '../src/chronicler.ts'
 import { forgetState } from '../src/state-publisher.ts'
 import { emptyWorldState } from '../src/world-state.ts'
+import { transcriptProjections } from './stubs/transcript-projections.ts'
 
 const VALID = {
   characters: { 毓忻: { affinity: 3, mood: '警惕' } },
@@ -98,11 +99,10 @@ function fakeHost(preset: string, options: {
     append(type: string, data: unknown) {
       if (options.failAppend === true) throw new Error('append failed')
       appended.push({ type, data })
-      // The real host's snapshot reflects every appended event, state writes included.
+      // The real host's projection drive folds every appended event, state writes included.
       events.push({ type, data })
       return { type, data }
     },
-    snapshotEvents: () => events,
   }
 
   const llm = options.llm ?? {
@@ -119,12 +119,10 @@ function fakeHost(preset: string, options: {
     },
   }
   const agents = { get: () => ({ options: { provider: 'deepseek', model: 'deepseek-chat' } }) }
-  const projections = {
-    stateOf: (session: unknown, key: string) => {
-      if (options.stateOf) return options.stateOf(session, key)
-      return key === 'agentPreset' ? preset : undefined
-    },
-  }
+  const projections = transcriptProjections(events, (session: unknown, key: string) => {
+    if (options.stateOf) return options.stateOf(session, key)
+    return key === 'agentPreset' ? preset : undefined
+  })
 
   const ctx = {
     effect(fn: () => (() => void) | void) {

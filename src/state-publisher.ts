@@ -20,7 +20,8 @@ import { renderCardContext, type CardContext } from './card-types.ts'
 import { SUMMARY_KEY, renderMacroSummary, type MacroSummary } from './macro-summary.ts'
 import { RRP_SETTINGS_KEY, rrpSettingsOf, type RrpSettings } from './settings.ts'
 import type { SedimentChange } from './sediment-state.ts'
-import { messageTextOf, rrpPayloadOf, rrpStateMessage, type RrpStatePayload } from './state-payload.ts'
+import { rrpStateMessage, type RrpStatePayload } from './state-payload.ts'
+import { TRANSCRIPT_KEY, type TranscriptSlice } from './transcript.ts'
 import { WORLD_STATE_KEY, renderWorldState, type WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
@@ -29,7 +30,6 @@ const TAG = '[dsh-rrp]'
 export interface StateSession {
   readonly id: string
   append(type: string, data: unknown, intent?: unknown): unknown
-  snapshotEvents?(): readonly { type?: string; data?: unknown }[]
 }
 /** The projection read face. */
 export interface StateProjections {
@@ -60,8 +60,10 @@ function appendLane(session: StateSession, text: string, payload: RrpStatePayloa
 }
 
 /**
- * Adopt the lanes already present in the log, so a restart/resume does not
- * republish the constant card or duplicate an unchanged facts message.
+ * Adopt the lanes the transcript slice already folded, so a restart/resume
+ * does not republish the constant card or duplicate an unchanged facts
+ * message. The projection read may throw (racing disposal) — same outcome as
+ * the old missing snapshot: nothing is retained.
  */
 function factsFingerprint(text: string, settings: RrpSettings): string {
   return text + '\u0000summary=' + String(settings.summaryEnabled)
@@ -73,18 +75,16 @@ function cardFingerprint(card: CardContext, text: string): string {
 
 function adopt(session: StateSession, projections: StateProjections): Retained {
   const retained: Retained = {}
-  let factsText: string | undefined
-  for (const event of session.snapshotEvents?.() ?? []) {
-    const payload = rrpPayloadOf(event)
-    if (payload === undefined) continue
-    if (payload.card !== undefined) retained.cardFingerprint = cardFingerprint(payload.card, messageTextOf(event))
-    if (payload.worldState !== undefined || payload.summary !== undefined || payload.settings !== undefined || payload.sediment !== undefined) {
-      factsText = messageTextOf(event)
-    }
+  let slice: TranscriptSlice | undefined
+  try {
+    slice = projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined
+  } catch {
+    slice = undefined
   }
-  if (factsText !== undefined) {
+  if (slice?.card !== undefined) retained.cardFingerprint = slice.card.fingerprint
+  if (slice?.facts !== undefined) {
     retained.factsFingerprint = factsFingerprint(
-      factsText,
+      slice.facts.text,
       rrpSettingsOf(projections.stateOf(session, RRP_SETTINGS_KEY)),
     )
   }
@@ -146,4 +146,9 @@ export function publishState(session: StateSession, projections: StateProjection
 /** Forget one session's retained lanes (called when a session is disposed). */
 export function forgetState(sessionId: string): void {
   RETAINED.delete(sessionId)
+}
+
+/** Drop every retained lane (plugin unload must not leave stale sessions behind). */
+export function forgetAllState(): void {
+  RETAINED.clear()
 }

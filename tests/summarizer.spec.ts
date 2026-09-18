@@ -3,6 +3,7 @@ import { buildSummarizerPrompt, parseSummarizerReply } from '../src/agents/summa
 import { registerSummarizer, registerSummaryCommand } from '../src/summarizer.ts'
 import { RRP_SETTINGS_KEY } from '../src/settings.ts'
 import type { RrpStatePayload } from '../src/state-payload.ts'
+import { transcriptProjections } from './stubs/transcript-projections.ts'
 
 const VALID = {
   goal: '逃离塞北',
@@ -29,22 +30,20 @@ function fakeHost(preset: string, turn: number, summaryEnabled = true) {
   const listeners = new Map<string, (...args: unknown[]) => void>()
   const appended: Array<{ type: string; data: unknown }> = []
   let started = 0
+  const proseSeed = [{ type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟。' }] } }]
   const session = {
     id: 's1',
     append(type: string, data: unknown) { appended.push({ type, data }); return {} },
-    snapshotEvents: () => [{ type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟。' }] } }],
   }
   const llm = { async *stream() { yield { type: 'text-delta', text: JSON.stringify(VALID) } } }
   const jobs = { start() { started += 1; return 'summarizer-1' } }
   const agents = { get: () => ({ options: { provider: 'deepseek', model: 'deepseek-chat' } }) }
-  const projections = {
-    stateOf: (_session: unknown, key: string) => {
-      if (key === 'agentPreset') return preset
-      if (key === 'turnBoundary') return { lastTurn: turn }
-      if (key === RRP_SETTINGS_KEY) return { summaryEnabled }
-      return undefined
-    },
-  }
+  const projections = transcriptProjections(proseSeed, (_session: unknown, key: string) => {
+    if (key === 'agentPreset') return preset
+    if (key === 'turnBoundary') return { lastTurn: turn }
+    if (key === RRP_SETTINGS_KEY) return { summaryEnabled }
+    return undefined
+  })
   const ctx = {
     effect(fn: () => (() => void) | void) { return fn() },
     get: (name: string) => ({ llm, jobs, agents, sessionProjections: projections } as Record<string, unknown>)[name],
@@ -86,7 +85,6 @@ describe('Summarizer toggle command', () => {
     type Session = {
       id: string
       append(type: string, data: unknown, intent?: unknown): unknown
-      snapshotEvents(): readonly { type?: string; data?: unknown }[]
     }
     type Invocation = { rawInput: string; agent?: { session: Session } }
     let definition: { handler: (i: Invocation) => { kind: string; text?: string } } | undefined
@@ -100,7 +98,6 @@ describe('Summarizer toggle command', () => {
         writes.set(id, entries)
         return { seq: entries.length }
       },
-      snapshotEvents: () => [],
     })
     const first = session('first')
     const second = session('second')
@@ -129,7 +126,6 @@ describe('Summarizer toggle command', () => {
     type Session = {
       id: string
       append(type: string, data: unknown, intent?: unknown): unknown
-      snapshotEvents(): readonly { type?: string; data?: unknown }[]
     }
     type Invocation = { rawInput: string; agent?: { session: Session } }
     let definition: { handler: (i: Invocation) => { kind: string; text?: string } } | undefined
@@ -138,7 +134,6 @@ describe('Summarizer toggle command', () => {
     const session: Session = {
       id: 's1',
       append(type, data) { writes.push({ type, data }); return { seq: writes.length } },
-      snapshotEvents: () => [],
     }
     const projections = {
       stateOf: (_session: unknown, key: string) => key === RRP_SETTINGS_KEY ? { summaryEnabled: true, summaryEveryTurns: 4 } : undefined,
@@ -160,7 +155,6 @@ describe('Summarizer toggle command', () => {
     const other: Session = {
       id: 's2',
       append(type, data) { writes.push({ type, data }); return { seq: writes.length } },
-      snapshotEvents: () => [],
     }
     definition?.handler({ rawInput: 'every 999', agent: { session: other } })
     const clamped = (writes[1]?.data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp

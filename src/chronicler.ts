@@ -18,7 +18,7 @@ import { recordActivity } from './activity.ts'
 import { CHRONICLER_SYSTEM_PROMPT, buildChroniclerPrompt, parseChroniclerReply } from './agents/chronicler.ts'
 import { matchesPreset } from './preset-id.ts'
 import { publishState } from './state-publisher.ts'
-import { rrpPayloadOf } from './state-payload.ts'
+import { TRANSCRIPT_KEY, emptyTranscriptSlice, type TranscriptSlice } from './transcript.ts'
 import { NO_WORLD_STATE_CHANGE, WORLD_STATE_KEY, diffWorldState, emptyWorldState, type WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
@@ -32,7 +32,6 @@ export const CHRONICLER_TRANSCRIPT_LIMIT = 8000
 interface SessionLike {
   readonly id: string
   append(type: string, data: unknown): unknown
-  snapshotEvents(): readonly { type: string; data?: unknown }[]
 }
 interface StreamChunkLike {
   type?: string
@@ -171,6 +170,12 @@ export function forgetInference(sessionId: string): void {
   RERUN_PENDING.delete(sessionId)
 }
 
+/** Drop every concurrency marker (plugin unload must not leave stale sessions behind). */
+export function forgetAllInference(): void {
+  INFERENCE_IN_FLIGHT.clear()
+  RERUN_PENDING.clear()
+}
+
 /** One inference pass: prompt -> model -> parse -> append. */
 async function runInference(
   faces: HostFaces,
@@ -188,8 +193,8 @@ async function runInference(
     // needs THIS turn's prose — re-feeding older turns is pure token waste.
     // A covering rerun instead folds everything not yet state-written.
     const transcript = coveringRerun
-      ? unprocessedTranscriptOf(session)
-      : latestTurnTranscriptOf(session)
+      ? unprocessedTranscriptOf(faces.projections, session)
+      : latestTurnTranscriptOf(faces.projections, session)
     if (transcript.trim().length === 0) return { status: 'completed' }
 
     recordActivity(session.id, {
@@ -300,104 +305,80 @@ async function collectText(stream: AsyncIterable<StreamChunkLike>): Promise<stri
 }
 
 /**
- * Render ONLY the latest turn's user/assistant text. The Chronicler holds the
- * full prior state, so older turns add cost without adding information.
- * @param session - the session whose newest turn is rendered.
- * @returns the latest turn's prose, capped.
+ * Read the transcript slice, degrading to empty when the projection read
+ * throws (e.g. racing session disposal) so these readers stay total.
  */
-export function latestTurnTranscriptOf(session: SessionLike): string {
-  const events = session.snapshotEvents()
-  let start = 0
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const candidate = events[index]
-    if (candidate?.type === 'user/message' && rrpPayloadOf(candidate) === undefined) {
-      start = index
-      break
-    }
+function transcriptSliceOf(projections: Pick<ProjectionsService, 'stateOf'>, session: unknown): TranscriptSlice {
+  try {
+    return (projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined) ?? emptyTranscriptSlice()
+  } catch {
+    return emptyTranscriptSlice()
   }
-  return renderEventsTranscript(events, start)
 }
 
-/**
- * Render every user/assistant turn AFTER the most recent state-bearing write —
- * i.e. everything the Chronicler has not folded yet. Used by covering reruns
- * queued while a pass was still in flight, so deferred turns lose no changes.
- * @param session - the session whose unprocessed prose is rendered.
- * @returns the unprocessed prose, tail-biased and capped.
- */
-export function unprocessedTranscriptOf(session: SessionLike): string {
-  const events = session.snapshotEvents()
-  let start = 0
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const candidate = events[index]
-    if (candidate?.type === 'user/message' && rrpPayloadOf(candidate) !== undefined) {
-      start = index + 1
-      break
-    }
-  }
-  return renderEventsTranscript(events, start)
-}
-
-/** Shared renderer: user/assistant text blocks from `start` onward, capped. */
-function renderEventsTranscript(
-  events: readonly { type: string; data?: unknown }[],
-  start: number,
-): string {
+/** Shared renderer: non-empty slice entries as 【玩家】/【叙述】 parts, tail-capped. */
+function renderSliceTranscript(slice: TranscriptSlice, fromIndex: number, minSeq: number, limit: number): string {
   const parts: string[] = []
-  for (let index = start; index < events.length; index += 1) {
-    const event = events[index]
-    if (event?.type !== 'user/message' && event?.type !== 'assistant/message') continue
-    if (rrpPayloadOf(event) !== undefined) continue
-    if (isPluginNotice(event)) continue
-    const blocks: string[] = []
-    collectTextBlocks(event.data, blocks)
-    const text = blocks.join('\n').trim()
-    if (text.length === 0) continue
-    parts.push('【' + (event.type === 'user/message' ? '玩家' : '叙述') + '】\n' + text)
-  }
-  const joined = parts.join('\n\n')
-  return joined.length > CHRONICLER_TRANSCRIPT_LIMIT ? joined.slice(joined.length - CHRONICLER_TRANSCRIPT_LIMIT) : joined
-}
-
-/** Render the session's user/assistant text blocks, tail-biased and capped.
- * Exported so the Summarizer consumes the same rendering. */
-export function transcriptOf(session: SessionLike, limit: number = DEFAULT_TRANSCRIPT_LIMIT): string {
-  const parts: string[] = []
-  for (const event of session.snapshotEvents()) {
-    if (event.type !== 'user/message' && event.type !== 'assistant/message') continue
-    if (rrpPayloadOf(event) !== undefined) continue
-    if (isPluginNotice(event)) continue
-    const blocks: string[] = []
-    collectTextBlocks(event.data, blocks)
-    const text = blocks.join('\n').trim()
-    if (text.length === 0) continue
-    parts.push('【' + (event.type === 'user/message' ? '玩家' : '叙述') + '】\n' + text)
+  for (let index = fromIndex; index < slice.entries.length; index += 1) {
+    const entry = slice.entries[index]
+    if (entry === undefined || entry.seq <= minSeq) continue
+    if (entry.text.length === 0) continue
+    parts.push('【' + (entry.role === 'user' ? '玩家' : '叙述') + '】\n' + entry.text)
   }
   const joined = parts.join('\n\n')
   return joined.length > limit ? joined.slice(joined.length - limit) : joined
 }
 
 /**
- * True for plugin-issued notices WITHOUT an rrp payload (e.g. the opening
- * fallback notice appended by start.ts): they are bookkeeping, never player
- * prose, and must not reach the Chronicler/Summarizer/Scribe as 【玩家】 text.
+ * Render ONLY the latest turn's prose. The Chronicler holds the
+ * full prior state, so older turns add cost without adding information.
+ *
+ * NOTE: the fold's front-trim (500 entries / 64k chars) may have dropped very
+ * old user boundary markers; the boundary then resolves to the oldest retained
+ * entry instead of the true latest turn start. Intentional and irrelevant in
+ * practice — a live turn never sits 500 messages behind the slice head.
+ * @param projections - the session-projection read face.
+ * @param session - the session whose newest turn is rendered.
+ * @returns the latest turn's prose, capped.
  */
-function isPluginNotice(event: { type: string; data?: unknown }): boolean {
-  const source = (event.data as { source?: { kind?: unknown } } | undefined)?.source
-  return source?.kind === 'plugin' && rrpPayloadOf(event) === undefined
+export function latestTurnTranscriptOf(projections: Pick<ProjectionsService, 'stateOf'>, session: unknown): string {
+  const slice = transcriptSliceOf(projections, session)
+  let start = 0
+  for (let index = slice.entries.length - 1; index >= 0; index -= 1) {
+    // Empty-text and plugin-notice user entries count: they mark the boundary
+    // exactly like the old raw-log rule (last payload-less user/message).
+    if (slice.entries[index]?.role === 'user') {
+      start = index
+      break
+    }
+  }
+  return renderSliceTranscript(slice, start, -1, CHRONICLER_TRANSCRIPT_LIMIT)
 }
 
-/** Recursively collect { type: 'text', text } blocks from an event payload. */
-function collectTextBlocks(value: unknown, out: string[]): void {  if (value === null || value === undefined) return
-  if (Array.isArray(value)) {
-    for (const item of value) collectTextBlocks(item, out)
-    return
-  }
-  if (typeof value !== 'object') return
-  const record = value as Record<string, unknown>
-  if (record.type === 'text' && typeof record.text === 'string') {
-    out.push(record.text)
-    return
-  }
-  for (const item of Object.values(record)) collectTextBlocks(item, out)
+/**
+ * Render every turn AFTER the most recent state-bearing write —
+ * i.e. everything the Chronicler has not folded yet. Used by covering reruns
+ * queued while a pass was still in flight, so deferred turns lose no changes.
+ * @param projections - the session-projection read face.
+ * @param session - the session whose unprocessed prose is rendered.
+ * @returns the unprocessed prose, tail-biased and capped.
+ */
+export function unprocessedTranscriptOf(projections: Pick<ProjectionsService, 'stateOf'>, session: unknown): string {
+  const slice = transcriptSliceOf(projections, session)
+  return renderSliceTranscript(slice, 0, slice.lastStateSeq, CHRONICLER_TRANSCRIPT_LIMIT)
+}
+
+/**
+ * Render the session's prose entries, tail-biased and capped.
+ * Exported so the Summarizer and the Scribe consume the same rendering.
+ * @param projections - the session-projection read face.
+ * @param session - the session whose prose is rendered.
+ * @param limit - character cap (default {@link DEFAULT_TRANSCRIPT_LIMIT}).
+ */
+export function transcriptOf(
+  projections: Pick<ProjectionsService, 'stateOf'>,
+  session: unknown,
+  limit: number = DEFAULT_TRANSCRIPT_LIMIT,
+): string {
+  return renderSliceTranscript(transcriptSliceOf(projections, session), 0, -1, limit)
 }

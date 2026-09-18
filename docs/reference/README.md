@@ -23,6 +23,7 @@
 | [`LESSONS.md`](LESSONS.md) | 旧项目为什么失败？哪些资产值得留？ | 想「参考旧实现」前 |
 | [`COMMUNITY_PLUGINS.md`](COMMUNITY_PLUGINS.md) | 社区成熟插件长什么样？ | 建工程骨架前 |
 | [`HOST_SEAMS.md`](HOST_SEAMS.md) | 宿主接缝实测细节（slot / preset / 事件词表 / 原子库） | 接宿主能力前 |
+| [`HOST_BASELINE.md`](HOST_BASELINE.md) | 宿主版本基线、seam 清单、升级流程与废弃债务对账 | **升级宿主 / 怀疑宿主行为前必读** |
 | [`SKILLS.md`](SKILLS.md) | Skills 是什么？如何替代 Lorebook？D8 沉淀怎么控？ | 做知识体系前 |
 | [`CARDS.md`](CARDS.md) | 卡包格式、目录契约与开卡流 | 做卡包/开卡前 |
 | [`WORLDLINES.md`](WORLDLINES.md) | 为什么 fork 后状态不穿帮？与 synapse 的边界 | 涉及分支/重放时 |

@@ -26,7 +26,6 @@ const TRANSCRIPT_LIMIT = 16000
 interface SessionLike {
   readonly id: string
   append(type: string, data: unknown): unknown
-  snapshotEvents(): readonly { type: string; data?: unknown }[]
 }
 interface StreamChunkLike {
   type?: string
@@ -75,6 +74,11 @@ const LAST_SUMMARIZED = new Map<string, number>()
 /** Forget last-summarized turn watermark when a session is disposed. */
 export function forgetSummary(sessionId: string): void {
   LAST_SUMMARIZED.delete(sessionId)
+}
+
+/** Drop every watermark (plugin unload must not leave stale sessions behind). */
+export function forgetAllSummary(): void {
+  LAST_SUMMARIZED.clear()
 }
 
 /** Check last-summarized turn watermark (for testing / inspection). */
@@ -181,7 +185,7 @@ async function runSummary(
   const activityId = randomUUID()
   const stamp = (): string => new Date().toISOString()
   try {
-    const full = transcriptOf(session, TRANSCRIPT_LIMIT)
+    const full = transcriptOf(faces.projections, session, TRANSCRIPT_LIMIT)
     if (full.trim().length === 0) return { status: 'completed' }
     const transcript = full.length > TRANSCRIPT_LIMIT ? full.slice(full.length - TRANSCRIPT_LIMIT) : full
 

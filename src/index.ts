@@ -1,7 +1,7 @@
 /**
  * dsh-rrp — host half.
  *
- * The host half materializes the RP preset family, registers the five pure
+ * The host half materializes the RP preset family, registers the six pure
  * Session projections, and wires the DSH-native routes/jobs/agent scopes used
  * by the card, WorldState, summary, and sediment flows.
  *
@@ -14,7 +14,7 @@ import { listCards } from './cards.ts'
 import { registerCardsRoute } from './cards-route.ts'
 import { registerSedimentCommand, registerSedimentRoute } from './sediment-route.ts'
 import { registerSedimentRuntime } from './sediment-runtime.ts'
-import { registerChronicler, forgetInference } from './chronicler.ts'
+import { registerChronicler, forgetAllInference, forgetInference } from './chronicler.ts'
 import { registerCorrectionRoute } from './correction.ts'
 import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
 import { presetIdForCard } from './preset-id.ts'
@@ -22,12 +22,13 @@ import { cardProjection } from './projection/card.ts'
 import { summaryProjection } from './projection/summary.ts'
 import { settingsProjection } from './projection/settings.ts'
 import { sedimentProjection } from './projection/sediment.ts'
+import { transcriptProjection } from './projection/transcript.ts'
 import { worldStateProjection } from './projection/world-state.ts'
 import { registerStartRoute } from './start.ts'
-import { registerSummarizer, registerSummaryCommand, forgetSummary } from './summarizer.ts'
-import { forgetActivity } from './activity.ts'
-import { forgetSediment } from './sediment-route.ts'
-import { forgetState } from './state-publisher.ts'
+import { registerSummarizer, registerSummaryCommand, forgetAllSummary, forgetSummary } from './summarizer.ts'
+import { forgetAllActivity, forgetActivity } from './activity.ts'
+import { forgetAllSediment, forgetSediment } from './sediment-route.ts'
+import { forgetAllState, forgetState } from './state-publisher.ts'
 
 /** Loader row id. Keep in sync with cordis.patch.yml. */
 export const name = 'dsh-rrp'
@@ -61,7 +62,8 @@ interface SessionProjectionsService {
       | typeof summaryProjection
       | typeof settingsProjection
       | typeof sedimentProjection
-      | typeof cardProjection,
+      | typeof cardProjection
+      | typeof transcriptProjection,
   ): () => void
 }
 
@@ -98,6 +100,8 @@ export function apply(ctx: Context): void {
     console.log(`${TAG} sediment projection registered (key '${sedimentProjection.key}')`)
     projectionDisposers.push(registry.register(cardProjection))
     console.log(`${TAG} active-card projection registered (key '${cardProjection.key}')`)
+    projectionDisposers.push(registry.register(transcriptProjection))
+    console.log(`${TAG} transcript projection registered (key '${transcriptProjection.key}')`)
   })
   ctx.effect(() => {
     return () => {
@@ -177,6 +181,14 @@ export function apply(ctx: Context): void {
       })
     }, 'dsh-rrp: agent disposal cleanup')
   })
+
+  // Runtime-unload path: module caches only clear on disposal events, which
+  // never fire for still-live sessions — drop them explicitly on unload.
+  ctx.effect(() => {
+    return () => {
+      cleanupAllSessions()
+    }
+  }, 'dsh-rrp: unload cache reset')
 }
 
 /** Clean up all in-memory state and caches associated with a session (P0-4). */
@@ -186,6 +198,19 @@ export function cleanupSession(sessionId: string): void {
   forgetSediment(sessionId)
   forgetSummary(sessionId)
   forgetInference(sessionId)
+}
+
+/**
+ * Plugin-unload path (the plugin manager unloads bundles at runtime): the
+ * per-session disposal events never fire for live sessions, so every module
+ * cache must be dropped here to keep a reload clean.
+ */
+export function cleanupAllSessions(): void {
+  forgetAllState()
+  forgetAllActivity()
+  forgetAllSediment()
+  forgetAllSummary()
+  forgetAllInference()
 }
 
 /** Resolve a Session id from an event payload. */

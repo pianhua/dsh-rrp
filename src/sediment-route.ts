@@ -36,7 +36,6 @@ const SEDIMENT_PATH = '/dsh-rrp/sediment'
 interface SessionLike {
   readonly id: string
   append(type: string, data: unknown, intent?: unknown): unknown
-  snapshotEvents(): readonly { type: string; data?: unknown }[]
 }
 interface SessionsService {
   get(id: string): SessionLike | undefined
@@ -90,6 +89,12 @@ const DRAFTING = new Set<string>()
 export function forgetSediment(sessionId: string): void {
   PENDING.delete(sessionId)
   DRAFTING.delete(sessionId)
+}
+
+/** Drop every staged draft (plugin unload must not leave stale sessions behind). */
+export function forgetAllSediment(): void {
+  PENDING.clear()
+  DRAFTING.clear()
 }
 
 /** Check whether a session has pending or drafting state (for testing / inspection). */
@@ -219,7 +224,7 @@ async function runDraft(
       ...reservedNames(faces.projections, session),
       ...currentSediment(faces.projections, session).map((skill) => skill.name),
     ]
-    const transcript = transcriptOf(session)
+    const transcript = transcriptOf(faces.projections, session)
     if (transcript.trim().length === 0) {
       recordActivity(session.id, { id: activityId, at: stamp(), actor: 'scribe', target: 'sediment', phase: 'failed', detailKey: 'detail.noTranscript' })
       return { status: 'completed' }

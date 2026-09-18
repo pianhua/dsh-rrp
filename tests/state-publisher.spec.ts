@@ -4,22 +4,20 @@ import { rrpStateMessage, type RrpStatePayload } from '../src/state-payload.ts'
 import { publishState } from '../src/state-publisher.ts'
 import { RRP_SETTINGS_KEY } from '../src/settings.ts'
 import { emptyWorldState, renderWorldState } from '../src/world-state.ts'
+import { transcriptProjections } from './stubs/transcript-projections.ts'
 
 const CARD: CardContext = { id: 'c1', name: '测试卡', persona: 'P', worldCore: 'W' }
 const STATE = { ...emptyWorldState(), scene: { location: '门口' } }
 
 /** A fake session recording appends. */
-function fakeSession(id: string, seed: Array<{ seq?: number; type?: string; data?: unknown }> = []) {
+function fakeSession(id: string) {
   const appended: Array<{ type: string; data: unknown; intent?: unknown }> = []
-  let seq = seed.length
   const session = {
     id,
     append(type: string, data: unknown, intent?: unknown) {
       appended.push({ type, data, intent })
-      seq += 1
-      return { seq }
+      return { seq: appended.length }
     },
-    snapshotEvents: () => seed,
   }
   return { session, appended }
 }
@@ -97,8 +95,8 @@ describe('durable state publisher', () => {
       owned(1, renderCardContext(CARD), { card: CARD }),
       owned(2, renderWorldState(STATE), { worldState: STATE }),
     ]
-    const { session, appended } = fakeSession('sp-a6', seed)
-    publishState(session, { stateOf: () => undefined }, { card: CARD, worldState: STATE })
+    const { session, appended } = fakeSession('sp-a6')
+    publishState(session, transcriptProjections(seed), { card: CARD, worldState: STATE })
     expect(appended).toHaveLength(0) // fully adopted: nothing re-published
   })
 
@@ -107,8 +105,8 @@ describe('durable state publisher', () => {
       owned(1, renderCardContext(CARD), { card: CARD }),
       owned(2, renderWorldState(STATE), { worldState: STATE }),
     ]
-    const { session, appended } = fakeSession('sp-a7', seed)
-    publishState(session, { stateOf: () => undefined }, { card: CARD, worldState: { ...STATE, flags: { 新事实: true } } })
+    const { session, appended } = fakeSession('sp-a7')
+    publishState(session, transcriptProjections(seed), { card: CARD, worldState: { ...STATE, flags: { 新事实: true } } })
 
     expect(appended).toHaveLength(1)
     expect(payloadOf(appended[0]?.data)?.worldState).toEqual({ ...STATE, flags: { 新事实: true } })

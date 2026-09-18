@@ -17,7 +17,7 @@ import { belongsToRpPreset } from './preset-id.ts'
 import { createSedimentProvider, type SedimentProviderControl } from './sediment-provider.ts'
 import { backupLegacySediment, listLegacySediment } from './sediment.ts'
 import { RRP_SEDIMENT_KEY, sedimentEntriesOf } from './sediment-state.ts'
-import { rrpPayloadOf } from './state-payload.ts'
+import { TRANSCRIPT_KEY, type TranscriptSlice } from './transcript.ts'
 import { publishState, type StateSession } from './state-publisher.ts'
 import { forgetSediment } from './sediment-route.ts'
 
@@ -26,7 +26,6 @@ const TAG = '[dsh-rrp]'
 interface SessionLike {
   readonly id: string
   append?(type: string, data: unknown, intent?: unknown): unknown
-  snapshotEvents?(): readonly { type?: string; data?: unknown }[]
 }
 interface SkillsServiceLike {
   registerProvider(create: (control: SedimentProviderControl) => unknown): () => void
@@ -69,8 +68,13 @@ function disarm(sessionId: string): void {
 }
 
 /** Whether this Session has ever adopted the event-backed sediment model. */
-function hasSedimentEvent(session: SessionLike): boolean {
-  return (session.snapshotEvents?.() ?? []).some((event) => rrpPayloadOf(event)?.sediment !== undefined)
+function hasSedimentEvent(projections: ProjectionsService, session: SessionLike): boolean {
+  try {
+    return ((projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined)?.sedimentSeen) ?? false
+  } catch {
+    // Racing disposal etc.: treat as unseen, exactly like a missing snapshot before.
+    return false
+  }
 }
 
 /**
@@ -82,8 +86,8 @@ export function migrateLegacySediment(
   projections: ProjectionsService,
   home: string = harnessHome(),
 ): boolean {
-  if (typeof session.append !== 'function' || typeof session.snapshotEvents !== 'function') return false
-  if (hasSedimentEvent(session)) return false
+  if (typeof session.append !== 'function') return false
+  if (hasSedimentEvent(projections, session)) return false
   const skills = sedimentEntriesOf(
     listLegacySediment(home, session.id).map(({ name, description, body }) => ({ name, description, body })),
   )
