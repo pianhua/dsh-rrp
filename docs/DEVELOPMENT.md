@@ -1,7 +1,7 @@
 # 开发环境与日常流程（DEVELOPMENT.md）
 
 > 面向本仓库的开发者（人类与 AI）：一条命令构建，一条命令挂到真实 DSH 验证。
-> **接手先读 [`HANDOFF.md`](HANDOFF.md)**（宿主硬约束、模块地图、待办）；契约层是 [`../AGENTS.md`](../AGENTS.md) 与 [`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md)。
+> **接手先读 [`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md)**（宿主能力映射与红线）；宿主接缝的证据链见 [`reference/HOST_SEAMS.md`](reference/HOST_SEAMS.md)；契约层是 [`../AGENTS.md`](../AGENTS.md)。
 
 ---
 
@@ -66,7 +66,7 @@ dsh --profile rp-dev --port 3099 --no-open      # 真实宿主验证
 node scripts/inspect-context.mjs --latest       # 需要时：解码日志、统计上下文与缓存
 ```
 
-启动日志中应出现（完整清单见 [`HANDOFF.md`](HANDOFF.md) §1）：
+启动日志中应出现：
 
 ```text
 [dsh-rrp] RP preset refreshed at <dshHome>\.agent-presets\rp
@@ -83,6 +83,8 @@ node scripts/inspect-context.mjs --latest       # 需要时：解码日志、统
 ```
 
 RP 基础模式物化到 `<dshHome>/.agent-presets/rp/`，**每张卡**另有一个 `rp-<card-id>` preset（只含该卡的世界知识技能）——所以基础模式显示 `skills (0)` 是正常的，卡包技能在卡 preset 名下逐条打印。
+
+> 启动后新丢进 `cards/` 的卡：卡列表路由会按需补物化它的 `rp-<id>` preset（`ensureCardPreset`），刷新展厅即可直接开局，无需重载插件。
 
 不启动服务器即可确认组合：
 
@@ -102,4 +104,4 @@ dsh --profile rp-dev --dump-config | grep -A2 dsh-rrp
 - **绝不发明会话事件类型**（会让整个日志不可读）；
 - **不在陌生 context 上属性读取服务**（用 `ctx.get(name)`；agent 生命周期监听器整体 try/catch）。
 
-> 这几条的成因、证据与正确写法见 [`HANDOFF.md`](HANDOFF.md) §4 —— 每一条都是真实踩过的坑。
+> 这几条的成因、证据与正确写法见 [`reference/HOST_SEAMS.md`](reference/HOST_SEAMS.md) —— 每一条都是真实踩过的坑。

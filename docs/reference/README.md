@@ -1,7 +1,7 @@
 # 参考资料索引（reference/README.md）
 
 > **这里的文档回答「为什么」，不是契约。**  
-> 契约在上一层：[`DESIGN.md`](../DESIGN.md) · [`HOST_ALIGNMENT.md`](../HOST_ALIGNMENT.md) · [`ACTIVE_TASK.md`](../ACTIVE_TASK.md) · [`../../AGENTS.md`](../../AGENTS.md)。
+> 契约在上一层：[`DESIGN.md`](../DESIGN.md) · [`HOST_ALIGNMENT.md`](../HOST_ALIGNMENT.md) · [`../../AGENTS.md`](../../AGENTS.md)。
 
 ---
 
@@ -35,8 +35,18 @@
 | [`LONG_PLAY_TEST.md`](LONG_PLAY_TEST.md) | 长线（15 轮）测试清单与量化结论 | 做长线回归前 |
 | [`CONTEXT_PUBLISHER_VERIFY.md`](CONTEXT_PUBLISHER_VERIFY.md) | 上下文发布与缓存命中的核验方法 | 动注入/发布时 |
 | [`dsh-plugin-development-research.md`](dsh-plugin-development-research.md) | DSH 插件开发的完整技术机制 | 需要宿主细节时查阅 |
+| [`chronicler-field-syntax.md`](chronicler-field-syntax.md) | 纪事官动态字段语法细则（原 Skill，P1-5 已内联进提示词，此处存档备查） | 改 D5 字段语法前 |
 
-> 交接总入口在上一层：[`../HANDOFF.md`](../HANDOFF.md)。
+### 验收与归档（已完成内容，不是契约）
+
+| 文档 | 内容 |
+| :--- | :--- |
+| [`COMPLETED_WORK.md`](COMPLETED_WORK.md) | **已完成切片 / 已修复问题 / 验收快照的总归档**（活文档只留待办） |
+| [`COMPLETION_ASSESSMENT.md`](COMPLETION_ASSESSMENT.md) | v0.1.0 对 DESIGN.md 的完成度评估（102.75%） |
+| [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) | v0.1.0 发布检查单 |
+| [`TEST_PLAN.md`](TEST_PLAN.md) · [`TEST_REPORT.md`](TEST_REPORT.md) · [`TEST_REPORT_TEMPLATE.md`](TEST_REPORT_TEMPLATE.md) | 实机测试计划 / 报告 / 模板 |
+| [`PRESET_DIAGNOSIS_TEST.md`](PRESET_DIAGNOSIS_TEST.md) | 会话预设 vs 全局默认的误诊排查 |
+| [`WRITING_SKILL_TEST_PROMPT.md`](WRITING_SKILL_TEST_PROMPT.md) | 写作技能五轮实测提示词与结论 |
 
 ---
 

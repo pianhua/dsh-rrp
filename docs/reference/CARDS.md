@@ -106,6 +106,9 @@ opening: default
   **首条 assistant 消息**注入，让故事从开场就直接开始，而不是等玩家说「你好」。
 - 玩家在展厅可预览并选择其一；会话内可用命令切换（如 `/opening`，待定）。
 - 开场白写入后，Chronicler 照常对该轮推演初始状态。
+- **玩家变量插值**：`{{player.name}}` 与 `{{player.description}}` 会在发布时替换为
+  frontmatter 声明的玩家角色（`card.md` 的 worldCore / persona 同样生效）；未知变量
+  原样保留。skill 文件不经插值，请勿在其中使用变量。示例见 `cards/yanmen-inn`。
 
 ---
 
@@ -195,7 +198,7 @@ opening: default
 - 开卡路由 `src/start.ts`：`POST /dsh-rrp/start` → 发布卡包 + 初始状态上下文（`source.rrp`；actor `card` 记入内存账本），**最后**追加开场白。
 - 卡片展厅 `src/client/gallery-panel.tsx`：`main` 主区面板 + 同名 `sidebar.panellist` 导航；开始流 = create → `agentPresets.select(presetIdForCard(card.id))` → POST start → open。UI 用宿主原子库（搜索/封面/标签/技能卡/开场白 + 底部主操作条）。
 - **主题（已撤回 P0）**：暖纸 `overrideTokens` 层观感被所有者否决，改用 **DSH 原版亮暗**；面板自身靠 `@deepseek-ai/dsh-client-ui-primitives` 原子 + `--dsw-alias-*` token 保持原生观感（见 [UI_CEILING.md](UI_CEILING.md) §A4）。
-- 当前验证：`tests/cards.spec.ts`、`tests/start.spec.ts`、`tests/client.spec.ts` 覆盖规范 id、开卡失败传播与可选 Workspace 归属；最新全量数字以 [`ACTIVE_TASK.md`](../ACTIVE_TASK.md) 的事实基线为准。
+- 当前验证：`tests/cards.spec.ts`、`tests/start.spec.ts`、`tests/client.spec.ts` 覆盖规范 id、开卡失败传播与可选 Workspace 归属；最新全量数字以 `pnpm test` 的当前输出为准。
 - **已实机确认**：开场白被宿主原生接受为**正文第一条**；卡包 persona 注入**零剧透**（见 [MANUAL_TEST.md](MANUAL_TEST.md)）。
 - ✅ **技能作用域（已修）**：每张卡一个 `rp-<card-id>` preset（`src/preset-id.ts`），绑定卡包开局时 `agentPresets.select` 选它；基础 `rp` 无卡包设定。宿主启动日志会逐个打印各 preset 的技能表。
 - **待优化**：P4 输入区接管；多卡体系下的卡面封面图；第二张官方测试卡。

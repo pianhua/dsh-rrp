@@ -53,9 +53,9 @@
 | 卡包 Skills | 每卡派生 `rp-<card>` preset，利用官方 standing scope 隔离 | ✅ 符合，不是重复造轮子 |
 | 投影注册生命周期 | `sessionProjections.register()` 在宿主中本身是 calling-fiber effect；未保存提前 disposer 不等于 HMR 泄漏 | ✅ 符合 |
 | D8 持久化 | `source.rrp.sediment` 操作事件 + `rrpSediment` 纯投影；agent provider 读取所属会话投影 | ✅ 符合；旧 sidecar 仅在首次访问时迁移并备份为 `.legacy.bak` |
-| 后台状态 UI | 世界状态活动与典籍草稿各自 2s HTTP 轮询 | ⚠️ 偏移：运行态应优先复用 Jobs/宿主推送，领域历史应优先走投影 |
-| Frontmatter | `cards.ts` 自行实现 YAML-like 子集解析 | ⚠️ 小型重复实现：不具备完整 YAML 语义 |
-| 进程内状态 | `RETAINED`、`LEDGERS`、`PENDING` 等 Map 未全部接入生产销毁路径 | ⚠️ 低风险生命周期债务 |
+| 后台状态 UI | 推送优先：典籍列表走 `useProjection('rrpSediment')`、在飞状态走 `useSessions` 的 `jobsBySession` 宿主推送；宿主不注入该座位时保留 2s 轮询作 fallback | ✅ 已收敛（fallback 为宿主能力缺席时的显式降级） |
+| Frontmatter | 官方 `yaml` 包解析（P4 已替换手写子集）；仅覆盖 frontmatter 用到的字段，不复用为通用 YAML 能力 | ✅ 符合 |
+| 进程内状态 | `RETAINED`、`LEDGERS`、`PENDING`、`LAST_SUMMARIZED`、纪事官在飞标记均经 `cleanupSession`（`session/disposed` / `agent/disposed`）统一释放（P0-4 + 并发守卫） | ✅ 符合 |
 
 D8 的语义已经确定：沉淀属于世界线，子会话继承分叉点前的事件前缀，分叉后的新增/删除只影响各自分支。实现复用 Session 日志与投影，不复制目录、不自建分支存储。Workspace 只承担宿主导航与归组，不参与这一状态语义。
 

@@ -40,12 +40,10 @@
 
 ```text
 dsh-rrp/
-├── docs/                        # 设计、宿主映射、任务指针与交接
-│   ├── HANDOFF.md               # 交接总入口：现状/架构/硬约束/待办
+├── docs/                        # 设计、宿主映射与开发流程
 │   ├── DESIGN.md                # 唯一产品目标规格
 │   ├── HOST_ALIGNMENT.md        # 宿主能力映射与反重复造轮子红线
 │   ├── DEVELOPMENT.md           # 开发环境与日常循环
-│   ├── ACTIVE_TASK.md           # 当前执行任务指针
 │   └── reference/               # 为什么这么设计：决策/术语/经验/技能
 ├── src/                         # 源码
 │   ├── index.ts                 # 插件后端入口 (Cordis 插件)
@@ -69,7 +67,6 @@ dsh-rrp/
 │   │   ├── world-state-tab.tsx  # 世界状态：结构化就地编辑器
 │   │   ├── sediment-tab.tsx     # 典籍（D8）：起草/审阅/确认/删除
 │   │   ├── gallery-panel.tsx    # 卡片展厅 + 开卡流
-│   │   ├── story-view.tsx       # 「沉浸」视图（纯增量）
 │   │   └── primitives.d.ts      # 宿主原子库结构面类型
 │   ├── agents/                  # 智体提示词与行为规范
 │   │   ├── chronicler.ts        # 纪事官提示词与输出契约
@@ -78,6 +75,8 @@ dsh-rrp/
 │   └── projection/              # 会话投影纯数学折叠器
 │       ├── world-state.ts       # WorldState 投影单元（zod 校验 + 纯折叠）
 │       ├── summary.ts           # 大局编年投影单元
+│       ├── settings.ts          # RP 设置投影单元（摘要开关）
+│       ├── sediment.ts          # D8 沉淀投影单元
 │       └── card.ts              # 当前卡包投影单元
 ├── presets/                     # 随包分发的原生 agent preset（RP 模式）
 │   └── rp/                      # 组合、元数据与随模式作用域的世界知识技能
@@ -97,7 +96,7 @@ dsh-rrp/
 2. **对齐目标**：在动笔前先核对 `docs/DESIGN.md` 与 `docs/HOST_ALIGNMENT.md`；涉及设计取舍或命名时，先读 [`docs/reference/DECISIONS.md`](docs/reference/DECISIONS.md) 与 [`docs/reference/GLOSSARY.md`](docs/reference/GLOSSARY.md)；
 3. **红线拦截**：如果发现准备写 `http.createServer`、写通用 SQLite 连接池、写前端整站弹窗，立即停手，寻找对应的 DSH 宿主能力；
 4. **轻量优雅**：代码追求精炼透明，每一行代码都直接服务于 RP 游玩体验，拒绝为了“架构完整性”而脑补基建；
-5. **三条宿主硬约束**（详见 [`docs/HANDOFF.md`](docs/HANDOFF.md) §4，违者会真机爆炸）：
+5. **三条宿主硬约束**（详见 [`docs/reference/HOST_SEAMS.md`](docs/reference/HOST_SEAMS.md)，违者会真机爆炸）：
    - **绝不发明会话事件类型** —— 状态寄存在已知 `user/message` 的 `source`；
    - **不在陌生 context 上属性读取服务** —— 用 `ctx.get(name)`；agent 生命周期监听器整体 try/catch；
    - **注入上下文只追加、绝不 replace** —— 前缀缓存是性能命脉。

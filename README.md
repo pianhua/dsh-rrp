@@ -9,21 +9,19 @@
 
 ## 当前状态
 
-阶段路线中的功能切片均已有实现；随后完成了 UI 精修、会话可读性修复、多卡技能作用域与 **D8 知识沉淀控制环**。当前不是单纯“按需打磨”，而是先依据 2026-09-17 事实审计收敛设计与宿主边界。
+阶段路线中的功能切片均已实现并经真机验收：卡包/存档/世界线隔离、UI 精修、D5 动态状态、D6 时序窗口、P4 官方 YAML 解析、D8 知识沉淀控制环、写作质量技能，以及 2026-09-18 稳健性审计修复（P0-1 ~ P1-8）。已完成内容统一归档于 [`docs/reference/COMPLETED_WORK.md`](docs/reference/COMPLETED_WORK.md)。
 
 核心环路已跑通：物化原生 RP 模式 → Author 只读消费卡包设定 / 最新 WorldState / 大局编年 → 每轮正文后纪事官异步推演状态 → 玩家在原生右侧栏就地矫正（无锁 Last-Write-Wins）→ 世界设定以 Skills 按需调取 → 每 8 回合编年官提炼四维大局观（`/summary` 按局可关）→ 剧情确立的新设定可经 `/lore` 审阅后写入当前世界线，并在 fork 时继承分叉点前缀。
 
-当前已确认但尚未解决的边界：D5 动态 WorldState 仍是固定 schema；世界状态和典籍存在 2s 轮询；卡包 frontmatter 使用简化 YAML 子集解析；若干进程内 Map 尚未完整接入销毁清理。D8 已改为 Session 事件 + 纯投影，旧文件 sidecar 仅用于一次性迁移。权威现状见 [`docs/HANDOFF.md`](docs/HANDOFF.md) §0/§7 与 [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md)。
+当前已确认但尚未解决的边界：世界状态和典籍面板各有一条 2s 客户端轮询（待收敛到宿主 Jobs / 投影推送 seam）。
 
 | 项 | 状态 |
 | :--- | :--- |
 | 产品设计规格 | ✅ [`docs/DESIGN.md`](docs/DESIGN.md) |
 | 宿主能力映射 | ✅ [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) |
 | 协作与红线准则 | ✅ [`AGENTS.md`](AGENTS.md) |
-| **交接文档（先读这份）** | ✅ [`docs/HANDOFF.md`](docs/HANDOFF.md) |
-| 当前任务指针 | ✅ [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md) |
 | 开发环境流程 | ✅ [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
-| 生产代码 | ⚠️ 功能环可运行；设计与宿主边界收敛中，不能标记为规格全部完成 |
+| 生产代码 | ✅ 功能环已真机验收；剩余项均为可选增强 |
 
 ---
 
@@ -71,16 +69,15 @@ DeepSeek Harness 宿主
 
 ## 文档索引
 
-> **接手先读 [`docs/HANDOFF.md`](docs/HANDOFF.md)**（现状、架构、宿主硬约束、验证工具、待办）。
-> 契约层四份：[`AGENTS.md`](AGENTS.md) → [`docs/DESIGN.md`](docs/DESIGN.md) → [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) → [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md)。
+> **接手先读 [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md)**（宿主能力映射与红线）与 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)（开发循环）；宿主接缝证据链见 [`docs/reference/HOST_SEAMS.md`](docs/reference/HOST_SEAMS.md)。
+> 契约层三份：[`AGENTS.md`](AGENTS.md) → [`docs/DESIGN.md`](docs/DESIGN.md) → [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md)。
 
 | 顺序 | 文档 | 作用 |
 | ---: | :--- | :--- |
-| 0 | [`docs/HANDOFF.md`](docs/HANDOFF.md) | **交接总入口**：现状 / 架构 / 宿主硬约束 / 待办 |
 | 1 | [`AGENTS.md`](AGENTS.md) | 协作准则、红线、开工协议 |
 | 2 | [`docs/DESIGN.md`](docs/DESIGN.md) | 唯一产品目标规格 |
 | 3 | [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) | 宿主能力映射 + 反重复造轮子红线 |
-| 4 | [`docs/ACTIVE_TASK.md`](docs/ACTIVE_TASK.md) | 当前唯一切片 |
+| 4 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | 开发环境、日常循环、真实宿主验证 |
 
 工程与开发环境：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) —— 构建、`rp-dev` 开发 profile、真实宿主验证流程。  
 扩展契约：`dsh-rrp/contracts`（外部记忆/分析插件读取 WorldState 与大局编年）；边界见 [`docs/reference/MEMORY.md`](docs/reference/MEMORY.md)。

@@ -9,7 +9,7 @@
 
 ### Code Quality
 - [x] Type checking: 0 errors
-- [x] Unit tests: 117/117 pass
+- [x] Unit tests: 128/128 pass
 - [x] Integration tests: 19/19 scenarios pass
 - [x] Build: successful
 - [x] No console errors in production build
@@ -119,7 +119,7 @@ pnpm add dsh-rrp
 dsh --profile rp-dev
 ```
 
-See `docs/DESIGN.md` for philosophy and `docs/HANDOFF.md` for technical details.
+See `docs/DESIGN.md` for philosophy and `docs/DEVELOPMENT.md` for technical details.
 
 #### 🙏 Credits
 
