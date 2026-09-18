@@ -204,4 +204,25 @@ describe('Chronicler trigger', () => {
     expect(activity.map((entry) => entry.phase)).toEqual(['started', 'stale'])
     expect(activity[1]?.detail).toContain('玩家已就地矫正')
   })
+
+  it('skips publish and marks ledger as no change when inferred state matches prior', async () => {
+    forgetState('session-1'); forgetActivity('session-1')
+    const host = fakeHost('rp', {
+      stateOf: (_session, key) => {
+        if (key === 'agentPreset') return 'rp'
+        if (key === 'rrpWorldState') return VALID
+        return undefined
+      },
+    })
+    registerChronicler(host.ctx as never, 'rp')
+    host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    const outcome = await host.started()!.run().done
+    expect(outcome.status).toBe('completed')
+    // No facts appended because state did not change
+    expect(host.appended.filter((entry) => entry.type === 'user/message')).toHaveLength(0)
+    const activity = readActivity('session-1').entries
+    expect(activity.map((entry) => entry.phase)).toEqual(['started', 'committed'])
+    expect(activity[1]?.detail).toBe('（无实质变化）')
+  })
 })
+
