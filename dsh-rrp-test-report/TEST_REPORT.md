@@ -253,3 +253,45 @@
 - **正统薄插件，零重复造轮子**：通过 Cordis 依赖注入与 DSH 官方槽位，实现了极具沉浸感的高品质 RP 体验；
 - **自然时序无锁流卓越生效**：彻底废除了传统酒馆与上一代系统的复杂硬锁，状态随对话自然向前推进，玩家随手可改，AI 紧随其后；
 - **本次测试已全量覆盖 CHROME_TEST_PLAN 规划的全部功能面**，整体工程质量极高，在修复 P1 与 P2 两处小缺陷后即可达到发布就绪水准。
+
+---
+
+## 7. 缺陷修复复验记录 (Defect Re-verification)
+
+> **复验时间**：2026-09-18 23:45 ~ 23:51 (UTC+8)  
+> **复验目标**：验证 Commit `ee68021` 针对真机测试报告记录的 2 处缺陷修复情况  
+> **复验环境**：重新编译 `pnpm run build`，重启 DSH 宿主 `http://127.0.0.1:3099`
+
+### 复验 1 (DEF-01, P1) — 展厅开卡自动跳转
+- **测试方法**：
+  1. 从左侧应用栏进入「卡片展厅」；
+  2. 选择卡片 1「落魄大小姐女仆 · 米娅」，点击「开始这一局」；
+  3. 选择卡片 2「雪夜雁门客栈」，点击「开始这一局」；
+  4. 检查跳转行为与浏览器控制台。
+- **实测结果**：
+  - **米娅卡包**：新会话 `session-485fc6a7-7f12-40be-bffc-9f824183db2d` 成功建立，展厅面板自动退出，页面平滑自动切换到对话区，完整呈现开场白正文；控制台 0 报错；
+  - **雁门关卡包**：新会话 `session-24621263-d9b4-4174-b439-ba761f9b6b8d` 成功建立，页面自动切换至对话区，完整呈现风雪关城开场白正文；控制台 0 报错；
+  - `TypeError: sessions.open is not a function` **彻底消失**。
+- **复验判定**：**PASS**
+- **复验截图**：
+  - [`reverify-01-maid-nav.png`](./screenshots/reverify-01-maid-nav.png) — 米娅开卡自动跳转成功
+  - [`reverify-01-yanmen-nav.png`](./screenshots/reverify-01-yanmen-nav.png) — 雁门关开卡自动跳转成功
+
+---
+
+### 复验 2 (DEF-02, P2) — 典籍路由非 RP 会话 403 守卫
+- **测试方法**：
+  1. 对非 RP 标准会话（`session-473922bf-f444-4c0a-ba99-0d6e44439826`）执行 `fetch('/dsh-rrp/sediment?sessionId=...')` 及各方法调用；
+  2. 对 RP 会话（`session-24621263...` 与 `session-485fc6a7...`）执行回退检查。
+- **实测结果**：
+  - **非 RP 会话**：
+    - `GET` 请求：**HTTP 403**，响应体 `{"error":"not an RP session"}`（修复前为 200）；
+    - `POST (draft)` 请求：**HTTP 403**，响应体 `{"error":"not an RP session"}`；
+    - `POST (confirm)` 请求：**HTTP 403**，响应体 `{"error":"not an RP session"}`；
+    - `DELETE` 请求：**HTTP 403**，响应体 `{"error":"not an RP session"}`。
+  - **RP 会话回退检查**：
+    - 雁门关会话：**HTTP 200**，返回 `{ skills: [], pending: null, drafting: false }`；
+    - 米娅会话：**HTTP 200**，返回 `{ skills: [], pending: null, drafting: false }`。
+- **复验判定**：**PASS**
+- **复验截图**：
+  - [`reverify-02-sediment-403.png`](./screenshots/reverify-02-sediment-403.png) — 403 拦截与 200 回退通过

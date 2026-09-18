@@ -111,6 +111,6 @@
 | DEF-02 (P2) | **典籍路由补 403 守卫**：`/dsh-rrp/sediment` 全部方法（GET/POST/DELETE）在会话解析后统一校验 `agentPreset` 归属（`belongsToRpPreset`，与矫正路由同策略同文案），非 RP 会话一律 403，不再漏 200/400 |
 
 - 回归测试：新增 `sediment-route.spec.ts`「non-RP 403 on every method」；typecheck 0 错、146/146 绿、构建通过
-- 待复验：DEF-01 的跳转修复需真机重跑一次 T3（开卡后应自动切到新会话）
+- 真机复验（2026-09-18 23:45，报告 §7 + 3 张 reverify 截图）：DEF-01 两张卡开卡均自动跳转对话区、Console 0 错；DEF-02 非 RP 会话 GET/POST/DELETE 全部 403、RP 会话回退 200。**两处缺陷均已闭环，全量绿灯**
 
 **发布状态**：v0.1.0 就绪（核心功能与真机验证达标，剩余项均为可选增强）。
