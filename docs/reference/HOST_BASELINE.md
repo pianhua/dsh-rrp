@@ -12,6 +12,7 @@
 | 安装宿主 | `@deepseek-ai/dsh@0.1.6-alpha.2`（npm 全局，`dsh --version` 核验） |
 | 源码克隆 | `D:\projects\deepseek-harness`，tag `dsh-v0.1.6-alpha.2`（commit `ddefc45fbc`） |
 | 索引 | codegraph（仅索引宿主克隆；`codegraph telemetry off` 已执行） |
+| peerDependencies | 7 个 `dsh-*` peer 全部 `^0.1.6-alpha.2`（dev 实装同版；npm semver 下旧 `^0.1.5-rc.1` 不覆盖本基线的预发布） |
 | 升级日期 | 2026-09-18 |
 
 源码克隆与安装版本必须**严格同 tag**。升级宿主后第一件事：在克隆里 `git fetch && git checkout dsh-v<新版本>`，然后更新上表。
@@ -80,5 +81,6 @@
 
 | 日期 | 基线 | 事项 |
 | :--- | :--- | :--- |
+| 2026-09-18 | 0.1.6-alpha.2 | 遗留清账：peerDependencies 七项 `^0.1.5-rc.1` → `^0.1.6-alpha.2`（旧范围不覆盖本基线预发布），dev 实装同步对齐；typecheck 0 错、145/145 绿 |
 | 2026-09-18 | 0.1.6-alpha.2 | 升级 + seam 全量复核 + snapshotEvents 迁移至 rrpTranscript 投影 + 卸载路径清账 |
 | 2026-09-17 | 0.1.5-rc.1 | 只读验证轮：DisclosureRow 导出、workspace getSnapshot 缓存、harnessHome 口径三项证据确认 |
