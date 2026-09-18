@@ -112,4 +112,29 @@ describe('player correction route', () => {
     expect(host.appended).toEqual([])
     expect(readActivity('s1').entries).toEqual([])
   })
+
+  it('prunes over-limit entries and clamps constrained dynamic fields before publishing', async () => {
+    forgetState('s1'); forgetActivity('s1')
+    const host = fakeHost()
+    registerCorrectionRoute(host.ctx as never)
+    const overLimitFlags: Record<string, boolean> = {}
+    for (let i = 0; i < 20; i++) overLimitFlags[`flag_${i}`] = true
+    const unprunedState = {
+      ...VALID,
+      flags: overLimitFlags,
+      mana: { type: 'number', value: 150, min: 0, max: 100 },
+    }
+    const { req, res } = fakeExchange({ sessionId: 's1', state: unprunedState })
+    await host.route()!.handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const writes = host.appended.filter((entry) => entry.type === 'user/message')
+    expect(writes).toHaveLength(1)
+    const writtenState = (writes[0]?.data as { source: { rrp: { worldState: any } } }).source.rrp.worldState
+    // Flags must be capped to 16
+    expect(Object.keys(writtenState.flags)).toHaveLength(16)
+    // Value must be clamped to max 100
+    expect(writtenState.mana).toEqual({ type: 'number', value: 100, min: 0, max: 100 })
+  })
 })
+
