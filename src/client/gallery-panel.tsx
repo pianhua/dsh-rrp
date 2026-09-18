@@ -555,7 +555,15 @@ export function registerGallery(ctx: RrpClientContext): void {
     // Stage the session only AFTER the log is complete: the conversation view
     // then pulls the whole history (card context + facts + opening) in one go,
     // instead of racing the host's live follow stream for the opening.
-    sessions.open(sessionId)
+    // Navigation belongs to view owners: ISessions has no open(), so switch
+    // through the host's workspace navigation (defensively probed — the
+    // workspace package may mount after this plugin).
+    const uiWorkspace = (ctx as unknown as { get?(name: string): unknown }).get?.('uiWorkspace') as
+      | { openSession?: (id: string) => void }
+      | undefined
+    if (typeof uiWorkspace?.openSession === 'function') {
+      uiWorkspace.openSession(sessionId)
+    }
     ctx.layout?.selectPanel(null)
     return { ok: true }
   }

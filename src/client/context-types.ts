@@ -70,8 +70,6 @@ export interface RrpSessionBindingFace {
 export interface RrpSessionsService {
   /** Create a session on the host; the new session is addressable on resolve. */
   create(options?: { workspaceId?: string; cwd?: string }): Promise<string>
-  /** Select a session as current. */
-  open(id: string): void
   /** Resolve the behavior face of a listed session. */
   binding(id: string): RrpSessionBindingFace | undefined
 }

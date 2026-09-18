@@ -20,6 +20,7 @@ import { readCard } from './cards.ts'
 import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
 import { transcriptOf } from './chronicler.ts'
 import { SCRIBE_SYSTEM_PROMPT, buildScribePrompt, parseScribeReply } from './agents/scribe.ts'
+import { belongsToRpPreset } from './preset-id.ts'
 import { ensureSedimentArmed, invalidateSediment } from './sediment-runtime.ts'
 import {
   RRP_SEDIMENT_KEY,
@@ -330,6 +331,13 @@ export function registerSedimentRoute(ctx: Context): void {
         const session = sessions.get(sessionId)
         if (session === undefined) {
           send(res, 404, { error: 'unknown session' })
+          return
+        }
+        // Same write-path guard as the player-correction route: only RP-family
+        // sessions accept RRP sediment operations.
+        const preset = projections.stateOf(session, 'agentPreset')
+        if (typeof preset === 'string' && !belongsToRpPreset(preset)) {
+          send(res, 403, { error: 'not an RP session' })
           return
         }
         ensureSedimentArmed(ctx, sessionId)

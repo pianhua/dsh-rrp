@@ -5,7 +5,7 @@ import { rrpPayloadOf } from '../src/state-payload.ts'
 import { transcriptProjections } from './stubs/transcript-projections.ts'
 
 /** Minimal fake host with synchronous projection folding, like Session.append. */
-function fakeHost() {
+function fakeHost(opts?: { agentPreset?: string }) {
   let sediment: SedimentEntry[] = []
   let failAppend = false
   const appended: Array<{ type: string; data: unknown }> = []
@@ -20,8 +20,11 @@ function fakeHost() {
     },
   }
   const sessions = { get: (id: string) => id === session.id ? session : undefined }
-  const projections = transcriptProjections(appended, (_session: unknown, key: string) =>
-    key === RRP_SEDIMENT_KEY ? sediment : undefined)
+  const projections = transcriptProjections(appended, (_session: unknown, key: string) => {
+    if (key === RRP_SEDIMENT_KEY) return sediment
+    if (key === 'agentPreset') return opts?.agentPreset
+    return undefined
+  })
   let route: { handler: (req: unknown, res: unknown) => unknown } | undefined
   const webServer = { register: (definition: { handler: (req: unknown, res: unknown) => unknown }) => { route = definition; return () => {} } }
   const ctx = {
@@ -136,5 +139,26 @@ describe('sediment route (D8)', () => {
     const unknown = exchange('GET', '/dsh-rrp/sediment?sessionId=nope')
     await host.route()!.handler(unknown.req, unknown.res)
     expect(unknown.res.statusCode).toBe(404)
+  })
+
+  it('refuses non-RP sessions with 403 on every method', async () => {
+    const host = fakeHost({ agentPreset: 'assistant' })
+    registerSedimentRoute(host.ctx as never)
+
+    const listed = exchange('GET', '/dsh-rrp/sediment?sessionId=s1')
+    await host.route()!.handler(listed.req, listed.res)
+    expect(listed.res.statusCode).toBe(403)
+    expect(listed.res.payload).toEqual({ error: 'not an RP session' })
+
+    const manual = exchange('POST', '/dsh-rrp/sediment', { sessionId: 's1', action: 'manual', draft: DRAFT })
+    await host.route()!.handler(manual.req, manual.res)
+    expect(manual.res.statusCode).toBe(403)
+
+    const removed = exchange('DELETE', '/dsh-rrp/sediment?sessionId=s1&name=qingqiu-lore')
+    await host.route()!.handler(removed.req, removed.res)
+    expect(removed.res.statusCode).toBe(403)
+
+    expect(host.sediment()).toEqual([])
+    expect(host.appended).toEqual([])
   })
 })

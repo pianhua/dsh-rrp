@@ -98,8 +98,19 @@
 
 ## 5. 质量验收快照
 
-- 单测：139/139（24 文件）；类型：0 错；构建：通过
-- 真机：P0 验收 7/7；D5/D6/P4 19/19；Synapse RP 地图 5/5（均 rp-dev:3099）；R1-R12 客户端与宿主交互改动待真机复验（重点：面板推送链路、连轮状态折叠、新卡免重载开局、HMR 投影注销）
-- 报告存档：[TEST_REPORT.md](TEST_REPORT.md) · [TEST_PLAN.md](TEST_PLAN.md) · [ACCEPTANCE_CHECKLIST.md](ACCEPTANCE_CHECKLIST.md) · [COMPLETION_ASSESSMENT.md](COMPLETION_ASSESSMENT.md) · [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
+- 单测：146/146（23 文件）；类型：0 错；构建：通过
+- 依赖：7 个 `dsh-*` peer 全部对齐基线 `^0.1.6-alpha.2`（dev 实装同版）
+- 真机：**2026-09-18 Chrome E2E 全量 T1–T13 PASS**（报告与 12 张截图归档 `dsh-rrp-test-report/`；86% 前缀缓存、零代打、无锁流/纪事官/编年/典籍/分支全闭环；T10 宿主无内置插件卸载入口，按规范记录 SKIPPED）。R1–R20 交互改动经此轮真机复验清零。
+- 报告存档：[CHROME_TEST_PLAN.md](CHROME_TEST_PLAN.md)（本轮用例表）· [TEST_REPORT.md](TEST_REPORT.md) · [TEST_PLAN.md](TEST_PLAN.md) · [ACCEPTANCE_CHECKLIST.md](ACCEPTANCE_CHECKLIST.md) · [COMPLETION_ASSESSMENT.md](COMPLETION_ASSESSMENT.md) · [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
+
+## 6. 2026-09-18 Chrome E2E 缺陷修复（报告 DEF-01/DEF-02）
+
+| # | 修复 |
+| :--- | :--- |
+| DEF-01 (P1) | **展厅开卡跳转**：宿主 `ISessions` 无 `open()`（导航权属 view owner），`sessions.open(sessionId)` 抛 `TypeError`。改经 `uiWorkspace.openSession(sessionId)`（宿主 0.1.6 合法导航 API，惰性 `ctx.get` 探测 + `typeof` 防御）；`RrpSessionsService` 删除虚构的 `open` 成员 |
+| DEF-02 (P2) | **典籍路由补 403 守卫**：`/dsh-rrp/sediment` 全部方法（GET/POST/DELETE）在会话解析后统一校验 `agentPreset` 归属（`belongsToRpPreset`，与矫正路由同策略同文案），非 RP 会话一律 403，不再漏 200/400 |
+
+- 回归测试：新增 `sediment-route.spec.ts`「non-RP 403 on every method」；typecheck 0 错、146/146 绿、构建通过
+- 待复验：DEF-01 的跳转修复需真机重跑一次 T3（开卡后应自动切到新会话）
 
 **发布状态**：v0.1.0 就绪（核心功能与真机验证达标，剩余项均为可选增强）。
