@@ -2,13 +2,13 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { buildCopilotPrompt, parseCopilotActions } from '../src/agents/copilot.ts'
+import { buildCopilotPrompt, COPILOT_SYSTEM_PROMPT, parseCopilotActions } from '../src/agents/copilot.ts'
 import { readActivity } from '../src/activity.ts'
 import { forgetState } from '../src/state-publisher.ts'
 import { rrpPayloadOf } from '../src/state-payload.ts'
 import { emptyWorldState, WORLD_STATE_KEY, type WorldState } from '../src/world-state.ts'
 import { mergeWorldStatePatch, registerCopilotRoute, setCopilotDirForTesting, forgetCopilot } from '../src/copilot.ts'
-import { hasSedimentDraft } from '../src/sediment-route.ts'
+import { hasLoreDraft } from '../src/lore-route.ts'
 
 let copilotDir: string
 
@@ -28,27 +28,48 @@ describe('copilot agent (prompt + action parsing)', () => {
       card: '【卡包设定】',
       worldState: 'characters: 米娅',
       summary: '',
-      sediment: '',
+      lore: '',
       transcript: '第 1 轮正文',
     })
     expect(prompt.indexOf('【卡包设定】')).toBeLessThan(prompt.indexOf('【世界状态】'))
     expect(prompt.indexOf('【剧情记录】')).toBeLessThan(prompt.indexOf('【玩家】'))
     expect(prompt.trim().endsWith('米娅现在穿什么？')).toBe(true)
-    expect(prompt).toContain('（大局编年未开启或尚未产出）')
+    expect(prompt).toContain('（剧情脉络未开启或尚未产出）')
   })
 
   it('parses a fenced action block and skips malformed entries', () => {
-    const reply = '好的。\n\n```rrp-action\n{"actions":[{"type":"update_world_state","patch":{"scene":{"weather":"大雨"}},"reason":"应玩家要求"},{"type":"draft_sediment","draft":{"name":"inn-rule","description":"d","body":"b"}},{"type":"bogus"},{"type":"update_world_state"}]}\n```'
+    const reply = '好的。\n\n```rrp-action\n{"actions":[{"type":"update_world_state","patch":{"scene":{"weather":"大雨"}},"reason":"应玩家要求"},{"type":"draft_lore","draft":{"name":"inn-rule","description":"d","body":"b"}},{"type":"bogus"},{"type":"update_world_state"}]}\n```'
     const actions = parseCopilotActions(reply)
     expect(actions).toHaveLength(2)
     expect(actions[0]).toMatchObject({ type: 'update_world_state', patch: { scene: { weather: '大雨' } } })
-    expect(actions[1]).toMatchObject({ type: 'draft_sediment', draft: { name: 'inn-rule' } })
+    expect(actions[1]).toMatchObject({ type: 'draft_lore', draft: { name: 'inn-rule' } })
   })
 
   it('returns no actions for pure Q&A or an invalid block', () => {
     expect(parseCopilotActions('老剑客是前朝影卫，直接回答即可。')).toEqual([])
     expect(parseCopilotActions('```rrp-action\n{not json}\n```')).toEqual([])
     expect(parseCopilotActions('```rrp-action\n{"noactions":true}\n```')).toEqual([])
+  })
+
+  // DEF-03 re-verification: models append extra closing braces to long blocks.
+  it('tolerates extra trailing closing braces in the action block', () => {
+    const reply = '好的。\n\n```rrp-action\n{"actions":[{"type":"update_world_state","patch":{"scene":{"weather":"大雨"}},"reason":"应玩家要求"}}]}}\n```'
+    const actions = parseCopilotActions(reply)
+    expect(actions).toHaveLength(1)
+    expect(actions[0]).toMatchObject({ type: 'update_world_state', patch: { scene: { weather: '大雨' } } })
+  })
+
+  // DEF-03 re-verification: a block cut mid-stream still salvages its actions.
+  it('salvages a truncated action block instead of dropping it', () => {
+    const reply = '好的。\n\n```rrp-action\n{"actions":[{"type":"update_world_state","patch":{"scene":{"weather":"大雨"}},"reason":"应玩家要求"},{"type":"draft_lore","draft":{"name":"mia-family","description":"d","body":"b"\n```'
+    const actions = parseCopilotActions(reply)
+    expect(actions.length).toBeGreaterThanOrEqual(1)
+    expect(actions[0]).toMatchObject({ type: 'update_world_state', patch: { scene: { weather: '大雨' } } })
+  })
+
+  it('requires a kebab-case lore name in the system prompt (DEF-03)', () => {
+    expect(COPILOT_SYSTEM_PROMPT).toContain('kebab-case')
+    expect(COPILOT_SYSTEM_PROMPT).toContain('严禁下划线')
   })
 
   it('merges patches per-name, clamps dynamic fields, and deletes null keys', () => {
@@ -219,14 +240,14 @@ describe('copilot route', () => {
     expect(readActivity('s-undo').entries.some((entry) => entry.detailKey === 'detail.copilotUndone')).toBe(true)
   })
 
-  it('stages draft_sediment for player confirmation instead of writing it', async () => {
-    forgetState('s-sediment'); forgetCopilot('s-sediment')
-    const reply = '已整理。\n```rrp-action\n{"actions":[{"type":"draft_sediment","draft":{"name":"inn-rule","description":"客栈规矩","body":"# 规矩\\n入夜落栓。"}}]}\n```'
-    const host = fakeHost({ id: 's-sediment', reply })
+  it('stages draft_lore for player confirmation instead of writing it', async () => {
+    forgetState('s-lore'); forgetCopilot('s-lore')
+    const reply = '已整理。\n```rrp-action\n{"actions":[{"type":"draft_lore","draft":{"name":"inn-rule","description":"客栈规矩","body":"# 规矩\\n入夜落栓。"}}]}\n```'
+    const host = fakeHost({ id: 's-lore', reply })
     registerCopilotRoute(host.ctx as never)
-    const { req, res } = exchange('POST', '/dsh-rrp/copilot', { sessionId: 's-sediment', message: '把客栈规矩整理成典籍' })
+    const { req, res } = exchange('POST', '/dsh-rrp/copilot', { sessionId: 's-lore', message: '把客栈规矩整理成设定集' })
     await host.routes.get('/dsh-rrp/copilot')!.handler(req, res)
-    expect(hasSedimentDraft('s-sediment')).toBe(true)
+    expect(hasLoreDraft('s-lore')).toBe(true)
     // Staging is not a session-log write.
     expect(host.appended).toHaveLength(0)
   })

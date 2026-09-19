@@ -31,7 +31,7 @@ type Translate = (key: string) => string
 /** One executed action as the host recorded it on the turn. */
 type TurnAction =
   | { kind: 'world-state'; digest: string }
-  | { kind: 'sediment'; name: string }
+  | { kind: 'lore'; name: string }
   | { kind: 'failed'; error: string }
 
 interface CopilotTurn {
@@ -58,7 +58,7 @@ const S: Record<string, CSSProperties> = {
   turnLabel: { fontSize: 11, marginBottom: 4, color: 'var(--dsw-alias-label-tertiary)' },
   bubblePlayer: {
     padding: '9px 11px', borderRadius: 10, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-    background: 'var(--dsw-alias-brand-primary)', color: 'var(--dsw-alias-inverted-label-primary)',
+    background: 'var(--dsw-alias-brand-primary)', color: 'var(--dsw-alias-label-primary-inverted, #fff)',
     fontSize: 13, lineHeight: 1.65,
   },
   bubbleCopilot: {
@@ -242,7 +242,7 @@ function CopilotPanel(props: CopilotPanelProps) {
         <div style={S.actionsTitle}>{t('copilot.applied')}</div>
         {turn.actions.map((action, index) => {
           if (action.kind === 'world-state') return <div key={index} style={S.actionRow}>{action.digest}</div>
-          if (action.kind === 'sediment') return <div key={index} style={S.actionRow}>{t('copilot.staged') + '：' + action.name}</div>
+          if (action.kind === 'lore') return <div key={index} style={S.actionRow}>{t('copilot.staged') + '：' + action.name}</div>
           return <div key={index} style={S.actionFailed}>{action.error}</div>
         })}
       </div>
