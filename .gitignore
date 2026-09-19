@@ -29,3 +29,7 @@ docs/DEVELOPMENT.md
 docs/reference/
 docs/superpowers/
 dsh-rrp-test-report/
+
+# VitePress
+docs/.vitepress/cache/
+docs/.vitepress/dist/
