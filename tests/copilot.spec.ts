@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -7,14 +7,34 @@ import { readActivity } from '../src/activity.ts'
 import { forgetState } from '../src/state-publisher.ts'
 import { rrpPayloadOf } from '../src/state-payload.ts'
 import { emptyWorldState, WORLD_STATE_KEY, type WorldState } from '../src/world-state.ts'
-import { mergeWorldStatePatch, registerCopilotRoute, setCopilotDirForTesting, forgetCopilot } from '../src/copilot.ts'
+import { mergeWorldStatePatch, registerCopilotRoute, forgetCopilot } from '../src/copilot.ts'
+import { setCopilotLegacyDirForTesting } from '../src/copilot-store.ts'
 import { hasLoreDraft } from '../src/lore-route.ts'
 
 let copilotDir: string
 
+/** In-memory stand-in for the host storage-domain facility (immediate durability). */
+function fakeStorageDomain() {
+  const records = new Map<string, unknown>()
+  const table = {
+    get: (key: string) => records.get(key),
+    put: async (key: string, value: unknown) => { records.set(key, structuredClone(value)) },
+    update: async (key: string, fn: (current: never) => never) => {
+      const next = fn(structuredClone(records.get(key)) as never)
+      records.set(key, structuredClone(next))
+      return next
+    },
+    delete: async (key: string) => records.delete(key),
+  }
+  const facility = {
+    open: async () => ({ table: () => table, close: async () => {} }),
+  }
+  return { facility, records }
+}
+
 beforeAll(() => {
   copilotDir = mkdtempSync(join(tmpdir(), 'rrp-copilot-'))
-  setCopilotDirForTesting(copilotDir)
+  setCopilotLegacyDirForTesting(copilotDir)
 })
 
 afterAll(() => {
@@ -139,11 +159,12 @@ function fakeHost(opts?: { id?: string; agentPreset?: string; reply?: string; fa
       return () => {}
     },
   }
+  const { facility, records } = fakeStorageDomain()
   const ctx = {
     effect: (fn: () => (() => void) | void) => fn(),
-    get: (name: string) => ({ webServer, sessions, sessionProjections: projections, llm, agents } as Record<string, unknown>)[name],
+    get: (name: string) => ({ webServer, sessions, sessionProjections: projections, llm, agents, storageDomain: facility } as Record<string, unknown>)[name],
   }
-  return { ctx, routes, appended, stateOf: () => state, id }
+  return { ctx, routes, appended, stateOf: () => state, id, records }
 }
 
 function exchange(method: string, path: string, body?: unknown) {
@@ -296,5 +317,76 @@ describe('copilot route', () => {
     await host.routes.get('/dsh-rrp/copilot')!.handler(after.req, after.res)
     const cleared = JSON.parse((after.res as { chunks: string[] }).chunks[0] ?? '{}') as { turns: Array<{ role: string }> }
     expect(cleared.turns).toEqual([])
+  })
+})
+
+describe('copilot history on the storage domain (issue #21)', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+  it('writes history to domain records, never to the sidecar dir', async () => {
+    forgetState('s-domain'); forgetCopilot('s-domain')
+    const host = fakeHost({ id: 's-domain', reply: '答。' })
+    registerCopilotRoute(host.ctx as never)
+    const ask = exchange('POST', '/dsh-rrp/copilot', { sessionId: 's-domain', message: '存哪了？' })
+    await host.routes.get('/dsh-rrp/copilot')!.handler(ask.req, ask.res)
+    await settle()
+
+    const record = host.records.get('s-domain') as { turns: Array<{ role: string }> }
+    expect(record.turns.map((turn) => turn.role)).toEqual(['player', 'copilot'])
+    expect(existsSync(join(copilotDir, 's-domain.json'))).toBe(false)
+  })
+
+  it('migrates a legacy sidecar on first read and retires the file', async () => {
+    forgetState('s-legacy'); forgetCopilot('s-legacy')
+    writeFileSync(join(copilotDir, 's-legacy.json'), JSON.stringify({
+      version: 1,
+      turns: [{ role: 'player', text: '旧世界的提问', at: '2026-09-01T00:00:00.000Z' }],
+      undo: [],
+    }), 'utf8')
+    const host = fakeHost({ id: 's-legacy', reply: '答。' })
+    registerCopilotRoute(host.ctx as never)
+
+    const get = exchange('GET', '/dsh-rrp/copilot?sessionId=s-legacy')
+    await host.routes.get('/dsh-rrp/copilot')!.handler(get.req, get.res)
+    const body = JSON.parse((get.res as { chunks: string[] }).chunks[0] ?? '{}') as { turns: Array<{ text: string }> }
+    expect(body.turns[0]?.text).toBe('旧世界的提问')
+
+    await settle()
+    expect(host.records.get('s-legacy')).toBeDefined()
+    expect(existsSync(join(copilotDir, 's-legacy.json'))).toBe(false)
+  })
+
+  it('reads a corrupt sidecar as no history instead of crashing the route', async () => {
+    forgetState('s-corrupt'); forgetCopilot('s-corrupt')
+    writeFileSync(join(copilotDir, 's-corrupt.json'), '{oops not json', 'utf8')
+    const host = fakeHost({ id: 's-corrupt', reply: '答。' })
+    registerCopilotRoute(host.ctx as never)
+
+    const get = exchange('GET', '/dsh-rrp/copilot?sessionId=s-corrupt')
+    await host.routes.get('/dsh-rrp/copilot')!.handler(get.req, get.res)
+    expect(get.res.statusCode).toBe(200)
+    const body = JSON.parse((get.res as { chunks: string[] }).chunks[0] ?? '{}') as { turns: unknown[] }
+    expect(body.turns).toEqual([])
+  })
+
+  it('normalizes pre-rename legacy actions instead of dropping the transcript', async () => {
+    forgetState('s-sediment'); forgetCopilot('s-sediment')
+    writeFileSync(join(copilotDir, 's-sediment.json'), JSON.stringify({
+      version: 1,
+      turns: [
+        { role: 'copilot', text: '已沉淀。', at: '2026-09-19T07:00:00.000Z', actions: [{ kind: 'sediment', name: 'cecilia-background' }] },
+        { role: 'copilot', text: '怪东西。', at: '2026-09-19T07:01:00.000Z', actions: [{ kind: 'weird', x: 1 }] },
+      ],
+      undo: [],
+    }), 'utf8')
+    const host = fakeHost({ id: 's-sediment', reply: '答。' })
+    registerCopilotRoute(host.ctx as never)
+
+    const get = exchange('GET', '/dsh-rrp/copilot?sessionId=s-sediment')
+    await host.routes.get('/dsh-rrp/copilot')!.handler(get.req, get.res)
+    const body = JSON.parse((get.res as { chunks: string[] }).chunks[0] ?? '{}') as { turns: Array<{ text: string; actions?: Array<{ kind: string; name?: string; error?: string }> }> }
+    expect(body.turns).toHaveLength(2)
+    expect(body.turns[0]?.actions?.[0]).toEqual({ kind: 'lore', name: 'cecilia-background' })
+    expect(body.turns[1]?.actions?.[0]?.kind).toBe('failed')
   })
 })

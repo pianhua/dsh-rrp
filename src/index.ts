@@ -155,9 +155,9 @@ export function apply(ctx: Context): void {
   })
 
   // Copilot: the player's omniscient advisor in the third right-sidebar tab.
-  // Conversation history lives in plugin-private JSON (never the session log);
-  // her writes ride the same published lanes with actor 'copilot'.
-  ctx.inject(['webServer', 'sessions', 'sessionProjections', 'llm', 'agents'], (scoped: Context) => {
+  // Conversation history lives on the host Storage domain (never the session
+  // log, issue #21); her writes ride the same published lanes with actor 'copilot'.
+  ctx.inject(['webServer', 'sessions', 'sessionProjections', 'llm', 'agents', 'storageDomain'], (scoped: Context) => {
     registerCopilotRoute(scoped)
   })
 

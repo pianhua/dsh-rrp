@@ -1,13 +1,13 @@
 /**
- * dsh-rrp — the Copilot advisor (route + storage + undo).
+ * dsh-rrp — the Copilot advisor (route + history + undo).
  *
  * The Copilot lives in the right sidebar's third tab and talks to the player
- * out-of-band: her conversation history is kept in plugin-private JSON files
- * (`<dshHome>/.dsh-rrp/copilot/<sessionId>.json`), NOT in the session log, so
- * the narrative stream stays pure. Her only writes into the session are the
- * same published lanes everyone else uses (WorldState facts, staged lore
- * draft) — append-only, fork-safe, and attributed `actor: 'copilot'` in the
- * activity ledger.
+ * out-of-band: her conversation history is kept OUT of the session log (the
+ * narrative stream stays pure) on the host Storage domain (issue #21) —
+ * plugin-owned records, host-owned durability. Her only writes into the
+ * session are the same published lanes everyone else uses (WorldState facts,
+ * staged lore draft) — append-only, fork-safe, and attributed `actor:
+ * 'copilot'` in the activity ledger.
  *
  * Undo is honest about the append-only log: it publishes the pre-action
  * snapshot as ONE new state (a revert, not an erasure), so the ledger keeps
@@ -18,14 +18,21 @@
  * the non-RP 403 guard every other write path carries.
  */
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { COPILOT_SYSTEM_PROMPT, buildCopilotPrompt, parseCopilotActions } from './agents/copilot.ts'
 import { recordActivity } from './activity.ts'
 import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
+import {
+  emptyCopilotStore,
+  openCopilotStore,
+  type CopilotHistoryView,
+  type CopilotStore,
+  type CopilotStoreHandle,
+  type CopilotTurn,
+  type CopilotTurnAction,
+  type CopilotUndoEntry,
+} from './copilot-store.ts'
 import { transcriptOf, DEFAULT_TRANSCRIPT_LIMIT } from './chronicler.ts'
-import { harnessHome } from './home.ts'
 import { SUMMARY_KEY, renderMacroSummary } from './macro-summary.ts'
 import { belongsToRpPreset } from './preset-id.ts'
 import { stageLoreDraft, reservedNames } from './lore-route.ts'
@@ -46,82 +53,12 @@ const UNDO_LIMIT = 10
 const HISTORY_FEED = 20
 
 // ---------------------------------------------------------------------------
-// Persistence: one small JSON per session, fork-isolated by sessionId on
-// purpose (the advisor is the player's private channel, not world state).
+// History lives on the host Storage domain (see copilot-store.ts). Fork
+// isolation is deliberate: sessionId keys the record, so a forked worldline
+// starts with an empty advisor instead of quoting prose from its sibling.
 
-let copilotDir = join(harnessHome(), '.dsh-rrp', 'copilot')
-
-/** Test hook: keep the real harness home untouched by specs. */
-export function setCopilotDirForTesting(dir: string): void {
-  copilotDir = dir
-}
-
-/** One executed action as recorded on the turn (for the panel's action card). */
-export type CopilotTurnAction =
-  | { kind: 'world-state'; digest: string }
-  | { kind: 'lore'; name: string }
-  | { kind: 'failed'; error: string }
-
-export interface CopilotTurn {
-  role: 'player' | 'copilot'
-  text: string
-  at: string
-  actions?: CopilotTurnAction[]
-}
-
-export interface CopilotUndoEntry {
-  id: string
-  at: string
-  /** Human digest of what the turn changed (shown on the undo card). */
-  digest: string
-  /** The WorldState before the turn's world-state actions ran. */
-  snapshot: WorldState
-}
-
-interface CopilotStore {
-  version: 1
-  turns: CopilotTurn[]
-  undo: CopilotUndoEntry[]
-}
-
-function emptyStore(): CopilotStore {
-  return { version: 1, turns: [], undo: [] }
-}
-
-function storePath(sessionId: string): string {
-  return join(copilotDir, sessionId + '.json')
-}
-
-/** Load one session's store; a missing or corrupt file yields a fresh store. */
-export function loadCopilotStore(sessionId: string): CopilotStore {
-  try {
-    const raw = readFileSync(storePath(sessionId), 'utf8')
-    const parsed = JSON.parse(raw) as CopilotStore
-    if (!Array.isArray(parsed.turns) || !Array.isArray(parsed.undo)) return emptyStore()
-    return { version: 1, turns: parsed.turns, undo: parsed.undo }
-  } catch {
-    return emptyStore()
-  }
-}
-
-/** Persist one store, creating the directory on first use. */
-export function saveCopilotStore(sessionId: string, store: CopilotStore): void {
-  try {
-    if (!existsSync(copilotDir)) mkdirSync(copilotDir, { recursive: true })
-    writeFileSync(storePath(sessionId), JSON.stringify(store), 'utf8')
-  } catch (error) {
-    console.warn(TAG + ' copilot history save failed:', error)
-  }
-}
-
-/** What the panel GETs: recent turns + undo depth. */
-export interface CopilotHistoryView {
-  turns: CopilotTurn[]
-  undoCount: number
-}
-
-export function readCopilotHistory(sessionId: string): CopilotHistoryView {
-  const store = loadCopilotStore(sessionId)
+function readCopilotHistory(handle: CopilotStoreHandle, sessionId: string): CopilotHistoryView {
+  const store = handle.load(sessionId)
   return { turns: store.turns.slice(-TURNS_LIMIT), undoCount: store.undo.length }
 }
 
@@ -310,6 +247,25 @@ export function registerCopilotRoute(ctx: Context): void {
   }
 
   ctx.effect(() => {
+    // One domain open per effect; handlers await the shared promise (settles
+    // once). If storage fails to open the routes answer 503 instead of
+    // silently dropping history.
+    let disposed = false
+    const storeReady = openCopilotStore((name) => runtime.get(name)).then(({ handle }) => {
+      if (disposed) {
+        void handle.close()
+        throw new Error('copilot store disposed before open')
+      }
+      return handle
+    })
+    const takeStore = async (): Promise<CopilotStoreHandle | undefined> => {
+      try {
+        return await storeReady
+      } catch {
+        return undefined
+      }
+    }
+
     const disposeUndo = webServer.register({
       kind: 'exact',
       path: UNDO_PATH,
@@ -332,9 +288,15 @@ export function registerCopilotRoute(ctx: Context): void {
         }
         const session = resolveSession(sessionId, res)
         if (session === undefined) return
+        const store = await takeStore()
+        if (store === undefined) {
+          sendJson(res, 503, { error: 'copilot history unavailable' })
+          return
+        }
 
-        const store = loadCopilotStore(sessionId)
-        const entry = store.undo.pop()
+        // Pop on the domain write chain: atomic, so racing undos cannot
+        // double-spend one snapshot.
+        const entry = await store.mutate(sessionId, (draft) => draft.undo.pop())
         if (entry === undefined) {
           sendJson(res, 400, { error: 'nothing to undo' })
           return
@@ -342,6 +304,7 @@ export function registerCopilotRoute(ctx: Context): void {
         // The revert is itself one new published state (append-only honesty):
         // the values roll back, the ledger keeps both records.
         if (!publishState(session, projections, { worldState: entry.snapshot })) {
+          await store.mutate(sessionId, (draft) => { draft.undo.push(entry) })
           sendJson(res, 500, { error: 'WorldState write failed' })
           return
         }
@@ -349,9 +312,8 @@ export function registerCopilotRoute(ctx: Context): void {
           id: randomUUID(), at: new Date().toISOString(), actor: 'copilot', target: 'world-state', phase: 'corrected',
           detailKey: 'detail.copilotUndone',
         })
-        saveCopilotStore(sessionId, store)
         console.log(TAG + ' copilot undo restored pre-turn state for ' + sessionId)
-        sendJson(res, 200, { ok: true, digest: entry.digest, undoCount: store.undo.length })
+        sendJson(res, 200, { ok: true, digest: entry.digest, undoCount: store.load(sessionId).undo.length })
       },
     })
 
@@ -367,6 +329,11 @@ export function registerCopilotRoute(ctx: Context): void {
           return
         }
         const fromBody = async (): Promise<string> => req.method === 'POST' ? await readBody(req) : ''
+        const store = await takeStore()
+        if (store === undefined) {
+          sendJson(res, 503, { error: 'copilot history unavailable' })
+          return
+        }
 
         // GET: history + undo depth. DELETE: clear history.
         if (req.method === 'GET') {
@@ -376,7 +343,7 @@ export function registerCopilotRoute(ctx: Context): void {
             return
           }
           if (resolveSession(sessionId, res) === undefined) return
-          sendJson(res, 200, readCopilotHistory(sessionId))
+          sendJson(res, 200, readCopilotHistory(store, sessionId))
           return
         }
         if (req.method === 'DELETE') {
@@ -386,11 +353,7 @@ export function registerCopilotRoute(ctx: Context): void {
             return
           }
           if (resolveSession(sessionId, res) === undefined) return
-          try {
-            unlinkSync(storePath(sessionId))
-          } catch {
-            /* absent file is already cleared */
-          }
+          await store.remove(sessionId)
           sendJson(res, 200, { ok: true })
           return
         }
@@ -432,10 +395,11 @@ export function registerCopilotRoute(ctx: Context): void {
 
         IN_FLIGHT.add(sessionId)
         try {
-          const store = loadCopilotStore(sessionId)
-          store.turns.push({ role: 'player', text: message, at: new Date().toISOString() })
-          store.turns = store.turns.slice(-TURNS_LIMIT)
-          saveCopilotStore(sessionId, store)
+          await store.mutate(sessionId, (draft) => {
+            draft.turns.push({ role: 'player', text: message, at: new Date().toISOString() })
+            draft.turns = draft.turns.slice(-TURNS_LIMIT)
+          })
+          const store0 = store.load(sessionId)
 
           // SSE over the raw Node response.
           res.statusCode = 200
@@ -459,7 +423,7 @@ export function registerCopilotRoute(ctx: Context): void {
             transcript: transcriptOf(projections, session).slice(-DEFAULT_TRANSCRIPT_LIMIT),
           })
 
-          const historyMessages = store.turns.slice(-HISTORY_FEED, -1).map((turn) => ({
+          const historyMessages = store0.turns.slice(-HISTORY_FEED, -1).map((turn) => ({
             id: randomUUID(),
             role: turn.role === 'player' ? 'user' : 'assistant',
             content: [{ type: 'text', text: turn.text }],
@@ -542,28 +506,29 @@ export function registerCopilotRoute(ctx: Context): void {
               applied.push({ kind: 'failed', error: String((error as { message?: string })?.message ?? error) })
             }
           }
-          if (priorForUndo !== undefined && applied.some((entry) => entry.kind === 'world-state')) {
-            store.undo.push({
-              id: randomUUID(),
-              at: new Date().toISOString(),
-              digest: applied.filter((entry): entry is { kind: 'world-state'; digest: string } => entry.kind === 'world-state').map((entry) => entry.digest).join('；'),
-              snapshot: priorForUndo,
-            })
-            store.undo = store.undo.slice(-UNDO_LIMIT)
-          }
-
           const copilotTurn: CopilotTurn = {
             role: 'copilot',
             text: reply,
             at: new Date().toISOString(),
             ...(applied.length > 0 ? { actions: applied } : {}),
           }
-          store.turns.push(copilotTurn)
-          store.turns = store.turns.slice(-TURNS_LIMIT)
-          saveCopilotStore(sessionId, store)
+          const undoCount = await store.mutate(sessionId, (draft) => {
+            if (priorForUndo !== undefined && applied.some((entry) => entry.kind === 'world-state')) {
+              draft.undo.push({
+                id: randomUUID(),
+                at: new Date().toISOString(),
+                digest: applied.filter((entry): entry is { kind: 'world-state'; digest: string } => entry.kind === 'world-state').map((entry) => entry.digest).join('；'),
+                snapshot: priorForUndo,
+              })
+              draft.undo = draft.undo.slice(-UNDO_LIMIT)
+            }
+            draft.turns.push(copilotTurn)
+            draft.turns = draft.turns.slice(-TURNS_LIMIT)
+            return draft.undo.length
+          })
 
           writeSse(res, 'action', { applied })
-          writeSse(res, 'done', { turn: copilotTurn, undoCount: store.undo.length })
+          writeSse(res, 'done', { turn: copilotTurn, undoCount })
           res.end()
           console.log(TAG + ' copilot turn completed for ' + sessionId + (applied.length > 0 ? ' (' + String(applied.length) + ' action(s))' : ''))
         } catch (error) {
@@ -582,6 +547,8 @@ export function registerCopilotRoute(ctx: Context): void {
 
     console.log(TAG + ' copilot route armed at ' + COPILOT_PATH)
     return () => {
+      disposed = true
+      void storeReady.then((handle) => handle.close()).catch(() => {})
       disposeMain()
       disposeUndo()
     }
