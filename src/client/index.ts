@@ -7,6 +7,7 @@
 import type { RrpClientContext } from './context-types.ts'
 import { registerCopilotTab } from './copilot-tab.tsx'
 import { registerGallery } from './gallery-panel.tsx'
+import { registerWorldlineTab } from './worldline-tab.tsx'
 import { registerLoreTab } from './lore-tab.tsx'
 import { registerWorldStateTab } from './world-state-tab.tsx'
 
@@ -146,6 +147,14 @@ const ZH: Record<string, string> = {
   'gallery.player': '玩家角色',
   'gallery.playerName': '本局主角名',
   'gallery.playerNameHint': '留空沿用卡声明，仅本局生效',
+  'worldline.view': '世界线',
+  'worldline.title': '世界线存档图',
+  'worldline.refresh': '刷新地图',
+  'worldline.empty': '还没有世界线——开局后每推进一轮就自动生成一个存档点。',
+  'worldline.unavailable': '世界线服务不可用',
+  'worldline.load': '读档',
+  'worldline.reroll': '从这里重roll',
+  'worldline.hide': '收起此线',
   'gallery.skills': '世界知识',
   'gallery.opening': '开场白',
   'gallery.start': '开始这一局',
@@ -286,6 +295,14 @@ const EN: Record<string, string> = {
   'gallery.player': 'Player',
   'gallery.playerName': 'Player name this run',
   'gallery.playerNameHint': 'Leave blank to keep the card-declared name; this run only',
+  'worldline.view': 'Worldlines',
+  'worldline.title': 'Worldline save map',
+  'worldline.refresh': 'Refresh map',
+  'worldline.empty': 'No worldlines yet — every turn becomes a save slot once a story starts.',
+  'worldline.unavailable': 'Worldline service unavailable',
+  'worldline.load': 'Load',
+  'worldline.reroll': 'Reroll from here',
+  'worldline.hide': 'Hide this line',
   'gallery.skills': 'World knowledge',
   'gallery.opening': 'Opening',
   'gallery.start': 'Start this story',
@@ -339,4 +356,5 @@ export function apply(ctx: RrpClientContext): void {
   registerLoreTab(ctx)
   registerCopilotTab(ctx)
   registerGallery(ctx)
+  registerWorldlineTab(ctx)
 }

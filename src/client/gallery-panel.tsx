@@ -559,10 +559,11 @@ export function registerGallery(ctx: RrpClientContext): void {
     if (selected.ok === false) return abortStart(selected.error?.message ?? t('gallery.selectFailed'))
 
     // The card name is the story's name; a rename is a nicety, never fatal.
+    // #28 naming convention: main lines read 「卡名·主线」, forks 「卡名·线N」.
     const binding = sessions.binding(sessionId)
     if (binding !== undefined) {
       try {
-        await binding.session.rename?.(card.meta.name)
+        await binding.session.rename?.(card.meta.name + '·主线')
       } catch {
         /* title only */
       }

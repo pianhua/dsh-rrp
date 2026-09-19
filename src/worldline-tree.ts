@@ -9,21 +9,16 @@
  * invent coordinates or a parallel session model: the tree is a fold of
  * facts the host already keeps.
  */
+import type { WorldlineBadge } from './worldline-digest.ts'
 
-/** The save-slot badge: what the world looked like at this turn. */
-export interface WorldlineBadge {
-  location?: string
-  time?: string
-  /** Key characters' affinity at this turn, in the state's own order. */
-  affinity?: Array<{ name: string; value: number }>
-  /** One macro-summary line when the compass has produced one. */
-  summaryLine?: string
-}
+export type { WorldlineBadge } from './worldline-digest.ts'
 
 /** One player turn as the fold sees it (excerpts pre-cut by the caller). */
 export interface WorldlineTurnFact {
   /** 0-based turn index over the session's FULL log (inherited prefix included). */
   turn: number
+  /** Seq of the player message; also the fork boundary for rerolls. */
+  seq: number
   playerExcerpt: string
   proseExcerpt: string
   badge?: WorldlineBadge
@@ -50,6 +45,8 @@ export interface WorldlineNode {
   sessionId: string
   sessionTitle: string
   turn: number
+  /** Seq of the player message — the fork boundary for "reroll from here". */
+  seq: number
   playerExcerpt: string
   proseExcerpt: string
   badge?: WorldlineBadge
@@ -110,6 +107,7 @@ export function foldWorldlineTrees(
         sessionId: session.id,
         sessionTitle: session.title,
         turn: turn.turn,
+        seq: turn.seq,
         playerExcerpt: turn.playerExcerpt,
         proseExcerpt: turn.proseExcerpt,
         ...(turn.badge === undefined ? {} : { badge: turn.badge }),

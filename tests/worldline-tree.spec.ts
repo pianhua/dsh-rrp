@@ -4,6 +4,7 @@ import { foldWorldlineTrees, type WorldlineNode, type WorldlineSessionFact, type
 function turns(count: number, tag = ''): WorldlineTurnFact[] {
   return Array.from({ length: count }, (_, turn) => ({
     turn,
+    seq: turn * 2 + 1,
     playerExcerpt: tag + 'P' + String(turn),
     proseExcerpt: tag + 'A' + String(turn),
   }))

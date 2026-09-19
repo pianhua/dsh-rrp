@@ -66,12 +66,29 @@ export interface RrpSessionBindingFace {
   }
 }
 
+/** One listed session row (the fields the worldline map reads). */
+export interface RrpSessionSummary {
+  displayTitle?: string
+  parentId?: string
+  blank?: boolean
+}
+
+/** Observable session-list snapshot (host SessionListState slice). */
+export interface RrpSessionListStore {
+  getSnapshot(): { ids: string[]; byId: Record<string, RrpSessionSummary> }
+  subscribe(listener: () => void): () => void
+}
+
 /** Client sessions service face (subset of dsh-api-session-controller). */
 export interface RrpSessionsService {
   /** Create a session on the host; the new session is addressable on resolve. */
   create(options?: { workspaceId?: string; cwd?: string }): Promise<string>
   /** Resolve the behavior face of a listed session. */
   binding(id: string): RrpSessionBindingFace | undefined
+  /** Host session roster with fork lineage (issue #28 reads parentId/displayTitle). */
+  readonly list?: RrpSessionListStore
+  /** Fork a child session through an event seq; returns the child id. */
+  fork?(opts: { sessionId: string; atSeq?: number; increaseTitle?: boolean }): Promise<string>
 }
 
 /** One native DSH Workspace row used by the optional gallery picker. */
