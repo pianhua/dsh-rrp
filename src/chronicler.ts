@@ -23,7 +23,7 @@ import { NO_WORLD_STATE_CHANGE, WORLD_STATE_KEY, diffWorldState, emptyWorldState
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'chronicler'
-/** Default cap for broad transcript rendered for summarization / sediment. */
+/** Default cap for broad transcript rendered for summarization / lore. */
 export const DEFAULT_TRANSCRIPT_LIMIT = 16000
 /** Cap the latest turn transcript handed to the Chronicler (characters, tail-biased). */
 export const CHRONICLER_TRANSCRIPT_LIMIT = 8000
@@ -139,7 +139,7 @@ function scheduleInference(faces: HostFaces, session: SessionLike): void {
   try {
     faces.jobs.start({
       kind: JOB_KIND,
-      label: '纪事官 Chronicler · ' + session.id.slice(0, 8),
+      label: '状态推演 Chronicler · ' + session.id.slice(0, 8),
       ...(owner === undefined ? {} : { owner }),
       run: () => {
         const controller = new AbortController()

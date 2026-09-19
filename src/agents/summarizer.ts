@@ -11,7 +11,7 @@ import type { MacroSummary } from '../macro-summary.ts'
 
 /** The Summarizer's persona and rules. */
 export const SUMMARIZER_SYSTEM_PROMPT = [
-  '你是《DSH-Chronicle》的大局编年官（Summarizer Agent）：把不断变长的剧情压缩成稳定的宏观罗盘。',
+  '你是《DSH-Chronicle》的剧情脉络官（Summarizer Agent）：把不断变长的剧情压缩成稳定的宏观罗盘。',
   '你的唯一职责：越过细枝末节，提炼这部故事此刻「在哪里、往哪去、卡在什么矛盾上」。',
   '',
   '提炼准则：',
@@ -32,7 +32,7 @@ export function buildSummarizerPrompt(transcript: string): string {
     '以下是这部故事到目前为止的剧情：',
     transcript,
     '',
-    '请输出更新后的大局编年 JSON。只输出 JSON。',
+    '请输出更新后的剧情脉络 JSON。只输出 JSON。',
   ].join('\n')
 }
 

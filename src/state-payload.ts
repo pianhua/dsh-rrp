@@ -19,7 +19,7 @@
 import type { CardContext } from './card-types.ts'
 import type { MacroSummary } from './macro-summary.ts'
 import type { RrpSettings } from './settings.ts'
-import type { SedimentChange } from './sediment-state.ts'
+import type { LoreChange } from './lore-state.ts'
 import type { WorldState } from './world-state.ts'
 
 /** The plugin identity stamped on every context message we own. */
@@ -38,7 +38,7 @@ export interface RrpStatePayload {
   /** Complete player settings for this Session. */
   settings?: RrpSettings
   /** One incremental dynamic-lore operation for this worldline. */
-  sediment?: SedimentChange
+  sediment?: LoreChange
 }
 
 /**

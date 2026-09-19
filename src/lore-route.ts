@@ -1,13 +1,13 @@
 /**
- * dsh-rrp — knowledge-sedimentation routes (D8).
+ * dsh-rrp — knowledge-lore routes (D8).
  *
  * The panel drives the whole controlled flow:
- *   GET    /dsh-rrp/sediment?sessionId=            list + pending draft
- *   POST   /dsh-rrp/sediment  { action:'draft' }   schedule the Scribe
- *   POST   /dsh-rrp/sediment  { action:'confirm' } write the pending draft
- *   POST   /dsh-rrp/sediment  { action:'discard' } drop the pending draft
- *   POST   /dsh-rrp/sediment  { action:'manual', draft } write one directly
- *   DELETE /dsh-rrp/sediment?sessionId=&name=      remove one
+ *   GET    /dsh-rrp/lore?sessionId=            list + pending draft
+ *   POST   /dsh-rrp/lore  { action:'draft' }   schedule the Scribe
+ *   POST   /dsh-rrp/lore  { action:'confirm' } write the pending draft
+ *   POST   /dsh-rrp/lore  { action:'discard' } drop the pending draft
+ *   POST   /dsh-rrp/lore  { action:'manual', draft } write one directly
+ *   DELETE /dsh-rrp/lore?sessionId=&name=      remove one
  *
  * Nothing is committed without an explicit player action; the Scribe only
  * STAGES a draft. Confirmed changes append to the owning Session and fold
@@ -21,18 +21,18 @@ import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
 import { transcriptOf } from './chronicler.ts'
 import { SCRIBE_SYSTEM_PROMPT, buildScribePrompt, parseScribeReply } from './agents/scribe.ts'
 import { belongsToRpPreset } from './preset-id.ts'
-import { ensureSedimentArmed, invalidateSediment } from './sediment-runtime.ts'
+import { ensureLoreArmed, invalidateLore } from './lore-runtime.ts'
 import {
-  RRP_SEDIMENT_KEY,
-  sedimentEntriesOf,
-  validateSedimentEntry,
-  type SedimentEntry,
-} from './sediment-state.ts'
+  RRP_LORE_KEY,
+  loreEntriesOf,
+  validateLoreEntry,
+  type LoreEntry,
+} from './lore-state.ts'
 import { publishState } from './state-publisher.ts'
 import { WORLD_STATE_KEY, renderWorldState, type WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
-const SEDIMENT_PATH = '/dsh-rrp/sediment'
+const LORE_PATH = '/dsh-rrp/lore'
 
 interface SessionLike {
   readonly id: string
@@ -82,40 +82,40 @@ interface RuntimeFaces {
 }
 
 /** Staged drafts, one per session; never durable — the player confirms or drops. */
-const PENDING = new Map<string, SedimentEntry>()
+const PENDING = new Map<string, LoreEntry>()
 /** Sessions with a Scribe pass in flight (one at a time). */
 const DRAFTING = new Set<string>()
 
 /** Forget staged drafts and in-flight drafting state when a session is disposed. */
-export function forgetSediment(sessionId: string): void {
+export function forgetLore(sessionId: string): void {
   PENDING.delete(sessionId)
   DRAFTING.delete(sessionId)
 }
 
 /** Drop every staged draft (plugin unload must not leave stale sessions behind). */
-export function forgetAllSediment(): void {
+export function forgetAllLore(): void {
   PENDING.clear()
   DRAFTING.clear()
 }
 
 /** Check whether a session has pending or drafting state (for testing / inspection). */
-export function hasSedimentDraft(sessionId: string): boolean {
+export function hasLoreDraft(sessionId: string): boolean {
   return PENDING.has(sessionId) || DRAFTING.has(sessionId)
 }
 
 /** Set staged draft for testing. */
-export function stageSedimentDraftForTesting(sessionId: string, entry: SedimentEntry): void {
+export function stageLoreDraftForTesting(sessionId: string, entry: LoreEntry): void {
   PENDING.set(sessionId, entry)
 }
 
 /**
- * Stage an externally composed draft (the Copilot's draft_sediment action).
- * The player still confirms it in the 「典籍」 panel before anything is
+ * Stage an externally composed draft (the Copilot's draft_lore action).
+ * The player still confirms it in the 「设定集」 panel before anything is
  * written — the D8 control ring is never bypassed.
  */
-export function stageSedimentDraft(sessionId: string, entry: SedimentEntry): void {
+export function stageLoreDraft(sessionId: string, entry: LoreEntry): void {
   PENDING.set(sessionId, entry)
-  invalidateSediment(sessionId)
+  invalidateLore(sessionId)
 }
 
 /** Respond with a JSON body. */
@@ -134,7 +134,7 @@ async function readBody(req: RequestLike): Promise<string> {
   return text
 }
 
-/** The active card's bundled skill names, so sediment cannot take their names. */
+/** The active card's bundled skill names, so lore cannot take their names. */
 export function reservedNames(projections: ProjectionsService | undefined, session: SessionLike): string[] {
   if (projections === undefined) return []
   const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
@@ -145,12 +145,12 @@ export function reservedNames(projections: ProjectionsService | undefined, sessi
 }
 
 /** Current dynamic lore for exactly this Session/worldline. */
-function currentSediment(projections: ProjectionsService, session: SessionLike): SedimentEntry[] {
-  return sedimentEntriesOf(projections.stateOf(session, RRP_SEDIMENT_KEY))
+function currentLore(projections: ProjectionsService, session: SessionLike): LoreEntry[] {
+  return loreEntriesOf(projections.stateOf(session, RRP_LORE_KEY))
 }
 
 /** Player-facing list row; bodies remain in the Skill provider, not this view. */
-function sedimentView(skill: SedimentEntry): { name: string; description: string; bytes: number; updatedAt: string } {
+function loreView(skill: LoreEntry): { name: string; description: string; bytes: number; updatedAt: string } {
   return {
     name: skill.name,
     description: skill.description,
@@ -188,13 +188,13 @@ function scheduleDraft(faces: ScribeFaces, session: SessionLike, topic: string):
   DRAFTING.add(session.id)
   const activityId = randomUUID()
   recordActivity(session.id, {
-    id: activityId, at: new Date().toISOString(), actor: 'scribe', target: 'sediment', phase: 'started',
+    id: activityId, at: new Date().toISOString(), actor: 'scribe', target: 'lore', phase: 'started',
   })
   const owner = faces.agents.get(session.id)
   try {
     faces.jobs.start({
       kind: 'scribe',
-      label: '典籍编纂 Scribe · ' + session.id.slice(0, 8),
+      label: '知识起草 Scribe · ' + session.id.slice(0, 8),
       ...(owner === undefined ? {} : { owner }),
       run: () => {
         const controller = new AbortController()
@@ -233,11 +233,11 @@ async function runDraft(
     const cardBaseline = card === null || card === undefined ? '' : renderCardContext(card)
     const existing = [
       ...reservedNames(faces.projections, session),
-      ...currentSediment(faces.projections, session).map((skill) => skill.name),
+      ...currentLore(faces.projections, session).map((skill) => skill.name),
     ]
     const transcript = transcriptOf(faces.projections, session)
     if (transcript.trim().length === 0) {
-      recordActivity(session.id, { id: activityId, at: stamp(), actor: 'scribe', target: 'sediment', phase: 'failed', detailKey: 'detail.noTranscript' })
+      recordActivity(session.id, { id: activityId, at: stamp(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.noTranscript' })
       return { status: 'completed' }
     }
 
@@ -259,26 +259,26 @@ async function runDraft(
       if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') text += chunk.text
     }
     if (isCancelled()) {
-      recordActivity(session.id, { id: activityId, at: stamp(), actor: 'scribe', target: 'sediment', phase: 'failed', detailKey: 'detail.cancelled' })
+      recordActivity(session.id, { id: activityId, at: stamp(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.cancelled' })
       return { status: 'killed' }
     }
     const draft = parseScribeReply(text)
     if (draft === undefined) {
       recordActivity(session.id, {
-        id: activityId, at: stamp(), actor: 'scribe', target: 'sediment', phase: 'failed', detailKey: 'detail.nothingToSediment',
+        id: activityId, at: stamp(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.nothingToLore',
       })
       return { status: 'completed' }
     }
     PENDING.set(session.id, draft)
     recordActivity(session.id, {
-      id: activityId, at: stamp(), actor: 'scribe', target: 'sediment', phase: 'committed',
+      id: activityId, at: stamp(), actor: 'scribe', target: 'lore', phase: 'committed',
       detailKey: 'detail.stagedDraft', detailName: draft.name,
     })
     console.log(TAG + ' Scribe staged a draft for ' + session.id + ': ' + draft.name)
     return { status: 'completed' }
   } catch (error) {
     recordActivity(session.id, {
-      id: activityId, at: stamp(), actor: 'scribe', target: 'sediment', phase: 'failed',
+      id: activityId, at: stamp(), actor: 'scribe', target: 'lore', phase: 'failed',
       ...(isCancelled()
         ? { detailKey: 'detail.cancelled' }
         : { detail: String((error as { message?: string })?.message ?? error) }),
@@ -290,16 +290,16 @@ async function runDraft(
 }
 
 /**
- * Register the sedimentation routes.
+ * Register the lore routes.
  * @param ctx - the host context owning the registration.
  */
-export function registerSedimentRoute(ctx: Context): void {
+export function registerLoreRoute(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
   const webServer = runtime.get('webServer') as WebServerService | undefined
   const sessions = runtime.get('sessions') as SessionsService | undefined
   const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
   if (webServer === undefined || sessions === undefined || projections === undefined) {
-    console.warn(TAG + ' sediment route idle (missing webServer/sessions/sessionProjections)')
+    console.warn(TAG + ' lore route idle (missing webServer/sessions/sessionProjections)')
     return
   }
   const agents = runtime.get('agents') as AgentsService | undefined
@@ -312,7 +312,7 @@ export function registerSedimentRoute(ctx: Context): void {
   ctx.effect(() => {
     const dispose = webServer.register({
       kind: 'exact',
-      path: SEDIMENT_PATH,
+      path: LORE_PATH,
       handler: async (req, res) => {
         let url: URL
         try {
@@ -344,18 +344,18 @@ export function registerSedimentRoute(ctx: Context): void {
           return
         }
         // Same write-path guard as the player-correction route: only RP-family
-        // sessions accept RRP sediment operations.
+        // sessions accept RRP lore operations.
         const preset = projections.stateOf(session, 'agentPreset')
         if (typeof preset === 'string' && !belongsToRpPreset(preset)) {
           send(res, 403, { error: 'not an RP session' })
           return
         }
-        ensureSedimentArmed(ctx, sessionId)
+        ensureLoreArmed(ctx, sessionId)
 
         try {
           if (req.method === 'GET') {
             send(res, 200, {
-              skills: currentSediment(projections, session).map(sedimentView),
+              skills: currentLore(projections, session).map(loreView),
               pending: PENDING.get(sessionId) ?? null,
               drafting: DRAFTING.has(sessionId),
             })
@@ -364,17 +364,17 @@ export function registerSedimentRoute(ctx: Context): void {
 
           if (req.method === 'DELETE') {
             const name = url.searchParams.get('name') ?? ''
-            const exists = currentSediment(projections, session).some((skill) => skill.name === name)
+            const exists = currentLore(projections, session).some((skill) => skill.name === name)
             if (!exists) {
               send(res, 404, { ok: false, removed: false })
               return
             }
             const published = publishState(session, projections, { sediment: { kind: 'remove', name } })
             if (!published) {
-              send(res, 500, { error: '典籍事件写入失败' })
+              send(res, 500, { error: '设定集事件写入失败' })
               return
             }
-            invalidateSediment(sessionId)
+            invalidateLore(sessionId)
             send(res, 200, { ok: true, removed: true })
             return
           }
@@ -405,13 +405,13 @@ export function registerSedimentRoute(ctx: Context): void {
           }
 
           if (action === 'confirm' || action === 'manual') {
-            const candidate = (request.draft ?? PENDING.get(sessionId)) as Partial<SedimentEntry> | undefined
+            const candidate = (request.draft ?? PENDING.get(sessionId)) as Partial<LoreEntry> | undefined
             if (candidate === undefined || candidate === null) {
               send(res, 400, { error: '没有待确认的草稿' })
               return
             }
-            const existing = currentSediment(projections, session)
-            const result = validateSedimentEntry(
+            const existing = currentLore(projections, session)
+            const result = validateLoreEntry(
               candidate,
               existing.map((skill) => skill.name),
               reservedNames(projections, session),
@@ -423,17 +423,17 @@ export function registerSedimentRoute(ctx: Context): void {
             const draft = result.skill
             const published = publishState(session, projections, { sediment: { kind: 'add', skill: draft } })
             if (!published) {
-              send(res, 500, { error: '典籍事件写入失败' })
+              send(res, 500, { error: '设定集事件写入失败' })
               return
             }
             PENDING.delete(sessionId)
-            invalidateSediment(sessionId)
+            invalidateLore(sessionId)
             recordActivity(sessionId, {
-              id: randomUUID(), at: new Date().toISOString(), actor: 'player', target: 'sediment', phase: 'corrected',
-              detailKey: 'detail.sedimented', detailName: draft.name,
+              id: randomUUID(), at: new Date().toISOString(), actor: 'player', target: 'lore', phase: 'corrected',
+              detailKey: 'detail.loreWritten', detailName: draft.name,
             })
-            console.log(TAG + ' sediment committed for ' + sessionId + ': ' + draft.name)
-            send(res, 200, { ok: true, skill: sedimentView(draft) })
+            console.log(TAG + ' lore committed for ' + sessionId + ': ' + draft.name)
+            send(res, 200, { ok: true, skill: loreView(draft) })
             return
           }
 
@@ -445,9 +445,9 @@ export function registerSedimentRoute(ctx: Context): void {
         }
       },
     })
-    console.log(TAG + ' sediment route armed at ' + SEDIMENT_PATH)
+    console.log(TAG + ' lore route armed at ' + LORE_PATH)
     return dispose
-  }, 'dsh-rrp: sediment route')
+  }, 'dsh-rrp: lore route')
 }
 
 interface CommandInvocationLike {
@@ -464,10 +464,10 @@ interface CommandsService {
 
 /**
  * The player-facing `/lore` trigger: same Scribe pass as the panel button, so
- * the draft still lands in 「典籍」 for review before anything is written.
+ * the draft still lands in 「设定集」 for review before anything is written.
  * @param ctx - the host context owning the registration.
  */
-export function registerSedimentCommand(ctx: Context): void {
+export function registerLoreCommand(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
   const commands = runtime.get('commands') as CommandsService | undefined
   if (commands === undefined) {
@@ -488,10 +488,16 @@ export function registerSedimentCommand(ctx: Context): void {
       description: '把最近确立的新设定沉淀为技能（/lore [主题]）',
       handler: (invocation) => {
         const session = invocation.agent?.session
-        if (session === undefined || faces === undefined) return { kind: 'error', text: '典籍编纂不可用' }
-        ensureSedimentArmed(ctx, session.id)
+        if (session === undefined || faces === undefined) return { kind: 'error', text: '设定集编纂不可用' }
+        // Same guard as the HTTP write paths: a draft on a non-RP session would
+        // burn an LLM pass and stage a draft nobody can confirm.
+        const preset = projections?.stateOf(session, 'agentPreset')
+        if (typeof preset === 'string' && !belongsToRpPreset(preset)) {
+          return { kind: 'error', text: '当前不是 RP 会话，设定集编纂不可用' }
+        }
+        ensureLoreArmed(ctx, session.id)
         scheduleDraft(faces, session, invocation.rawInput.trim())
-        return { kind: 'success', text: '正在编纂；请在右侧「典籍」确认后写入。' }
+        return { kind: 'success', text: '正在起草；请在右侧「设定集」确认后写入。' }
       },
     })
     console.log(TAG + ' /lore command armed')

@@ -1,5 +1,5 @@
 /**
- * dsh-rrp — the macro summary (大局编年) vocabulary.
+ * dsh-rrp — the macro summary (剧情脉络) vocabulary.
  *
  * D11: a dedicated Summarizer Agent condenses the long arc into four macro
  * dimensions so the Author does not drift. Dependency-free so host and client
@@ -24,7 +24,7 @@ export const SUMMARY_KEY = 'rrpSummary'
 /** Render the summary as the Author's macro compass. */
 export function renderMacroSummary(summary: MacroSummary): string {
   return [
-    '【大局编年 · 宏观罗盘】',
+    '【剧情脉络 · 宏观罗盘】',
     '主线总目标：' + summary.goal,
     '当前核心矛盾：' + summary.conflict,
     '重大转折：' + (summary.turningPoints.length > 0 ? summary.turningPoints.join('；') : '（暂无）'),

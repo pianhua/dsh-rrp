@@ -19,7 +19,7 @@ import { randomUUID } from 'node:crypto'
 import { renderCardContext, type CardContext } from './card-types.ts'
 import { SUMMARY_KEY, renderMacroSummary, type MacroSummary } from './macro-summary.ts'
 import { RRP_SETTINGS_KEY, rrpSettingsOf, type RrpSettings } from './settings.ts'
-import type { SedimentChange } from './sediment-state.ts'
+import type { LoreChange } from './lore-state.ts'
 import { rrpStateMessage, type RrpStatePayload } from './state-payload.ts'
 import { TRANSCRIPT_KEY, type TranscriptSlice } from './transcript.ts'
 import { WORLD_STATE_KEY, renderWorldState, type WorldState } from './world-state.ts'
@@ -47,7 +47,7 @@ export interface RrpStatePatch {
   /** Turn that produced `summary`; persisted as the durable Summarizer watermark. */
   summaryTurn?: number
   settings?: RrpSettings
-  sediment?: SedimentChange
+  sediment?: LoreChange
 }
 
 /** Last published text per lane, for content dedup. */
@@ -136,7 +136,7 @@ export function publishState(session: StateSession, projections: StateProjection
       if (patch.sediment !== undefined || retained.factsFingerprint !== fingerprint) {
         // Metadata-only publish (e.g. a confirmed lore entry whose state text is
         // unchanged): keep the model-visible content to one breadcrumb line
-        // instead of re-rendering the full state — the sediment data itself
+        // instead of re-rendering the full state — the lore data itself
         // rides the hidden source.rrp payload and reaches the model via skills.
         const text = patch.sediment !== undefined && retained.factsFingerprint === fingerprint
           ? LORE_ONLY_NOTICE

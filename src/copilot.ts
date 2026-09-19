@@ -28,8 +28,8 @@ import { transcriptOf, DEFAULT_TRANSCRIPT_LIMIT } from './chronicler.ts'
 import { harnessHome } from './home.ts'
 import { SUMMARY_KEY, renderMacroSummary } from './macro-summary.ts'
 import { belongsToRpPreset } from './preset-id.ts'
-import { stageSedimentDraft, reservedNames } from './sediment-route.ts'
-import { RRP_SEDIMENT_KEY, sedimentEntriesOf, validateSedimentEntry } from './sediment-state.ts'
+import { stageLoreDraft, reservedNames } from './lore-route.ts'
+import { RRP_LORE_KEY, loreEntriesOf, validateLoreEntry } from './lore-state.ts'
 import { publishState } from './state-publisher.ts'
 import { WORLD_STATE_KEY, applyConstraints, diffWorldState, emptyWorldState, pruneWorldState, renderWorldState, type DynamicFieldValue, type WorldState, type WorldStateRelation } from './world-state.ts'
 import { worldStateSchema } from './projection/world-state.ts'
@@ -59,7 +59,7 @@ export function setCopilotDirForTesting(dir: string): void {
 /** One executed action as recorded on the turn (for the panel's action card). */
 export type CopilotTurnAction =
   | { kind: 'world-state'; digest: string }
-  | { kind: 'sediment'; name: string }
+  | { kind: 'lore'; name: string }
   | { kind: 'failed'; error: string }
 
 export interface CopilotTurn {
@@ -449,13 +449,13 @@ export function registerCopilotRoute(ctx: Context): void {
           const state = (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ?? emptyWorldState()
           const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
           const summaryValue = projections.stateOf(session, SUMMARY_KEY)
-          const sediment = sedimentEntriesOf(projections.stateOf(session, RRP_SEDIMENT_KEY))
+          const lore = loreEntriesOf(projections.stateOf(session, RRP_LORE_KEY))
           const prompt = buildCopilotPrompt({
             question: message,
             card: card === null || card === undefined ? '' : renderCardContext(card),
             worldState: renderWorldState(state),
             summary: summaryValue === null || summaryValue === undefined ? '' : renderMacroSummary(summaryValue as Parameters<typeof renderMacroSummary>[0]),
-            sediment: sediment.map((skill) => '- ' + skill.name + '：' + skill.description).join('\n'),
+            lore: lore.map((skill) => '- ' + skill.name + '：' + skill.description).join('\n'),
             transcript: transcriptOf(projections, session).slice(-DEFAULT_TRANSCRIPT_LIMIT),
           })
 
@@ -528,16 +528,16 @@ export function registerCopilotRoute(ctx: Context): void {
                 applied.push({ kind: 'world-state', digest })
                 continue
               }
-              // draft_sediment: validate then stage for player confirmation.
-              const existing = sedimentEntriesOf(projections.stateOf(session, RRP_SEDIMENT_KEY)).map((skill) => skill.name)
-              const result = validateSedimentEntry(action.draft, existing, reservedNames(projections, session))
+              // draft_lore: validate then stage for player confirmation.
+              const existing = loreEntriesOf(projections.stateOf(session, RRP_LORE_KEY)).map((skill) => skill.name)
+              const result = validateLoreEntry(action.draft, existing, reservedNames(projections, session))
               if (!result.ok) throw new Error(result.error)
-              stageSedimentDraft(sessionId, result.skill)
+              stageLoreDraft(sessionId, result.skill)
               recordActivity(sessionId, {
-                id: randomUUID(), at: new Date().toISOString(), actor: 'copilot', target: 'sediment', phase: 'corrected',
+                id: randomUUID(), at: new Date().toISOString(), actor: 'copilot', target: 'lore', phase: 'corrected',
                 detailKey: 'detail.stagedDraft', detailName: result.skill.name,
               })
-              applied.push({ kind: 'sediment', name: result.skill.name })
+              applied.push({ kind: 'lore', name: result.skill.name })
             } catch (error) {
               applied.push({ kind: 'failed', error: String((error as { message?: string })?.message ?? error) })
             }

@@ -6,7 +6,7 @@
  * consumers must maintain derived state incrementally in session projections
  * and read the projection instead of scanning the log. This slice is that
  * derived state for prose: the Chronicler/Summarizer/Scribe transcript, the
- * state-publisher adoption lanes, and the sediment-presence flag all fold
+ * state-publisher adoption lanes, and the lore-presence flag all fold
  * here, event by event.
  *
  * Dependency-free vocabulary shared by the host projection fold
@@ -40,7 +40,7 @@ export interface TranscriptSlice {
   card?: { fingerprint: string }
   /** Latest facts-lane adoption text. */
   facts?: { text: string }
-  /** Any rrp payload with sediment !== undefined, ever. */
+  /** Any rrp payload with lore !== undefined, ever. */
   sedimentSeen: boolean
   /** Turn number of the latest summary publish, -1 when none (durable watermark). */
   lastSummaryTurn: number

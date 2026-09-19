@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { cleanupSession, extractSessionId } from '../src/index.ts'
 import { readActivity, recordActivity } from '../src/activity.ts'
 import { forgetState, publishState } from '../src/state-publisher.ts'
-import { hasSedimentDraft, stageSedimentDraftForTesting } from '../src/sediment-route.ts'
+import { hasLoreDraft, stageLoreDraftForTesting } from '../src/lore-route.ts'
 import { getLastSummarizedTurn, registerSummarizer } from '../src/summarizer.ts'
 import { emptyWorldState } from '../src/world-state.ts'
 import * as rrp from '../src/index.ts'
@@ -35,13 +35,13 @@ describe('cleanupSession (P0-4 memory leak cleanup)', () => {
     })
     expect(readActivity(sessionId).entries).toHaveLength(1)
 
-    // 2. Populate sediment pending/drafting
-    stageSedimentDraftForTesting(sessionId, {
+    // 2. Populate lore pending/drafting
+    stageLoreDraftForTesting(sessionId, {
       name: 'test-lore',
       description: 'desc',
       body: 'body',
     })
-    expect(hasSedimentDraft(sessionId)).toBe(true)
+    expect(hasLoreDraft(sessionId)).toBe(true)
 
     // 3. Populate summarizer lastSummarized
     const host = {
@@ -75,7 +75,7 @@ describe('cleanupSession (P0-4 memory leak cleanup)', () => {
 
     // Verify all 5 structures are cleared
     expect(readActivity(sessionId).entries).toEqual([])
-    expect(hasSedimentDraft(sessionId)).toBe(false)
+    expect(hasLoreDraft(sessionId)).toBe(false)
     expect(getLastSummarizedTurn(sessionId)).toBeUndefined()
   })
 })

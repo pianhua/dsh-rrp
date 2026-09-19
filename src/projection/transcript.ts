@@ -3,7 +3,7 @@
  *
  * The host deprecated synchronous session-event reads, so every consumer that
  * used to scan the log (Chronicler transcripts, state-publisher adoption,
- * sediment presence) now folds this unit incrementally and reads the slice.
+ * lore presence) now folds this unit incrementally and reads the slice.
  *
  * Host-only unit: no client view. The host registry supports wire-less units
  * (a dedicated register() overload; wire-less keys are omitted from client

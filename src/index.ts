@@ -3,7 +3,7 @@
  *
  * The host half materializes the RP preset family, registers the six pure
  * Session projections, and wires the DSH-native routes/jobs/agent scopes used
- * by the card, WorldState, summary, and sediment flows.
+ * by the card, WorldState, summary, and lore flows.
  *
  * Every registration is capability-gated and reversible; the client half owns
  * only Slot/right-sidebar UI (see src/client/index.ts).
@@ -13,8 +13,8 @@ import { registerActivityRoute } from './activity-route.ts'
 import { listCards } from './cards.ts'
 import { registerCardsRoute } from './cards-route.ts'
 import { registerCopilotRoute, forgetAllCopilot, forgetCopilot } from './copilot.ts'
-import { registerSedimentCommand, registerSedimentRoute } from './sediment-route.ts'
-import { registerSedimentRuntime } from './sediment-runtime.ts'
+import { registerLoreCommand, registerLoreRoute } from './lore-route.ts'
+import { registerLoreRuntime } from './lore-runtime.ts'
 import { registerChronicler, forgetAllInference, forgetInference } from './chronicler.ts'
 import { registerCorrectionRoute } from './correction.ts'
 import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
@@ -22,13 +22,13 @@ import { presetIdForCard } from './preset-id.ts'
 import { cardProjection } from './projection/card.ts'
 import { summaryProjection } from './projection/summary.ts'
 import { settingsProjection } from './projection/settings.ts'
-import { sedimentProjection } from './projection/sediment.ts'
+import { loreProjection } from './projection/lore.ts'
 import { transcriptProjection } from './projection/transcript.ts'
 import { worldStateProjection } from './projection/world-state.ts'
 import { registerStartRoute } from './start.ts'
 import { registerSummarizer, registerSummaryCommand, forgetAllSummary, forgetSummary } from './summarizer.ts'
 import { forgetAllActivity, forgetActivity } from './activity.ts'
-import { forgetAllSediment, forgetSediment } from './sediment-route.ts'
+import { forgetAllLore, forgetLore } from './lore-route.ts'
 import { forgetAllState, forgetState } from './state-publisher.ts'
 
 /** Loader row id. Keep in sync with cordis.patch.yml. */
@@ -62,7 +62,7 @@ interface SessionProjectionsService {
       | typeof worldStateProjection
       | typeof summaryProjection
       | typeof settingsProjection
-      | typeof sedimentProjection
+      | typeof loreProjection
       | typeof cardProjection
       | typeof transcriptProjection,
   ): () => void
@@ -97,8 +97,8 @@ export function apply(ctx: Context): void {
     console.log(`${TAG} macro-summary projection registered (key '${summaryProjection.key}')`)
     projectionDisposers.push(registry.register(settingsProjection))
     console.log(`${TAG} RP settings projection registered (key '${settingsProjection.key}')`)
-    projectionDisposers.push(registry.register(sedimentProjection))
-    console.log(`${TAG} sediment projection registered (key '${sedimentProjection.key}')`)
+    projectionDisposers.push(registry.register(loreProjection))
+    console.log(`${TAG} lore projection registered (key '${loreProjection.key}')`)
     projectionDisposers.push(registry.register(cardProjection))
     console.log(`${TAG} active-card projection registered (key '${cardProjection.key}')`)
     projectionDisposers.push(registry.register(transcriptProjection))
@@ -136,17 +136,17 @@ export function apply(ctx: Context): void {
     registerActivityRoute(scoped)
   })
 
-  // Knowledge sedimentation (D8): worldline skills staged behind a player
+  // Knowledge lore (D8): worldline skills staged behind a player
   // confirmation. The runtime arms the agent-scoped provider; confirmed
   // changes live in the Session projection and therefore follow native forks.
   ctx.inject(['agents', 'sessionProjections'], (scoped: Context) => {
-    registerSedimentRuntime(scoped)
+    registerLoreRuntime(scoped)
   })
   ctx.inject(['webServer', 'sessions', 'sessionProjections', 'agents', 'llm', 'jobs'], (scoped: Context) => {
-    registerSedimentRoute(scoped)
+    registerLoreRoute(scoped)
   })
   ctx.inject(['commands', 'llm', 'jobs', 'agents', 'sessionProjections'], (scoped: Context) => {
-    registerSedimentCommand(scoped)
+    registerLoreCommand(scoped)
   })
 
   // Card start: write the initial state and the opening the browser cannot.
@@ -203,7 +203,7 @@ export function apply(ctx: Context): void {
 export function cleanupSession(sessionId: string): void {
   forgetState(sessionId)
   forgetActivity(sessionId)
-  forgetSediment(sessionId)
+  forgetLore(sessionId)
   forgetSummary(sessionId)
   forgetInference(sessionId)
   forgetCopilot(sessionId)
@@ -217,7 +217,7 @@ export function cleanupSession(sessionId: string): void {
 export function cleanupAllSessions(): void {
   forgetAllState()
   forgetAllActivity()
-  forgetAllSediment()
+  forgetAllLore()
   forgetAllSummary()
   forgetAllInference()
   forgetAllCopilot()

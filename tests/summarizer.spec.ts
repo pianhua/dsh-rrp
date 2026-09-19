@@ -97,7 +97,7 @@ describe('Summarizer trigger', () => {
     const host = fakeHost('rp', 8, true, [{
       type: 'user/message',
       data: {
-        content: [{ type: 'text', text: '【大局编年】更新' }],
+        content: [{ type: 'text', text: '【剧情脉络】更新' }],
         source: { rrp: { summary: VALID, summaryTurn: 8, settings: { summaryEnabled: true, summaryEveryTurns: 8 } } },
       },
     }])

@@ -1,17 +1,17 @@
 /**
  * dsh-rrp — the Scribe Agent (D8): draft ONE skill from what already happened.
  *
- * D8 permits sedimentation but forbids free-form world rewriting. The Scribe is
+ * D8 permits lore but forbids free-form world rewriting. The Scribe is
  * therefore deliberately constrained: it grounds every claim in the supplied
  * transcript / current state, emits exactly one candidate, and returns an EMPTY
  * candidate rather than inventing when the material does not support a skill.
  * The draft is never written by the model — the player confirms it first.
  */
-import { SEDIMENT_LIMITS, isSedimentName, type SedimentEntry as SedimentDraft } from '../sediment-state.ts'
+import { LORE_LIMITS, isLoreName, type LoreEntry as LoreDraft } from '../lore-state.ts'
 
 /** System prompt: one grounded skill, or nothing. */
 export const SCRIBE_SYSTEM_PROMPT = [
-  '你是《DSH-Chronicle》的典籍编纂者（Scribe）。',
+  '你是《DSH-Chronicle》的设定集编纂者（Scribe）。',
   '',
   '你的唯一任务：把这次游玩中**已经真实发生并确立**的一条新设定，整理成一个可长期检索的技能条目。',
   '',
@@ -26,8 +26,8 @@ export const SCRIBE_SYSTEM_PROMPT = [
   '',
   '约束：',
   '- name 只能用小写字母、数字、连字符（如 qingqiu-fox-clan）；',
-  '- description 不超过 ' + String(SEDIMENT_LIMITS.descriptionChars) + ' 字，必须写清「何时使用」；',
-  '- body 不超过 ' + String(SEDIMENT_LIMITS.bodyChars) + ' 字；',
+  '- description 不超过 ' + String(LORE_LIMITS.descriptionChars) + ' 字，必须写清「何时使用」；',
+  '- body 不超过 ' + String(LORE_LIMITS.bodyChars) + ' 字；',
   '- 无法沉淀时输出：{"name":"","description":"","body":""}。',
 ].join('\n')
 
@@ -61,7 +61,7 @@ export function buildScribePrompt(input: {
 }
 
 /** Extract a draft from a model reply, tolerating surrounding prose. */
-export function parseScribeReply(text: string): SedimentDraft | undefined {
+export function parseScribeReply(text: string): LoreDraft | undefined {
   const start = text.indexOf('{')
   const end = text.lastIndexOf('}')
   if (start === -1 || end <= start) return undefined
@@ -76,10 +76,10 @@ export function parseScribeReply(text: string): SedimentDraft | undefined {
   const name = typeof record.name === 'string' ? record.name.trim() : ''
   const description = typeof record.description === 'string' ? record.description.trim() : ''
   const body = typeof record.body === 'string' ? record.body.trim() : ''
-  // An empty candidate is the Scribe's sanctioned "nothing to sediment" answer.
+  // An empty candidate is the Scribe's sanctioned "nothing to lore" answer.
   if (name.length === 0 && description.length === 0 && body.length === 0) return undefined
-  if (!isSedimentName(name)) return undefined
+  if (!isLoreName(name)) return undefined
   if (description.length === 0 || body.length === 0) return undefined
-  if (description.length > SEDIMENT_LIMITS.descriptionChars || body.length > SEDIMENT_LIMITS.bodyChars) return undefined
+  if (description.length > LORE_LIMITS.descriptionChars || body.length > LORE_LIMITS.bodyChars) return undefined
   return { name, description, body }
 }

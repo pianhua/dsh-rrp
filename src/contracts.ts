@@ -44,14 +44,14 @@ export {
 } from './settings.ts'
 export type { RrpSettings } from './settings.ts'
 export {
-  RRP_SEDIMENT_KEY,
-  SEDIMENT_LIMITS,
-  applySedimentChange,
-  isSedimentName,
-  sedimentEntriesOf,
-  validateSedimentEntry,
-} from './sediment-state.ts'
-export type { SedimentChange, SedimentEntry, SedimentValidation } from './sediment-state.ts'
+  RRP_LORE_KEY,
+  LORE_LIMITS,
+  applyLoreChange,
+  isLoreName,
+  loreEntriesOf,
+  validateLoreEntry,
+} from './lore-state.ts'
+export type { LoreChange, LoreEntry, LoreValidation } from './lore-state.ts'
 export {
   ACTIVITY_LIMIT,
   appendActivity,

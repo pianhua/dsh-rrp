@@ -145,8 +145,8 @@ describe('durable state publisher', () => {
     expect((appended[1]?.data as { content: Array<{ text: string }> }).content[0]?.text).toBe(renderWorldState(STATE))
   })
 
-  it('always appends a sediment operation without exposing its body in content', () => {
-    const { session, appended } = fakeSession('sp-sediment')
+  it('always appends a lore operation without exposing its body in content', () => {
+    const { session, appended } = fakeSession('sp-lore')
     const projections = { stateOf: (_session: unknown, key: string) => key === 'rrpWorldState' ? STATE : undefined }
     publishState(session, projections, { worldState: STATE })
     publishState(session, projections, {
@@ -159,7 +159,7 @@ describe('durable state publisher', () => {
     expect(appended).toHaveLength(2)
     expect(payloadOf(appended[1]?.data)?.sediment?.kind).toBe('add')
     // Metadata-only publish: model-visible content is the one-line breadcrumb,
-    // not a full state re-render; the sediment body stays in the hidden payload.
+    // not a full state re-render; the lore body stays in the hidden payload.
     const text = (appended[1]?.data as { content: Array<{ text: string }> }).content[0]?.text
     expect(text).not.toBe(renderWorldState(STATE))
     expect(text).toContain('dsh-rrp')

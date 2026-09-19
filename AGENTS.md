@@ -25,7 +25,7 @@
 
 ### ③ 权能硬分权与自然时序流（No Locks, Just Natural Flow）
 - **Author Agent（叙事作家）**：只读消费精简工作区与 Skills，专注高质量第三人称文学正文创作，严禁替玩家代打，严禁写状态；
-- **Chronicler Agent（纪事官）**：独立的客观智能体，在每轮正文产出后异步推演物理与心理变化，生成状态变动；允许根据剧情动态增加追踪维度；
+- **Chronicler Agent（状态推演）**：独立的客观智能体，在每轮正文产出后异步推演物理与心理变化，生成状态变动；允许根据剧情动态增加追踪维度；
 - **玩家矫正（Player Correction，自然时序无锁流）**：
   - 彻底废除旧项目的“CAS 锁、永久硬锁、解绑通道”等防御性过度设计；
   - 状态流转遵循最质朴的人性逻辑：**AI 推演更新状态 → 玩家在侧边栏查看，若不满意随手直接就地修改 → 玩家开启下一轮时，Author 直接以最新修改后的切面为基准起笔**（Last-Write-Wins）。
@@ -54,10 +54,10 @@ dsh-rrp/
 │   ├── macro-summary.ts         # 四维大局观纯词汇（host/client 共享）
 │   ├── state-payload.ts         # 状态载体：user/message 的 source.rrp
 │   ├── state-publisher.ts       # 追加式发布（卡包 / 事实两通道）
-│   ├── chronicler.ts            # 纪事官触发与异步推演（ctx.jobs + ctx.llm）
-│   ├── summarizer.ts            # 编年官触发与推演（ctx.jobs + ctx.llm + /summary）
+│   ├── chronicler.ts            # 状态推演触发与异步推演（ctx.jobs + ctx.llm）
+│   ├── summarizer.ts            # 剧情脉络触发与推演（ctx.jobs + ctx.llm + /summary）
 │   ├── activity.ts / activity-route.ts   # 归因账本（宿主内存 + 只读路由）
-│   ├── sediment.ts / sediment-provider.ts / sediment-runtime.ts / sediment-route.ts
+│   ├── lore.ts / lore-provider.ts / lore-runtime.ts / lore-route.ts
 │   │                            # D8 知识沉淀：按会话存储、skill provider、路由与 /lore
 │   ├── correction.ts            # 玩家矫正写路径（宿主 webserver 路由）
 │   ├── cards-route.ts / start.ts# 卡包只读路由 / 开卡（发布初始状态 + 开场白）
@@ -66,18 +66,18 @@ dsh-rrp/
 │   ├── client/                  # 客户端入口与面板
 │   │   ├── index.ts             # 客户端入口（locale + 注册）
 │   │   ├── world-state-tab.tsx  # 世界状态：结构化就地编辑器
-│   │   ├── sediment-tab.tsx     # 典籍（D8）：起草/审阅/确认/删除
+│   │   ├── lore-tab.tsx     # 设定集（D8）：起草/审阅/确认/删除
 │   │   ├── gallery-panel.tsx    # 卡片展厅 + 开卡流
 │   │   └── primitives.d.ts      # 宿主原子库结构面类型
 │   ├── agents/                  # 智体提示词与行为规范
-│   │   ├── chronicler.ts        # 纪事官提示词与输出契约
-│   │   ├── summarizer.ts        # 编年官摘要智能体
-│   │   └── scribe.ts            # D8 典籍编纂者（只起草一条）
+│   │   ├── chronicler.ts        # 状态推演提示词与输出契约
+│   │   ├── summarizer.ts        # 剧情脉络摘要智能体
+│   │   └── scribe.ts            # D8 设定集编纂者（只起草一条）
 │   └── projection/              # 会话投影纯数学折叠器
 │       ├── world-state.ts       # WorldState 投影单元（zod 校验 + 纯折叠）
-│       ├── summary.ts           # 大局编年投影单元
+│       ├── summary.ts           # 剧情脉络投影单元
 │       ├── settings.ts          # RP 设置投影单元（摘要开关）
-│       ├── sediment.ts          # D8 沉淀投影单元
+│       ├── lore.ts          # D8 沉淀投影单元
 │       └── card.ts              # 当前卡包投影单元
 ├── presets/                     # 随包分发的原生 agent preset（RP 模式）
 │   └── rp/                      # 组合、元数据与随模式作用域的世界知识技能

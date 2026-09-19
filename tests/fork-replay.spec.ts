@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { summaryProjection } from '../src/projection/summary.ts'
 import { settingsProjection } from '../src/projection/settings.ts'
-import { sedimentProjection } from '../src/projection/sediment.ts'
+import { loreProjection } from '../src/projection/lore.ts'
 import { worldStateProjection } from '../src/projection/world-state.ts'
 import { rrpStateMessage } from '../src/state-payload.ts'
 import { emptyWorldState } from '../src/world-state.ts'
@@ -18,7 +18,7 @@ function stateEvent(payload: Record<string, unknown>, seq: number) {
 
 /** Fold a projection unit from its init over a whole log (as the host does). */
 function fold(
-  definition: typeof worldStateProjection | typeof summaryProjection | typeof settingsProjection | typeof sedimentProjection,
+  definition: typeof worldStateProjection | typeof summaryProjection | typeof settingsProjection | typeof loreProjection,
   events: ReturnType<typeof event>[],
 ) {
   let state = (definition as { init(): unknown }).init()
@@ -71,15 +71,15 @@ describe('worldline replay (fork) correctness', () => {
     expect(fold(settingsProjection, branchB).summaryEnabled).toBe(false)
   })
 
-  it('inherits sediment before a fork and isolates branch-local additions', () => {
+  it('inherits lore before a fork and isolates branch-local additions', () => {
     const inherited = { name: 'shared-lore', description: 'shared', body: '# Shared' }
     const onlyA = { name: 'branch-a-lore', description: 'A', body: '# A' }
     const shared = [...prefix, stateEvent({ sediment: { kind: 'add', skill: inherited } }, 5)]
     const branchA = [...shared, stateEvent({ sediment: { kind: 'add', skill: onlyA } }, 6)]
     const branchB = [...shared, stateEvent({ sediment: { kind: 'remove', name: inherited.name } }, 6)]
 
-    expect(fold(sedimentProjection, shared).map((entry: { name: string }) => entry.name)).toEqual(['shared-lore'])
-    expect(fold(sedimentProjection, branchA).map((entry: { name: string }) => entry.name)).toEqual(['shared-lore', 'branch-a-lore'])
-    expect(fold(sedimentProjection, branchB)).toEqual([])
+    expect(fold(loreProjection, shared).map((entry: { name: string }) => entry.name)).toEqual(['shared-lore'])
+    expect(fold(loreProjection, branchA).map((entry: { name: string }) => entry.name)).toEqual(['shared-lore', 'branch-a-lore'])
+    expect(fold(loreProjection, branchB)).toEqual([])
   })
 })

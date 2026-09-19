@@ -8,7 +8,7 @@ describe('Scribe reply contract', () => {
     expect(parseScribeReply('好的：\n' + JSON.stringify(draft) + '\n以上。')).toEqual(draft)
   })
 
-  it('treats an empty candidate as "nothing to sediment"', () => {
+  it('treats an empty candidate as "nothing to lore"', () => {
     expect(parseScribeReply('{"name":"","description":"","body":""}')).toBeUndefined()
     expect(parseScribeReply('没有可沉淀的内容')).toBeUndefined()
     expect(parseScribeReply('{ not json }')).toBeUndefined()

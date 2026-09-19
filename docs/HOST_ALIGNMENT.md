@@ -48,14 +48,14 @@
 | :--- | :--- | :--- |
 | Cordis 插件与 bundle | `package.json.dsh.bundle.patch` + `cordis.patch.yml`；host/client 分包 | ✅ 符合 |
 | UI | 原生 slots、右侧栏、session/controller 与 primitives；无独立 SPA | ✅ 符合 |
-| 会话状态 | 已知 `user/message.source.rrp` + 五个纯投影（Card / WorldState / Summary / Settings / Sediment）；无自造必需事件类型 | ✅ 符合 |
+| 会话状态 | 已知 `user/message.source.rrp` + 五个纯投影（Card / WorldState / Summary / Settings / Lore）；无自造必需事件类型 | ✅ 符合 |
 | 后台推演 | Chronicler / Summarizer / Scribe 走 `ctx.jobs + ctx.llm`；没有自建队列或 Agent loop | ✅ 符合 |
 | 卡包 Skills | 每卡派生 `rp-<card>` preset，利用官方 standing scope 隔离 | ✅ 符合，不是重复造轮子 |
 | 投影注册生命周期 | `sessionProjections.register()` 在宿主中本身是 calling-fiber effect；未保存提前 disposer 不等于 HMR 泄漏 | ✅ 符合 |
 | D8 持久化 | `source.rrp.sediment` 操作事件 + `rrpSediment` 纯投影；agent provider 读取所属会话投影 | ✅ 符合；旧 sidecar 仅在首次访问时迁移并备份为 `.legacy.bak` |
-| 后台状态 UI | 推送优先：典籍列表走 `useProjection('rrpSediment')`、在飞状态走 `useSessions` 的 `jobsBySession` 宿主推送；宿主不注入该座位时保留 2s 轮询作 fallback | ✅ 已收敛（fallback 为宿主能力缺席时的显式降级） |
+| 后台状态 UI | 推送优先：设定集列表走 `useProjection('rrpSediment')`、在飞状态走 `useSessions` 的 `jobsBySession` 宿主推送；宿主不注入该座位时保留 2s 轮询作 fallback | ✅ 已收敛（fallback 为宿主能力缺席时的显式降级） |
 | Frontmatter | 官方 `yaml` 包解析（P4 已替换手写子集）；仅覆盖 frontmatter 用到的字段，不复用为通用 YAML 能力 | ✅ 符合 |
-| 进程内状态 | `RETAINED`、`LEDGERS`、`PENDING`、`LAST_SUMMARIZED`、纪事官在飞标记均经 `cleanupSession`（`session/disposed` / `agent/disposed`）统一释放（P0-4 + 并发守卫） | ✅ 符合 |
+| 进程内状态 | `RETAINED`、`LEDGERS`、`PENDING`、`LAST_SUMMARIZED`、状态推演在飞标记均经 `cleanupSession`（`session/disposed` / `agent/disposed`）统一释放（P0-4 + 并发守卫） | ✅ 符合 |
 
 D8 的语义已经确定：沉淀属于世界线，子会话继承分叉点前的事件前缀，分叉后的新增/删除只影响各自分支。实现复用 Session 日志与投影，不复制目录、不自建分支存储。Workspace 只承担宿主导航与归组，不参与这一状态语义。
 

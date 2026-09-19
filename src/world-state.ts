@@ -281,7 +281,7 @@ function stableJson(value: unknown): string {
 export function renderWorldState(state: WorldState): string {
   const lines = [
     '【世界状态 · 事实基准】',
-    '以下是你执笔时必须遵守的当前事实（由纪事官维护，玩家可能已就地修正）。不要把它写进正文，也不要输出这段文字。',
+    '以下是你执笔时必须遵守的当前事实（由状态推演维护，玩家可能已就地修正）。不要把它写进正文，也不要输出这段文字。',
     '',
     'characters: ' + stableJson(state.characters),
     'inventory: ' + stableJson(state.inventory),

@@ -159,7 +159,7 @@ function scheduleSummary(faces: HostFaces, session: SessionLike, turn: number): 
   try {
     faces.jobs.start({
       kind: JOB_KIND,
-      label: '大局编年 Summarizer · 第 ' + turn + ' 轮',
+      label: '剧情脉络 Summarizer · 第 ' + turn + ' 轮',
       ...(owner === undefined ? {} : { owner }),
       run: () => {
         const controller = new AbortController()
@@ -279,7 +279,7 @@ export function registerSummaryCommand(ctx: Context): void {
   ctx.effect(() => {
     const dispose = commands.register({
       name: 'summary',
-      description: '大局编年：/summary on|off 开关，/summary every N 设置周期（默认 8 轮）',
+      description: '剧情脉络：/summary on|off 开关，/summary every N 设置周期（默认 8 轮）',
       handler: ({ rawInput, agent }) => {
         const session = agent?.session
         if (session === undefined) return { kind: 'error', text: '当前会话不可用' }
@@ -290,11 +290,11 @@ export function registerSummaryCommand(ctx: Context): void {
           ? { ...current, summaryEveryTurns: clampSummaryEveryTurns(Number(everyMatch[1])) }
           : { ...current, summaryEnabled: argument === 'on' ? true : argument === 'off' ? false : !current.summaryEnabled }
         if (!publishState(session, projections, { settings: next })) {
-          return { kind: 'error', text: '大局编年设置写入失败' }
+          return { kind: 'error', text: '剧情脉络设置写入失败' }
         }
         const text = everyMatch !== null
-          ? '大局编年：每 ' + next.summaryEveryTurns + ' 轮提炼一次'
-          : '大局编年已' + (next.summaryEnabled ? '开启' : '关闭')
+          ? '剧情脉络：每 ' + next.summaryEveryTurns + ' 轮提炼一次'
+          : '剧情脉络已' + (next.summaryEnabled ? '开启' : '关闭')
         return { kind: 'success', text }
       },
     })

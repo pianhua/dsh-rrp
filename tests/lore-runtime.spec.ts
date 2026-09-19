@@ -2,10 +2,10 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { legacySessionSedimentDir, renderSediment } from '../src/sediment.ts'
-import { SEDIMENT_LIMITS, applySedimentChange, type SedimentEntry } from '../src/sediment-state.ts'
-import { invalidateSediment, migrateLegacySediment, registerSedimentRuntime } from '../src/sediment-runtime.ts'
-import { hasSedimentDraft, stageSedimentDraftForTesting } from '../src/sediment-route.ts'
+import { legacySessionLoreDir, renderLore } from '../src/lore.ts'
+import { LORE_LIMITS, applyLoreChange, type LoreEntry } from '../src/lore-state.ts'
+import { invalidateLore, migrateLegacyLore, registerLoreRuntime } from '../src/lore-runtime.ts'
+import { hasLoreDraft, stageLoreDraftForTesting } from '../src/lore-route.ts'
 import { rrpPayloadOf } from '../src/state-payload.ts'
 import { transcriptProjections } from './stubs/transcript-projections.ts'
 
@@ -48,12 +48,12 @@ function fakeRuntime() {
  * inject, and agent/created listeners run inside session creation — a throw
  * there broke "开始这一局". The runtime must use the inject-free read.
  */
-describe('sediment runtime arming', () => {
+describe('lore runtime arming', () => {
   it('arms through ctx.get and reads only the owning Session projection', async () => {
     const { ctx, listeners, setPreset } = fakeRuntime()
-    registerSedimentRuntime(ctx as never)
+    registerLoreRuntime(ctx as never)
 
-    let provider: ReturnType<typeof import('../src/sediment-provider.ts')['createSedimentProvider']> | undefined
+    let provider: ReturnType<typeof import('../src/lore-provider.ts')['createLoreProvider']> | undefined
     const skillsService = {
       registerProvider(create: (control: { signal: AbortSignal; invalidate(): void }) => unknown) {
         provider = create({ signal: new AbortController().signal, invalidate() {} }) as typeof provider
@@ -76,7 +76,7 @@ describe('sediment runtime arming', () => {
 
   it('does not arm agents outside the RP preset family', () => {
     const { ctx, listeners, setPreset } = fakeRuntime()
-    registerSedimentRuntime(ctx as never)
+    registerLoreRuntime(ctx as never)
 
     let registered = 0
     const agent = {
@@ -91,7 +91,7 @@ describe('sediment runtime arming', () => {
 
   it('keys provider invalidation by Session id rather than Agent id', () => {
     const { ctx, listeners, setPreset } = fakeRuntime()
-    registerSedimentRuntime(ctx as never)
+    registerLoreRuntime(ctx as never)
     let invalidations = 0
     const agent = {
       id: 'agent-x',
@@ -107,13 +107,13 @@ describe('sediment runtime arming', () => {
     }
     setPreset('session-y', 'rp-maid-heiress')
     listeners.get('agent/created')?.({ agent })
-    invalidateSediment('session-y')
+    invalidateLore('session-y')
     expect(invalidations).toBe(1)
   })
 
   it('arms after a blank Session selects an RP preset', () => {
     const { ctx, listeners, setAgent, setPreset } = fakeRuntime()
-    registerSedimentRuntime(ctx as never)
+    registerLoreRuntime(ctx as never)
     let registered = 0
     let disposed = 0
     const agent = {
@@ -143,32 +143,32 @@ describe('sediment runtime arming', () => {
     expect(disposed).toBe(1)
   })
 
-  it('cleans up staged sediment drafts on agent/disposed', () => {
+  it('cleans up staged lore drafts on agent/disposed', () => {
     const { ctx, listeners } = fakeRuntime()
-    registerSedimentRuntime(ctx as never)
-    stageSedimentDraftForTesting('session-disposed-test', {
+    registerLoreRuntime(ctx as never)
+    stageLoreDraftForTesting('session-disposed-test', {
       name: 'temp-lore',
       description: 'temp',
       body: 'temp',
     })
-    expect(hasSedimentDraft('session-disposed-test')).toBe(true)
+    expect(hasLoreDraft('session-disposed-test')).toBe(true)
 
     listeners.get('agent/disposed')?.({ agent: { session: { id: 'session-disposed-test' } } })
-    expect(hasSedimentDraft('session-disposed-test')).toBe(false)
+    expect(hasLoreDraft('session-disposed-test')).toBe(false)
   })
 })
 
-describe('legacy sediment migration', () => {
+describe('legacy lore migration', () => {
   function fixture(fail = false) {
-    const home = mkdtempSync(join(tmpdir(), 'dsh-rrp-sediment-migrate-'))
+    const home = mkdtempSync(join(tmpdir(), 'dsh-rrp-lore-migrate-'))
     homes.push(home)
     const entry = { name: 'legacy-lore', description: 'old sidecar', body: '# Legacy' }
-    const source = legacySessionSedimentDir(home, 'legacy-session')
+    const source = legacySessionLoreDir(home, 'legacy-session')
     const skillDir = join(source, entry.name)
     mkdirSync(skillDir, { recursive: true })
-    writeFileSync(join(skillDir, 'SKILL.md'), renderSediment(entry), 'utf8')
+    writeFileSync(join(skillDir, 'SKILL.md'), renderLore(entry), 'utf8')
 
-    let state: SedimentEntry[] = []
+    let state: LoreEntry[] = []
     const events: Array<{ type: string; data: unknown }> = []
     const session = {
       id: 'legacy-session',
@@ -177,7 +177,7 @@ describe('legacy sediment migration', () => {
         if (fail) throw new Error('append failed')
         events.push({ type, data })
         const change = rrpPayloadOf({ type, data })?.sediment
-        if (change !== undefined) state = applySedimentChange(state, change)
+        if (change !== undefined) state = applyLoreChange(state, change)
         return { seq: events.length }
       },
     }
@@ -188,35 +188,35 @@ describe('legacy sediment migration', () => {
 
   it('appends one snapshot before renaming the sidecar to a backup', () => {
     const value = fixture()
-    expect(migrateLegacySediment(value.session, value.projections, value.home)).toBe(true)
+    expect(migrateLegacyLore(value.session, value.projections, value.home)).toBe(true)
     expect(value.state()).toEqual([value.entry])
     expect(rrpPayloadOf(value.events[0])?.sediment?.kind).toBe('snapshot')
     expect(existsSync(value.source)).toBe(false)
     expect(existsSync(value.source + '.legacy.bak')).toBe(true)
 
-    expect(migrateLegacySediment(value.session, value.projections, value.home)).toBe(false)
+    expect(migrateLegacyLore(value.session, value.projections, value.home)).toBe(false)
     expect(value.events).toHaveLength(1)
   })
 
   it('keeps the original sidecar when the Session append fails', () => {
     const value = fixture(true)
-    expect(migrateLegacySediment(value.session, value.projections, value.home)).toBe(false)
+    expect(migrateLegacyLore(value.session, value.projections, value.home)).toBe(false)
     expect(existsSync(value.source)).toBe(true)
     expect(existsSync(value.source + '.legacy.bak')).toBe(false)
   })
 
   it('caps a manually oversized legacy tree before publishing its snapshot', () => {
     const value = fixture()
-    for (let index = 1; index <= SEDIMENT_LIMITS.skillsPerSession; index += 1) {
+    for (let index = 1; index <= LORE_LIMITS.skillsPerSession; index += 1) {
       const name = 'legacy-' + String(index)
       const dir = join(value.source, name)
       mkdirSync(dir, { recursive: true })
-      writeFileSync(join(dir, 'SKILL.md'), renderSediment({ name, description: name, body: '# ' + name }), 'utf8')
+      writeFileSync(join(dir, 'SKILL.md'), renderLore({ name, description: name, body: '# ' + name }), 'utf8')
     }
-    expect(migrateLegacySediment(value.session, value.projections, value.home)).toBe(true)
+    expect(migrateLegacyLore(value.session, value.projections, value.home)).toBe(true)
     const snapshot = rrpPayloadOf(value.events[0])?.sediment
     expect(snapshot?.kind).toBe('snapshot')
-    expect(snapshot?.kind === 'snapshot' ? snapshot.skills : []).toHaveLength(SEDIMENT_LIMITS.skillsPerSession)
-    expect(value.state()).toHaveLength(SEDIMENT_LIMITS.skillsPerSession)
+    expect(snapshot?.kind === 'snapshot' ? snapshot.skills : []).toHaveLength(LORE_LIMITS.skillsPerSession)
+    expect(value.state()).toHaveLength(LORE_LIMITS.skillsPerSession)
   })
 })

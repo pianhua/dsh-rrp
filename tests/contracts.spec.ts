@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   RRP_PLUGIN,
   RRP_SETTINGS_KEY,
-  RRP_SEDIMENT_KEY,
+  RRP_LORE_KEY,
   SUMMARY_KEY,
   WORLD_STATE_KEY,
   emptyWorldState,
@@ -17,7 +17,7 @@ describe('external read contract', () => {
     expect(WORLD_STATE_KEY).toBe('rrpWorldState')
     expect(SUMMARY_KEY).toBe('rrpSummary')
     expect(RRP_SETTINGS_KEY).toBe('rrpSettings')
-    expect(RRP_SEDIMENT_KEY).toBe('rrpSediment')
+    expect(RRP_LORE_KEY).toBe('rrpSediment')
   })
 
   it('round-trips a structured payload through a known user/message event', () => {
@@ -31,7 +31,7 @@ describe('external read contract', () => {
 
   it('renders both baselines for external consumers', () => {
     expect(renderWorldState(emptyWorldState())).toContain('世界状态')
-    expect(renderMacroSummary({ goal: 'g', conflict: 'c', turningPoints: [], threads: [] })).toContain('大局编年')
+    expect(renderMacroSummary({ goal: 'g', conflict: 'c', turningPoints: [], threads: [] })).toContain('剧情脉络')
   })
 
   it('names the plugin identity extensions match on', () => {

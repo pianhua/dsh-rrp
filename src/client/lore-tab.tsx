@@ -1,7 +1,7 @@
 /**
- * dsh-rrp — the 「典籍」 right-sidebar tab (D8).
+ * dsh-rrp — the 「设定集」 right-sidebar tab (D8).
  *
- * Player-facing control surface for knowledge sedimentation: trigger a Scribe
+ * Player-facing control surface for knowledge lore: trigger a Scribe
  * draft, review it, confirm or discard, and delete what is already written.
  * Reads/writes the host routes; the panel never touches the session log.
  *
@@ -27,15 +27,15 @@ import {
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { RRP_SEDIMENT_KEY, type SedimentEntry } from '../sediment-state.ts'
+import { RRP_LORE_KEY, type LoreEntry } from '../lore-state.ts'
 import type { RrpClientContext, RrpJobView, RrpUseProjection, RrpUseSessions } from './context-types.ts'
 
 /** Implementation identity; also the key the body registers under. */
-const TAB_ID = 'dsh-rrp/sediment'
+const TAB_ID = 'dsh-rrp/lore'
 /** Type discriminator openTab names. */
-const TAB_KIND = 'dsh-rrp-sediment'
+const TAB_KIND = 'dsh-rrp-lore'
 /** Host routes driving the controlled flow. */
-const SEDIMENT_PATH = '/dsh-rrp/sediment'
+const LORE_PATH = '/dsh-rrp/lore'
 /** Fallback poll interval, only used when the host jobs mirror is unavailable. */
 const POLL_MS = 2000
 
@@ -62,7 +62,7 @@ interface SedList {
 }
 
 /** Props the slot framework merges. */
-interface SedimentPanelProps {
+interface LorePanelProps {
   t?: Translate
   sessionId?: string
   useProjection?: RrpUseProjection
@@ -72,7 +72,7 @@ interface SedimentPanelProps {
 const byteLengthOf = (text: string): number => new TextEncoder().encode(text).length
 
 /** Host-pushed projection rows → panel rows (same shape the route used to send). */
-function skillRows(entries: readonly SedimentEntry[]): SedSkill[] {
+function skillRows(entries: readonly LoreEntry[]): SedSkill[] {
   return entries.map((entry) => ({
     name: entry.name,
     description: entry.description,
@@ -119,12 +119,12 @@ const S: Record<string, CSSProperties> = {
   status: { fontSize: 11.5, color: 'var(--dsw-alias-label-tertiary)', minWidth: 0, lineHeight: 1.4 },
 }
 
-function SedimentPanel(props: SedimentPanelProps): ReactNode {
+function LorePanel(props: LorePanelProps): ReactNode {
   const t: Translate = typeof props.t === 'function' ? props.t : (key) => key
   const sessionId = props.sessionId
   // Push-first data sources (absent on hosts that do not inject them into this seat).
   const projected = typeof props.useProjection === 'function'
-    ? props.useProjection(RRP_SEDIMENT_KEY) as SedimentEntry[] | undefined
+    ? props.useProjection(RRP_LORE_KEY) as LoreEntry[] | undefined
     : undefined
   const scribeJobs = typeof props.useSessions === 'function' && sessionId !== undefined
     ? props.useSessions((state) => state.jobsBySession[sessionId]) as readonly RrpJobView[] | undefined
@@ -144,7 +144,7 @@ function SedimentPanel(props: SedimentPanelProps): ReactNode {
 
   const refresh = (): void => {
     if (sessionId === undefined) return
-    void fetch(SEDIMENT_PATH + '?sessionId=' + encodeURIComponent(sessionId))
+    void fetch(LORE_PATH + '?sessionId=' + encodeURIComponent(sessionId))
       .then((response) => (response.ok ? response.json() as Promise<SedList> : undefined))
       .then((body) => { if (body !== undefined) setFetched(body) })
       .catch(() => { /* best-effort */ })
@@ -178,7 +178,7 @@ function SedimentPanel(props: SedimentPanelProps): ReactNode {
   const post = (body: Record<string, unknown>, done: string): void => {
     if (sessionId === undefined) return
     setBusy(true)
-    void fetch(SEDIMENT_PATH, {
+    void fetch(LORE_PATH, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ sessionId, ...body }),
@@ -189,37 +189,37 @@ function SedimentPanel(props: SedimentPanelProps): ReactNode {
         if (payload.drafting === true) setFetched((current) => current === undefined ? current : { ...current, drafting: true })
         else setStatus(done)
       })
-      .catch((error: unknown) => setStatus(t('sediment.failed') + ': ' + String((error as { message?: string })?.message ?? error)))
+      .catch((error: unknown) => setStatus(t('lore.failed') + ': ' + String((error as { message?: string })?.message ?? error)))
       .finally(() => setBusy(false))
   }
 
   const remove = (name: string): void => {
     if (sessionId === undefined) return
     setBusy(true)
-    void fetch(SEDIMENT_PATH + '?sessionId=' + encodeURIComponent(sessionId) + '&name=' + encodeURIComponent(name), { method: 'DELETE' })
+    void fetch(LORE_PATH + '?sessionId=' + encodeURIComponent(sessionId) + '&name=' + encodeURIComponent(name), { method: 'DELETE' })
       .then((response) => {
         if (!response.ok) throw new Error(String(response.status))
         refresh()
-        setStatus(t('sediment.removed'))
+        setStatus(t('lore.removed'))
       })
-      .catch((error: unknown) => setStatus(t('sediment.failed') + ': ' + String((error as { message?: string })?.message ?? error)))
+      .catch((error: unknown) => setStatus(t('lore.failed') + ': ' + String((error as { message?: string })?.message ?? error)))
       .finally(() => setBusy(false))
   }
 
   return (
-    <div className="dsh-rrp-sediment" style={S.root}>
+    <div className="dsh-rrp-lore" style={S.root}>
       <div style={S.header}>
-        <span style={S.title}>{t('sediment.title')}</span>
+        <span style={S.title}>{t('lore.title')}</span>
         <Pill>{String(skills.length)}</Pill>
       </div>
 
       <div style={S.scroll}>
-        <p style={S.hint}>{t('sediment.guide')}</p>
+        <p style={S.hint}>{t('lore.guide')}</p>
 
         <div style={S.drain}>
           <span style={S.drainInput}>
             <Input
-              placeholder={t('sediment.topicPlaceholder')}
+              placeholder={t('lore.topicPlaceholder')}
               value={topic}
               onChange={(event) => setTopic(event.target.value)}
             />
@@ -228,9 +228,9 @@ function SedimentPanel(props: SedimentPanelProps): ReactNode {
             variant="primary"
             icon={drafting ? <IconLoadingOutline16 size={16} /> : <IconSparkle16 size={16} />}
             disabled={busy || drafting}
-            onClick={() => { setStatus(''); post({ action: 'draft', topic }, t('sediment.staged')) }}
+            onClick={() => { setStatus(''); post({ action: 'draft', topic }, t('lore.staged')) }}
           >
-            {drafting ? t('sediment.drafting') : t('sediment.draft')}
+            {drafting ? t('lore.drafting') : t('lore.draft')}
           </Button>
         </div>
 
@@ -249,39 +249,39 @@ function SedimentPanel(props: SedimentPanelProps): ReactNode {
                 size="sm"
                 icon={<IconCheckOutline16 size={16} />}
                 disabled={busy}
-                onClick={() => { setStatus(''); post({ action: 'confirm' }, t('sediment.written')) }}
+                onClick={() => { setStatus(''); post({ action: 'confirm' }, t('lore.written')) }}
               >
-                {t('sediment.confirm')}
+                {t('lore.confirm')}
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 disabled={busy}
-                onClick={() => { setStatus(''); post({ action: 'discard' }, t('sediment.discarded')) }}
+                onClick={() => { setStatus(''); post({ action: 'discard' }, t('lore.discarded')) }}
               >
-                {t('sediment.discard')}
+                {t('lore.discard')}
               </Button>
-              <span style={S.status}>{t('sediment.confirmHint')}</span>
+              <span style={S.status}>{t('lore.confirmHint')}</span>
             </div>
           </div>
         )}
 
         <div style={S.section}>
-          <span style={S.sectionTitle}>{t('sediment.written')}</span>
+          <span style={S.sectionTitle}>{t('lore.written')}</span>
           <Pill>{String(skills.length)}</Pill>
         </div>
-        {skills.length === 0 ? <div style={S.empty}>{t('sediment.empty')}</div> : null}
+        {skills.length === 0 ? <div style={S.empty}>{t('lore.empty')}</div> : null}
         {skills.map((skill) => (
           <div key={skill.name} style={S.card}>
             <div style={S.cardHead}>
               <span style={S.cardName}>{skill.name}</span>
               <Pill>{skill.bytes >= 1024 ? String(Math.round(skill.bytes / 1024)) + ' KB' : String(skill.bytes) + ' B'}</Pill>
-              <Tooltip label={t('sediment.delete')}>
+              <Tooltip label={t('lore.delete')}>
                 <Button
                   variant="ghost"
                   size="sm"
                   icon={<IconTrashOutline16 size={16} />}
-                  aria-label={t('sediment.delete')}
+                  aria-label={t('lore.delete')}
                   disabled={busy}
                   onClick={() => remove(skill.name)}
                 />
@@ -293,7 +293,7 @@ function SedimentPanel(props: SedimentPanelProps): ReactNode {
 
         {status.length === 0 ? null : <div style={{ ...S.status, marginTop: 10 }}>{status}</div>}
         {pending === null && !drafting && status.length === 0 ? (
-          <div style={{ ...S.cardMeta, marginTop: 10 }}>{t('sediment.noDraft')}</div>
+          <div style={{ ...S.cardMeta, marginTop: 10 }}>{t('lore.noDraft')}</div>
         ) : null}
       </div>
     </div>
@@ -301,22 +301,22 @@ function SedimentPanel(props: SedimentPanelProps): ReactNode {
 }
 
 /** Register the tab type and its body; both dispose with this fiber. */
-export function registerSedimentTab(ctx: RrpClientContext): void {
+export function registerLoreTab(ctx: RrpClientContext): void {
   const t = ctx.locale.bind('rrp') as Translate
   ctx.effect(() => {
     const disposeType = ctx.sidebarRightTabs.register({
       id: TAB_ID,
       kind: TAB_KIND,
-      title: () => t('sediment.title'),
-      guide: [{ order: 60, title: () => t('sediment.title'), description: () => t('sediment.guide') }],
+      title: () => t('lore.title'),
+      guide: [{ order: 60, title: () => t('lore.title'), description: () => t('lore.guide') }],
     })
     const disposeBody = ctx.slots.register(
       { name: 'sidebar.right.pane.tab', key: TAB_ID, locale: 'rrp', inject: (sessionId: unknown) => ({ t, sessionId }) },
-      SedimentPanel as never,
+      LorePanel as never,
     )
     return () => {
       disposeBody()
       disposeType()
     }
-  }, 'dsh-rrp: sediment tab')
+  }, 'dsh-rrp: lore tab')
 }

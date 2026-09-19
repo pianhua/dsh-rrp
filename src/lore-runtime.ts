@@ -1,10 +1,10 @@
 /**
- * dsh-rrp — arm the worldline-scoped sediment provider.
+ * dsh-rrp — arm the worldline-scoped lore provider.
  *
  * The host's skill registry layers contributions by AGENT scope, and
  * `agent.ctx` is the agent-scoped context whose contributions "are agent-local,
  * unwind on disposal" (dsh-agent runtime types). Registering our provider
- * through `agent.ctx` therefore makes one Session/worldline's sedimented lore
+ * through `agent.ctx` therefore makes one Session/worldline's lore
  * visible to that agent alone — exactly the isolation D8 wants — with no
  * per-session preset and no global leak.
  *
@@ -14,12 +14,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { harnessHome } from './home.ts'
 import { belongsToRpPreset } from './preset-id.ts'
-import { createSedimentProvider, type SedimentProviderControl } from './sediment-provider.ts'
-import { backupLegacySediment, listLegacySediment } from './sediment.ts'
-import { RRP_SEDIMENT_KEY, sedimentEntriesOf } from './sediment-state.ts'
+import { createLoreProvider, type LoreProviderControl } from './lore-provider.ts'
+import { backupLegacyLore, listLegacyLore } from './lore.ts'
+import { RRP_LORE_KEY, loreEntriesOf } from './lore-state.ts'
 import { TRANSCRIPT_KEY, type TranscriptSlice } from './transcript.ts'
 import { publishState, type StateSession } from './state-publisher.ts'
-import { forgetSediment } from './sediment-route.ts'
+import { forgetLore } from './lore-route.ts'
 
 const TAG = '[dsh-rrp]'
 
@@ -28,7 +28,7 @@ interface SessionLike {
   append?(type: string, data: unknown, intent?: unknown): unknown
 }
 interface SkillsServiceLike {
-  registerProvider(create: (control: SedimentProviderControl) => unknown): () => void
+  registerProvider(create: (control: LoreProviderControl) => unknown): () => void
 }
 interface AgentContextLike {
   /** Cordis property access; throws without a declared inject on the context. */
@@ -53,7 +53,7 @@ interface RuntimeFaces {
 }
 
 /** Live Session-scoped providers, so writes invalidate and preset switches unwind them. */
-const ARMED = new Map<string, { control: SedimentProviderControl; dispose: () => void }>()
+const ARMED = new Map<string, { control: LoreProviderControl; dispose: () => void }>()
 
 /** Remove one provider registration without letting lifecycle cleanup escape. */
 function disarm(sessionId: string): void {
@@ -67,8 +67,8 @@ function disarm(sessionId: string): void {
   }
 }
 
-/** Whether this Session has ever adopted the event-backed sediment model. */
-function hasSedimentEvent(projections: ProjectionsService, session: SessionLike): boolean {
+/** Whether this Session has ever adopted the event-backed lore model. */
+function hasLoreEvent(projections: ProjectionsService, session: SessionLike): boolean {
   try {
     return ((projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined)?.sedimentSeen) ?? false
   } catch {
@@ -81,24 +81,24 @@ function hasSedimentEvent(projections: ProjectionsService, session: SessionLike)
  * Import one old sidecar exactly once. The event must commit before the source
  * directory is renamed, so any failure leaves the user's files untouched.
  */
-export function migrateLegacySediment(
+export function migrateLegacyLore(
   session: SessionLike,
   projections: ProjectionsService,
   home: string = harnessHome(),
 ): boolean {
   if (typeof session.append !== 'function') return false
-  if (hasSedimentEvent(projections, session)) return false
-  const skills = sedimentEntriesOf(
-    listLegacySediment(home, session.id).map(({ name, description, body }) => ({ name, description, body })),
+  if (hasLoreEvent(projections, session)) return false
+  const skills = loreEntriesOf(
+    listLegacyLore(home, session.id).map(({ name, description, body }) => ({ name, description, body })),
   )
   if (skills.length === 0) return false
   const published = publishState(session as StateSession, projections, { sediment: { kind: 'snapshot', skills } })
   if (!published) return false
   try {
-    const backup = backupLegacySediment(home, session.id)
-    if (backup !== undefined) console.log(TAG + ' migrated legacy sediment for ' + session.id + ' (backup: ' + backup + ')')
+    const backup = backupLegacyLore(home, session.id)
+    if (backup !== undefined) console.log(TAG + ' migrated legacy lore for ' + session.id + ' (backup: ' + backup + ')')
   } catch (error) {
-    console.warn(TAG + ' legacy sediment was imported but its source could not be renamed:', error)
+    console.warn(TAG + ' legacy lore was imported but its source could not be renamed:', error)
   }
   return true
 }
@@ -128,15 +128,15 @@ function maybeArm(agent: AgentLike, projections: ProjectionsService): void {
     if (session === undefined || ARMED.has(session.id)) return
     const preset = projections.stateOf(session, 'agentPreset')
     if (typeof preset !== 'string' || !belongsToRpPreset(preset)) return
-    migrateLegacySediment(session, projections)
+    migrateLegacyLore(session, projections)
     const skills = skillsOf(agent.ctx)
     if (skills === undefined) return
-    let control: SedimentProviderControl | undefined
+    let control: LoreProviderControl | undefined
     const dispose = skills.registerProvider((value) => {
       control = value
-      return createSedimentProvider({
+      return createLoreProvider({
         sessionId: session.id,
-        read: () => sedimentEntriesOf(projections.stateOf(session, RRP_SEDIMENT_KEY)),
+        read: () => loreEntriesOf(projections.stateOf(session, RRP_LORE_KEY)),
       })
     })
     if (control === undefined) {
@@ -145,20 +145,20 @@ function maybeArm(agent: AgentLike, projections: ProjectionsService): void {
     }
     ARMED.set(session.id, { control, dispose })
   } catch (error) {
-    console.warn(TAG + ' sediment provider registration failed for ' + agent.id + ':', error)
+    console.warn(TAG + ' lore provider registration failed for ' + agent.id + ':', error)
   }
 }
 
 /**
- * Arm worldline sediment skills for RP agents.
+ * Arm worldline lore skills for RP agents.
  * @param ctx - the host context owning the registration.
  */
-export function registerSedimentRuntime(ctx: Context): void {
+export function registerLoreRuntime(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
   const agents = runtime.get('agents') as AgentsService | undefined
   const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
   if (agents === undefined || projections === undefined) {
-    console.warn(TAG + ' sediment runtime idle (missing agents/sessionProjections)')
+    console.warn(TAG + ' lore runtime idle (missing agents/sessionProjections)')
     return
   }
   ctx.effect(() => {
@@ -183,7 +183,7 @@ export function registerSedimentRuntime(ctx: Context): void {
         }
         maybeArm(agent, projections)
       } catch (error) {
-        console.warn(TAG + ' sediment preset-switch handling failed:', error)
+        console.warn(TAG + ' lore preset-switch handling failed:', error)
       }
     })
     const disposeDisposed = runtime.on('agent/disposed', (...args: unknown[]) => {
@@ -191,20 +191,20 @@ export function registerSedimentRuntime(ctx: Context): void {
       const sessionId = agent?.session?.id ?? agent?.id
       if (sessionId !== undefined) {
         disarm(sessionId)
-        forgetSediment(sessionId)
+        forgetLore(sessionId)
       }
     })
-    console.log(TAG + ' sediment runtime armed (worldline scoping via agent.ctx + Session projection)')
+    console.log(TAG + ' lore runtime armed (worldline scoping via agent.ctx + Session projection)')
     return () => {
       disposeCreated()
       disposeSelected()
       disposeDisposed()
       for (const sessionId of [...ARMED.keys()]) {
         disarm(sessionId)
-        forgetSediment(sessionId)
+        forgetLore(sessionId)
       }
     }
-  }, 'dsh-rrp: sediment runtime')
+  }, 'dsh-rrp: lore runtime')
 }
 
 /**
@@ -213,7 +213,7 @@ export function registerSedimentRuntime(ctx: Context): void {
  * @param ctx - the host context.
  * @param sessionId - the session to arm.
  */
-export function ensureSedimentArmed(ctx: Context, sessionId: string): void {
+export function ensureLoreArmed(ctx: Context, sessionId: string): void {
   const runtime = ctx as unknown as RuntimeFaces
   const agents = runtime.get('agents') as AgentsService | undefined
   const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
@@ -221,8 +221,8 @@ export function ensureSedimentArmed(ctx: Context, sessionId: string): void {
   if (agent !== undefined && projections !== undefined) maybeArm(agent, projections)
 }
 
-/** Invalidate one session's skill catalog after a sediment event commits. */
-export function invalidateSediment(sessionId: string): void {
+/** Invalidate one session's skill catalog after a lore event commits. */
+export function invalidateLore(sessionId: string): void {
   try {
     ARMED.get(sessionId)?.control.invalidate()
   } catch {
