@@ -149,6 +149,30 @@ describe('card start route', () => {
     expect(payloadOf(host.appended[0]?.data)?.card).toEqual({ id: 'c1', name: '测试卡', persona: 'P', worldCore: 'W' })
   })
 
+  it('interpolates the per-run player-name override into the opening before it is logged (issue #25)', async () => {
+    forgetState('s1'); forgetActivity('s1')
+    const host = fakeHost({ preset: 'rp-c1' })
+    registerStartRoute(host.ctx as never)
+    const { req, res } = exchange({
+      sessionId: 's1',
+      card: {
+        id: 'c1', name: '测试卡', persona: 'P', worldCore: 'W',
+        player: { name: '林小满', description: '独行旅人' },
+      },
+      opening: '{{player.name}}推开阁楼的门，{{player.description}}般的沉默。',
+    })
+    await host.route()!.handler(req, res)
+    expect(res.statusCode).toBe(200)
+    // The durable card context carries the effective (overridden) player.
+    expect(payloadOf(host.appended[0]?.data)?.card).toEqual({
+      id: 'c1', name: '测试卡', persona: 'P', worldCore: 'W',
+      player: { name: '林小满', description: '独行旅人' },
+    })
+    // The logged opening is final text — interpolation happened BEFORE the append.
+    const data = host.appended[1]?.data as { message: { content: Array<{ text: string }> } }
+    expect(data.message.content[0]?.text).toBe('林小满推开阁楼的门，独行旅人般的沉默。')
+  })
+
   it('requires a selected card preset even when the immutable header is blank or stale', async () => {
     const missing = fakeHost({ headerPreset: 'rp-demo-card' })
     registerStartRoute(missing.ctx as never)

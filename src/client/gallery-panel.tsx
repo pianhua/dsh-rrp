@@ -26,7 +26,7 @@ import {
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
-import type { CardMeta, CardPack } from '../card-types.ts'
+import { interpolateCardText, type CardMeta, type CardPack, type CardPlayer } from '../card-types.ts'
 import { presetIdForCard } from '../preset-id.ts'
 import type { RrpClientContext, RrpWorkspaceSource, RrpWorkspacesService } from './context-types.ts'
 
@@ -46,7 +46,8 @@ interface GalleryPanelProps {
   t?: Translate
   loadList?: () => Promise<CardMeta[]>
   loadCard?: (id: string) => Promise<CardPack | undefined>
-  start?: (card: CardPack, workspaceId?: string) => Promise<StartOutcome>
+  /** playerNameOverride: per-session player-name override (#25); empty/undefined = card-declared. */
+  start?: (card: CardPack, workspaceId?: string, playerNameOverride?: string) => Promise<StartOutcome>
   workspaces?: RrpWorkspaceSource
 }
 
@@ -132,6 +133,8 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
   const [busy, setBusy] = useState(false)
   const [query, setQuery] = useState('')
   const [workspaceId, setWorkspaceId] = useState('')
+  // #25 per-session player-name override; empty = use the card-declared name.
+  const [playerName, setPlayerName] = useState('')
   const workspaces = useWorkspaces(props.workspaces)
 
   const loadList = props.loadList
@@ -149,6 +152,8 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
       .then((card) => {
         if (seq !== selectSeq.current) return
         setSelected(card ?? null)
+        // A fresh selection gets a fresh per-run name override (#25).
+        setPlayerName('')
         if (!quiet) setStatus(card === undefined ? { tone: 'error', text: t('gallery.failed') } : { tone: 'idle', text: '' })
       })
       .catch((error: unknown) => {
@@ -190,7 +195,7 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
     if (props.start === undefined) return
     setBusy(true)
     setStatus({ tone: 'busy', text: t('gallery.starting') })
-    void props.start(card, workspaceId.length === 0 ? undefined : workspaceId)
+    void props.start(card, workspaceId.length === 0 ? undefined : workspaceId, playerName.trim())
       .then((outcome) => {
         setStatus(outcome.ok
           ? { tone: 'ok', text: t('gallery.started') }
@@ -215,6 +220,15 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
   const opening = selected === null
     ? undefined
     : (selected.openings.find((entry) => entry.id === selected.meta.opening) ?? selected.openings[0])
+
+  // #25: the effective player for previews and the start request — the
+  // per-run override replaces only the name; the description stays as declared.
+  const playerNameOverride = playerName.trim()
+  const effectivePlayer: CardPlayer | undefined = selected === null
+    ? undefined
+    : playerNameOverride.length === 0
+      ? selected.meta.player
+      : { name: playerNameOverride, ...(selected.meta.player?.description === undefined ? {} : { description: selected.meta.player.description }) }
 
   const dot = DOT[status.tone]
 
@@ -299,6 +313,21 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
                   </div>
                 )}
 
+                {/* #25 per-run name override: empty keeps the card-declared name. */}
+                <div style={S.playerOverride}>
+                  <span style={S.overrideLabel}>{t('gallery.playerName')}</span>
+                  <span style={S.overrideInput}>
+                    <Input
+                      value={playerName}
+                      onChange={(event) => { setPlayerName(event.target.value) }}
+                      placeholder={selected.meta.player?.name ?? ''}
+                      maxLength={24}
+                      aria-label={t('gallery.playerName')}
+                    />
+                  </span>
+                  <span style={S.overrideHint}>{t('gallery.playerNameHint')}</span>
+                </div>
+
                 <div style={S.section}>
                   <span style={S.sectionIcon}><IconSkillOutline16 size={16} /></span>
                   <span style={S.sectionTitle}>{t('gallery.skills')}</span>
@@ -318,7 +347,7 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
                     <div style={S.section}>
                       <span style={S.sectionTitle}>{t('gallery.opening')}</span>
                     </div>
-                    <blockquote style={S.opening}>{opening.body}</blockquote>
+                    <blockquote style={S.opening}>{interpolateCardText(opening.body, effectivePlayer)}</blockquote>
                   </>
                 )}
               </div>
@@ -418,6 +447,10 @@ const S: Record<string, CSSProperties> = {
   factIcon: { display: 'inline-flex', color: 'var(--dsw-alias-label-tertiary)' },
   factLabel: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12, flex: '0 0 auto' },
   factValue: { color: 'var(--dsw-alias-label-primary)', minWidth: 0 },
+  playerOverride: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12 },
+  overrideLabel: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12, flex: '0 0 auto' },
+  overrideInput: { width: 200, display: 'flex' },
+  overrideHint: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11 },
   section: { display: 'flex', alignItems: 'center', gap: 8, margin: '22px 0 10px' },
   sectionIcon: { display: 'inline-flex', color: 'var(--dsw-alias-label-tertiary)' },
   sectionTitle: { fontSize: 13, fontWeight: 600 },
@@ -494,7 +527,7 @@ export function registerGallery(ctx: RrpClientContext): void {
     return body.card
   }
 
-  const start = async (card: CardPack, workspaceId?: string): Promise<StartOutcome> => {
+  const start = async (card: CardPack, workspaceId?: string, playerNameOverride?: string): Promise<StartOutcome> => {
     const sessions = ctx.sessions
     const remote = ctx.remote
     if (sessions === undefined || remote === undefined) return { ok: false, message: t('gallery.unavailable') }
@@ -535,6 +568,14 @@ export function registerGallery(ctx: RrpClientContext): void {
     }
 
     const opening = (card.openings.find((entry) => entry.id === card.meta.opening) ?? card.openings[0])?.body
+    // #25: the per-run override rides the card player slot — description stays
+    // as declared; the effective name flows into the card projection, the
+    // facts fingerprint and the pre-log opening interpolation on the host side.
+    const override = (playerNameOverride ?? '').trim()
+    const declared = card.meta.player
+    const player: CardPlayer | undefined = override.length === 0
+      ? declared
+      : { name: override, ...(declared?.description === undefined ? {} : { description: declared.description }) }
     const response = await fetch('/dsh-rrp/start', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -547,7 +588,7 @@ export function registerGallery(ctx: RrpClientContext): void {
           name: card.meta.name,
           persona: card.persona,
           worldCore: card.worldCore,
-          player: card.meta.player,
+          player,
         },
       }),
     })
