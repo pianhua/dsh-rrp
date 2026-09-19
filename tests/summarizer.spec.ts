@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeEach } from 'vitest'
 import { buildSummarizerPrompt, parseSummarizerReply } from '../src/agents/summarizer.ts'
-import { registerSummarizer, registerSummaryCommand } from '../src/summarizer.ts'
+import { registerSummarizer, registerSummaryCommand, forgetAllSummary } from '../src/summarizer.ts'
 import { RRP_SETTINGS_KEY } from '../src/settings.ts'
 import type { RrpStatePayload } from '../src/state-payload.ts'
 import { transcriptProjections } from './stubs/transcript-projections.ts'
@@ -94,16 +94,142 @@ describe('Summarizer trigger', () => {
   it('does not re-run a boundary turn already covered before a restart (issue #13)', () => {
     // The transcript slice durably folds the summary publish: a restart loses
     // the in-memory watermark but not the slice, so turn 8 is recognized.
+    forgetAllSummary()
     const host = fakeHost('rp', 8, true, [{
       type: 'user/message',
       data: {
         content: [{ type: 'text', text: '【剧情脉络】更新' }],
-        source: { rrp: { summary: VALID, summaryTurn: 8, settings: { summaryEnabled: true, summaryEveryTurns: 8 } } },
+        source: { kind: 'plugin', plugin: 'dsh-rrp', rrp: { summary: VALID, summaryTurn: 8, settings: { summaryEnabled: true, summaryEveryTurns: 8 } } },
       },
     }])
     registerSummarizer(host.ctx as never, 'rp')
     host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
     expect(host.started()).toBe(0)
+  })
+})
+
+describe('Summarizer concurrency (issue #20)', () => {
+  let hostSeq = 0
+  type Deferred = { promise: Promise<void>; resolve: () => void }
+  function deferred(): Deferred {
+    let resolve!: () => void
+    const promise = new Promise<void>((r) => { resolve = r })
+    return { promise, resolve }
+  }
+
+  // A host whose LLM streams hold until released, so passes can be made to
+  // finish out of order; session appends fold back into the same transcript
+  // stub, so durable-watermark reads see every commit immediately.
+  function raceHost(seedEvents?: Array<{ type?: string; data?: unknown }>) {
+    forgetAllSummary()
+    hostSeq += 1
+    const listeners = new Map<string, (...args: unknown[]) => void>()
+    const log: Array<{ type?: string; data?: unknown }> = seedEvents ?? [
+      { type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟。' }] } },
+    ]
+    let turn = 0
+    let replies = 0
+    const waiters: Deferred[] = []
+    const doneness: Array<Promise<{ status: string }>> = []
+    const session = {
+      // Fresh id per host: the publisher's RETAINED lanes dedup per session,
+      // and a disposed/restarted test session must not inherit them.
+      id: 'race-' + hostSeq,
+      append(type: string, data: unknown) { log.push({ type, data }); return {} },
+    }
+    const llm = {
+      async *stream() {
+        const gate = deferred()
+        waiters.push(gate)
+        await gate.promise
+        replies += 1
+        yield { type: 'text-delta', text: JSON.stringify({ ...VALID, goal: '目标-' + replies }) }
+      },
+    }
+    const jobs = {
+      start(spec: { run(): { cancel(): void; done: Promise<{ status: string }> } }) {
+        doneness.push(spec.run().done)
+        return 'race-job-' + doneness.length
+      },
+    }
+    const agents = { get: () => ({ options: { provider: 'deepseek', model: 'deepseek-chat' } }) }
+    const projections = transcriptProjections(log, (_session: unknown, key: string) => {
+      if (key === 'agentPreset') return 'rp'
+      if (key === 'turnBoundary') return { lastTurn: turn }
+      if (key === RRP_SETTINGS_KEY) return { summaryEnabled: true, summaryEveryTurns: 8 }
+      return undefined
+    })
+    const ctx = {
+      effect(fn: () => (() => void) | void) { return fn() },
+      get: (name: string) => ({ llm, jobs, agents, sessionProjections: projections } as Record<string, unknown>)[name],
+      on(name: string, listener: (...args: unknown[]) => void) { listeners.set(name, listener); return () => {} },
+    }
+    registerSummarizer(ctx as never, 'rp')
+    const fire = async (boundary: number) => {
+      turn = boundary
+      listeners.get('session/event')?.(session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+      // Let the just-started pass reach its stream gate before returning.
+      await Promise.resolve()
+      await Promise.resolve()
+    }
+    const committedTurns = (): number[] => log
+      .map((entry) => (entry.data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp)
+      .filter((p): p is RrpStatePayload => p !== undefined && typeof p.summaryTurn === 'number')
+      .map((p) => p.summaryTurn as number)
+    return { fire, waiters, doneness, committedTurns, log }
+  }
+
+  it('serializes passes per session: a busy Summarizer defers, newest commits last', async () => {
+    const host = raceHost()
+    await host.fire(8)
+    expect(host.waiters).toHaveLength(1)
+    await host.fire(16)
+    expect(host.waiters).toHaveLength(1) // deferred, not run in parallel
+
+    host.waiters[0]?.resolve()
+    await host.doneness[0]
+    expect(host.waiters).toHaveLength(2) // drained covering pass started
+    host.waiters[1]?.resolve()
+    await Promise.all(host.doneness)
+
+    expect(host.committedTurns()).toEqual([8, 16])
+  })
+
+  it('keeps only the newest deferred boundary', async () => {
+    const host = raceHost()
+    await host.fire(8)
+    await host.fire(16)
+    await host.fire(24)
+    expect(host.waiters).toHaveLength(1)
+
+    host.waiters[0]?.resolve()
+    await host.doneness[0]
+    expect(host.waiters).toHaveLength(2)
+    host.waiters[1]?.resolve()
+    await Promise.all(host.doneness)
+
+    expect(host.committedTurns()).toEqual([8, 24]) // 16 was superseded by 24
+  })
+
+  it('discards a late commit whose boundary the durable watermark already passed', async () => {
+    // Simulates the post-restart shape: turn 16 is durably committed, yet an
+    // older turn-8 pass reaches commit. The monotonicity check must drop it.
+    const host = raceHost([
+      { type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟。' }] } },
+      {
+        type: 'user/message',
+        data: {
+          content: [{ type: 'text', text: '【剧情脉络】更新' }],
+          source: { kind: 'plugin', plugin: 'dsh-rrp', rrp: { summary: VALID, summaryTurn: 16, settings: { summaryEnabled: true, summaryEveryTurns: 8 } } },
+        },
+      },
+    ])
+    await host.fire(8)
+    expect(host.waiters).toHaveLength(1)
+    host.waiters[0]?.resolve()
+    const result = await host.doneness[0]
+    expect(result.status).toBe('stale')
+    expect(host.committedTurns()).toEqual([16]) // nothing older landed on top
   })
 })
 

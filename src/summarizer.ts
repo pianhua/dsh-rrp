@@ -72,15 +72,22 @@ interface RuntimeFaces {
 
 /** Last summarized turn per session, to prevent duplicate runs on the same turn. */
 const LAST_SUMMARIZED = new Map<string, number>()
+/** Sessions with a summary job in flight, and the latest deferred boundary turn. */
+const IN_FLIGHT = new Map<string, number>()
+const PENDING = new Map<string, number>()
 
-/** Forget last-summarized turn watermark when a session is disposed. */
+/** Forget summary watermarks and concurrency markers when a session is disposed. */
 export function forgetSummary(sessionId: string): void {
   LAST_SUMMARIZED.delete(sessionId)
+  IN_FLIGHT.delete(sessionId)
+  PENDING.delete(sessionId)
 }
 
 /** Drop every watermark (plugin unload must not leave stale sessions behind). */
 export function forgetAllSummary(): void {
   LAST_SUMMARIZED.clear()
+  IN_FLIGHT.clear()
+  PENDING.clear()
 }
 
 /** Check last-summarized turn watermark (for testing / inspection). */
@@ -148,14 +155,27 @@ function routeFor(owner: AgentLike | undefined): { provider: string; model: stri
 }
 
 /** Schedule one summarization job. Never throws into the session feed.
- * @returns whether the job actually started (false = no route / start failure) */
+ * @returns whether the turn is covered (started now, or deferred behind the
+ * in-flight job). A boundary deferred here is summarized by a later covering
+ * run, so the caller may still mark its watermark.
+ */
 function scheduleSummary(faces: HostFaces, session: SessionLike, turn: number): boolean {
+  // Concurrency guard (issue #20): two live passes could commit out of order
+  // and let the slower OLDER turn overwrite the newer summary. Defer instead:
+  // keep only the newest boundary turn, which covers everything before it.
+  if (IN_FLIGHT.has(session.id)) {
+    const queued = PENDING.get(session.id)
+    if (queued === undefined || turn > queued) PENDING.set(session.id, turn)
+    console.log(TAG + ' Summarizer busy for ' + session.id + '; deferred turn ' + turn)
+    return true
+  }
   const owner = faces.agents.get(session.id)
   const route = routeFor(owner)
   if (route === undefined) {
     console.warn(TAG + ' Summarizer skipped ' + session.id + ': no provider/model route')
     return false
   }
+  IN_FLIGHT.set(session.id, turn)
   try {
     faces.jobs.start({
       kind: JOB_KIND,
@@ -165,6 +185,7 @@ function scheduleSummary(faces: HostFaces, session: SessionLike, turn: number): 
         const controller = new AbortController()
         let cancelled = false
         const done = runSummary(faces, session, turn, route, controller.signal, () => cancelled)
+          .finally(() => drainDeferred(faces, session))
         return {
           cancel: () => {
             cancelled = true
@@ -176,9 +197,26 @@ function scheduleSummary(faces: HostFaces, session: SessionLike, turn: number): 
     })
     return true
   } catch (error) {
+    IN_FLIGHT.delete(session.id)
     console.warn(TAG + ' Summarizer could not start a job:', error)
     return false
   }
+}
+
+/** After one pass ends, take over the newest deferred boundary, if any.
+ * A disposed session makes the settings read throw — same outcome as
+ * "turned off": nothing is rescheduled. */
+function drainDeferred(faces: HostFaces, session: SessionLike): void {
+  IN_FLIGHT.delete(session.id)
+  const next = PENDING.get(session.id)
+  if (next === undefined) return
+  PENDING.delete(session.id)
+  try {
+    if (!rrpSettingsOf(faces.projections.stateOf(session, RRP_SETTINGS_KEY)).summaryEnabled) return
+  } catch {
+    return
+  }
+  if (scheduleSummary(faces, session, next)) LAST_SUMMARIZED.set(session.id, next)
 }
 
 /** One summarization pass: prompt -> model -> parse -> append.
@@ -229,6 +267,17 @@ async function runSummary(
 
     const summary = parseSummarizerReply(text)
     if (summary === undefined) throw new Error('Summarizer reply was not a valid MacroSummary')
+    // Commit-time monotonicity check (issue #20): every committed summary
+    // advances the durable watermark, so a pass covering an older boundary
+    // discards itself here — the Author's macro compass never rewinds.
+    const slice = faces.projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined
+    if ((slice?.lastSummaryTurn ?? -1) >= turn) {
+      recordActivity(session.id, {
+        id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'stale', detailKey: 'detail.staleSuperseded',
+      })
+      console.log(TAG + ' Summarizer result for turn ' + turn + ' is stale (newer summary committed), discarding for session ' + session.id)
+      return { status: 'stale' }
+    }
     // Short-circuit like the Chronicler: a reworded-but-identical summary must
     // not trigger a facts republish (wasted tokens and log noise).
     const priorSummary = faces.projections.stateOf(session, SUMMARY_KEY) as MacroSummary | null | undefined
