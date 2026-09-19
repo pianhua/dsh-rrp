@@ -51,6 +51,8 @@ const TAB_KIND = 'dsh-rrp-worldstate'
 const CORRECTION_PATH = '/dsh-rrp/world-state'
 /** Host route serving the host-side activity ledger. */
 const ACTIVITY_PATH = '/dsh-rrp/activity'
+/** Host route whose GET also reports the conditional-injection size (issue #16). */
+const LORE_PATH = '/dsh-rrp/lore'
 /** Fallback poll interval, used only when the host jobs mirror is unavailable. */
 const ACTIVITY_POLL_MS = 2000
 
@@ -430,10 +432,14 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
   const macroSummary = typeof props.useProjection === 'function'
     ? (props.useProjection('rrpSummary') as MacroSummary | undefined)
     : undefined
+  // Conditional-injection payload size (issue #16): served by the lore route.
+  // Fetch failure degrades silently — the gauge simply omits the segment.
+  const [injectedChars, setInjectedChars] = useState<number | undefined>(undefined)
   const budgetReport = promptBudgetReport({
     card: cardContext ?? null,
     summary: macroSummary ?? undefined,
     state: view,
+    injectedChars,
   })
   const showBudget = cardContext != null || macroSummary != null || view != null
   const sessionId = props.sessionId
@@ -530,6 +536,14 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
       })
       .catch(() => {
         /* the ledger is best-effort */
+      })
+    void fetch(LORE_PATH + '?sessionId=' + encodeURIComponent(sessionId))
+      .then((response) => (response.ok ? response.json() as Promise<{ injectedChars?: number }> : undefined))
+      .then((body) => {
+        if (body !== undefined && typeof body.injectedChars === 'number') setInjectedChars(body.injectedChars)
+      })
+      .catch(() => {
+        /* the injection gauge degrades silently */
       })
   }
   useEffect(() => {
@@ -847,6 +861,7 @@ function BudgetGauge(props: { t: Translate; report: BudgetReport }): ReactNode {
     card: 'var(--dsw-alias-brand-primary)',
     summary: 'var(--dsw-alias-label-secondary)',
     state: 'var(--dsw-alias-label-tertiary)',
+    triggers: 'var(--dsw-alias-label-danger)',
   }
   const textColor = report.level === 'danger'
     ? 'var(--dsw-alias-status-error)'

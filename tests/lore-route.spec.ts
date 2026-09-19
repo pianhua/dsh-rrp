@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { registerLoreRoute } from '../src/lore-route.ts'
+import { seedCardTriggersForTesting } from '../src/cards.ts'
+import type { CardContext } from '../src/card-types.ts'
+import { parseWhen, type TriggerDef, type WhenCondition } from '../src/lore-condition.ts'
 import { RRP_LORE_KEY, applyLoreChange, type LoreEntry } from '../src/lore-state.ts'
 import { rrpPayloadOf } from '../src/state-payload.ts'
+import { emptyWorldState, type WorldState } from '../src/world-state.ts'
 import { transcriptProjections } from './stubs/transcript-projections.ts'
 
 /** Minimal fake host with synchronous projection folding, like Session.append. */
-function fakeHost(opts?: { agentPreset?: string }) {
+function fakeHost(opts?: { agentPreset?: string; card?: CardContext; worldState?: WorldState }) {
   let lore: LoreEntry[] = []
   let failAppend = false
   const appended: Array<{ type: string; data: unknown }> = []
@@ -23,6 +27,8 @@ function fakeHost(opts?: { agentPreset?: string }) {
   const projections = transcriptProjections(appended, (_session: unknown, key: string) => {
     if (key === RRP_LORE_KEY) return lore
     if (key === 'agentPreset') return opts?.agentPreset
+    if (key === 'rrpCard') return opts?.card
+    if (key === 'rrpWorldState') return opts?.worldState
     return undefined
   })
   let route: { handler: (req: unknown, res: unknown) => unknown } | undefined
@@ -160,5 +166,53 @@ describe('lore route (D8)', () => {
 
     expect(host.lore()).toEqual([])
     expect(host.appended).toEqual([])
+  })
+
+  it('GET reports card triggers with active flags and the injected character budget', async () => {
+    const card: CardContext = { id: 'trig-lore-card', name: '触发卡', persona: '', worldCore: '' }
+    const state: WorldState = { ...emptyWorldState(), characters: { 米娅: { affinity: 50 } } }
+    const mustCond = (src: string): WhenCondition => {
+      const parsed = parseWhen(src, '测试')
+      if (parsed instanceof Error) throw parsed
+      return parsed
+    }
+    const warm: TriggerDef = {
+      id: 'mia-warm', name: '温热',
+      condition: mustCond('characters.米娅.affinity >= 40'),
+      excerpt: 'abc',
+    }
+    const intimate: TriggerDef = {
+      id: 'mia-intimate', name: '亲密',
+      condition: mustCond('characters.米娅.affinity >= 80'),
+      excerpt: 'defgh',
+    }
+    seedCardTriggersForTesting(card.id, [warm, intimate])
+    const host = fakeHost({ card, worldState: state })
+    registerLoreRoute(host.ctx as never)
+
+    const listed = exchange('GET', '/dsh-rrp/lore?sessionId=s1')
+    await host.route()!.handler(listed.req, listed.res)
+    expect(listed.res.statusCode).toBe(200)
+    const payload = listed.res.payload as {
+      triggers: Array<{ name: string; active: boolean }>
+      injectedChars: number
+    }
+    expect(payload.triggers).toEqual([
+      { name: '温热', active: true },
+      { name: '亲密', active: false },
+    ])
+    // Only the hit excerpt counts toward the budget.
+    expect(payload.injectedChars).toBe(3)
+  })
+
+  it('GET degrades to an empty trigger view without a card or state', async () => {
+    const host = fakeHost()
+    registerLoreRoute(host.ctx as never)
+    const listed = exchange('GET', '/dsh-rrp/lore?sessionId=s1')
+    await host.route()!.handler(listed.req, listed.res)
+    expect(listed.res.statusCode).toBe(200)
+    const payload = listed.res.payload as { triggers: unknown[]; injectedChars: number }
+    expect(payload.triggers).toEqual([])
+    expect(payload.injectedChars).toBe(0)
   })
 })

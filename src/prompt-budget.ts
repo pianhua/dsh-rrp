@@ -30,7 +30,7 @@ export function estimateTokens(chineseText: string): number {
 
 /** One gauge segment: the rendered text of one injection channel. */
 export interface BudgetSection {
-  id: 'card' | 'summary' | 'state'
+  id: 'card' | 'summary' | 'state' | 'triggers'
   chars: number
   tokens: number
 }
@@ -45,13 +45,16 @@ export interface BudgetReport {
 }
 
 /**
- * Size the three injection channels the model actually sees.
+ * Size the injection channels the model actually sees.
  * Absent channels contribute no section (card null, summary/state undefined).
+ * `injectedChars` is the conditional-injection block's payload size served by
+ * the lore route (issue #16); zero/undefined adds no segment.
  */
 export function promptBudgetReport(input: {
   card: CardContext | null
   summary: MacroSummary | undefined
   state: WorldState | undefined
+  injectedChars?: number
 }): BudgetReport {
   const sections: BudgetSection[] = []
   const push = (id: BudgetSection['id'], text: string): void => {
@@ -60,6 +63,9 @@ export function promptBudgetReport(input: {
   if (input.card !== null && input.card !== undefined) push('card', renderCardContext(input.card))
   if (input.summary !== undefined) push('summary', renderMacroSummary(input.summary))
   if (input.state !== undefined) push('state', renderWorldState(input.state))
+  if (input.injectedChars !== undefined && input.injectedChars > 0) {
+    sections.push({ id: 'triggers', chars: input.injectedChars, tokens: estimateTokens('x'.repeat(input.injectedChars)) })
+  }
 
   const totalTokens = sections.reduce((sum, section) => sum + section.tokens, 0)
   const pct = Math.floor((totalTokens * 1000) / PROMPT_BUDGET_WINDOW_TOKENS) / 10

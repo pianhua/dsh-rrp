@@ -10,13 +10,21 @@
  * `<dshHome>/.dsh-rrp/cards/` and this package's bundled `cards/`.
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse as parseYAML } from 'yaml'
 import { harnessHome } from './home.ts'
 import { isCardId } from './preset-id.ts'
+import {
+  TRIGGER_EXCERPT_CHARS,
+  parseWhen,
+  whenPathWarning,
+  type TriggerDef,
+} from './lore-condition.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 import type { WorldState } from './world-state.ts'
+
+const TAG = '[dsh-rrp]'
 
 /** The shipped card root (resolved against the bundled lib/index.js). */
 const SHIPPED_CARDS_DIR = fileURLToPath(new URL('../cards/', import.meta.url))
@@ -33,6 +41,33 @@ export type { CardMeta, CardOpening, CardPack, CardPlayer, CardSkill } from './c
 /** Card roots, user override first. */
 export function cardRoots(home: string = harnessHome()): string[] {
   return [join(home, '.dsh-rrp', 'cards'), SHIPPED_CARDS_DIR]
+}
+
+/**
+ * Conditional-injection trigger registry (issue #16): host memory keyed by
+ * cardId, rebuilt whenever a card's skills are read. Nothing is persisted —
+ * a restart re-reads the card packs and recovers; trigger state is always
+ * re-derived from the WorldState projection.
+ */
+const CARD_TRIGGERS = new Map<string, TriggerDef[]>()
+
+/**
+ * The registered triggers for one card (possibly empty). Reads the card pack
+ * lazily on first access so evaluation works no matter when the preset
+ * materialization ran relative to the first publish.
+ */
+export function triggersOfCard(cardId: string, home?: string): readonly TriggerDef[] {
+  let defs = CARD_TRIGGERS.get(cardId)
+  if (defs === undefined) {
+    readCard(cardId, home)
+    defs = CARD_TRIGGERS.get(cardId) ?? []
+  }
+  return defs
+}
+
+/** Replace one card's trigger defs (testing only; mirrors stageLoreDraftForTesting). */
+export function seedCardTriggersForTesting(cardId: string, defs: TriggerDef[]): void {
+  CARD_TRIGGERS.set(cardId, defs)
 }
 
 /** The shipped card root, for tests and tooling. */
@@ -148,10 +183,20 @@ function readInitialState(dir: string): WorldState | null {
   }
 }
 
-/** Read the skill directories bundled by a card. */
-function readSkills(dir: string): CardSkill[] {
+/**
+ * Read the skill directories bundled by a card. Parses the optional
+ * conditional-injection `when:` frontmatter into the trigger registry:
+ * a syntax error logs with card+skill locator (the skill still loads);
+ * the path is checked against the card's initial state key tree (a missing
+ * key logs a warning, never blocks loading).
+ */
+function readSkills(dir: string, cardName: string, initialState: WorldState | null): CardSkill[] {
   const root = join(dir, 'skills')
-  if (!existsSync(root)) return []
+  const triggerDefs: TriggerDef[] = []
+  if (!existsSync(root)) {
+    CARD_TRIGGERS.set(cardIdOf(dir), triggerDefs)
+    return []
+  }
   const out: CardSkill[] = []
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
@@ -164,10 +209,33 @@ function readSkills(dir: string): CardSkill[] {
       const description = asString(parsed.data.description)
       if (name !== undefined) skill.name = name
       if (description !== undefined) skill.description = description
+      const whenRaw = asString(parsed.data.when)
+      if (whenRaw !== undefined) {
+        const locator = '卡「' + cardName + '」skill「' + entry.name + '」'
+        const condition = parseWhen(whenRaw, locator)
+        if (condition instanceof Error) {
+          console.error(TAG + ' 条件注入 when 语法错误：' + condition.message + '（原文：' + whenRaw + '）')
+        } else {
+          const warning = whenPathWarning(condition, initialState, locator)
+          if (warning !== undefined) console.warn(TAG + ' ' + warning)
+          triggerDefs.push({
+            id: entry.name,
+            name: name ?? entry.name,
+            condition,
+            excerpt: parsed.body.trim().slice(0, TRIGGER_EXCERPT_CHARS),
+          })
+        }
+      }
     }
     out.push(skill)
   }
+  CARD_TRIGGERS.set(cardIdOf(dir), triggerDefs)
   return out
+}
+
+/** The card id a card directory stands for (its basename must be canonical). */
+function cardIdOf(dir: string): string {
+  return basename(dir)
 }
 
 /**
@@ -212,6 +280,7 @@ export function readCard(id: string, home: string = harnessHome()): CardPack | u
     try {
       const parsed = parseCardMarkdown(readFileSync(file, 'utf8'))
       if (parsed === undefined || parsed.meta.id !== id) continue
+      const initialState = readInitialState(dir)
       return {
         id,
         dir,
@@ -219,8 +288,8 @@ export function readCard(id: string, home: string = harnessHome()): CardPack | u
         persona: parsed.persona,
         worldCore: parsed.worldCore,
         openings: readOpenings(dir),
-        initialState: readInitialState(dir),
-        skills: readSkills(dir),
+        initialState,
+        skills: readSkills(dir, parsed.meta.name, initialState),
       }
     } catch {
       return undefined

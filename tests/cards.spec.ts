@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { listCards, mountSkillsForCard, parseCardMarkdown, parseFrontmatter, readCard } from '../src/cards.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { listCards, mountSkillsForCard, parseCardMarkdown, parseFrontmatter, readCard, triggersOfCard } from '../src/cards.ts'
 import { interpolateCardText } from '../src/card-types.ts'
 
 const SAMPLE = `---
@@ -110,7 +110,7 @@ describe('the shipped test card', () => {
     expect(pack?.initialState?.characters['米娅']?.affinity).toBe(6)
     expect(pack?.initialState?.flags['米娅已成为你的贴身女仆']).toBe(true)
     expect(pack?.skills.map((skill) => skill.id).sort()).toEqual([
-      'apartment', 'cecilia', 'family', 'mia', 'tone', 'world-setting',
+      'apartment', 'cecilia', 'family', 'mia', 'mia-intimate', 'mia-warm', 'tone', 'world-setting',
     ])
     expect(pack?.skills.every((skill) => typeof skill.name === 'string' && skill.name.length > 0)).toBe(true)
     expect(pack?.skills.every((skill) => typeof skill.description === 'string' && skill.description.length > 0)).toBe(true)
@@ -150,5 +150,97 @@ describe('the shipped test card', () => {
     expect(existsSync(join(target, 'skills', 'mia', 'SKILL.md'))).toBe(true)
     expect(existsSync(join(target, 'skills', 'tone', 'SKILL.md'))).toBe(true)
     expect(existsSync(join(target, 'skills', 'world-setting', 'SKILL.md'))).toBe(true)
+  })
+})
+
+describe('conditional-injection trigger loading (issue #16, T5)', () => {
+  let home: string
+  let previous: string | undefined
+  const cardDir = () => join(home, '.dsh-rrp', 'cards', 'trig-check')
+
+  beforeEach(() => {
+    previous = process.env.DSH_HOME
+    home = mkdtempSync(join(tmpdir(), 'dsh-rrp-trig-'))
+    process.env.DSH_HOME = home
+    mkdirSync(join(cardDir(), 'skills', 'good'), { recursive: true })
+    mkdirSync(join(cardDir(), 'skills', 'badwhen'), { recursive: true })
+    mkdirSync(join(cardDir(), 'skills', 'ghost'), { recursive: true })
+    writeFileSync(join(cardDir(), 'card.md'), '---\nid: trig-check\nname: 触发校验卡\n---\n\n核心。')
+    writeFileSync(join(cardDir(), 'state.json'), JSON.stringify({
+      characters: { 米娅: { affinity: 6 } },
+      inventory: {},
+      scene: {},
+      flags: {},
+      relations: [],
+    }))
+    writeFileSync(join(cardDir(), 'skills', 'good', 'SKILL.md'), '---\nname: 温热\ndescription: d\nwhen: characters.米娅.affinity >= 40\n---\n\n温热正文片段')
+    writeFileSync(join(cardDir(), 'skills', 'badwhen', 'SKILL.md'), '---\nname: 坏条件\ndescription: d\nwhen: characters.米娅.affinity >= 亲密\n---\n\n坏正文')
+    writeFileSync(join(cardDir(), 'skills', 'ghost', 'SKILL.md'), '---\nname: 幽灵\ndescription: d\nwhen: characters.幽灵.affinity >= 1\n---\n\n幽灵正文')
+  })
+
+  afterEach(() => {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  it('registers valid triggers; logs syntax errors and unknown paths with locators', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const pack = readCard('trig-check')
+      // All three skills still load; only the valid one registers.
+      expect(pack?.skills.map((skill) => skill.id).sort()).toEqual(['badwhen', 'ghost', 'good'])
+
+      const triggers = triggersOfCard('trig-check')
+      // good registers; badwhen is dropped (syntax error); ghost still loads
+      // (the missing-path warning never blocks registration).
+      expect(triggers.map((def) => def.id)).toEqual(['ghost', 'good'])
+      const good = triggers.find((def) => def.id === 'good')
+      expect(good?.name).toBe('温热')
+      expect(good?.condition).toMatchObject({ op: '>=', value: 40 })
+      expect(good?.excerpt).toBe('温热正文片段')
+
+      expect(errorSpy).toHaveBeenCalledTimes(1)
+      const err = String(errorSpy.mock.calls[0]?.[0])
+      expect(err).toContain('触发校验卡')
+      expect(err).toContain('badwhen')
+      expect(err).toContain('characters.米娅.affinity >= 亲密')
+
+      expect(warnSpy).toHaveBeenCalledTimes(1)
+      const warn = String(warnSpy.mock.calls[0]?.[0])
+      expect(warn).toContain('触发校验卡')
+      expect(warn).toContain('ghost')
+      expect(warn).toContain('幽灵')
+    } finally {
+      errorSpy.mockRestore()
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('skips the path check when the card has no state.json', () => {
+    rmSync(join(cardDir(), 'state.json'))
+    writeFileSync(join(cardDir(), 'skills', 'ghost', 'SKILL.md'), '---\nname: 幽灵\ndescription: d\nwhen: characters.幽灵.affinity >= 1\n---\n\n幽灵正文')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      readCard('trig-check')
+      const ghost = triggersOfCard('trig-check').find((def) => def.id === 'ghost')
+      expect(ghost).toBeDefined()
+      const pathWarnings = warnSpy.mock.calls.filter((call) => String(call[0]).includes('永远求值为 false'))
+      expect(pathWarnings).toHaveLength(0)
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('the shipped maid-heiress card registers both staged mia triggers', () => {
+    readCard('maid-heiress')
+    const triggers = triggersOfCard('maid-heiress')
+    expect(triggers.map((def) => def.id).sort()).toEqual(['mia-intimate', 'mia-warm'])
+    expect(triggers.find((def) => def.id === 'mia-warm')?.condition).toMatchObject({
+      path: { kind: 'characters', name: '米娅', field: 'affinity' }, op: '>=', value: 40,
+    })
+    expect(triggers.find((def) => def.id === 'mia-intimate')?.condition).toMatchObject({ op: '>=', value: 80 })
+    expect(triggers.every((def) => def.excerpt.length > 0)).toBe(true)
   })
 })

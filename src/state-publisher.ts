@@ -16,7 +16,9 @@
  * deduplicated, and hidden settings/lore operations share the facts event.
  */
 import { randomUUID } from 'node:crypto'
-import { renderCardContext, type CardContext } from './card-types.ts'
+import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
+import { hitSet, renderTriggerBlock, type TriggerHit } from './lore-condition.ts'
+import { triggersOfCard } from './cards.ts'
 import { SUMMARY_KEY, renderMacroSummary, type MacroSummary } from './macro-summary.ts'
 import { RRP_SETTINGS_KEY, rrpSettingsOf, type RrpSettings } from './settings.ts'
 import type { LoreChange } from './lore-state.ts'
@@ -54,6 +56,8 @@ export interface RrpStatePatch {
 interface Retained {
   cardFingerprint?: string
   factsFingerprint?: string
+  /** Conditional-injection hits at the last publish (revoke diff baseline). */
+  triggerHits?: TriggerHit[]
 }
 
 /** Per-session retained lanes. Bounded by the number of live sessions. */
@@ -131,6 +135,23 @@ export function publishState(session: StateSession, projections: StateProjection
       const parts: string[] = []
       if (summary !== null && summary !== undefined) parts.push(renderMacroSummary(summary))
       if (state !== undefined) parts.push(renderWorldState(state))
+      // Conditional injection (issue #16): evaluate the card's skill triggers
+      // against the post-change state. The block is keyed only by the hit SET,
+      // so within-band state wobble renders byte-identical text and the
+      // fingerprint below suppresses the append; a set change (incl. shrinking
+      // to empty) renders a new block with the revocation sentence.
+      if (state !== undefined) {
+        const activeCard = card ?? (projections.stateOf(session, CARD_KEY) as CardContext | null | undefined) ?? null
+        if (activeCard !== null) {
+          const triggers = triggersOfCard(activeCard.id)
+          if (triggers.length > 0) {
+            const prevHits = retained.triggerHits ?? []
+            const hits = hitSet(triggers, state)
+            retained.triggerHits = hits
+            if (hits.length > 0 || prevHits.length > 0) parts.push(renderTriggerBlock(hits, prevHits))
+          }
+        }
+      }
       const factsText = parts.join('\n\n')
       const fingerprint = factsFingerprint(factsText, settings)
       if (patch.sediment !== undefined || retained.factsFingerprint !== fingerprint) {

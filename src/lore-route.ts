@@ -16,10 +16,11 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
-import { readCard } from './cards.ts'
+import { readCard, triggersOfCard } from './cards.ts'
 import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
 import { transcriptOf } from './chronicler.ts'
 import { SCRIBE_SYSTEM_PROMPT, buildScribePrompt, parseScribeReply } from './agents/scribe.ts'
+import { evalCondition, hitSet } from './lore-condition.ts'
 import { belongsToRpPreset } from './preset-id.ts'
 import { ensureLoreArmed, invalidateLore } from './lore-runtime.ts'
 import {
@@ -156,6 +157,27 @@ function loreView(skill: LoreEntry): { name: string; description: string; bytes:
     description: skill.description,
     bytes: Buffer.byteLength(skill.body, 'utf8'),
     updatedAt: '',
+  }
+}
+
+/**
+ * Conditional-injection view (issue #16): every trigger of the session's card
+ * evaluated against the current state, plus the hit set's total injected
+ * characters. No card / no state → empty view, never an error.
+ */
+function triggerView(
+  projections: ProjectionsService,
+  session: SessionLike,
+): { triggers: Array<{ name: string; active: boolean }>; injectedChars: number } {
+  const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
+  const state = projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined
+  if (card === null || card === undefined || state === undefined) {
+    return { triggers: [], injectedChars: 0 }
+  }
+  const triggers = triggersOfCard(card.id)
+  return {
+    triggers: triggers.map((def) => ({ name: def.name, active: evalCondition(def.condition, state) })),
+    injectedChars: hitSet(triggers, state).reduce((sum, hit) => sum + hit.excerpt.length, 0),
   }
 }
 
@@ -358,6 +380,7 @@ export function registerLoreRoute(ctx: Context): void {
               skills: currentLore(projections, session).map(loreView),
               pending: PENDING.get(sessionId) ?? null,
               drafting: DRAFTING.has(sessionId),
+              ...triggerView(projections, session),
             })
             return
           }

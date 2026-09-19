@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { CARD_KEY, renderCardContext, type CardContext } from '../src/card-types.ts'
+import { seedCardTriggersForTesting } from '../src/cards.ts'
+import { parseWhen, renderTriggerBlock, type TriggerDef, type WhenCondition } from '../src/lore-condition.ts'
 import { rrpStateMessage, type RrpStatePayload } from '../src/state-payload.ts'
 import { publishState } from '../src/state-publisher.ts'
 import { RRP_SETTINGS_KEY } from '../src/settings.ts'
-import { emptyWorldState, renderWorldState } from '../src/world-state.ts'
+import { emptyWorldState, renderWorldState, type WorldState } from '../src/world-state.ts'
 import { transcriptProjections } from './stubs/transcript-projections.ts'
 
 const CARD: CardContext = { id: 'c1', name: '测试卡', persona: 'P', worldCore: 'W' }
@@ -22,6 +24,14 @@ function fakeSession(id: string) {
   return { session, appended }
 }
 
+/** Payload of an appended fake-session entry. */
+const payloadOf = (data: unknown): RrpStatePayload | undefined =>
+  (data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp
+
+/** Model-facing text of an appended entry. */
+const textOf = (data: unknown): string =>
+  (data as { content: Array<{ text: string }> }).content[0]?.text ?? ''
+
 /** A log event carrying our structured payload (source.rrp) and its rendered text. */
 const owned = (seq: number, text: string, payload: RrpStatePayload) => ({
   seq,
@@ -29,9 +39,26 @@ const owned = (seq: number, text: string, payload: RrpStatePayload) => ({
   data: rrpStateMessage('m' + seq, text, payload),
 })
 
-/** Payload of an appended fake-session entry. */
-const payloadOf = (data: unknown): RrpStatePayload | undefined =>
-  (data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp
+/** Parse a when source, asserting success. */
+function mustCond(src: string): WhenCondition {
+  const parsed = parseWhen(src, '测试')
+  if (parsed instanceof Error) throw parsed
+  return parsed
+}
+
+const TRIGGER_CARD: CardContext = { id: 'trig-card', name: '触发卡', persona: 'P', worldCore: 'W' }
+const WARM: TriggerDef = { id: 'mia-warm', name: '温热', condition: mustCond('characters.米娅.affinity >= 40'), excerpt: '温热片段' }
+const INTIMATE: TriggerDef = { id: 'mia-intimate', name: '亲密', condition: mustCond('characters.米娅.affinity >= 80'), excerpt: '亲密片段' }
+
+const withAffinity = (value: number): WorldState => ({
+  ...emptyWorldState(),
+  characters: { 米娅: { affinity: value } },
+})
+
+const BLOCK_MARK = '【条件注入 · 裁决块】'
+
+/** The trigger-block substring of a facts text (the block is always the tail). */
+const blockOf = (text: string): string => text.slice(text.indexOf(BLOCK_MARK))
 
 describe('durable state publisher', () => {
   it('publishes the card once and the facts once on the first pass', () => {
@@ -191,5 +218,86 @@ describe('durable state publisher', () => {
     publishState(session, { stateOf: () => undefined }, { summary: null })
     expect(appended).toHaveLength(1)
     expect(payloadOf(appended[0]?.data)?.summary).toBeNull()
+  })
+})
+
+describe('conditional injection in the facts lane (issue #16)', () => {
+  it('injects nothing while no trigger band is crossed', () => {
+    seedCardTriggersForTesting(TRIGGER_CARD.id, [WARM, INTIMATE])
+    const { session, appended } = fakeSession('sp-trig-below')
+    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(6) })
+    expect(appended).toHaveLength(2)
+    expect(textOf(appended[1]?.data)).not.toContain(BLOCK_MARK)
+  })
+
+  it('publishes the block once when the band is crossed (40), then stays byte-identical within the band', () => {
+    seedCardTriggersForTesting(TRIGGER_CARD.id, [WARM, INTIMATE])
+    const { session, appended } = fakeSession('sp-trig-band')
+    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(39) })
+    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(40) })
+    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(79) })
+    expect(appended).toHaveLength(4) // card + facts(39) + facts(40) + facts(79)
+
+    const at40 = textOf(appended[2]?.data)
+    const at79 = textOf(appended[3]?.data)
+    expect(at40).toContain(BLOCK_MARK)
+    expect(at40).toContain('温热片段')
+    expect(at40).not.toContain('亲密片段')
+    // Within-band wobble: the state re-render differs, but the injected block
+    // is keyed only by the hit set and must be byte-identical.
+    expect(blockOf(at79)).toBe(blockOf(at40))
+  })
+
+  it('crossing into the 80 band publishes a new block listing both hits, with no revocation', () => {
+    seedCardTriggersForTesting(TRIGGER_CARD.id, [WARM, INTIMATE])
+    const { session, appended } = fakeSession('sp-trig-80')
+    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(40) })
+    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(81) })
+    const block = blockOf(textOf(appended[2]?.data))
+    expect(block).toContain('亲密片段')
+    expect(block).toContain('温热片段')
+    // Growth, not shrink: no revocation sentence.
+    expect(block).not.toContain('现已失效')
+  })
+
+  it('dropping below the band publishes a block with the revocation sentence', () => {
+    seedCardTriggersForTesting(TRIGGER_CARD.id, [WARM, INTIMATE])
+    const { session, appended } = fakeSession('sp-trig-revoke')
+    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(81) })
+    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(20) })
+    const block = blockOf(textOf(appended[2]?.data))
+    expect(block).toContain('（无）')
+    expect(block).toContain('以下条目现已失效，立即停止使用其内容——亲密、温热')
+  })
+
+  it('re-publishing the same state never duplicates the block', () => {
+    seedCardTriggersForTesting(TRIGGER_CARD.id, [WARM, INTIMATE])
+    const { session, appended } = fakeSession('sp-trig-dedup')
+    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(40) })
+    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(40) })
+    expect(appended).toHaveLength(2)
+  })
+
+  it('hit entries are listed in skill-id lexicographic order', () => {
+    seedCardTriggersForTesting(TRIGGER_CARD.id, [INTIMATE, WARM])
+    const { session, appended } = fakeSession('sp-trig-order')
+    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(90) })
+    const block = blockOf(textOf(appended[1]?.data))
+    expect(block.indexOf('1. 亲密')).not.toBe(-1)
+    expect(block.indexOf('1. 亲密')).toBeLessThan(block.indexOf('2. 温热'))
+  })
+
+  it('the published block matches renderTriggerBlock byte for byte', () => {
+    seedCardTriggersForTesting(TRIGGER_CARD.id, [WARM, INTIMATE])
+    const { session, appended } = fakeSession('sp-trig-exact')
+    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(81) })
+    const expected = renderTriggerBlock(
+      [
+        { id: 'mia-intimate', name: '亲密', excerpt: '亲密片段' },
+        { id: 'mia-warm', name: '温热', excerpt: '温热片段' },
+      ],
+      [],
+    )
+    expect(blockOf(textOf(appended[1]?.data))).toBe(expected)
   })
 })

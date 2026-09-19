@@ -58,6 +58,18 @@ describe('promptBudgetReport', () => {
     expect(report.sections.map((section) => section.id)).toEqual(['summary'])
   })
 
+  it('adds the conditional-injection segment only for a positive injectedChars', () => {
+    const absent = promptBudgetReport({ card: null, summary: undefined, state: undefined })
+    expect(absent.sections).toEqual([])
+
+    const zero = promptBudgetReport({ card: null, summary: undefined, state: undefined, injectedChars: 0 })
+    expect(zero.sections).toEqual([])
+
+    const sized = promptBudgetReport({ card: null, summary: undefined, state: undefined, injectedChars: 320 })
+    expect(sized.sections).toEqual([{ id: 'triggers', chars: 320, tokens: 100 }])
+    expect(sized.totalTokens).toBe(100)
+  })
+
   it('levels at the 60% / 90% thresholds', () => {
     const justBelowWarn = Math.floor(PROMPT_BUDGET_WINDOW_TOKENS * 0.6) - 1 // 59.9%
     const atWarn = Math.floor(PROMPT_BUDGET_WINDOW_TOKENS * 0.6) // 60.0%

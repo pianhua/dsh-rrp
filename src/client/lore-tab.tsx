@@ -59,6 +59,9 @@ interface SedList {
   skills: SedSkill[]
   pending: SedDraft | null
   drafting: boolean
+  /** Card conditional-injection triggers (issue #16); absent on old hosts. */
+  triggers?: Array<{ name: string; active: boolean }>
+  injectedChars?: number
 }
 
 /** Props the slot framework merges. */
@@ -141,6 +144,7 @@ function LorePanel(props: LorePanelProps): ReactNode {
   const skills = projected !== undefined ? skillRows(projected) : fetched?.skills ?? []
   const pending = fetched?.pending ?? null
   const drafting = scribeRunning ?? fetched?.drafting ?? false
+  const triggers = fetched?.triggers ?? []
 
   const refresh = (): void => {
     if (sessionId === undefined) return
@@ -288,6 +292,21 @@ function LorePanel(props: LorePanelProps): ReactNode {
               </Tooltip>
             </div>
             {skill.description.length === 0 ? null : <div style={S.cardDesc}>{skill.description}</div>}
+          </div>
+        ))}
+
+        <div style={{ ...S.section, marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--dsw-alias-border-l1)' }}>
+          <span style={S.sectionTitle}>{t('lore.triggers')}</span>
+          <Pill>{String(triggers.length)}</Pill>
+        </div>
+        {triggers.length === 0 ? <div style={S.empty}>{t('lore.triggersEmpty')}</div> : null}
+        {triggers.map((trigger) => (
+          <div key={trigger.name} style={S.card}>
+            <div style={S.cardHead}>
+              <StateDot state={trigger.active ? 'done' : 'warning'} />
+              <span style={S.cardName}>{trigger.name}</span>
+              <Pill active={trigger.active}>{trigger.active ? t('lore.triggerActive') : t('lore.triggerInactive')}</Pill>
+            </div>
           </div>
         ))}
 
