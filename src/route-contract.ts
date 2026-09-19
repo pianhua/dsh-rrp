@@ -11,7 +11,7 @@
  */
 import type { CardContext, CardMeta, CardPack } from './card-types.ts'
 import type { WorldState } from './world-state.ts'
-import type { WorldlineTurnDigest } from './worldline-digest.ts'
+import type { WorldlineTree } from './worldline-tree.ts'
 
 // ── Paths (host registers these; clients fetch these) ──────────────────────
 export const RRP_ROUTES = {
@@ -23,7 +23,7 @@ export const RRP_ROUTES = {
   lore: '/dsh-rrp/lore',
   copilot: '/dsh-rrp/copilot',
   copilotUndo: '/dsh-rrp/copilot/undo',
-  worldlineFacts: '/dsh-rrp/worldlines/facts',
+  worldlineTree: '/dsh-rrp/worldlines/tree',
   worldlineHidden: '/dsh-rrp/worldlines/hidden',
 } as const
 
@@ -126,12 +126,14 @@ export interface LoreDeleteResponse {
 }
 
 // ── /dsh-rrp/worldlines (issue #28 save map) ───────────────────────────────
-export interface WorldlineFactsResponse {
-  cardId: string
-  cardName: string
-  /** How many of this session's turns were inherited from the fork parent. */
-  seedTurns: number
-  turns: WorldlineTurnDigest[]
+/**
+ * The whole map in one shot, folded server-side over LIVE sessions only
+ * (the host keeps unloaded sessions off the service; opening one from the
+ * host roster brings it into the map). Node titles arrive empty and are
+ * filled client-side from the host's own session list display names.
+ */
+export interface WorldlineTreeResponse {
+  trees: WorldlineTree[]
 }
 
 export interface WorldlineHiddenResponse {

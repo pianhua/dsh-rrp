@@ -21,13 +21,13 @@ function stateEvent(seq: number, worldState: Partial<WorldState>) {
 }
 
 describe('worldline digest fold (issue #28)', () => {
-  it('opens a save slot per real player message and fills prose once', () => {
+  it('opens a save slot per real player message; the LAST assistant text wins the prose', () => {
     let state = apply(emptyWorldlineDigest(), player(1, '我推门而入'))
-    state = apply(state, assistant(2, '门轴吱呀。'))
-    state = apply(state, assistant(3, '后续步骤不覆盖。'))
+    state = apply(state, assistant(2, 'The player pushes the door open...'))
+    state = apply(state, assistant(3, '门轴吱呀一声。'))
     state = apply(state, player(4, '我环顾四周'))
     expect(state.turns.map((entry) => [entry.turn, entry.seq, entry.player, entry.prose])).toEqual([
-      [0, 1, '我推门而入', '门轴吱呀。'],
+      [0, 1, '我推门而入', '门轴吱呀一声。'],
       [1, 4, '我环顾四周', ''],
     ])
   })

@@ -45,12 +45,17 @@ const summaryPayloadSchema = z.object({
   conflict: z.string().optional(),
 })
 
-/** Text of either message shape: user data IS the message; assistant wraps it in `message`. */
-function textOf(event: { data?: unknown }): string {
+/** Text blocks of either message shape: user data IS the message; assistant wraps it in `message`. */
+function blocksOf(event: { data?: unknown }): string[] {
   const data = event.data as { content?: unknown; message?: { content?: unknown } } | undefined
   const blocks = Array.isArray(data?.content) ? data.content : Array.isArray(data?.message?.content) ? data.message?.content : null
-  if (blocks === null) return ''
-  return blocks.map((block) => (block as { text?: unknown }).text ?? '').join('')
+  if (blocks === null) return []
+  return blocks
+    .map((block) => {
+      const text = (block as { text?: unknown })?.text
+      return typeof text === 'string' ? text : ''
+    })
+    .filter((text) => text.length > 0)
 }
 
 /** True for plugin-issued messages WITHOUT an rrp payload (notices, fallbacks). */
@@ -64,8 +69,9 @@ function badgeFromState(raw: unknown, base: WorldlineBadge | undefined): Worldli
   const parsed = worldStatePayloadSchema.safeParse(raw)
   if (!parsed.success) return base
   const next: WorldlineBadge = { ...base }
-  const location = parsed.data.scene?.location
-  const time = parsed.data.scene?.time
+  const scene = parsed.data.scene as Record<string, string | undefined> | undefined
+  const location = scene?.location
+  const time = scene?.time
   if (typeof location === 'string' && location.length > 0) next.location = location
   if (typeof time === 'string' && time.length > 0) next.time = time
   if (parsed.data.characters !== undefined) {
@@ -82,7 +88,10 @@ function badgeFromState(raw: unknown, base: WorldlineBadge | undefined): Worldli
 export const worldlineDigestProjection = {
   key: WORLDLINE_DIGEST_KEY,
   stateSchema: digestSchema,
-  stateVersion: 1,
+  // v3: the last assistant text of a turn wins the prose (English planning
+  // messages precede the finished prose). v2: system-reminder user messages
+  // no longer open a slot; prose takes the final text block.
+  stateVersion: 3,
   init: (): WorldlineDigest => emptyWorldlineDigest(),
   apply: (state: WorldlineDigest, event: { type: string; data?: unknown; seq?: number }): WorldlineDigest => {
     if (event.type !== 'user/message' && event.type !== 'assistant/message') return state
@@ -111,17 +120,22 @@ export const worldlineDigestProjection = {
     }
 
     if (isPluginNotice(event)) return state
-    const text = textOf(event).trim()
+    const blocks = blocksOf(event)
     if (event.type === 'assistant/message') {
-      // The turn's prose opening; later assistant steps never overwrite it.
+      // The turn's prose is the LAST assistant text: models may emit an
+      // English planning message (or block) before the finished Chinese prose,
+      // and a save slot must show the story, not the sketch.
+      const text = (blocks[blocks.length - 1] ?? '').trim()
       if (text.length === 0 || state.turns.length === 0) return state
       const last = state.turns[state.turns.length - 1]!
-      if (last.prose.length > 0) return state
+      if (last.prose === text.slice(0, PROSE_CHARS)) return state
       const turns = state.turns.map((entry) => (entry === last ? { ...entry, prose: text.slice(0, PROSE_CHARS) } : entry))
       return { ...state, turns }
     }
-    // A real player message opens the next save slot.
-    if (text.length === 0) return state
+    // A real player message opens the next save slot. Host-injected
+    // system-reminders ride user messages too but are never the player's turn.
+    const text = blocks.join('\n').trim()
+    if (text.length === 0 || text.startsWith('<system-reminder>')) return state
     const turns = [...state.turns, {
       turn: state.turns.length === 0 ? 0 : (state.turns[state.turns.length - 1]?.turn ?? -1) + 1,
       seq,

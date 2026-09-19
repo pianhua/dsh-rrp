@@ -1,22 +1,25 @@
 /**
- * dsh-rrp — the worldline map read/write routes (issue #28).
+ * dsh-rrp — the worldline map route (issue #28).
  *
- * Two small endpoints feed the save map: per-session turn FACTS (digest +
- * seed-turn conversion, so the client can fold the tree with the host's own
- * lineage and never scan logs), and the soft-hide ledger. The tree fold
- * itself lives client-side (src/worldline-tree.ts is shared vocabulary);
- * lineage (parentId/title) comes from the host's own sessions list, which
- * is the most Host-First source there is.
+ * GET /dsh-rrp/worldlines/tree folds the WHOLE map server-side in one shot:
+ * the host's live sessions (`sessions.list()` — exactly the sessions the
+ * player can currently see loaded, and the only ones whose projections are
+ * warm), each session's card ownership + turn digest, and the host's own
+ * fork stamps for lineage. The client decorates node titles from its
+ * session list and renders; it never fans out one request per session.
+ *
+ * POST/GET /dsh-rrp/worldlines/hidden serve the soft-archive ledger —
+ * hiding prunes the map only, never the host session.
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { CARD_KEY, type CardContext } from './card-types.ts'
-import { belongsToRpPreset } from './preset-id.ts'
-import { RRP_ROUTES, type WorldlineFactsResponse, type WorldlineHiddenResponse } from './route-contract.ts'
+import { RRP_ROUTES, type WorldlineTreeResponse } from './route-contract.ts'
 import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from './worldline-digest.ts'
+import { foldWorldlineTrees, type WorldlineSessionFact, type WorldlineTree } from './worldline-tree.ts'
 import { openWorldlineStore, type WorldlineStoreHandle } from './worldline-store.ts'
 
 const TAG = '[dsh-rrp]'
-const FACTS_PATH = RRP_ROUTES.worldlineFacts
+const TREE_PATH = RRP_ROUTES.worldlineTree
 const HIDDEN_PATH = RRP_ROUTES.worldlineHidden
 
 interface SessionLike {
@@ -25,6 +28,7 @@ interface SessionLike {
 }
 interface SessionsService {
   get(id: string): SessionLike | undefined
+  list?(): SessionLike[]
 }
 interface ProjectionsService {
   stateOf(session: unknown, key: string): unknown
@@ -64,10 +68,35 @@ async function readBody(req: RequestLike): Promise<string> {
   return text
 }
 
-/** RP-family guard shared with every write/read lane; unknown presets pass. */
-function rpSession(projections: ProjectionsService, session: SessionLike): boolean {
-  const preset = projections.stateOf(session, 'agentPreset')
-  return typeof preset !== 'string' || belongsToRpPreset(preset)
+/** Fold every live, card-owned session into the worldline forest. */
+function collectFacts(sessions: SessionsService, projections: ProjectionsService): WorldlineSessionFact[] {
+  const facts: WorldlineSessionFact[] = []
+  for (const session of sessions.list?.() ?? []) {
+    const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
+    if (card === null || card === undefined || card.id.length === 0) continue
+    const digest = (projections.stateOf(session, WORLDLINE_DIGEST_KEY) as WorldlineDigest | undefined) ?? { turns: [] }
+    // The fork cut is stamped in EVENTS; the digest carries each turn's seq,
+    // so seed turns are simply the folded turns before the cut.
+    const inherited = Number(session.header?.inheritedEventCount ?? 0)
+    const seedTurns = digest.turns.filter((entry) => entry.seq < inherited).length
+    const parentId = session.header?.meta?.parentSession
+    facts.push({
+      id: session.id,
+      cardId: card.id,
+      cardName: card.name,
+      title: '',
+      ...(parentId === undefined ? {} : { parentId }),
+      seedTurns,
+      turns: digest.turns.map((entry) => ({
+        turn: entry.turn,
+        seq: entry.seq,
+        playerExcerpt: entry.player,
+        proseExcerpt: entry.prose,
+        ...(entry.badge === undefined ? {} : { badge: entry.badge }),
+      })),
+    })
+  }
+  return facts
 }
 
 /**
@@ -101,36 +130,21 @@ export function registerWorldlineRoute(ctx: Context): void {
       }
     }
 
-    const disposeFacts = webServer.register({
+    const disposeTree = webServer.register({
       kind: 'exact',
-      path: FACTS_PATH,
-      handler: (req, res) => {
+      path: TREE_PATH,
+      handler: async (req, res) => {
         if (req.method !== undefined && req.method !== 'GET') {
           sendJson(res, 405, { error: 'method not allowed' })
           return
         }
-        const sessionId = new URL(req.url ?? '', 'http://localhost').searchParams.get('sessionId') ?? ''
-        const session = sessions.get(sessionId)
-        if (session === undefined) {
-          sendJson(res, 404, { error: 'unknown session' })
+        const store = await takeStore()
+        if (store === undefined) {
+          sendJson(res, 503, { error: 'worldline archive unavailable' })
           return
         }
-        if (!rpSession(projections, session)) {
-          sendJson(res, 403, { error: 'not an RP session' })
-          return
-        }
-        const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
-        const digest = (projections.stateOf(session, WORLDLINE_DIGEST_KEY) as WorldlineDigest | undefined) ?? { turns: [] }
-        // The host stamps the inherited prefix in EVENTS; the digest carries
-        // each turn's seq, so seed turns are simply the turns before the cut.
-        const inherited = Number(session.header?.inheritedEventCount ?? 0)
-        const seedTurns = digest.turns.filter((entry) => entry.seq < inherited).length
-        const body: WorldlineFactsResponse = {
-          cardId: card?.id ?? '',
-          cardName: card?.name ?? '',
-          seedTurns,
-          turns: digest.turns,
-        }
+        const trees: WorldlineTree[] = foldWorldlineTrees(collectFacts(sessions, projections), store.listHidden())
+        const body: WorldlineTreeResponse = { trees }
         sendJson(res, 200, body)
       },
     })
@@ -145,8 +159,7 @@ export function registerWorldlineRoute(ctx: Context): void {
           return
         }
         if (req.method === 'GET') {
-          const body: WorldlineHiddenResponse = { hidden: store.listHidden() }
-          sendJson(res, 200, body)
+          sendJson(res, 200, { hidden: store.listHidden() })
           return
         }
         if (req.method !== 'POST') {
@@ -170,10 +183,10 @@ export function registerWorldlineRoute(ctx: Context): void {
       },
     })
 
-    console.log(TAG + ' worldline routes armed at ' + FACTS_PATH + ' and ' + HIDDEN_PATH)
+    console.log(TAG + ' worldline routes armed at ' + TREE_PATH + ' and ' + HIDDEN_PATH)
     return () => {
       disposed = true
-      disposeFacts()
+      disposeTree()
       disposeHidden()
       void storeReady.then((h) => h.close()).catch(() => {})
     }

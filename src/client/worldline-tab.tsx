@@ -11,8 +11,8 @@
  */
 import { Button, IconLoadingOutline16, IconRefreshOutline16, IconSparkle16, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
-import { RRP_ROUTES, type WorldlineFactsResponse, type WorldlineHiddenResponse } from '../route-contract.ts'
-import { foldWorldlineTrees, type WorldlineNode, type WorldlineSessionFact, type WorldlineTree } from '../worldline-tree.ts'
+import { RRP_ROUTES, type WorldlineTreeResponse } from '../route-contract.ts'
+import type { WorldlineNode, WorldlineTree } from '../worldline-tree.ts'
 import type { RrpClientContext } from './context-types.ts'
 
 type Translate = (key: string) => string
@@ -25,7 +25,7 @@ export interface WorldlineApi {
   open(sessionId: string): void
   /** Fork from one turn's player-message seq and open the child (重roll). */
   reroll(sessionId: string, atSeq: number, cardName: string): Promise<void>
-  /** Soft-archive a line and its subtree (收起). */
+  /** Soft-archive a line and its subtree (收起); returns when persisted. */
   hide(sessionId: string): Promise<void>
   /** Subscribe to roster churn (a new fork appearing refreshes the map). */
   subscribe(listener: () => void): () => void
@@ -38,8 +38,8 @@ interface WorldlinePanelProps {
 }
 
 /** One save slot. */
-function Slot(props: { node: WorldlineNode; currentId?: string; api: WorldlineApi; t: Translate; branchLabel?: string }): ReactNode {
-  const { node, currentId, api, t } = props
+function Slot(props: { node: WorldlineNode; cardName: string; currentId?: string; api: WorldlineApi; t: Translate; onHid: () => void; branchLabel?: string }): ReactNode {
+  const { node, cardName, currentId, api, t, onHid } = props
   const badge = node.badge
   const isCurrent = node.sessionId === currentId
   return (
@@ -57,23 +57,23 @@ function Slot(props: { node: WorldlineNode; currentId?: string; api: WorldlineAp
       )}
       <div style={S.slotActions}>
         <Button size="sm" variant="ghost" onClick={() => { api.open(node.sessionId) }}>{t('worldline.load')}</Button>
-        <Button size="sm" variant="ghost" onClick={() => { void api.reroll(node.sessionId, node.seq, node.sessionTitle) }}>{t('worldline.reroll')}</Button>
-        <Button size="sm" variant="ghost" onClick={() => { void api.hide(node.sessionId) }}>{t('worldline.hide')}</Button>
+        <Button size="sm" variant="ghost" onClick={() => { void api.reroll(node.sessionId, node.seq, cardName) }}>{t('worldline.reroll')}</Button>
+        <Button size="sm" variant="ghost" onClick={() => { void api.hide(node.sessionId).then(onHid) }}>{t('worldline.hide')}</Button>
       </div>
     </div>
   )
 }
 
 /** Recursive tree rows: the first child continues the line, later children are branches. */
-function Branch(props: { node: WorldlineNode; depth: number; currentId?: string; api: WorldlineApi; t: Translate; branchLabel?: string }): ReactNode {
-  const { node, depth, api } = props
+function Branch(props: { node: WorldlineNode; cardName: string; depth: number; currentId?: string; api: WorldlineApi; t: Translate; onHid: () => void; branchLabel?: string }): ReactNode {
+  const { node, cardName, depth, api, onHid } = props
   const [continuation, ...branches] = node.children
   return (
     <div style={{ marginLeft: depth === 0 ? 0 : 18, borderLeft: depth === 0 ? 'none' : '1px solid var(--dsw-alias-border-l1)', paddingLeft: depth === 0 ? 0 : 10 }}>
-      <Slot node={node} currentId={props.currentId} api={api} t={props.t} branchLabel={props.branchLabel} />
-      {continuation === undefined ? null : <Branch node={continuation} depth={depth} currentId={props.currentId} api={api} t={props.t} />}
+      <Slot node={node} cardName={cardName} currentId={props.currentId} api={api} t={props.t} onHid={onHid} branchLabel={props.branchLabel} />
+      {continuation === undefined ? null : <Branch node={continuation} cardName={cardName} depth={depth} currentId={props.currentId} api={api} t={props.t} onHid={onHid} />}
       {branches.map((child) => (
-        <Branch key={child.key} node={child} depth={depth + 1} currentId={props.currentId} api={api} t={props.t} branchLabel={child.sessionTitle} />
+        <Branch key={child.key} node={child} cardName={cardName} depth={depth + 1} currentId={props.currentId} api={api} t={props.t} onHid={onHid} branchLabel={child.sessionTitle} />
       ))}
     </div>
   )
@@ -120,7 +120,7 @@ function WorldlinePanel(props: WorldlinePanelProps): ReactNode {
           <section key={tree.cardId} style={S.cardGroup}>
             <div style={S.cardTitle}>{tree.cardName}</div>
             {tree.roots.map((root) => (
-              <Branch key={root.key} node={root} depth={0} currentId={props.sessionId} api={api} t={t} branchLabel={root.sessionTitle} />
+              <Branch key={root.key} node={root} cardName={tree.cardName} depth={0} currentId={props.sessionId} api={api} t={t} onHid={refresh} branchLabel={root.sessionTitle} />
             ))}
           </section>
         ))}
@@ -166,64 +166,51 @@ export function registerWorldlineTab(ctx: RrpClientContext): void {
 
   const api: WorldlineApi = {
     async loadTrees() {
-      const list = sessions?.list?.getSnapshot()
-      if (list === undefined) return []
-      let hidden: string[] = []
-      try {
-        const response = await fetch(RRP_ROUTES.worldlineHidden)
-        if (response.ok) hidden = (await response.json() as WorldlineHiddenResponse).hidden
-      } catch {
-        /* the map still renders unfiltered if the ledger is unreachable */
-      }
-      const facts: WorldlineSessionFact[] = []
-      for (const id of list.ids) {
-        const row = list.byId[id]
-        if (row === undefined || row.blank === true) continue
-        try {
-          const response = await fetch(RRP_ROUTES.worldlineFacts + '?sessionId=' + encodeURIComponent(id))
-          if (!response.ok) continue
-          const body = await response.json() as WorldlineFactsResponse
-          if (body.cardId.length === 0) continue
-          facts.push({
-            id,
-            cardId: body.cardId,
-            cardName: body.cardName,
-            title: row.displayTitle ?? id,
-            ...(row.parentId === undefined ? {} : { parentId: row.parentId }),
-            seedTurns: body.seedTurns,
-            turns: body.turns.map((entry) => ({
-              turn: entry.turn,
-              seq: entry.seq,
-              playerExcerpt: entry.player,
-              proseExcerpt: entry.prose,
-              ...(entry.badge === undefined ? {} : { badge: entry.badge }),
-            })),
-          })
-        } catch {
-          /* one unreadable session must not sink the whole map */
+      const response = await fetch(RRP_ROUTES.worldlineTree)
+      if (!response.ok) return []
+      const body = await response.json() as WorldlineTreeResponse
+      // Node titles are the host roster's business: decorate from its own list.
+      const byId = sessions?.list?.getSnapshot().byId ?? {}
+      const title = (id: string): string => byId[id]?.displayTitle ?? id
+      const fill = (nodes: WorldlineNode[]): void => {
+        for (const node of nodes) {
+          node.sessionTitle = title(node.sessionId)
+          fill(node.children)
         }
       }
-      return foldWorldlineTrees(facts, hidden)
+      for (const tree of body.trees) fill(tree.roots)
+      return body.trees
     },
     open(sessionId) {
       openSession(sessionId)
     },
     async reroll(sessionId, atSeq, cardName) {
       if (sessions?.fork === undefined) return
-      const childId = await sessions.fork({ sessionId, atSeq })
-      // Name the new line beyond the card's existing roster (卡名·线N).
+      const childId = await sessions.fork({ sessionId, atSeq, increaseTitle: true })
+      // Name the new line 「卡名·线N」 once the child is addressable (the
+      // roster needs a beat to catch up after fork; increaseTitle is the
+      // fallback title if every rename attempt lands too early).
       const list = sessions.list?.getSnapshot()
       const sameCard = list === undefined ? 0 : list.ids.filter((id) => {
         const row = list.byId[id]
         return row !== undefined && (row.parentId !== undefined || id === sessionId) && (row.displayTitle ?? '').startsWith(cardName.split('·')[0] ?? cardName)
       }).length
-      const binding = sessions.binding(childId)
-      try {
-        await binding?.session.rename?.(cardName + '·线' + String(sameCard + 1))
-      } catch {
-        /* title only */
-      }
+      const wanted = cardName + '·线' + String(sameCard + 1)
+      // Open the child first: its binding is guaranteed live once current,
+      // and the rename is a nicety on top of the host's unique increaseTitle.
       openSession(childId)
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 400))
+        const binding = sessions.binding(childId)
+        if (binding !== undefined) {
+          try {
+            await binding.session.rename?.(wanted)
+          } catch {
+            /* title only */
+          }
+          break
+        }
+      }
     },
     async hide(sessionId) {
       await fetch(RRP_ROUTES.worldlineHidden, {
