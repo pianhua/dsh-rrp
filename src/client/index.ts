@@ -158,6 +158,8 @@ const ZH: Record<string, string> = {
   'copilot.cleared': '对话已清空',
   'actor.copilot': '副驾驶',
   'detail.copilotUndone': '已撤销副驾驶的状态修改',
+  'copilot.copyCode': '复制代码',
+  'copilot.copiedCode': '已复制',
 }
 
 const EN: Record<string, string> = {
@@ -281,6 +283,8 @@ const EN: Record<string, string> = {
   'copilot.cleared': 'Conversation cleared',
   'actor.copilot': 'Copilot',
   'detail.copilotUndone': 'Reverted the Copilot edit',
+  'copilot.copyCode': 'Copy code',
+  'copilot.copiedCode': 'Copied',
 }
 
 /** Client plugin body. Registers only reversible effects. */

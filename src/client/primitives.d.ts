@@ -27,6 +27,30 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     className?: string
   }
 
+  /** Localized chrome for one Markdown code fence. */
+  export interface MarkdownCodeLabels {
+    copyLabel: string
+    copiedLabel: string
+  }
+
+  /** Localized chrome for a Markdown document (footnotes heading is sr-only). */
+  export interface MarkdownLabels {
+    code: MarkdownCodeLabels
+    footnotes: string
+  }
+
+  /** Untrusted assistant-Markdown renderer over the host mdast pipeline. */
+  export function MarkdownText(props: {
+    text: string
+    /** Parse incrementally across chunks (per-chunk work tracks the tail). */
+    streaming?: boolean
+    /** Reference-stable labels; a new identity discards the render cache. */
+    labels: MarkdownLabels
+    fileMentions?: unknown
+    pathImages?: unknown
+    variant?: 'body' | 'compact'
+  }): ReactElement
+
   /** One rendered SVG icon. */
   export type IconComponent = (props: IconProps) => ReactElement
 

@@ -13,9 +13,10 @@ import {
   IconRefreshOutline16,
   IconTrashOutline16,
   Input,
+  MarkdownText,
   StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { RrpClientContext } from './context-types.ts'
 
 /** Implementation identity; also the key the body registers under. */
@@ -80,35 +81,6 @@ const S: Record<string, CSSProperties> = {
   caret: { display: 'inline-block', width: 7, marginLeft: 1, animation: 'rrp-copilot-blink 1s steps(2) infinite', color: 'var(--dsw-alias-brand-primary)' },
 }
 
-/** Minimal Markdown: fenced code blocks, bold, inline code, dash lists, paragraphs. */
-function renderMarkdown(text: string): ReactNode {
-  const blocks = text.split(/```/)
-  return blocks.map((block, index) => {
-    if (index % 2 === 1) {
-      return (
-        <pre key={index} style={{ margin: '6px 0', padding: 8, borderRadius: 8, overflowX: 'auto', background: 'var(--dsw-alias-bg-layer-2, rgba(127,127,127,0.12))', fontSize: 12 }}>
-          <code>{block.replace(/^\w*\n/, '')}</code>
-        </pre>
-      )
-    }
-    return block.split('\n').map((line, lineIndex) => {
-      const inline = (content: string, key: number): ReactNode => {
-        const parts = content.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, partIndex) => {
-          if (part.startsWith('**') && part.endsWith('**')) return <strong key={partIndex}>{part.slice(2, -2)}</strong>
-          if (part.startsWith('`') && part.endsWith('`')) return <code key={partIndex} style={{ fontSize: 12, background: 'var(--dsw-alias-bg-layer-2, rgba(127,127,127,0.12))', padding: '0 4px', borderRadius: 4 }}>{part.slice(1, -1)}</code>
-          return part
-        })
-        return <span key={key}>{parts}</span>
-      }
-      if (line.trimStart().startsWith('- ')) {
-        return <div key={lineIndex} style={{ paddingLeft: 12 }}>• {inline(line.trim().slice(2), lineIndex)}</div>
-      }
-      if (line.trim().length === 0) return <div key={lineIndex} style={{ height: 6 }} />
-      return <div key={lineIndex}>{inline(line, lineIndex)}</div>
-    })
-  })
-}
-
 /** Parse complete SSE frames out of the buffer; returns leftovers. */
 function drainSse(buffer: string, onEvent: (event: string, data: unknown) => void): string {
   const frames = buffer.split('\n\n')
@@ -142,6 +114,12 @@ function CopilotPanel(props: CopilotPanelProps) {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const scrollRef = useRef<HTMLDivElement | null>(null)
+
+  // Reference-stable: a new identity mid-stream discards the render cache.
+  const markdownLabels = useMemo(() => ({
+    code: { copyLabel: t('copilot.copyCode'), copiedLabel: t('copilot.copiedCode') },
+    footnotes: '',
+  }), [t])
 
   const load = useCallback(async () => {
     if (sessionId === undefined) return
@@ -258,8 +236,7 @@ function CopilotPanel(props: CopilotPanelProps) {
     return <div style={S.root}><div style={S.empty}>{t('noSession')}</div></div>
   }
 
-  const actionCard = (turn: CopilotTurn): ReactNode => {
-    if (turn.actions === undefined || turn.actions.length === 0) return null
+  const actionCard = (turn: CopilotTurn): ReactNode => {    if (turn.actions === undefined || turn.actions.length === 0) return null
     return (
       <div style={S.actions}>
         <div style={S.actionsTitle}>{t('copilot.applied')}</div>
@@ -296,7 +273,7 @@ function CopilotPanel(props: CopilotPanelProps) {
           <div key={turn.at + String(index)} style={S.turn}>
             <div style={S.turnLabel}>{turn.role === 'player' ? t('copilot.you') : t('copilot.title')}</div>
             <div style={turn.role === 'player' ? S.bubblePlayer : S.bubbleCopilot}>
-              {turn.role === 'player' ? turn.text : renderMarkdown(turn.text)}
+              {turn.role === 'player' ? turn.text : <MarkdownText text={turn.text} labels={markdownLabels} variant="compact" />}
             </div>
             {actionCard(turn)}
           </div>
@@ -305,7 +282,7 @@ function CopilotPanel(props: CopilotPanelProps) {
           <div style={S.turn}>
             <div style={S.turnLabel}>{t('copilot.title')}</div>
             <div style={S.bubbleCopilot}>
-              {renderMarkdown(streamed)}
+              <MarkdownText text={streamed} streaming labels={markdownLabels} variant="compact" />
               <span style={S.caret}>▌</span>
             </div>
           </div>
