@@ -31,7 +31,7 @@ import { belongsToRpPreset } from './preset-id.ts'
 import { stageSedimentDraft, reservedNames } from './sediment-route.ts'
 import { RRP_SEDIMENT_KEY, sedimentEntriesOf, validateSedimentEntry } from './sediment-state.ts'
 import { publishState } from './state-publisher.ts'
-import { WORLD_STATE_KEY, applyConstraints, diffWorldState, emptyWorldState, pruneWorldState, renderWorldState, type DynamicFieldValue, type WorldState } from './world-state.ts'
+import { WORLD_STATE_KEY, applyConstraints, diffWorldState, emptyWorldState, pruneWorldState, renderWorldState, type DynamicFieldValue, type WorldState, type WorldStateRelation } from './world-state.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 
 const TAG = '[dsh-rrp]'
@@ -213,7 +213,8 @@ function writeSse(res: ResponseLike, event: string, data: unknown): void {
 /**
  * Merge one action patch over the current state: per-name merge for
  * characters/inventory, per-field merge for scene/flags, whole-value replace
- * for dynamic fields (with constraint clamping); null deletes a key.
+ * for relations and dynamic fields (with constraint clamping); null deletes
+ * a dynamic-field key.
  */
 export function mergeWorldStatePatch(prior: WorldState, patch: Record<string, unknown>): WorldState {
   const next: WorldState = structuredClone(prior)
@@ -245,6 +246,14 @@ export function mergeWorldStatePatch(prior: WorldState, patch: Record<string, un
         throw new Error('patch.scene 必须是对象')
       }
       next.scene = { ...next.scene, ...(value as Record<string, string>) }
+      continue
+    }
+    if (key === 'relations') {
+      // Whole-value replace; pruneWorldState normalizes pairs afterwards.
+      if (!Array.isArray(value)) {
+        throw new Error('patch.relations 必须是数组')
+      }
+      next.relations = value as WorldStateRelation[]
       continue
     }
     // Dynamic field: full DynamicFieldValue, clamped to its constraints.

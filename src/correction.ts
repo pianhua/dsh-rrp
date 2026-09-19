@@ -120,7 +120,7 @@ export function registerCorrectionRoute(ctx: Context): void {
           send(res, 403, { error: 'not an RP session' })
           return
         }
-        const pruned = pruneWorldState(state.data)
+        const pruned = pruneWorldState(state.data as WorldState)
         // No-change short-circuit: a stray click on "save" with an identical
         // state must not append a facts message (log noise + wasted tokens).
         const prior = projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined

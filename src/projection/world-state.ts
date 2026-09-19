@@ -39,6 +39,13 @@ const sceneSchema = z.object({
 
 const flagSchema = z.union([z.string(), z.number(), z.boolean()])
 
+/** One tracked relation: undirected endpoint pair + short label. */
+const relationSchema = z.object({
+  a: z.string(),
+  b: z.string(),
+  label: z.string(),
+})
+
 /** D5: DynamicFieldValue schema. */
 const dynamicFieldValueSchema = z.object({
   type: z.enum(['number', 'string', 'boolean']),
@@ -53,6 +60,8 @@ export const worldStateSchema = z.object({
   inventory: z.record(z.string(), itemSchema),
   scene: sceneSchema,
   flags: z.record(z.string(), flagSchema),
+  // Optional for legacy sessions written before relations existed.
+  relations: z.array(relationSchema).optional(),
 }).catchall(dynamicFieldValueSchema)
 
 /**
@@ -66,10 +75,14 @@ export const worldStateProjection = {
   apply: (state: WorldState, event: { type: string; data?: unknown }): WorldState => {
     const payload = rrpPayloadOf(event)
     if (!payload?.worldState) return state
-    
+
     // D5: payload.worldState should already be in correct format
     // (writers use createWorldState or direct construction)
-    return payload.worldState as WorldState
+    const worldState = payload.worldState as WorldState
+    // Legacy payloads predate the relations domain: backfill the key so the
+    // in-memory projection shape always carries it.
+    if (worldState.relations !== undefined) return worldState
+    return { ...worldState, relations: [] }
   },
   wire: {
     viewSchema: worldStateSchema,

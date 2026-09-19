@@ -28,6 +28,7 @@ export type {
   WorldStateCharacter,
   WorldStateFlag,
   WorldStateItem,
+  WorldStateRelation,
   WorldStateScene,
   WorldStateView,
 } from './world-state.ts'

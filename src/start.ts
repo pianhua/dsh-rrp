@@ -227,7 +227,7 @@ export function registerStartRoute(ctx: Context): void {
             send(res, 400, { error: 'invalid WorldState' })
             return
           }
-          state = validated.data
+          state = validated.data as WorldState
         }
 
         // Publish the durable context FIRST (card lane + facts lane).

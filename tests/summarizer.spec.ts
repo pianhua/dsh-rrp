@@ -24,6 +24,18 @@ describe('Summarizer reply contract', () => {
   it('includes the transcript in the prompt', () => {
     expect(buildSummarizerPrompt('【玩家】\n我推门而入。')).toContain('我推门而入。')
   })
+  it('recovers a reply truncated inside the final array', () => {
+    const full = JSON.stringify({
+      ...VALID,
+      threads: ['枯河滩上的脚印', '商队里的内鬼'],
+    })
+    // Cut inside the last thread: `…"枯河滩上的脚印","商队里的内`
+    const truncated = full.slice(0, -3)
+    const parsed = parseSummarizerReply(truncated)
+    expect(parsed).toBeDefined()
+    expect(parsed?.goal).toBe(VALID.goal)
+    expect(parsed?.threads).toEqual(['枯河滩上的脚印'])
+  })
 })
 
 function fakeHost(preset: string, turn: number, summaryEnabled = true, seed?: Array<{ type: string; data: unknown }>) {

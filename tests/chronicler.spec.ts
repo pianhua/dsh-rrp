@@ -15,8 +15,9 @@ const VALID = {
 
 describe('Chronicler reply contract', () => {
   it('parses a bare JSON object and tolerates surrounding prose', () => {
-    expect(parseChroniclerReply(JSON.stringify(VALID))).toEqual({ state: VALID })
-    expect(parseChroniclerReply('好的，结果如下：\n' + JSON.stringify(VALID) + '\n以上。')).toEqual({ state: VALID })
+    const expected = { state: { ...VALID, relations: [] } }
+    expect(parseChroniclerReply(JSON.stringify(VALID))).toEqual(expected)
+    expect(parseChroniclerReply('好的，结果如下：\n' + JSON.stringify(VALID) + '\n以上。')).toEqual(expected)
   })
 
   it('rejects unusable replies', () => {
@@ -73,6 +74,33 @@ describe('Chronicler reply contract', () => {
     expect(parsed?.state.stamina).toEqual({ type: 'number', value: 80, min: 0, max: 100 })
     expect(parsed?.createFields).toHaveLength(1)
     expect(parsed?.createFields?.[0]?.id).toBe('stamina')
+  })
+
+  it('parses relations and normalizes dirty endpoints and duplicate pairs', () => {
+    const reply = JSON.stringify({
+      ...VALID,
+      relations: [
+        { a: '我', b: '米娅（女仆长）', label: '主仆' },
+        { a: '米娅', b: '玩家', label: '猜忌' },
+        { a: ' ', b: 'x', label: '无效' },
+      ],
+    })
+    const parsed = parseChroniclerReply(reply)
+    expect(parsed?.state.relations).toEqual([{ a: '米娅', b: '玩家', label: '猜忌' }])
+  })
+
+  it('recovers a reply truncated mid-stream', () => {
+    const full = JSON.stringify({
+      ...VALID,
+      flags: { 已知晓密道: true, 承诺: '护送商队抵达塞北' },
+    })
+    // Cut inside the last flags value: `…护送商队抵`
+    const truncated = full.slice(0, -5)
+    const parsed = parseChroniclerReply(truncated)
+    expect(parsed).toBeDefined()
+    expect(parsed?.state.characters).toEqual(VALID.characters)
+    expect(parsed?.state.scene).toEqual(VALID.scene)
+    expect(parsed?.state.flags).toEqual({ 已知晓密道: true })
   })
 })
 
@@ -158,7 +186,7 @@ describe('Chronicler trigger', () => {
     expect(outcome.status).toBe('completed')
     const stateWrites = host.appended.filter((entry) => entry.type === 'user/message')
     expect(stateWrites).toHaveLength(1)
-    expect((stateWrites[0]?.data as { source: { rrp: { worldState: unknown } } }).source.rrp.worldState).toEqual(VALID)
+    expect((stateWrites[0]?.data as { source: { rrp: { worldState: unknown } } }).source.rrp.worldState).toEqual({ ...VALID, relations: [] })
 
     // Attribution: the ledger must show the Chronicler started and what changed.
     const activity = readActivity('session-1').entries

@@ -140,7 +140,9 @@ function readInitialState(dir: string): WorldState | null {
   if (!existsSync(file)) return null
   try {
     const parsed = worldStateSchema.safeParse(JSON.parse(readFileSync(file, 'utf8')))
-    return parsed.success ? parsed.data : null
+    // Relations are optional in the schema (legacy card packs predate them);
+    // pruneWorldState backfills the key on the write path.
+    return parsed.success ? parsed.data as WorldState : null
   } catch {
     return null
   }

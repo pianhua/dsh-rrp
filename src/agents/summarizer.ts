@@ -6,6 +6,7 @@
  * every turn.
  */
 import { macroSummarySchema } from '../projection/summary.ts'
+import { extractFirstJsonObject } from '../json-extract.ts'
 import type { MacroSummary } from '../macro-summary.ts'
 
 /** The Summarizer's persona and rules. */
@@ -41,15 +42,7 @@ export function buildSummarizerPrompt(transcript: string): string {
  * @returns the validated summary, or undefined when unusable.
  */
 export function parseSummarizerReply(reply: string): MacroSummary | undefined {
-  const start = reply.indexOf('{')
-  const end = reply.lastIndexOf('}')
-  if (start === -1 || end <= start) return undefined
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(reply.slice(start, end + 1))
-  } catch {
-    return undefined
-  }
+  const parsed = extractFirstJsonObject(reply)
   const result = macroSummarySchema.safeParse(parsed)
   return result.success ? result.data : undefined
 }

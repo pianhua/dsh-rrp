@@ -35,6 +35,17 @@ export interface WorldStateScene {
 export type WorldStateFlag = string | number | boolean
 
 /**
+ * One tracked relation: an undirected pair of endpoints plus a short label
+ * (主仆 / 猜忌 / 亏欠 / 同盟 …). Endpoints are normalized character names;
+ * the player is always written 「玩家」.
+ */
+export interface WorldStateRelation {
+  a: string
+  b: string
+  label: string
+}
+
+/**
  * D5: Dynamic field types. Extensible for future types.
  */
 export type DynamicFieldType = 'number' | 'string' | 'boolean'
@@ -59,18 +70,20 @@ export interface WorldState {
   inventory: Record<string, WorldStateItem>
   scene: WorldStateScene
   flags: Record<string, WorldStateFlag>
-  
+  relations: WorldStateRelation[]
+
   /** D5: Dynamic fields stored as Record<string, DynamicFieldValue> */
-  [key: string]: 
+  [key: string]:
     | Record<string, WorldStateCharacter>
     | Record<string, WorldStateItem>
     | WorldStateScene
     | Record<string, WorldStateFlag>
+    | WorldStateRelation[]
     | DynamicFieldValue
 }
 
 /** Core domain keys (reserved). */
-export const CORE_DOMAIN_KEYS = ['characters', 'inventory', 'scene', 'flags'] as const
+export const CORE_DOMAIN_KEYS = ['characters', 'inventory', 'scene', 'flags', 'relations'] as const
 
 /** Check if a key is a core domain. */
 export function isCoreKey(key: string): boolean {
@@ -90,11 +103,12 @@ export const WORLD_STATE_KEY = 'rrpWorldState'
 
 /** A fresh empty state. */
 export function emptyWorldState(): WorldState {
-  return { 
-    characters: {}, 
-    inventory: {}, 
-    scene: {}, 
-    flags: {} 
+  return {
+    characters: {},
+    inventory: {},
+    scene: {},
+    flags: {},
+    relations: [],
   }
 }
 
@@ -129,6 +143,7 @@ export const WORLD_STATE_LIMITS = {
   flags: 16,
   flagValueChars: 160,
   dynamicFields: 32,
+  relations: 16,
 } as const
 
 /** Keep at most `limit` entries, preserving key order. */
@@ -146,6 +161,58 @@ function capFlagValue(value: WorldStateFlag): WorldStateFlag {
   return value.slice(0, WORLD_STATE_LIMITS.flagValueChars - 1) + '…'
 }
 
+/** Player aliases (case-insensitive) that normalize to 「玩家」. */
+const PLAYER_ENDPOINT_ALIASES = new Set(['我', '你', '玩家', '主角', 'user', 'player'])
+
+/** Bracketed modifiers stripped from a relation endpoint: （…）(…) […]【…】. */
+const BRACKET_MODIFIER = /（[^（）]*）|\([^()]*\)|【[^【】]*】|\[[^\[\]]*\]/g
+
+/**
+ * Normalize one relation endpoint: trim → drop bracket modifiers (titles,
+ * notes, aliases in parentheses) → map player aliases to 「玩家」. Traditional
+ * characters and other names pass through untouched.
+ */
+export function normalizeRelationEndpoint(name: string): string {
+  const text = String(name ?? '').replace(BRACKET_MODIFIER, '').trim()
+  if (PLAYER_ENDPOINT_ALIASES.has(text.toLowerCase())) return '玩家'
+  return text
+}
+
+/**
+ * Normalize a relation list: endpoints via normalizeRelationEndpoint, drop
+ * blank entries, dedupe undirected pairs (key = sorted a+b) with the LAST
+ * occurrence winning. Pure; returns the SAME reference when nothing changed.
+ */
+export function normalizeRelations(relations: WorldStateRelation[]): WorldStateRelation[] {
+  const byPair = new Map<string, WorldStateRelation>()
+  let changed = false
+  for (const rel of relations) {
+    const a = normalizeRelationEndpoint(rel.a)
+    const b = normalizeRelationEndpoint(rel.b)
+    const label = String(rel.label ?? '').trim()
+    if (a.length === 0 || b.length === 0 || label.length === 0) {
+      changed = true
+      continue
+    }
+    if (a !== rel.a || b !== rel.b || label !== rel.label) changed = true
+    const key = [a, b].sort().join(' ')
+    if (byPair.has(key)) {
+      changed = true
+      // Same-key later entry overrides the earlier one (last write wins).
+      byPair.set(key, { a, b, label })
+    } else {
+      byPair.set(key, { a, b, label })
+    }
+  }
+  if (byPair.size === relations.length && !changed) return relations
+  return [...byPair.values()]
+}
+
+/** Keep at most `limit` relations, preserving order. */
+function capRelations(relations: WorldStateRelation[], limit: number): WorldStateRelation[] {
+  return relations.length <= limit ? relations : relations.slice(0, limit)
+}
+
 /**
  * Bound a state to the safety caps. Pure; returns SAME reference when within limits.
  */
@@ -153,7 +220,7 @@ export function pruneWorldState(state: WorldState): WorldState {
   const characters = capRecord(state.characters, WORLD_STATE_LIMITS.characters)
   const inventory = capRecord(state.inventory, WORLD_STATE_LIMITS.inventory)
   const head = capRecord(state.flags, WORLD_STATE_LIMITS.flags)
-  
+
   let flags = head
   for (const [key, value] of Object.entries(head)) {
     const capped = capFlagValue(value)
@@ -162,11 +229,15 @@ export function pruneWorldState(state: WorldState): WorldState {
       flags[key] = capped
     }
   }
-  
+
+  // Relations: normalize endpoints/pairs on every write path, then cap.
+  const relations = capRelations(normalizeRelations(state.relations ?? []), WORLD_STATE_LIMITS.relations)
+
   // Cap dynamic fields count and apply constraints
   const dynamicKeys = getDynamicKeys(state)
-  let pruned: WorldState = { ...state, characters, inventory, flags }
+  let pruned: WorldState = { ...state, characters, inventory, flags, relations }
   let changed = characters !== state.characters || inventory !== state.inventory || flags !== state.flags
+    || relations !== state.relations
   
   if (dynamicKeys.length > WORLD_STATE_LIMITS.dynamicFields) {
     changed = true
@@ -216,6 +287,7 @@ export function renderWorldState(state: WorldState): string {
     'inventory: ' + stableJson(state.inventory),
     'scene: ' + stableJson(state.scene),
     'flags: ' + stableJson(state.flags),
+    'relations: ' + stableJson(state.relations ?? []),
   ]
   
   // D5: Render dynamic fields
@@ -328,7 +400,28 @@ export function diffWorldState(prior: WorldState, next: WorldState): string {
       clauses.push('事件「' + key + '」' + showField(before) + ' → ' + showField(after))
     }
   }
-  
+
+  // Relations: undirected pairs keyed by sorted endpoints.
+  const relationKey = (rel: WorldStateRelation): string => [rel.a, rel.b].sort().join(' ')
+  const priorRelations = new Map((prior.relations ?? []).map((rel) => [relationKey(rel), rel] as [string, WorldStateRelation]))
+  const nextRelations = new Map((next.relations ?? []).map((rel) => [relationKey(rel), rel] as [string, WorldStateRelation]))
+  const allRelationKeys = [...new Set([...priorRelations.keys(), ...nextRelations.keys()])]
+  for (const key of allRelationKeys) {
+    const before = priorRelations.get(key)
+    const after = nextRelations.get(key)
+    if (before === undefined && after !== undefined) {
+      clauses.push('新增关系「' + after.a + ' × ' + after.b + '（' + after.label + '）」')
+      continue
+    }
+    if (after === undefined && before !== undefined) {
+      clauses.push('移除关系「' + before.a + ' × ' + before.b + '（' + before.label + '）」')
+      continue
+    }
+    if (before !== undefined && after !== undefined && before.label !== after.label) {
+      clauses.push('「' + after.a + ' × ' + after.b + '」关系 ' + showField(before.label) + ' → ' + showField(after.label))
+    }
+  }
+
   // D5: Diff dynamic fields
   const priorDynamic = getDynamicKeys(prior)
   const nextDynamic = getDynamicKeys(next)

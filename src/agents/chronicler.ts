@@ -8,6 +8,7 @@
  * D5: Chronicler can create new dynamic fields when needed.
  */
 import { worldStateSchema } from '../projection/world-state.ts'
+import { extractFirstJsonObject } from '../json-extract.ts'
 import {
   pruneWorldState,
   isValidFieldId,
@@ -35,8 +36,12 @@ export const CHRONICLER_SYSTEM_PROMPT = [
   '   - 写法：优先写「键 → 简短事实」，而不是「键 → true」。例：「某人的真实身份」→「某隐秘身份（玩家尚未知情）」。',
   '   - 保持精简（≤ 12 条），按重要度从高到低排列。',
   '5. characters / inventory 同样只保留当前仍然有效的状态，并按重要度排序。',
-  '6. 如实反映玩家行动造成的后果，但绝不替玩家角色杜撰新的行动、对白或心理。',
-  '7. 忠于既有设定；可以补充合理的细节，但不得改写世界观。',
+  '6. 关系网（relations）：',
+  '   - 顶层可选 relations 数组（≤ 12 条），只保留当前仍影响剧情的双向关系；已和解、已无关的关系应当移除。',
+  '   - 端点必须使用 characters 中的规范角色名；指代玩家统一写「玩家」。',
+  '   - label 用一两字到短语概括（主仆/猜忌/亏欠/同盟…），同义合并，不写括号修饰。',
+  '7. 如实反映玩家行动造成的后果，但绝不替玩家角色杜撰新的行动、对白或心理。',
+  '8. 忠于既有设定；可以补充合理的细节，但不得改写世界观。',
   '',
   '【D5】自定义状态字段（动态扩展）：',
   '- 当需要追踪四域（characters/inventory/scene/flags）无法容纳的状态时，可在输出中使用 createFields 数组创建自定义字段。',
@@ -56,6 +61,7 @@ export const CHRONICLER_SYSTEM_PROMPT = [
   '- inventory 是「物品名 → { quantity?: number, note?: string }」的对象。',
   '- scene 是 { location?: string, time?: string, weather?: string }。',
   '- flags 是「长期事实名 → 简短事实值（string | number | boolean）」的对象；不要用它记流水账。',
+  '- relations 是数组，格式：[{ "a": "角色A", "b": "角色B", "label": "关系" }]，可选。',
   '- createFields 是数组，格式：[{ "id": "字段名", "type": "number"|"string"|"boolean", "value": 初始值, "min": 最小值?, "max": 最大值? }]',
   '- 该 JSON 必须是变化后的完整状态（当前切面），而不是增量，也不是历史记录。',
 ].join('\n')
@@ -111,17 +117,7 @@ export interface ChroniclerReply {
  * @returns the validated state and field creation requests, or undefined when unusable.
  */
 export function parseChroniclerReply(reply: string, existingState?: WorldState): ChroniclerReply | undefined {
-  const start = reply.indexOf('{')
-  const end = reply.lastIndexOf('}')
-  if (start === -1 || end <= start) return undefined
-  
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(reply.slice(start, end + 1))
-  } catch {
-    return undefined
-  }
-  
+  const parsed = extractFirstJsonObject(reply)
   if (!parsed || typeof parsed !== 'object') return undefined
   const obj = parsed as Record<string, unknown>
   
@@ -165,7 +161,7 @@ export function parseChroniclerReply(reply: string, existingState?: WorldState):
   const result = worldStateSchema.safeParse(obj)
   if (!result.success) return undefined
   
-  const state = pruneWorldState(result.data)
+  const state = pruneWorldState(result.data as WorldState)
   
   // Validate and apply createFields
   if (createFields && Array.isArray(createFields)) {
@@ -188,7 +184,7 @@ export function parseChroniclerReply(reply: string, existingState?: WorldState):
       if (!['number', 'string', 'boolean'].includes(req.type)) continue
       
       // Check for duplicate with existing fields (prevent synonyms)
-      const existing = Object.keys(state).filter(k => !['characters', 'inventory', 'scene', 'flags'].includes(k))
+      const existing = Object.keys(state).filter(k => !isCoreKey(k))
       const normalized = req.id.toLowerCase().replace(/_/g, '')
       const isDuplicate = existing.some(k => k.toLowerCase().replace(/_/g, '') === normalized)
       if (isDuplicate) continue

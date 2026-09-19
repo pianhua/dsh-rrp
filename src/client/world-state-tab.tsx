@@ -24,6 +24,9 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { pendingActivity, type RrpActivityLog } from '../activity.ts'
+import type { CardContext } from '../card-types.ts'
+import type { MacroSummary } from '../macro-summary.ts'
+import { promptBudgetReport, type BudgetReport, type BudgetSection } from '../prompt-budget.ts'
 import type { RrpUseSessions, RrpJobView } from './context-types.ts'
 import {
   WORLD_STATE_KEY,
@@ -34,6 +37,7 @@ import {
   type WorldState,
   type WorldStateCharacter,
   type WorldStateItem,
+  type WorldStateRelation,
   type WorldStateView,
   type DynamicFieldValue,
 } from '../world-state.ts'
@@ -88,6 +92,7 @@ interface Draft {
   inventory: ItemRow[]
   flags: FlagRow[]
   scene: { location: string; time: string; weather: string }
+  relations: WorldStateRelation[]
   dynamicFields: DynamicFieldRow[]
 }
 
@@ -128,6 +133,9 @@ function draftOf(view: WorldStateView | undefined): Draft {
       time: view?.scene?.time ?? '',
       weather: view?.scene?.weather ?? '',
     },
+    // Relations are read-only in the panel (maintained by the Chronicler);
+    // copy them so draft edits can never alias projection objects.
+    relations: (view?.relations ?? []).map((rel) => ({ ...rel })),
     dynamicFields,
   }
 }
@@ -137,6 +145,7 @@ function isEmptyDraft(draft: Draft): boolean {
   return draft.characters.length === 0
     && draft.inventory.length === 0
     && draft.flags.length === 0
+    && draft.relations.length === 0
     && draft.scene.location.length === 0
     && draft.scene.time.length === 0
     && draft.scene.weather.length === 0
@@ -187,8 +196,8 @@ function stateOfDraft(draft: Draft): WorldState {
   if (draft.scene.time.trim().length > 0) scene.time = draft.scene.time.trim()
   if (draft.scene.weather.trim().length > 0) scene.weather = draft.scene.weather.trim()
   
-  // Build base state
-  const state: WorldState = { characters, inventory, flags, scene }
+  // Build base state (relations pass through untouched: read-only here)
+  const state: WorldState = { characters, inventory, flags, scene, relations: draft.relations.map((rel) => ({ ...rel })) }
   
   // Add dynamic fields
   for (const row of draft.dynamicFields) {
@@ -239,6 +248,21 @@ const S: Record<string, CSSProperties> = {
   spacer: { flex: 1 },
   scroll: { flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px' },
   hint: { margin: '0 0 12px', fontSize: 11.5, lineHeight: 1.6, color: 'var(--dsw-alias-label-tertiary)' },
+  budget: {
+    display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', marginBottom: 12,
+    borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1)',
+    border: '1px solid var(--dsw-alias-border-l1)',
+  },
+  budgetHead: { display: 'flex', alignItems: 'center', gap: 8 },
+  budgetTitle: {
+    flex: 1, fontSize: 11, fontWeight: 600, color: 'var(--dsw-alias-label-secondary)',
+    letterSpacing: '0.03em', textTransform: 'uppercase' as const,
+  },
+  budgetText: { fontSize: 11, fontWeight: 600, fontFamily: 'var(--dsw-font-mono, monospace)' },
+  budgetBar: {
+    display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden',
+    background: 'var(--dsw-alias-bg-layer-2)',
+  },
   empty: {
     display: 'flex', flexDirection: 'column', gap: 6, padding: '12px', marginBottom: 12,
     borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1)',
@@ -302,6 +326,14 @@ const S: Record<string, CSSProperties> = {
     padding: '14px', marginBottom: 12, borderRadius: 8,
     background: 'var(--dsw-alias-bg-layer-1)', border: '1px dashed var(--dsw-alias-border-l2)',
   },
+  relationRow: {
+    display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', marginBottom: 8,
+    borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1)',
+    border: '1px solid var(--dsw-alias-border-l1)', fontSize: 12,
+  },
+  relationName: { fontWeight: 600, color: 'var(--dsw-alias-label-primary)' },
+  relationLabel: { flex: 1, minWidth: 0, textAlign: 'center' as const, color: 'var(--dsw-alias-label-tertiary)' },
+  relationEmpty: { fontSize: 11, color: 'var(--dsw-alias-label-dimmed)', padding: '2px 0 8px' },
   formRow: { display: 'flex', gap: 10, marginBottom: 10 },
   formField: { flex: 1, minWidth: 0 },
   formActions: { display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 },
@@ -390,6 +422,20 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
   const sessionPreset = typeof props.useProjection === 'function'
     ? (props.useProjection('agentPreset') as string | undefined)
     : undefined
+  // The two other injection channels the Author actually sees (A3 gauge):
+  // the active card setting and the macro chronicle. Both ride projections.
+  const cardContext = typeof props.useProjection === 'function'
+    ? (props.useProjection('rrpCard') as CardContext | null | undefined)
+    : undefined
+  const macroSummary = typeof props.useProjection === 'function'
+    ? (props.useProjection('rrpSummary') as MacroSummary | undefined)
+    : undefined
+  const budgetReport = promptBudgetReport({
+    card: cardContext ?? null,
+    summary: macroSummary ?? undefined,
+    state: view,
+  })
+  const showBudget = cardContext != null || macroSummary != null || view != null
   const sessionId = props.sessionId
   // The host pushes job state per session (`jobsBySession` mirror): the
   // Chronicler's in-flight state needs no ledger round-trips where available.
@@ -560,6 +606,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
       </div>
 
       <div style={S.scroll}>
+        {showBudget ? <BudgetGauge t={t} report={budgetReport} /> : null}
         <p style={S.hint}>{t('editHint')}</p>
 
         {isEmptyDraft(draft) ? <div style={S.empty}>{t('world.missing')}</div> : null}
@@ -633,6 +680,20 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
             </div>
             <Field disabled={isInferring} label={t('field.appearance')} value={row.appearance} onChange={(v) => mutate((d) => { d.characters[index].appearance = v })} />
             <Field disabled={isInferring} label={t('field.condition')} value={row.condition} onChange={(v) => mutate((d) => { d.characters[index].condition = v })} />
+          </div>
+        ))}
+
+        <div style={S.section}>
+          <span style={S.sectionTitle}>{t('section.relations')}</span>
+          <Pill>{String(draft.relations.length)}</Pill>
+        </div>
+        {draft.relations.length === 0 ? (
+          <div style={S.relationEmpty}>{t('relations.none')}</div>
+        ) : draft.relations.map((rel, index) => (
+          <div key={'relation-' + String(index)} style={S.relationRow}>
+            <span style={S.relationName}>{rel.a}</span>
+            <span style={S.relationLabel}>· {rel.label} ·</span>
+            <span style={S.relationName}>{rel.b}</span>
           </div>
         ))}
 
@@ -777,6 +838,46 @@ export function registerWorldStateTab(ctx: RrpClientContext): void {
   }, 'dsh-rrp: WorldState tab')
 }
 
+
+/** Compact A3 gauge: stacked per-channel color bar + token/share reading. */
+function BudgetGauge(props: { t: Translate; report: BudgetReport }): ReactNode {
+  const { t, report } = props
+  const totalChars = report.sections.reduce((sum, section) => sum + section.chars, 0)
+  const segmentColor: Record<BudgetSection['id'], string> = {
+    card: 'var(--dsw-alias-brand-primary)',
+    summary: 'var(--dsw-alias-label-secondary)',
+    state: 'var(--dsw-alias-label-tertiary)',
+  }
+  const textColor = report.level === 'danger'
+    ? 'var(--dsw-alias-status-error)'
+    : report.level === 'warn'
+      ? 'var(--dsw-alias-label-danger)'
+      : 'var(--dsw-alias-label-secondary)'
+  return (
+    <div style={S.budget}>
+      <div style={S.budgetHead}>
+        <span style={S.budgetTitle}>{t('budget.title')}</span>
+        <span style={{ ...S.budgetText, color: textColor }}>
+          {'≈ ' + report.totalTokens.toLocaleString() + ' tokens · ' + report.pct + '%'}
+        </span>
+      </div>
+      <Tooltip label={t('budget.hint')}>
+        <div style={S.budgetBar}>
+          {report.sections.map((section) => (
+            <div
+              key={section.id}
+              title={t('budget.' + section.id)}
+              style={{
+                width: totalChars > 0 ? String((section.chars / totalChars) * 100) + '%' : '0%',
+                background: segmentColor[section.id],
+              }}
+            />
+          ))}
+        </div>
+      </Tooltip>
+    </div>
+  )
+}
 
 /** Collapsible section component */
 function CollapsibleSection(props: { 
