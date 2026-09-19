@@ -11,6 +11,7 @@
  */
 import type { CardContext, CardMeta, CardPack } from './card-types.ts'
 import type { WorldState } from './world-state.ts'
+import type { WorldlineTurnDigest } from './worldline-digest.ts'
 
 // ── Paths (host registers these; clients fetch these) ──────────────────────
 export const RRP_ROUTES = {
@@ -22,6 +23,8 @@ export const RRP_ROUTES = {
   lore: '/dsh-rrp/lore',
   copilot: '/dsh-rrp/copilot',
   copilotUndo: '/dsh-rrp/copilot/undo',
+  worldlineFacts: '/dsh-rrp/worldlines/facts',
+  worldlineHidden: '/dsh-rrp/worldlines/hidden',
 } as const
 
 // ── Shared JSON vocabulary ──────────────────────────────────────────────────
@@ -120,6 +123,24 @@ export interface LoreConfirmResponse {
 export interface LoreDeleteResponse {
   ok: boolean
   removed: boolean
+}
+
+// ── /dsh-rrp/worldlines (issue #28 save map) ───────────────────────────────
+export interface WorldlineFactsResponse {
+  cardId: string
+  cardName: string
+  /** How many of this session's turns were inherited from the fork parent. */
+  seedTurns: number
+  turns: WorldlineTurnDigest[]
+}
+
+export interface WorldlineHiddenResponse {
+  hidden: string[]
+}
+
+export interface WorldlineHiddenSetRequest {
+  sessionId: string
+  hidden: boolean
 }
 
 // ── /dsh-rrp/copilot ────────────────────────────────────────────────────────

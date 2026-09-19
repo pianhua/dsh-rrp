@@ -13,6 +13,8 @@ import { registerActivityRoute } from './activity-route.ts'
 import { listCards } from './cards.ts'
 import { registerCardsRoute } from './cards-route.ts'
 import { registerCopilotRoute, forgetAllCopilot, forgetCopilot } from './copilot.ts'
+import { worldlineDigestProjection } from './projection/worldline-digest.ts'
+import { registerWorldlineRoute } from './worldline-route.ts'
 import { registerLoreCommand, registerLoreRoute } from './lore-route.ts'
 import { registerLoreRuntime } from './lore-runtime.ts'
 import { registerChronicler, forgetAllInference, forgetInference } from './chronicler.ts'
@@ -64,7 +66,8 @@ interface SessionProjectionsService {
       | typeof settingsProjection
       | typeof loreProjection
       | typeof cardProjection
-      | typeof transcriptProjection,
+      | typeof transcriptProjection
+      | typeof worldlineDigestProjection,
   ): () => void
 }
 
@@ -103,6 +106,8 @@ export function apply(ctx: Context): void {
     console.log(`${TAG} active-card projection registered (key '${cardProjection.key}')`)
     projectionDisposers.push(registry.register(transcriptProjection))
     console.log(`${TAG} transcript projection registered (key '${transcriptProjection.key}')`)
+    projectionDisposers.push(registry.register(worldlineDigestProjection))
+    console.log(`${TAG} worldline digest projection registered (key '${worldlineDigestProjection.key}')`)
   })
   ctx.effect(() => {
     return () => {
@@ -159,6 +164,12 @@ export function apply(ctx: Context): void {
   // log, issue #21); her writes ride the same published lanes with actor 'copilot'.
   ctx.inject(['webServer', 'sessions', 'sessionProjections', 'llm', 'agents', 'storageDomain'], (scoped: Context) => {
     registerCopilotRoute(scoped)
+  })
+
+  // Worldline map (issue #28): turn facts for the client-side tree fold and
+  // the soft-hide ledger; lineage itself stays the host's own sessions data.
+  ctx.inject(['webServer', 'sessions', 'sessionProjections', 'storageDomain'], (scoped: Context) => {
+    registerWorldlineRoute(scoped)
   })
 
   // Summarizer: macro compass every N turns; the /summary command toggles it.

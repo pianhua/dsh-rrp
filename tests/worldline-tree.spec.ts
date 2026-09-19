@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { foldWorldlineTrees, type WorldlineSessionFact, type WorldlineTurnFact } from '../src/worldline-tree.ts'
+import { foldWorldlineTrees, type WorldlineNode, type WorldlineSessionFact, type WorldlineTurnFact } from '../src/worldline-tree.ts'
 
 function turns(count: number, tag = ''): WorldlineTurnFact[] {
   return Array.from({ length: count }, (_, turn) => ({
@@ -14,12 +14,12 @@ function session(id: string, extra: Partial<WorldlineSessionFact> = {}): Worldli
 }
 
 /** Flatten a node's continuation chain (first-child path) for assertions. */
-function chain(node: { turn: number; children: Array<{ turn: number; children: never[] }> } | undefined): number[] {
+function chain(node: WorldlineNode | undefined): number[] {
   const out: number[] = []
-  let current = node
+  let current: WorldlineNode | undefined = node
   while (current !== undefined) {
     out.push(current.turn)
-    current = current.children[0] as typeof current | undefined
+    current = current.children[0]
   }
   return out
 }
@@ -46,7 +46,7 @@ describe('worldline tree fold (issue #28)', () => {
     expect(cut?.turn).toBe(1)
     expect(cut?.fork).toBe(true)
     expect(cut?.children.map((child) => child.sessionId + ':' + String(child.turn))).toEqual(['m:2', 'f:2'])
-    expect(chain(cut?.children[1] as never)).toEqual([2, 3])
+    expect(chain(cut?.children[1])).toEqual([2, 3])
   })
 
   it('supports forks of forks and keeps input order for roots', () => {
