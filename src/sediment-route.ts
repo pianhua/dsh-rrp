@@ -108,6 +108,16 @@ export function stageSedimentDraftForTesting(sessionId: string, entry: SedimentE
   PENDING.set(sessionId, entry)
 }
 
+/**
+ * Stage an externally composed draft (the Copilot's draft_sediment action).
+ * The player still confirms it in the 「典籍」 panel before anything is
+ * written — the D8 control ring is never bypassed.
+ */
+export function stageSedimentDraft(sessionId: string, entry: SedimentEntry): void {
+  PENDING.set(sessionId, entry)
+  invalidateSediment(sessionId)
+}
+
 /** Respond with a JSON body. */
 function send(res: ResponseLike, status: number, payload: unknown): void {
   res.statusCode = status
@@ -125,7 +135,7 @@ async function readBody(req: RequestLike): Promise<string> {
 }
 
 /** The active card's bundled skill names, so sediment cannot take their names. */
-function reservedNames(projections: ProjectionsService | undefined, session: SessionLike): string[] {
+export function reservedNames(projections: ProjectionsService | undefined, session: SessionLike): string[] {
   if (projections === undefined) return []
   const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
   if (card === null || card === undefined) return []

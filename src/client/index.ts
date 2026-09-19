@@ -5,6 +5,7 @@
  * Everything is a reversible effect tied to this plugin's fiber.
  */
 import type { RrpClientContext } from './context-types.ts'
+import { registerCopilotTab } from './copilot-tab.tsx'
 import { registerGallery } from './gallery-panel.tsx'
 import { registerSedimentTab } from './sediment-tab.tsx'
 import { registerWorldStateTab } from './world-state-tab.tsx'
@@ -141,6 +142,22 @@ const ZH: Record<string, string> = {
   'gallery.unavailable': '会话服务不可用',
   'gallery.workspace': '工作区',
   'gallery.workspaceUngrouped': '未分组',
+  'copilot.title': '副驾驶',
+  'copilot.guide': '全知幕僚（OOC 视角）：咨询设定、人物秘密与破局思路，或直接让她代劳修改世界状态、起草典籍。',
+  'copilot.placeholder': '问剧情、问设定，或直接下指令…',
+  'copilot.send': '发送',
+  'copilot.busy': '上一次咨询尚未完成',
+  'copilot.failed': '副驾驶出错了，请重试',
+  'copilot.empty': '还没有对话。向副驾驶提问，或直接让她修改世界状态。',
+  'copilot.you': '玩家',
+  'copilot.applied': '已执行变更',
+  'copilot.staged': '已起草典籍（待确认）',
+  'copilot.undo': '一键撤销',
+  'copilot.undoDone': '已撤销上一轮状态变更',
+  'copilot.undoEmpty': '没有可撤销的变更',
+  'copilot.cleared': '对话已清空',
+  'actor.copilot': '副驾驶',
+  'detail.copilotUndone': '已撤销副驾驶的状态修改',
 }
 
 const EN: Record<string, string> = {
@@ -248,6 +265,22 @@ const EN: Record<string, string> = {
   'gallery.unavailable': 'Session service unavailable',
   'gallery.workspace': 'Workspace',
   'gallery.workspaceUngrouped': 'Ungrouped',
+  'copilot.title': 'Copilot',
+  'copilot.guide': 'Omniscient advisor (OOC): ask about lore, secrets and strategy — or let her edit world state and stage lore drafts.',
+  'copilot.placeholder': 'Ask about the story, lore, or give a command…',
+  'copilot.send': 'Send',
+  'copilot.busy': 'The previous turn is still running',
+  'copilot.failed': 'Copilot failed; please retry',
+  'copilot.empty': 'No conversation yet. Ask the Copilot, or let her edit the world state.',
+  'copilot.you': 'Player',
+  'copilot.applied': 'Changes applied',
+  'copilot.staged': 'Lore staged (awaiting review)',
+  'copilot.undo': 'Undo',
+  'copilot.undoDone': 'Reverted the last state change',
+  'copilot.undoEmpty': 'Nothing to undo',
+  'copilot.cleared': 'Conversation cleared',
+  'actor.copilot': 'Copilot',
+  'detail.copilotUndone': 'Reverted the Copilot edit',
 }
 
 /** Client plugin body. Registers only reversible effects. */
@@ -270,5 +303,6 @@ export function apply(ctx: RrpClientContext): void {
 
   registerWorldStateTab(ctx)
   registerSedimentTab(ctx)
+  registerCopilotTab(ctx)
   registerGallery(ctx)
 }

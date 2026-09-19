@@ -16,7 +16,7 @@
  */
 
 /** Which writer produced an entry. */
-export type RrpActor = 'chronicler' | 'summarizer' | 'player' | 'card' | 'scribe'
+export type RrpActor = 'chronicler' | 'summarizer' | 'player' | 'card' | 'scribe' | 'copilot'
 
 /** Which artifact the writer touched. */
 export type RrpTarget = 'world-state' | 'summary' | 'sediment'

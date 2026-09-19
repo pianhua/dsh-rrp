@@ -12,6 +12,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { registerActivityRoute } from './activity-route.ts'
 import { listCards } from './cards.ts'
 import { registerCardsRoute } from './cards-route.ts'
+import { registerCopilotRoute, forgetAllCopilot, forgetCopilot } from './copilot.ts'
 import { registerSedimentCommand, registerSedimentRoute } from './sediment-route.ts'
 import { registerSedimentRuntime } from './sediment-runtime.ts'
 import { registerChronicler, forgetAllInference, forgetInference } from './chronicler.ts'
@@ -153,6 +154,13 @@ export function apply(ctx: Context): void {
     registerStartRoute(scoped)
   })
 
+  // Copilot: the player's omniscient advisor in the third right-sidebar tab.
+  // Conversation history lives in plugin-private JSON (never the session log);
+  // her writes ride the same published lanes with actor 'copilot'.
+  ctx.inject(['webServer', 'sessions', 'sessionProjections', 'llm', 'agents'], (scoped: Context) => {
+    registerCopilotRoute(scoped)
+  })
+
   // Summarizer: macro compass every N turns; the /summary command toggles it.
   ctx.inject(['jobs', 'llm', 'agents', 'sessionProjections'], (scoped: Context) => {
     registerSummarizer(scoped, PRESET_ID)
@@ -198,6 +206,7 @@ export function cleanupSession(sessionId: string): void {
   forgetSediment(sessionId)
   forgetSummary(sessionId)
   forgetInference(sessionId)
+  forgetCopilot(sessionId)
 }
 
 /**
@@ -211,6 +220,7 @@ export function cleanupAllSessions(): void {
   forgetAllSediment()
   forgetAllSummary()
   forgetAllInference()
+  forgetAllCopilot()
 }
 
 /** Resolve a Session id from an event payload. */
