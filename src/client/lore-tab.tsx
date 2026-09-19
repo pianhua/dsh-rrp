@@ -28,14 +28,15 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { RRP_LORE_KEY, type LoreEntry } from '../lore-state.ts'
+import { RRP_ROUTES } from '../route-contract.ts'
 import type { RrpClientContext, RrpJobView, RrpUseProjection, RrpUseSessions } from './context-types.ts'
 
 /** Implementation identity; also the key the body registers under. */
 const TAB_ID = 'dsh-rrp/lore'
 /** Type discriminator openTab names. */
 const TAB_KIND = 'dsh-rrp-lore'
-/** Host routes driving the controlled flow. */
-const LORE_PATH = '/dsh-rrp/lore'
+/** Host route driving the controlled flow (path from the shared contract, #22). */
+const LORE_PATH = RRP_ROUTES.lore
 /** Fallback poll interval, only used when the host jobs mirror is unavailable. */
 const POLL_MS = 2000
 

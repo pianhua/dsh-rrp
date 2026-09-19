@@ -47,12 +47,12 @@ import type { RrpClientContext } from './context-types.ts'
 const TAB_ID = 'dsh-rrp/world-state'
 /** Type discriminator openTab names. */
 const TAB_KIND = 'dsh-rrp-worldstate'
-/** Host route that accepts a corrected WorldState. */
-const CORRECTION_PATH = '/dsh-rrp/world-state'
-/** Host route serving the host-side activity ledger. */
-const ACTIVITY_PATH = '/dsh-rrp/activity'
-/** Host route whose GET also reports the conditional-injection size (issue #16). */
-const LORE_PATH = '/dsh-rrp/lore'
+import { RRP_ROUTES } from '../route-contract.ts'
+
+/** Paths come from the shared route contract (#22). */
+const CORRECTION_PATH = RRP_ROUTES.worldState
+const ACTIVITY_PATH = RRP_ROUTES.activity
+const LORE_PATH = RRP_ROUTES.lore
 /** Fallback poll interval, used only when the host jobs mirror is unavailable. */
 const ACTIVITY_POLL_MS = 2000
 

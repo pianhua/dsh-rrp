@@ -13,8 +13,9 @@ import { ensureCardPreset } from './preset.ts'
 
 const TAG = '[dsh-rrp]'
 /** Exact read paths; the list returns summaries, \`one\` takes the whole pack. */
-const LIST_PATH = '/dsh-rrp/cards'
-const ONE_PATH = '/dsh-rrp/cards/one'
+import { RRP_ROUTES } from './route-contract.ts'
+const LIST_PATH = RRP_ROUTES.cards
+const ONE_PATH = RRP_ROUTES.cardOne
 
 interface RequestLike {
   method?: string

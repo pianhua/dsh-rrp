@@ -17,29 +17,17 @@ import {
   StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { COPILOT_SSE, RRP_ROUTES, drainSse, type CopilotTurn } from '../route-contract.ts'
 import type { RrpClientContext } from './context-types.ts'
 
 /** Implementation identity; also the key the body registers under. */
 const TAB_ID = 'dsh-rrp/copilot'
 /** Type discriminator openTab names. */
 const TAB_KIND = 'dsh-rrp-copilot'
-/** Host route driving the advisory conversation. */
-const COPILOT_PATH = '/dsh-rrp/copilot'
+/** Host route driving the advisory conversation (path from the shared contract). */
+const COPILOT_PATH = RRP_ROUTES.copilot
 
 type Translate = (key: string) => string
-
-/** One executed action as the host recorded it on the turn. */
-type TurnAction =
-  | { kind: 'world-state'; digest: string }
-  | { kind: 'lore'; name: string }
-  | { kind: 'failed'; error: string }
-
-interface CopilotTurn {
-  role: 'player' | 'copilot'
-  text: string
-  at: string
-  actions?: TurnAction[]
-}
 
 /** Props the slot framework merges. */
 interface CopilotPanelProps {
@@ -79,27 +67,6 @@ const S: Record<string, CSSProperties> = {
   error: { margin: '0 14px 8px', fontSize: 12, color: 'var(--dsw-alias-label-danger, #d5484f)' },
   empty: { marginTop: 30, textAlign: 'center', fontSize: 12.5, color: 'var(--dsw-alias-label-tertiary)', lineHeight: 1.8 },
   caret: { display: 'inline-block', width: 7, marginLeft: 1, animation: 'rrp-copilot-blink 1s steps(2) infinite', color: 'var(--dsw-alias-brand-primary)' },
-}
-
-/** Parse complete SSE frames out of the buffer; returns leftovers. */
-function drainSse(buffer: string, onEvent: (event: string, data: unknown) => void): string {
-  const frames = buffer.split('\n\n')
-  const rest = frames.pop() ?? ''
-  for (const frame of frames) {
-    let event = ''
-    let data = ''
-    for (const line of frame.split('\n')) {
-      if (line.startsWith('event: ')) event = line.slice(7)
-      if (line.startsWith('data: ')) data = line.slice(6)
-    }
-    if (event.length === 0 || data.length === 0) continue
-    try {
-      onEvent(event, JSON.parse(data) as unknown)
-    } catch {
-      /* one malformed frame must not sink the stream */
-    }
-  }
-  return rest
 }
 
 /** The advisory panel body. */
@@ -175,12 +142,12 @@ function CopilotPanel(props: CopilotPanelProps) {
         if (done) break
         buffer += decoder.decode(value, { stream: true })
         buffer = drainSse(buffer, (event, data) => {
-          if (event === 'chunk' && typeof (data as { text?: unknown }).text === 'string') {
+          if (event === COPILOT_SSE.chunk && typeof (data as { text?: unknown }).text === 'string') {
             streamText += (data as { text: string }).text
             setStreamed(streamText)
-          } else if (event === 'error') {
+          } else if (event === COPILOT_SSE.error) {
             setError(t('copilot.failed'))
-          } else if (event === 'done') {
+          } else if (event === COPILOT_SSE.done) {
             const payload = data as { turn?: CopilotTurn; undoCount?: number }
             if (payload.turn !== undefined) {
               setTurns((current) => [...current.filter((turn) => turn.at !== payload.turn?.at), payload.turn as CopilotTurn])
@@ -204,7 +171,7 @@ function CopilotPanel(props: CopilotPanelProps) {
     setNotice('')
     setError('')
     try {
-      const response = await fetch(COPILOT_PATH + '/undo', {
+      const response = await fetch(RRP_ROUTES.copilotUndo, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ sessionId }),

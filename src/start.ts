@@ -23,7 +23,8 @@ import { publishState } from './state-publisher.ts'
 import type { WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
-const START_PATH = '/dsh-rrp/start'
+import { RRP_ROUTES } from './route-contract.ts'
+const START_PATH = RRP_ROUTES.start
 
 interface SessionLike {
   readonly id: string

@@ -38,12 +38,13 @@ import { belongsToRpPreset } from './preset-id.ts'
 import { stageLoreDraft, reservedNames } from './lore-route.ts'
 import { RRP_LORE_KEY, loreEntriesOf, validateLoreEntry } from './lore-state.ts'
 import { publishState } from './state-publisher.ts'
+import { COPILOT_SSE, RRP_ROUTES, encodeSseFrame } from './route-contract.ts'
 import { WORLD_STATE_KEY, applyConstraints, diffWorldState, emptyWorldState, pruneWorldState, renderWorldState, type DynamicFieldValue, type WorldState, type WorldStateRelation } from './world-state.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 
 const TAG = '[dsh-rrp]'
-const COPILOT_PATH = '/dsh-rrp/copilot'
-const UNDO_PATH = '/dsh-rrp/copilot/undo'
+const COPILOT_PATH = RRP_ROUTES.copilot
+const UNDO_PATH = RRP_ROUTES.copilotUndo
 
 /** Kept turns per session; the panel only renders a recent window anyway. */
 const TURNS_LIMIT = 50
@@ -142,9 +143,9 @@ async function readBody(req: RequestLike): Promise<string> {
   return text
 }
 
-/** Write one SSE frame. */
+/** Write one SSE frame (codec shared with the panel via route-contract). */
 function writeSse(res: ResponseLike, event: string, data: unknown): void {
-  res.write?.('event: ' + event + '\ndata: ' + JSON.stringify(data) + '\n\n')
+  res.write?.(encodeSseFrame(event, data))
 }
 
 /**
@@ -451,12 +452,12 @@ export function registerCopilotRoute(ctx: Context): void {
             for await (const chunk of stream) {
               if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') {
                 reply += chunk.text
-                writeSse(res, 'chunk', { text: chunk.text })
+                writeSse(res, COPILOT_SSE.chunk, { text: chunk.text })
               }
             }
           } catch (error) {
             if (controller.signal.aborted) {
-              writeSse(res, 'error', { error: 'aborted' })
+              writeSse(res, COPILOT_SSE.error, { error: 'aborted' })
               res.end()
               return
             }
@@ -527,14 +528,14 @@ export function registerCopilotRoute(ctx: Context): void {
             return draft.undo.length
           })
 
-          writeSse(res, 'action', { applied })
-          writeSse(res, 'done', { turn: copilotTurn, undoCount })
+          writeSse(res, COPILOT_SSE.action, { applied })
+          writeSse(res, COPILOT_SSE.done, { turn: copilotTurn, undoCount })
           res.end()
           console.log(TAG + ' copilot turn completed for ' + sessionId + (applied.length > 0 ? ' (' + String(applied.length) + ' action(s))' : ''))
         } catch (error) {
           console.warn(TAG + ' copilot turn failed:', error)
           try {
-            writeSse(res, 'error', { error: String((error as { message?: string })?.message ?? error) })
+            writeSse(res, COPILOT_SSE.error, { error: String((error as { message?: string })?.message ?? error) })
             res.end()
           } catch {
             /* the socket may already be gone */

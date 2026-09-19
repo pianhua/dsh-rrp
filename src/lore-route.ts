@@ -33,7 +33,8 @@ import { publishState } from './state-publisher.ts'
 import { WORLD_STATE_KEY, renderWorldState, type WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
-const LORE_PATH = '/dsh-rrp/lore'
+import { RRP_ROUTES } from './route-contract.ts'
+const LORE_PATH = RRP_ROUTES.lore
 
 interface SessionLike {
   readonly id: string

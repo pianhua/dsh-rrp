@@ -28,6 +28,7 @@ import {
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { interpolateCardText, type CardMeta, type CardPack, type CardPlayer } from '../card-types.ts'
 import { presetIdForCard } from '../preset-id.ts'
+import { RRP_ROUTES } from '../route-contract.ts'
 import type { RrpClientContext, RrpWorkspaceSource, RrpWorkspacesService } from './context-types.ts'
 
 /** Panel id: the \`main\` key and the \`sidebar.panellist\` id must match. */
@@ -514,14 +515,14 @@ export function registerGallery(ctx: RrpClientContext): void {
   }
 
   const loadList = async (): Promise<CardMeta[]> => {
-    const response = await fetch('/dsh-rrp/cards')
+    const response = await fetch(RRP_ROUTES.cards)
     if (!response.ok) throw new Error(String(response.status))
     const body = await response.json() as { cards: CardMeta[] }
     return body.cards
   }
 
   const loadCard = async (id: string): Promise<CardPack | undefined> => {
-    const response = await fetch('/dsh-rrp/cards/one?id=' + encodeURIComponent(id))
+    const response = await fetch(RRP_ROUTES.cardOne + '?id=' + encodeURIComponent(id))
     if (!response.ok) return undefined
     const body = await response.json() as { card: CardPack }
     return body.card
@@ -576,7 +577,7 @@ export function registerGallery(ctx: RrpClientContext): void {
     const player: CardPlayer | undefined = override.length === 0
       ? declared
       : { name: override, ...(declared?.description === undefined ? {} : { description: declared.description }) }
-    const response = await fetch('/dsh-rrp/start', {
+    const response = await fetch(RRP_ROUTES.start, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({

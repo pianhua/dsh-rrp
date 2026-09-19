@@ -20,7 +20,8 @@ import { WORLD_STATE_KEY, diffWorldState, NO_WORLD_STATE_CHANGE, pruneWorldState
 
 const TAG = '[dsh-rrp]'
 /** Same-origin exact route the panel posts to. */
-const CORRECTION_PATH = '/dsh-rrp/world-state'
+import { RRP_ROUTES } from './route-contract.ts'
+const CORRECTION_PATH = RRP_ROUTES.worldState
 
 interface SessionLike {
   readonly id: string

@@ -21,24 +21,15 @@ import { z } from 'zod'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import { worldStateSchema } from './projection/world-state.ts'
 import { harnessHome } from './home.ts'
+import type { CopilotTurn, CopilotTurnAction } from './route-contract.ts'
 
 const TAG = '[dsh-rrp]'
 
 // ---------------------------------------------------------------------------
-// Record vocabulary (was inline in copilot.ts; the schema is its single home now).
+// Record vocabulary. The turn/action types are contract vocabulary
+// (src/route-contract.ts, shared with the panel); this module owns the schema.
 
-/** One executed action as recorded on the turn (for the panel's action card). */
-export type CopilotTurnAction =
-  | { kind: 'world-state'; digest: string }
-  | { kind: 'lore'; name: string }
-  | { kind: 'failed'; error: string }
-
-export interface CopilotTurn {
-  role: 'player' | 'copilot'
-  text: string
-  at: string
-  actions?: CopilotTurnAction[]
-}
+export type { CopilotTurn, CopilotTurnAction } from './route-contract.ts'
 
 export interface CopilotUndoEntry {
   id: string

@@ -9,7 +9,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import { readActivity } from './activity.ts'
 
 const TAG = '[dsh-rrp]'
-const ACTIVITY_PATH = '/dsh-rrp/activity'
+import { RRP_ROUTES } from './route-contract.ts'
+const ACTIVITY_PATH = RRP_ROUTES.activity
 
 interface RequestLike {
   method?: string
