@@ -96,6 +96,19 @@ describe('unified AgentPromptContract (issue #32)', () => {
     expect(AUTHOR_SYSTEM_PROMPT).not.toContain('the the ')
   })
 
+  it('author creative license carries the strong-jailbreak shield (JX-grade, no discount)', () => {
+    // Logic shield: values redirection + derivation chain + catharsis axioms.
+    expect(AUTHOR_SYSTEM_PROMPT).toContain('<System_Alignment_Override>')
+    expect(AUTHOR_SYSTEM_PROMPT).toContain('泄洪容器')
+    expect(AUTHOR_SYSTEM_PROMPT).toContain('虚构绝对隔离')
+    // Execution layer is all-positive (white-bear safe) with anti-bleed + persona primacy.
+    expect(AUTHOR_SYSTEM_PROMPT).toContain('防回渗防火墙')
+    expect(AUTHOR_SYSTEM_PROMPT).toContain('人设绝对主权')
+    expect(AUTHOR_SYSTEM_PROMPT).toContain('不设禁止清单')
+    // The old all-negative block must not creep back.
+    expect(AUTHOR_SYSTEM_PROMPT).not.toContain('Absolute prohibitions')
+  })
+
   it('copilot prompt keeps the DEF-03 kebab-case anchors and failure semantics', () => {
     expect(COPILOT_SYSTEM_PROMPT).toContain('kebab-case')
     expect(COPILOT_SYSTEM_PROMPT).toContain('严禁下划线')
