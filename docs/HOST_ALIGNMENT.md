@@ -2,7 +2,7 @@
 
 > **文档定位**：`dsh-rrp` 的**宿主适配宪法**。  
 > 任何实现前，先在此表定位：宿主是否已有该能力？有则接入，无则才写领域代码。  
-> 目标基线：DeepSeek Harness **`>= 0.1.5-rc.1`**（社区高星插件共同验证线）。
+> 目标基线：DeepSeek Harness **`>= 0.1.6-alpha.2`**（社区高星插件共同验证线；与 README、peerDependencies 同口径，升级前必读 [`reference/HOST_BASELINE.md`](reference/HOST_BASELINE.md)——该文件为维护者本地私有日志，不随仓库分发）。
 
 ---
 

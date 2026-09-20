@@ -158,7 +158,17 @@ function CopilotPanel(props: CopilotPanelProps) {
         body: JSON.stringify({ sessionId, message }),
       })
       if (!response.ok || response.body === null) {
-        setError(response.status === 409 ? t('copilot.busy') : t('copilot.failed'))
+        // 503 carries a machine reason in the body: 'no provider/model route'
+        // (session has no model configured) vs history-store outages.
+        let reason = ''
+        if (response.status === 503) {
+          try {
+            reason = String((await response.clone().json() as { error?: string }).error ?? '')
+          } catch { /* keep the generic copy */ }
+        }
+        setError(response.status === 409
+          ? t('copilot.busy')
+          : reason === 'no provider/model route' ? t('copilot.noModel') : t('copilot.failed'))
         setBusy(false)
         void load()
         return

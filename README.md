@@ -18,7 +18,16 @@
 
 ## 使用
 
-将本包安装为 DSH profile 的插件后启动宿主：左栏「**卡片展厅**」→ 选卡 → 「**开始这一局**」。
+**安装**（把一个 DSH profile 变成 RP 模式）：
+
+```bash
+dsh plugin --profile <你的profile名> add dsh-rrp
+dsh --profile <你的profile名>
+```
+
+本地开发版改用 `dsh plugin --profile <name> add <本仓库路径>`（或 `pnpm run link:dev` 自动链入 `rp-dev`）。
+
+启动宿主：左栏「**卡片展厅**」→ 选卡 → 「**开始这一局**」。
 
 ## 开发
 

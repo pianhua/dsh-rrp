@@ -4,7 +4,6 @@
   "description": "DSH-Chronicle — 个人单机沉浸式角色扮演插件（正统 DSH 薄插件）",
   "type": "module",
   "license": "MIT",
-  "private": true,
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "files": [
@@ -60,6 +59,7 @@
     "watch": "tsdown --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "prepublishOnly": "pnpm run build",
     "link:dev": "node scripts/link-dev.mjs",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
