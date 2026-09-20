@@ -131,6 +131,12 @@ export function applyConstraints(field: DynamicFieldValue): DynamicFieldValue {
     if (field.max !== undefined && value > field.max) value = field.max
     if (value !== field.value) return { ...field, value }
   }
+  // A string field has a declared length ceiling too, so no write path
+  // (Chronicler createFields, 月停 patch, player correction) can grow one.
+  if (field.type === 'string' && typeof field.value === 'string') {
+    const capped = capString(field.value, WORLD_STATE_LIMITS.dynamicStringChars)
+    if (capped !== field.value) return { ...field, value: capped }
+  }
   return field
 }
 
@@ -143,7 +149,20 @@ export const WORLD_STATE_LIMITS = {
   flags: 16,
   flagValueChars: 160,
   dynamicFields: 32,
+  /** Ceiling for any string-valued dynamic field (incl. the player persona). */
+  dynamicStringChars: 400,
   relations: 16,
+} as const
+
+/**
+ * Lean targets the Chronicler prompt asks for, deliberately below the caps
+ * above: a cap silently drops whatever sits past the tail, so the model is
+ * told to stay well inside it. Both numbers are named here so the prompt and
+ * the caps cannot drift apart.
+ */
+export const WORLD_STATE_TARGETS = {
+  flags: 12,
+  relations: 12,
 } as const
 
 /** Keep at most `limit` entries, preserving key order. */
@@ -155,10 +174,10 @@ function capRecord<T>(record: Record<string, T>, limit: number): Record<string, 
   return capped
 }
 
-/** Bound one flag value's length, ellipsis included. */
-function capFlagValue(value: WorldStateFlag): WorldStateFlag {
-  if (typeof value !== 'string' || value.length <= WORLD_STATE_LIMITS.flagValueChars) return value
-  return value.slice(0, WORLD_STATE_LIMITS.flagValueChars - 1) + '…'
+/** Bound a stored string's length; the cut tail becomes an ellipsis. */
+function capString(value: string, limit: number): string {
+  if (value.length <= limit) return value
+  return value.slice(0, limit - 1) + '…'
 }
 
 /** Player aliases (case-insensitive) that normalize to 「玩家」. */
@@ -223,7 +242,8 @@ export function pruneWorldState(state: WorldState): WorldState {
 
   let flags = head
   for (const [key, value] of Object.entries(head)) {
-    const capped = capFlagValue(value)
+    if (typeof value !== 'string') continue
+    const capped = capString(value, WORLD_STATE_LIMITS.flagValueChars)
     if (capped !== value) {
       if (flags === head) flags = { ...head }
       flags[key] = capped
@@ -270,9 +290,18 @@ function sortKeys(value: unknown): unknown {
   return value
 }
 
-/** Deterministic JSON (sorted keys). */
-function stableJson(value: unknown): string {
+/** Deterministic JSON (sorted keys). Shared so equality never depends on key order. */
+export function stableJson(value: unknown): string {
   return JSON.stringify(sortKeys(value))
+}
+
+/**
+ * Deep equality of two slices, independent of key insertion order. Used by the
+ * writers' "did anything actually change" checks — `JSON.stringify` on raw
+ * objects would call a reorder a real change and discard good inference.
+ */
+export function worldStatesEqual(prior: WorldState, next: WorldState): boolean {
+  return stableJson(prior) === stableJson(next)
 }
 
 /**
@@ -482,5 +511,5 @@ export function withPlayerPersona(state: WorldState | null, persona: string): Wo
   const text = persona.trim()
   if (text.length === 0) return state
   const base = state ?? emptyWorldState()
-  return { ...base, player: createDynamicField('string', text.slice(0, 400)) }
+  return { ...base, player: createDynamicField('string', text) }
 }

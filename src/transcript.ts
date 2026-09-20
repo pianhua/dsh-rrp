@@ -36,6 +36,12 @@ export interface TranscriptSlice {
   entries: TranscriptEntry[]
   /** Seq of the latest rrp-bearing event, -1 when none. */
   lastStateSeq: number
+  /**
+   * Seq of the newest prose the Chronicler's last committed fold covered, -1
+   * when none. Its resume cursor; fork- and restart-safe because it travels in
+   * the same event as the state it describes.
+   */
+  lastFoldSeq: number
   /** Latest card-lane adoption (fingerprint per cardFingerprint semantics). */
   card?: { fingerprint: string }
   /** Latest facts-lane adoption text. */
@@ -48,5 +54,5 @@ export interface TranscriptSlice {
 
 /** The empty slice: no events folded yet. */
 export function emptyTranscriptSlice(): TranscriptSlice {
-  return { entries: [], lastStateSeq: -1, sedimentSeen: false, lastSummaryTurn: -1 }
+  return { entries: [], lastStateSeq: -1, lastFoldSeq: -1, sedimentSeen: false, lastSummaryTurn: -1 }
 }

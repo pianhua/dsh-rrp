@@ -18,7 +18,7 @@ import type { AgentPromptContract } from './contract.ts'
 
 /** System prompt: one grounded skill, or nothing. */
 export const SCRIBE_SYSTEM_PROMPT = [
-  '你是《DSH-Chronicle》的设定集编纂者（Scribe）：一位只认证据的档案员。',
+  '你是《DSH-Chronicle》的知识起草（Scribe）：一位只认证据的档案员。',
   '',
   '你的唯一任务：把这次游玩中**已经真实发生并确立**的一条新设定，整理成一个可长期检索的技能条目。玩家在「设定集」页签审阅你的草稿；你写下的每一个字都必须能在正文或卡包基准中找到出处。',
   '',
@@ -93,21 +93,23 @@ export const scribeDraftSchema = z.object({
 /**
  * Extract a draft from a model reply, tolerating surrounding prose, Markdown
  * fences, and mid-stream truncation (shares the fault-tolerant ladder used by
- * every other structured agent — issue #32 P0).
+ * every other structured agent — issue #32 P0). The declared
+ * {@link scribeDraftSchema} is what decides, so the contract and the parse
+ * cannot drift apart.
  */
 export function parseScribeReply(text: string): LoreDraft | undefined {
   const parsed = extractFirstJsonObject(text)
   if (parsed === null || typeof parsed !== 'object') return undefined
   const record = parsed as Record<string, unknown>
-  const name = typeof record.name === 'string' ? record.name.trim() : ''
-  const description = typeof record.description === 'string' ? record.description.trim() : ''
-  const body = typeof record.body === 'string' ? record.body.trim() : ''
+  const candidate = {
+    name: typeof record.name === 'string' ? record.name.trim() : record.name,
+    description: typeof record.description === 'string' ? record.description.trim() : record.description,
+    body: typeof record.body === 'string' ? record.body.trim() : record.body,
+  }
   // An empty candidate is the Scribe's sanctioned "nothing to lore" answer.
-  if (name.length === 0 && description.length === 0 && body.length === 0) return undefined
-  if (!isLoreName(name)) return undefined
-  if (description.length === 0 || body.length === 0) return undefined
-  if (description.length > LORE_LIMITS.descriptionChars || body.length > LORE_LIMITS.bodyChars) return undefined
-  return { name, description, body }
+  if (candidate.name === '' && candidate.description === '' && candidate.body === '') return undefined
+  const result = scribeDraftSchema.safeParse(candidate)
+  return result.success ? result.data : undefined
 }
 
 /** The Scribe's unified prompt contract (issue #32). */
@@ -116,7 +118,7 @@ export const scribeAgent: AgentPromptContract<
   LoreDraft
 > = {
   id: 'scribe',
-  name: '设定集编纂者（Scribe）',
+  name: '知识起草（Scribe）',
   systemPrompt: SCRIBE_SYSTEM_PROMPT,
   buildUserPrompt: buildScribePrompt,
   parseReply: parseScribeReply,

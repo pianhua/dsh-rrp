@@ -7,37 +7,11 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { readActivity } from './activity.ts'
+import { type RequestLike, type ResponseLike, type RuntimeFaces, type WebServerService, queryOf, face, send } from './host-faces.ts'
 
 const TAG = '[dsh-rrp]'
 import { RRP_ROUTES } from './route-contract.ts'
 const ACTIVITY_PATH = RRP_ROUTES.activity
-
-interface RequestLike {
-  method?: string
-  url?: string
-}
-interface ResponseLike {
-  statusCode: number
-  setHeader?(name: string, value: string): void
-  end(body?: string): void
-}
-interface WebServerService {
-  register(route: {
-    kind: 'exact'
-    path: string
-    handler: (req: RequestLike, res: ResponseLike) => void | Promise<void>
-  }): () => void
-}
-interface RuntimeFaces {
-  get(name: string): unknown
-}
-
-/** Respond with a JSON body. */
-function send(res: ResponseLike, status: number, payload: unknown): void {
-  res.statusCode = status
-  res.setHeader?.('content-type', 'application/json; charset=utf-8')
-  res.end(JSON.stringify(payload))
-}
 
 /**
  * Register the read-only activity route.
@@ -45,7 +19,7 @@ function send(res: ResponseLike, status: number, payload: unknown): void {
  */
 export function registerActivityRoute(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
-  const webServer = runtime.get('webServer') as WebServerService | undefined
+  const webServer = face<WebServerService>(runtime, 'webServer')
   if (webServer === undefined) {
     console.warn(TAG + ' activity route idle (missing webServer)')
     return
@@ -61,8 +35,8 @@ export function registerActivityRoute(ctx: Context): void {
           return
         }
         try {
-          const sessionId = new URL(req.url ?? '', 'http://localhost').searchParams.get('sessionId')
-          if (sessionId === null || sessionId.length === 0) {
+          const sessionId = queryOf(req)?.get('sessionId') ?? ''
+          if (sessionId.length === 0) {
             send(res, 400, { error: 'missing sessionId' })
             return
           }

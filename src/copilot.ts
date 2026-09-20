@@ -1,10 +1,10 @@
 /**
  * dsh-rrp — the Copilot advisor (route + history + undo + steward proposals).
  *
- * The Copilot lives in the right sidebar's third tab and talks to the player
- * out-of-band: her conversation history is kept OUT of the session log (the
- * narrative stream stays pure) on the host Storage domain (issue #21) —
- * plugin-owned records, host-owned durability. Her only writes into the
+ * The Copilot (月停) lives in the right sidebar's third tab and talks to the
+ * player out-of-band: their conversation history is kept OUT of the session
+ * log (the narrative stream stays pure) on the host Storage domain (issue #21)
+ * — plugin-owned records, host-owned durability. Its only writes into the
  * session are the same published lanes everyone else uses (WorldState facts,
  * staged lore draft) — append-only, fork-safe, and attributed `actor:
  * 'copilot'` in the activity ledger.
@@ -24,6 +24,24 @@ import { recordActivity } from './activity.ts'
 import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
 import { readCard } from './cards.ts'
 import {
+  type AgentsService,
+  type LlmService,
+  type ProjectionsService,
+  type RequestLike,
+  type ResponseLike,
+  type RuntimeFaces,
+  type SessionLike,
+  type SessionsService,
+  type WebServerService,
+  acceptsRrpWrites,
+  face,
+  nowIso,
+  queryOf,
+  readJsonBody,
+  routeOf,
+  send,
+} from './host-faces.ts'
+import {
   emptyCopilotStore,
   openCopilotStore,
   type CopilotHistoryView,
@@ -33,15 +51,14 @@ import {
   type CopilotTurnAction,
   type CopilotUndoEntry,
 } from './copilot-store.ts'
-import { transcriptOf, DEFAULT_TRANSCRIPT_LIMIT } from './chronicler.ts'
+import { transcriptOf } from './transcript-reader.ts'
 import { SUMMARY_KEY, renderMacroSummary } from './macro-summary.ts'
-import { belongsToRpPreset } from './preset-id.ts'
 import { stageLoreDraft, reservedNames } from './lore-route.ts'
 import { RRP_LORE_KEY, loreEntriesOf, validateLoreEntry } from './lore-state.ts'
 import { publishState } from './state-publisher.ts'
 import { confirmProposal, discardProposal, listProposals, stageProposal } from './steward-proposals.ts'
-import { COPILOT_SSE, RRP_ROUTES, encodeSseFrame } from './route-contract.ts'
-import { WORLD_STATE_KEY, applyConstraints, diffWorldState, emptyWorldState, pruneWorldState, renderWorldState, type DynamicFieldValue, type WorldState, type WorldStateRelation } from './world-state.ts'
+import { COPILOT_NO_MODEL_ROUTE, COPILOT_SSE, RRP_ROUTES, encodeSseFrame } from './route-contract.ts'
+import { NO_WORLD_STATE_CHANGE, WORLD_STATE_KEY, applyConstraints, diffWorldState, emptyWorldState, pruneWorldState, renderWorldState, type DynamicFieldValue, type WorldState, type WorldStateRelation } from './world-state.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 
 const TAG = '[dsh-rrp]'
@@ -100,71 +117,6 @@ export function liveCardContextText(card: CardContext, home?: string): string {
       player: card.player ?? live.meta.player,
     }) + '\n（本区块为提问时实时读盘的卡包源文件。）'
   )
-}
-
-// ---------------------------------------------------------------------------
-// Host faces (structural, so the bundle imports no host package).
-
-interface SessionLike {
-  readonly id: string
-  append(type: string, data: unknown, intent?: unknown): unknown
-}
-interface SessionsService {
-  get(id: string): SessionLike | undefined
-}
-interface ProjectionsService {
-  stateOf(session: unknown, key: string): unknown
-}
-interface AgentLike {
-  options?: { provider?: string; model?: string }
-}
-interface AgentsService {
-  get(id: string): AgentLike | undefined
-}
-interface StreamChunkLike {
-  type?: string
-  text?: string
-}
-interface LlmService {
-  stream(options: Record<string, unknown>): AsyncIterable<StreamChunkLike>
-}
-interface RequestLike {
-  method?: string
-  url?: string
-  on?(event: string, listener: () => void): void
-  [Symbol.asyncIterator](): AsyncIterator<string | Uint8Array>
-}
-interface ResponseLike {
-  statusCode: number
-  setHeader?(name: string, value: string): void
-  write?(chunk: string): unknown
-  end(body?: string): void
-}
-interface WebServerService {
-  register(route: {
-    kind: 'exact'
-    path: string
-    handler: (req: RequestLike, res: ResponseLike) => void | Promise<void>
-  }): () => void
-}
-interface RuntimeFaces {
-  get(name: string): unknown
-}
-
-/** Respond with a JSON body. */
-function sendJson(res: ResponseLike, status: number, payload: unknown): void {
-  res.statusCode = status
-  res.setHeader?.('content-type', 'application/json; charset=utf-8')
-  res.end(JSON.stringify(payload))
-}
-
-/** Read the whole request body as UTF-8 text. */
-async function readBody(req: RequestLike): Promise<string> {
-  let text = ''
-  for await (const chunk of req) {
-    text += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
-  }
-  return text
 }
 
 /** Write one SSE frame (codec shared with the panel via route-contract). */
@@ -246,11 +198,11 @@ export function mergeWorldStatePatch(prior: WorldState, patch: Record<string, un
 /** Register the Copilot routes. Capability-gated like every other route. */
 export function registerCopilotRoute(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
-  const webServer = runtime.get('webServer') as WebServerService | undefined
-  const sessions = runtime.get('sessions') as SessionsService | undefined
-  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
-  const llm = runtime.get('llm') as LlmService | undefined
-  const agents = runtime.get('agents') as AgentsService | undefined
+  const webServer = face<WebServerService>(runtime, 'webServer')
+  const sessions = face<SessionsService>(runtime, 'sessions')
+  const projections = face<ProjectionsService>(runtime, 'sessionProjections')
+  const llm = face<LlmService>(runtime, 'llm')
+  const agents = face<AgentsService>(runtime, 'agents')
   if (webServer === undefined || sessions === undefined || projections === undefined || llm === undefined || agents === undefined) {
     console.warn(TAG + ' copilot route idle (missing webServer/sessions/sessionProjections/llm/agents)')
     return
@@ -260,12 +212,11 @@ export function registerCopilotRoute(ctx: Context): void {
   const resolveSession = (sessionId: string, res: ResponseLike): SessionLike | undefined => {
     const session = sessions.get(sessionId)
     if (session === undefined) {
-      sendJson(res, 404, { error: 'unknown session' })
+      send(res, 404, { error: 'unknown session' })
       return undefined
     }
-    const preset = projections.stateOf(session, 'agentPreset')
-    if (typeof preset === 'string' && !belongsToRpPreset(preset)) {
-      sendJson(res, 403, { error: 'not an RP session' })
+    if (!acceptsRrpWrites(projections, session)) {
+      send(res, 403, { error: 'not an RP session' })
       return undefined
     }
     return session
@@ -296,26 +247,24 @@ export function registerCopilotRoute(ctx: Context): void {
       path: UNDO_PATH,
       handler: async (req, res) => {
         if (req.method !== 'POST') {
-          sendJson(res, 405, { error: 'method not allowed' })
+          send(res, 405, { error: 'method not allowed' })
           return
         }
-        let parsed: unknown
-        try {
-          parsed = JSON.parse(await readBody(req))
-        } catch {
-          sendJson(res, 400, { error: 'invalid JSON body' })
+        const body = await readJsonBody(req)
+        if (body === undefined) {
+          send(res, 400, { error: 'invalid JSON body' })
           return
         }
-        const sessionId = (parsed as { sessionId?: unknown }).sessionId
+        const sessionId = body.sessionId
         if (typeof sessionId !== 'string' || sessionId.length === 0) {
-          sendJson(res, 400, { error: 'missing sessionId' })
+          send(res, 400, { error: 'missing sessionId' })
           return
         }
         const session = resolveSession(sessionId, res)
         if (session === undefined) return
         const store = await takeStore()
         if (store === undefined) {
-          sendJson(res, 503, { error: 'copilot history unavailable' })
+          send(res, 503, { error: 'copilot history unavailable' })
           return
         }
 
@@ -323,22 +272,22 @@ export function registerCopilotRoute(ctx: Context): void {
         // double-spend one snapshot.
         const entry = await store.mutate(sessionId, (draft) => draft.undo.pop())
         if (entry === undefined) {
-          sendJson(res, 400, { error: 'nothing to undo' })
+          send(res, 400, { error: 'nothing to undo' })
           return
         }
         // The revert is itself one new published state (append-only honesty):
         // the values roll back, the ledger keeps both records.
         if (!publishState(session, projections, { worldState: entry.snapshot })) {
           await store.mutate(sessionId, (draft) => { draft.undo.push(entry) })
-          sendJson(res, 500, { error: 'WorldState write failed' })
+          send(res, 500, { error: 'WorldState write failed' })
           return
         }
         recordActivity(sessionId, {
-          id: randomUUID(), at: new Date().toISOString(), actor: 'copilot', target: 'world-state', phase: 'corrected',
+          id: randomUUID(), at: nowIso(), actor: 'copilot', target: 'world-state', phase: 'corrected',
           detailKey: 'detail.copilotUndone',
         })
         console.log(TAG + ' copilot undo restored pre-turn state for ' + sessionId)
-        sendJson(res, 200, { ok: true, digest: entry.digest, undoCount: store.load(sessionId).undo.length })
+        send(res, 200, { ok: true, digest: entry.digest, undoCount: store.load(sessionId).undo.length })
       },
     })
 
@@ -347,32 +296,30 @@ export function registerCopilotRoute(ctx: Context): void {
       path: PROPOSALS_PATH,
       handler: async (req, res) => {
         if (req.method !== 'POST') {
-          sendJson(res, 405, { error: 'method not allowed' })
+          send(res, 405, { error: 'method not allowed' })
           return
         }
-        let parsed: unknown
-        try {
-          parsed = JSON.parse(await readBody(req))
-        } catch {
-          sendJson(res, 400, { error: 'invalid JSON body' })
+        const body = await readJsonBody(req)
+        if (body === undefined) {
+          send(res, 400, { error: 'invalid JSON body' })
           return
         }
-        const sessionId = (parsed as { sessionId?: unknown }).sessionId
-        const action = (parsed as { action?: unknown }).action
-        const id = (parsed as { id?: unknown }).id
+        const sessionId = body.sessionId
+        const action = body.action
+        const id = body.id
         if (typeof sessionId !== 'string' || sessionId.length === 0) {
-          sendJson(res, 400, { error: 'missing sessionId' })
+          send(res, 400, { error: 'missing sessionId' })
           return
         }
         if (resolveSession(sessionId, res) === undefined) return
         if ((action !== 'confirm' && action !== 'discard') || typeof id !== 'string' || id.length === 0) {
-          sendJson(res, 400, { error: 'unknown action' })
+          send(res, 400, { error: 'unknown action' })
           return
         }
 
         if (action === 'discard') {
           discardProposal(sessionId, id)
-          sendJson(res, 200, { ok: true, proposals: listProposals(sessionId) })
+          send(res, 200, { ok: true, proposals: listProposals(sessionId) })
           return
         }
 
@@ -380,16 +327,16 @@ export function registerCopilotRoute(ctx: Context): void {
         const proposal = listProposals(sessionId).find((entry) => entry.id === id)
         const result = confirmProposal(sessionId, id)
         if (!result.ok) {
-          sendJson(res, 400, { error: result.error })
+          send(res, 400, { error: result.error })
           return
         }
         recordActivity(sessionId, {
-          id: randomUUID(), at: new Date().toISOString(), actor: 'copilot',
+          id: randomUUID(), at: nowIso(), actor: 'copilot',
           target: proposal?.kind === 'doc-note' ? 'doc-note' : 'card', phase: 'corrected',
           detail: result.summary,
         })
         console.log(TAG + ' copilot proposal confirmed for ' + sessionId + ': ' + result.summary)
-        sendJson(res, 200, { ok: true, summary: result.summary, proposals: listProposals(sessionId) })
+        send(res, 200, { ok: true, summary: result.summary, proposals: listProposals(sessionId) })
       },
     })
 
@@ -397,35 +344,28 @@ export function registerCopilotRoute(ctx: Context): void {
       kind: 'exact',
       path: COPILOT_PATH,
       handler: async (req, res) => {
-        let url: URL
-        try {
-          url = new URL(req.url ?? '', 'http://localhost')
-        } catch {
-          sendJson(res, 400, { error: 'invalid URL' })
-          return
-        }
-        const fromBody = async (): Promise<string> => req.method === 'POST' ? await readBody(req) : ''
+        const query = queryOf(req)
         const store = await takeStore()
         if (store === undefined) {
-          sendJson(res, 503, { error: 'copilot history unavailable' })
+          send(res, 503, { error: 'copilot history unavailable' })
           return
         }
 
         // GET: history + undo depth. DELETE: clear history.
         if (req.method === 'GET') {
-          const sessionId = url.searchParams.get('sessionId') ?? ''
+          const sessionId = query?.get('sessionId') ?? ''
           if (sessionId.length === 0) {
-            sendJson(res, 400, { error: 'missing sessionId' })
+            send(res, 400, { error: 'missing sessionId' })
             return
           }
           if (resolveSession(sessionId, res) === undefined) return
-          sendJson(res, 200, { ...readCopilotHistory(store, sessionId), proposals: listProposals(sessionId) })
+          send(res, 200, { ...readCopilotHistory(store, sessionId), proposals: listProposals(sessionId) })
           return
         }
         if (req.method === 'DELETE') {
-          const sessionId = url.searchParams.get('sessionId') ?? ''
+          const sessionId = query?.get('sessionId') ?? ''
           if (sessionId.length === 0) {
-            sendJson(res, 400, { error: 'missing sessionId' })
+            send(res, 400, { error: 'missing sessionId' })
             return
           }
           if (resolveSession(sessionId, res) === undefined) return
@@ -433,51 +373,47 @@ export function registerCopilotRoute(ctx: Context): void {
           // plugin. Audit it loudly so a vanished record can be diagnosed
           // from the host log instead of archaeology.
           console.warn(TAG + ' copilot history DELETED for ' + sessionId
-            + ' (' + String(store.load(sessionId).turns.length) + ' turns) at ' + new Date().toISOString())
+            + ' (' + String(store.load(sessionId).turns.length) + ' turns) at ' + nowIso())
           await store.remove(sessionId)
-          sendJson(res, 200, { ok: true })
+          send(res, 200, { ok: true })
           return
         }
         if (req.method !== 'POST') {
-          sendJson(res, 405, { error: 'method not allowed' })
+          send(res, 405, { error: 'method not allowed' })
           return
         }
 
-        let parsed: unknown
-        try {
-          parsed = JSON.parse(await fromBody())
-        } catch {
-          sendJson(res, 400, { error: 'invalid JSON body' })
+        const body = await readJsonBody(req)
+        if (body === undefined) {
+          send(res, 400, { error: 'invalid JSON body' })
           return
         }
-        const sessionId = (parsed as { sessionId?: unknown }).sessionId
-        const message = (parsed as { message?: unknown }).message
+        const sessionId = body.sessionId
+        const message = body.message
         if (typeof sessionId !== 'string' || sessionId.length === 0) {
-          sendJson(res, 400, { error: 'missing sessionId' })
+          send(res, 400, { error: 'missing sessionId' })
           return
         }
         if (typeof message !== 'string' || message.trim().length === 0) {
-          sendJson(res, 400, { error: 'missing message' })
+          send(res, 400, { error: 'missing message' })
           return
         }
         const session = resolveSession(sessionId, res)
         if (session === undefined) return
         if (IN_FLIGHT.has(sessionId)) {
-          sendJson(res, 409, { error: 'busy' })
+          send(res, 409, { error: 'busy' })
           return
         }
-        const owner = agents.get(sessionId)
-        const provider = owner?.options?.provider
-        const model = owner?.options?.model
-        if (provider === undefined || model === undefined || provider.length === 0 || model.length === 0) {
-          sendJson(res, 503, { error: 'no provider/model route' })
+        const route = routeOf(agents, sessionId)
+        if (route === undefined) {
+          send(res, 503, { error: COPILOT_NO_MODEL_ROUTE })
           return
         }
 
         IN_FLIGHT.add(sessionId)
         try {
           await store.mutate(sessionId, (draft) => {
-            draft.turns.push({ role: 'player', text: message, at: new Date().toISOString() })
+            draft.turns.push({ role: 'player', text: message, at: nowIso() })
             draft.turns = draft.turns.slice(-TURNS_LIMIT)
           })
           const store0 = store.load(sessionId)
@@ -501,7 +437,7 @@ export function registerCopilotRoute(ctx: Context): void {
             worldState: renderWorldState(state),
             summary: summaryValue === null || summaryValue === undefined ? '' : renderMacroSummary(summaryValue as Parameters<typeof renderMacroSummary>[0]),
             lore: lore.map((skill) => '- ' + skill.name + '：' + skill.description).join('\n'),
-            transcript: transcriptOf(projections, session).slice(-DEFAULT_TRANSCRIPT_LIMIT),
+            transcript: transcriptOf(projections, session),
           })
 
           const historyMessages = store0.turns.slice(-HISTORY_FEED, -1).map((turn) => ({
@@ -511,8 +447,8 @@ export function registerCopilotRoute(ctx: Context): void {
             source: { kind: 'plugin', plugin: 'dsh-rrp' },
           }))
           const stream = llm.stream({
-            provider,
-            model,
+            provider: route.provider,
+            model: route.model,
             system: COPILOT_SYSTEM_PROMPT,
             messages: [
               ...historyMessages,
@@ -556,7 +492,7 @@ export function registerCopilotRoute(ctx: Context): void {
           }
 
           // Execute the action block, if any. Failures are reported per action
-          // and never abort the turn — the player still got her answer.
+          // and never abort the turn — the player still got their answer.
           const applied: CopilotTurnAction[] = []
           const actions = parseCopilotActions(reply)
           const worldActions = actions.filter((action) => action.type === 'update_world_state')
@@ -570,7 +506,7 @@ export function registerCopilotRoute(ctx: Context): void {
                 const prior = (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ?? emptyWorldState()
                 const next = mergeWorldStatePatch(prior, action.patch)
                 const digest = diffWorldState(prior, next)
-                if (digest.includes('无实质变化')) {
+                if (digest === NO_WORLD_STATE_CHANGE) {
                   applied.push({ kind: 'failed', error: '状态无实质变化' })
                   continue
                 }
@@ -578,7 +514,7 @@ export function registerCopilotRoute(ctx: Context): void {
                   throw new Error('WorldState write failed')
                 }
                 recordActivity(sessionId, {
-                  id: randomUUID(), at: new Date().toISOString(), actor: 'copilot', target: 'world-state', phase: 'corrected',
+                  id: randomUUID(), at: nowIso(), actor: 'copilot', target: 'world-state', phase: 'corrected',
                   detail: (action.reason !== undefined ? action.reason + '：' : '') + digest,
                 })
                 applied.push({ kind: 'world-state', digest })
@@ -595,19 +531,19 @@ export function registerCopilotRoute(ctx: Context): void {
                   ...(action.proposal.reason !== undefined ? { reason: action.proposal.reason } : {}),
                 })
                 recordActivity(sessionId, {
-                  id: randomUUID(), at: new Date().toISOString(), actor: 'copilot', target: 'card', phase: 'corrected',
+                  id: randomUUID(), at: nowIso(), actor: 'copilot', target: 'card', phase: 'corrected',
                   detailKey: 'detail.stagedCardEdit', detailName: action.proposal.card + '/' + action.proposal.file,
                 })
-                applied.push({ kind: 'proposal', proposalKind: 'card-edit', label: '卡包提案：' + action.proposal.card + '/' + action.proposal.file })
+                applied.push({ kind: 'proposal', proposalKind: 'card-edit', subject: action.proposal.card + '/' + action.proposal.file })
                 continue
               }
               if (action.type === 'propose_doc_note') {
                 stageProposal(sessionId, { kind: 'doc-note', title: action.note.title, body: action.note.body })
                 recordActivity(sessionId, {
-                  id: randomUUID(), at: new Date().toISOString(), actor: 'copilot', target: 'doc-note', phase: 'corrected',
+                  id: randomUUID(), at: nowIso(), actor: 'copilot', target: 'doc-note', phase: 'corrected',
                   detailKey: 'detail.stagedDocNote', detailName: action.note.title,
                 })
-                applied.push({ kind: 'proposal', proposalKind: 'doc-note', label: '文档备忘：' + action.note.title })
+                applied.push({ kind: 'proposal', proposalKind: 'doc-note', subject: action.note.title })
                 continue
               }
               // draft_lore: validate then stage for player confirmation.
@@ -616,7 +552,7 @@ export function registerCopilotRoute(ctx: Context): void {
               if (!result.ok) throw new Error(result.error)
               stageLoreDraft(sessionId, result.skill)
               recordActivity(sessionId, {
-                id: randomUUID(), at: new Date().toISOString(), actor: 'copilot', target: 'lore', phase: 'corrected',
+                id: randomUUID(), at: nowIso(), actor: 'copilot', target: 'lore', phase: 'corrected',
                 detailKey: 'detail.stagedDraft', detailName: result.skill.name,
               })
               applied.push({ kind: 'lore', name: result.skill.name })
@@ -627,14 +563,14 @@ export function registerCopilotRoute(ctx: Context): void {
           const copilotTurn: CopilotTurn = {
             role: 'copilot',
             text: reply,
-            at: new Date().toISOString(),
+            at: nowIso(),
             ...(applied.length > 0 ? { actions: applied } : {}),
           }
           const undoCount = await store.mutate(sessionId, (draft) => {
             if (priorForUndo !== undefined && applied.some((entry) => entry.kind === 'world-state')) {
               draft.undo.push({
                 id: randomUUID(),
-                at: new Date().toISOString(),
+                at: nowIso(),
                 digest: applied.filter((entry): entry is { kind: 'world-state'; digest: string } => entry.kind === 'world-state').map((entry) => entry.digest).join('；'),
                 snapshot: priorForUndo,
               })

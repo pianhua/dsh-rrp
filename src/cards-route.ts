@@ -14,46 +14,12 @@ import { ensureCardPreset } from './preset.ts'
 
 const TAG = '[dsh-rrp]'
 /** Exact read paths; the list returns summaries, \`one\` takes the whole pack. */
-import { RRP_ROUTES } from './route-contract.ts'
+import { RRP_ROUTES, type CardImportResponse } from './route-contract.ts'
 const LIST_PATH = RRP_ROUTES.cards
 const ONE_PATH = RRP_ROUTES.cardOne
 const IMPORT_PATH = RRP_ROUTES.cardImport
 
-interface RequestLike {
-  method?: string
-  url?: string
-  [Symbol.asyncIterator](): AsyncIterator<string | Uint8Array>
-}
-interface ResponseLike {
-  statusCode: number
-  setHeader?(name: string, value: string): void
-  end(body?: string): void
-}
-interface WebServerService {
-  register(route: {
-    kind: 'exact'
-    path: string
-    handler: (req: RequestLike, res: ResponseLike) => void | Promise<void>
-  }): () => void
-}
-interface RuntimeFaces {
-  get(name: string): unknown
-}
-
-/** Respond with a JSON body. */
-function send(res: ResponseLike, status: number, payload: unknown): void {
-  res.statusCode = status
-  res.setHeader?.('content-type', 'application/json; charset=utf-8')
-  res.end(JSON.stringify(payload))
-}
-
-async function readBody(req: RequestLike): Promise<string> {
-  let text = ''
-  for await (const chunk of req) {
-    text += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
-  }
-  return text
-}
+import { type RequestLike, type ResponseLike, type RuntimeFaces, type WebServerService, queryOf, readJsonBody, face, send } from './host-faces.ts'
 
 /**
  * Register the read-only card-pack routes.
@@ -61,7 +27,7 @@ async function readBody(req: RequestLike): Promise<string> {
  */
 export function registerCardsRoute(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
-  const webServer = runtime.get('webServer') as WebServerService | undefined
+  const webServer = face<WebServerService>(runtime, 'webServer')
   if (webServer === undefined) {
     console.warn(TAG + ' card route idle (missing webServer)')
     return
@@ -96,8 +62,8 @@ export function registerCardsRoute(ctx: Context): void {
           return
         }
         try {
-          const id = new URL(req.url ?? '', 'http://localhost').searchParams.get('id')
-          if (id === null || id.length === 0) {
+          const id = queryOf(req)?.get('id') ?? ''
+          if (id.length === 0) {
             send(res, 400, { error: 'missing id' })
             return
           }
@@ -121,14 +87,11 @@ export function registerCardsRoute(ctx: Context): void {
           return
         }
         try {
-          let parsed: unknown
-          try {
-            parsed = JSON.parse(await readBody(req))
-          } catch {
+          const body = await readJsonBody(req)
+          if (body === undefined) {
             send(res, 400, { error: 'invalid JSON body' })
             return
           }
-          const body = parsed as { kind?: unknown; data?: unknown }
           if (body.kind !== 'png' && body.kind !== 'json') {
             send(res, 400, { error: 'kind must be png or json' })
             return
@@ -149,7 +112,7 @@ export function registerCardsRoute(ctx: Context): void {
             send(res, 500, { error: 'could not allocate a card id' })
             return
           }
-          send(res, 200, { ok: true, ...written })
+          send(res, 200, { ok: true, ...written } satisfies CardImportResponse)
         } catch (error) {
           send(res, 500, { error: String(error) })
         }

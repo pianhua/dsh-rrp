@@ -4,7 +4,7 @@
  * `ask_copilot` is one of the only two things card UI may do. The copilot panel
  * owns its input as local state, so a question raised from another panel rides
  * this one-shot bus instead of reaching into that component. It survives the
- * panel being unmounted: the question waits until the player opens 副驾驶.
+ * panel being unmounted: the question waits until the player opens 月停.
  */
 import { useEffect } from 'react'
 

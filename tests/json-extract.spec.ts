@@ -48,3 +48,14 @@ describe('trailing-comma tolerance (testing-round hardening)', () => {
     expect(extractFirstJsonObject('{"a":"x,}y",}')).toEqual({ a: 'x,}y' })
   })
 })
+
+describe('surplus-closer tolerance (shared ladder, was copilot-only)', () => {
+  it('parses a payload the model over-closed', () => {
+    expect(extractFirstJsonObject('{"a":1}}')).toEqual({ a: 1 })
+    expect(extractFirstJsonObject('{"actions":[]}]]')).toEqual({ actions: [] })
+  })
+
+  it('still repairs a missing closer as well', () => {
+    expect(extractFirstJsonObject('{"a":{"b":1}')).toEqual({ a: { b: 1 } })
+  })
+})

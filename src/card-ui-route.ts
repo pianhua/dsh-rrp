@@ -17,37 +17,12 @@ import { cardDirOf, shippedCardRoot } from './cards.ts'
 import { isUiHtmlName, loadUiManifest, UI_MANIFEST_FILE } from './card-ui.ts'
 import { isCardId } from './preset-id.ts'
 import { RRP_ROUTES, type CardUiResponse } from './route-contract.ts'
+import { type RequestLike, type ResponseLike, type RuntimeFaces, type WebServerService, queryOf, face, send } from './host-faces.ts'
 
 const TAG = '[dsh-rrp]'
 const UI_PATH = RRP_ROUTES.cardUi
 /** One card HTML page, capped: a bespoke panel is a screen, not an application bundle. */
 const UI_HTML_MAX_BYTES = 256 * 1024
-
-interface RequestLike {
-  method?: string
-  url?: string
-}
-interface ResponseLike {
-  statusCode: number
-  setHeader?(name: string, value: string): void
-  end(body?: string): void
-}
-interface WebServerService {
-  register(route: {
-    kind: 'exact'
-    path: string
-    handler: (req: RequestLike, res: ResponseLike) => void | Promise<void>
-  }): () => void
-}
-interface RuntimeFaces {
-  get(name: string): unknown
-}
-
-function send(res: ResponseLike, status: number, payload: unknown): void {
-  res.statusCode = status
-  res.setHeader?.('content-type', 'application/json; charset=utf-8')
-  res.end(JSON.stringify(payload))
-}
 
 /** The directory one card id resolves to (user copy wins), or undefined. */
 function resolveCardDir(card: string): string | undefined {
@@ -64,7 +39,7 @@ function resolveCardDir(card: string): string | undefined {
  */
 export function registerCardUiRoute(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
-  const webServer = runtime.get('webServer') as WebServerService | undefined
+  const webServer = face<WebServerService>(runtime, 'webServer')
   if (webServer === undefined) {
     console.warn(TAG + ' card UI route idle (missing webServer)')
     return
@@ -80,9 +55,9 @@ export function registerCardUiRoute(ctx: Context): void {
           return
         }
         try {
-          const query = new URL(req.url ?? '', 'http://localhost').searchParams
-          const card = query.get('card') ?? ''
-          const file = query.get('file') ?? UI_MANIFEST_FILE
+          const query = queryOf(req)
+          const card = query?.get('card') ?? ''
+          const file = query?.get('file') ?? UI_MANIFEST_FILE
           const dir = resolveCardDir(card)
           if (dir === undefined) {
             send(res, 404, { error: 'unknown card' } satisfies CardUiResponse)

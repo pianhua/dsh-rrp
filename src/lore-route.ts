@@ -16,12 +16,34 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
-import { readCard, triggersOfCard } from './cards.ts'
 import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
-import { transcriptOf } from './chronicler.ts'
-import { SCRIBE_SYSTEM_PROMPT, buildScribePrompt, parseScribeReply } from './agents/scribe.ts'
-import { evalCondition, hitSet } from './lore-condition.ts'
-import { belongsToRpPreset } from './preset-id.ts'
+import { readCard, triggersOfCard } from './cards.ts'
+import {
+  type AgentsService,
+  type CommandsService,
+  type JobsService,
+  type LlmService,
+  type ProjectionsService,
+  type ProviderRoute,
+  type RequestLike,
+  type ResponseLike,
+  type RuntimeFaces,
+  type SessionLike,
+  type SessionsService,
+  type WebServerService,
+  collectText,
+  emptyReplyError,
+  face,
+  isEmptyReply,
+  messageOf,
+  nowIso,
+  queryOf,
+  readJsonBody,
+  acceptsRrpWrites,
+  routeOf,
+  send,
+  sessionIdOf,
+} from './host-faces.ts'
 import { ensureLoreArmed, invalidateLore } from './lore-runtime.ts'
 import {
   RRP_LORE_KEY,
@@ -29,59 +51,15 @@ import {
   validateLoreEntry,
   type LoreEntry,
 } from './lore-state.ts'
+import { RRP_ROUTES, type LoreEntryView } from './route-contract.ts'
+import { SCRIBE_SYSTEM_PROMPT, buildScribePrompt, parseScribeReply } from './agents/scribe.ts'
+import { evalCondition, hitSet } from './lore-condition.ts'
 import { publishState } from './state-publisher.ts'
+import { transcriptOf } from './transcript-reader.ts'
 import { WORLD_STATE_KEY, renderWorldState, type WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
-import { RRP_ROUTES } from './route-contract.ts'
 const LORE_PATH = RRP_ROUTES.lore
-
-interface SessionLike {
-  readonly id: string
-  append(type: string, data: unknown, intent?: unknown): unknown
-}
-interface SessionsService {
-  get(id: string): SessionLike | undefined
-}
-interface ProjectionsService {
-  stateOf(session: unknown, key: string): unknown
-}
-interface AgentLike {
-  options?: { provider?: string; model?: string }
-}
-interface AgentsService {
-  get(id: string): AgentLike | undefined
-}
-interface StreamChunkLike {
-  type?: string
-  text?: string
-}
-interface LlmService {
-  stream(options: Record<string, unknown>): AsyncIterable<StreamChunkLike>
-}
-interface JobsService {
-  start(spec: { kind: string; label: string; owner?: unknown; run(): { done: Promise<{ status: string }> } }): string
-}
-interface RequestLike {
-  method?: string
-  url?: string
-  [Symbol.asyncIterator](): AsyncIterator<string | Uint8Array>
-}
-interface ResponseLike {
-  statusCode: number
-  setHeader?(name: string, value: string): void
-  end(body?: string): void
-}
-interface WebServerService {
-  register(route: {
-    kind: 'exact'
-    path: string
-    handler: (req: RequestLike, res: ResponseLike) => void | Promise<void>
-  }): () => void
-}
-interface RuntimeFaces {
-  get(name: string): unknown
-}
 
 /** Staged drafts, one per session; never durable — the player confirms or drops. */
 const PENDING = new Map<string, LoreEntry>()
@@ -120,22 +98,6 @@ export function stageLoreDraft(sessionId: string, entry: LoreEntry): void {
   invalidateLore(sessionId)
 }
 
-/** Respond with a JSON body. */
-function send(res: ResponseLike, status: number, payload: unknown): void {
-  res.statusCode = status
-  res.setHeader?.('content-type', 'application/json; charset=utf-8')
-  res.end(JSON.stringify(payload))
-}
-
-/** Read the whole request body as UTF-8 text. */
-async function readBody(req: RequestLike): Promise<string> {
-  let text = ''
-  for await (const chunk of req) {
-    text += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
-  }
-  return text
-}
-
 /** The active card's bundled skill names, so lore cannot take their names. */
 export function reservedNames(projections: ProjectionsService | undefined, session: SessionLike): string[] {
   if (projections === undefined) return []
@@ -152,12 +114,11 @@ function currentLore(projections: ProjectionsService, session: SessionLike): Lor
 }
 
 /** Player-facing list row; bodies remain in the Skill provider, not this view. */
-function loreView(skill: LoreEntry): { name: string; description: string; bytes: number; updatedAt: string } {
+function loreView(skill: LoreEntry): LoreEntryView {
   return {
     name: skill.name,
     description: skill.description,
     bytes: Buffer.byteLength(skill.body, 'utf8'),
-    updatedAt: '',
   }
 }
 
@@ -182,16 +143,6 @@ function triggerView(
   }
 }
 
-/** Resolve the provider/model route of a session's live agent. */
-function routeOf(agents: AgentsService | undefined, sessionId: string): { provider: string; model: string } | undefined {
-  const owner = agents?.get(sessionId)
-  const provider = owner?.options?.provider
-  const model = owner?.options?.model
-  if (provider === undefined || provider.length === 0) return undefined
-  if (model === undefined || model.length === 0) return undefined
-  return { provider, model }
-}
-
 /** The material handed to the Scribe. */
 interface ScribeFaces {
   llm: LlmService
@@ -211,7 +162,7 @@ function scheduleDraft(faces: ScribeFaces, session: SessionLike, topic: string):
   DRAFTING.add(session.id)
   const activityId = randomUUID()
   recordActivity(session.id, {
-    id: activityId, at: new Date().toISOString(), actor: 'scribe', target: 'lore', phase: 'started',
+    id: activityId, at: nowIso(), actor: 'scribe', target: 'lore', phase: 'started',
   })
   const owner = faces.agents.get(session.id)
   try {
@@ -242,13 +193,12 @@ function scheduleDraft(faces: ScribeFaces, session: SessionLike, topic: string):
 async function runDraft(
   faces: ScribeFaces,
   session: SessionLike,
-  route: { provider: string; model: string },
+  route: ProviderRoute,
   topic: string,
   activityId: string,
   signal: AbortSignal,
   isCancelled: () => boolean,
 ): Promise<{ status: string }> {
-  const stamp = (): string => new Date().toISOString()
   try {
     const state = faces.projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined
     const worldState = state === undefined ? '（暂无状态）' : renderWorldState(state)
@@ -259,8 +209,8 @@ async function runDraft(
       ...currentLore(faces.projections, session).map((skill) => skill.name),
     ]
     const transcript = transcriptOf(faces.projections, session)
-    if (transcript.trim().length === 0) {
-      recordActivity(session.id, { id: activityId, at: stamp(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.noTranscript' })
+    if (isEmptyReply(transcript)) {
+      recordActivity(session.id, { id: activityId, at: nowIso(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.noTranscript' })
       return { status: 'completed' }
     }
 
@@ -277,42 +227,39 @@ async function runDraft(
       sessionId: session.id,
       signal,
     })
-    let text = ''
-    for await (const chunk of stream) {
-      if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') text += chunk.text
-    }
+    const text = await collectText(stream)
     if (isCancelled()) {
-      recordActivity(session.id, { id: activityId, at: stamp(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.cancelled' })
+      recordActivity(session.id, { id: activityId, at: nowIso(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.cancelled' })
       return { status: 'killed' }
     }
     // An empty stream is an infrastructure failure, NOT a "nothing to lore"
     // verdict — conflating them hid a silent-empty epidemic behind the
     // 「目前没有待确认草稿」message (same pathology the copilot route had).
-    if (text.trim().length === 0) {
+    if (isEmptyReply(text)) {
       console.warn(TAG + ' Scribe EMPTY reply for ' + session.id + ' (treated as failure, not nothing-to-lore)')
-      recordActivity(session.id, { id: activityId, at: stamp(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.emptyReply' })
+      recordActivity(session.id, { id: activityId, at: nowIso(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.emptyReply' })
       return { status: 'failed' }
     }
     const draft = parseScribeReply(text)
     if (draft === undefined) {
       recordActivity(session.id, {
-        id: activityId, at: stamp(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.nothingToLore',
+        id: activityId, at: nowIso(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.nothingToLore',
       })
       return { status: 'completed' }
     }
     PENDING.set(session.id, draft)
     recordActivity(session.id, {
-      id: activityId, at: stamp(), actor: 'scribe', target: 'lore', phase: 'committed',
+      id: activityId, at: nowIso(), actor: 'scribe', target: 'lore', phase: 'committed',
       detailKey: 'detail.stagedDraft', detailName: draft.name,
     })
     console.log(TAG + ' Scribe staged a draft for ' + session.id + ': ' + draft.name)
     return { status: 'completed' }
   } catch (error) {
     recordActivity(session.id, {
-      id: activityId, at: stamp(), actor: 'scribe', target: 'lore', phase: 'failed',
+      id: activityId, at: nowIso(), actor: 'scribe', target: 'lore', phase: 'failed',
       ...(isCancelled()
         ? { detailKey: 'detail.cancelled' }
-        : { detail: String((error as { message?: string })?.message ?? error) }),
+        : { detail: messageOf(error) }),
     })
     return { status: isCancelled() ? 'killed' : 'failed' }
   } finally {
@@ -326,16 +273,16 @@ async function runDraft(
  */
 export function registerLoreRoute(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
-  const webServer = runtime.get('webServer') as WebServerService | undefined
-  const sessions = runtime.get('sessions') as SessionsService | undefined
-  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
+  const webServer = face<WebServerService>(runtime, 'webServer')
+  const sessions = face<SessionsService>(runtime, 'sessions')
+  const projections = face<ProjectionsService>(runtime, 'sessionProjections')
   if (webServer === undefined || sessions === undefined || projections === undefined) {
     console.warn(TAG + ' lore route idle (missing webServer/sessions/sessionProjections)')
     return
   }
-  const agents = runtime.get('agents') as AgentsService | undefined
-  const llm = runtime.get('llm') as LlmService | undefined
-  const jobs = runtime.get('jobs') as JobsService | undefined
+  const agents = face<AgentsService>(runtime, 'agents')
+  const llm = face<LlmService>(runtime, 'llm')
+  const jobs = face<JobsService>(runtime, 'jobs')
   const faces: ScribeFaces | undefined = llm === undefined || jobs === undefined || agents === undefined
     ? undefined
     : { llm, jobs, agents, projections }
@@ -345,26 +292,12 @@ export function registerLoreRoute(ctx: Context): void {
       kind: 'exact',
       path: LORE_PATH,
       handler: async (req, res) => {
-        let url: URL
-        try {
-          url = new URL(req.url ?? '', 'http://localhost')
-        } catch {
-          send(res, 400, { error: 'invalid URL' })
+        const body = req.method === 'POST' ? await readJsonBody(req) : undefined
+        if (req.method === 'POST' && body === undefined) {
+          send(res, 400, { error: 'invalid JSON body' })
           return
         }
-        let parsed: unknown
-        if (req.method === 'POST') {
-          try {
-            parsed = JSON.parse(await readBody(req))
-          } catch {
-            send(res, 400, { error: 'invalid JSON body' })
-            return
-          }
-        }
-        const fromBody = (parsed as { sessionId?: unknown } | undefined)?.sessionId
-        const sessionId = typeof fromBody === 'string' && fromBody.length > 0
-          ? fromBody
-          : (url.searchParams.get('sessionId') ?? '')
+        const sessionId = sessionIdOf(queryOf(req), body)
         if (sessionId.length === 0) {
           send(res, 400, { error: 'missing sessionId' })
           return
@@ -374,10 +307,8 @@ export function registerLoreRoute(ctx: Context): void {
           send(res, 404, { error: 'unknown session' })
           return
         }
-        // Same write-path guard as the player-correction route: only RP-family
-        // sessions accept RRP lore operations.
-        const preset = projections.stateOf(session, 'agentPreset')
-        if (typeof preset === 'string' && !belongsToRpPreset(preset)) {
+        // Same write-path guard as the player-correction route.
+        if (!acceptsRrpWrites(projections, session)) {
           send(res, 403, { error: 'not an RP session' })
           return
         }
@@ -395,7 +326,7 @@ export function registerLoreRoute(ctx: Context): void {
           }
 
           if (req.method === 'DELETE') {
-            const name = url.searchParams.get('name') ?? ''
+            const name = queryOf(req)?.get('name') ?? ''
             const exists = currentLore(projections, session).some((skill) => skill.name === name)
             if (!exists) {
               send(res, 404, { ok: false, removed: false })
@@ -416,7 +347,7 @@ export function registerLoreRoute(ctx: Context): void {
             return
           }
 
-          const request = parsed as { action?: unknown; topic?: unknown; draft?: unknown }
+          const request = body ?? {}
           const action = typeof request.action === 'string' ? request.action : ''
 
           if (action === 'draft') {
@@ -461,7 +392,7 @@ export function registerLoreRoute(ctx: Context): void {
             PENDING.delete(sessionId)
             invalidateLore(sessionId)
             recordActivity(sessionId, {
-              id: randomUUID(), at: new Date().toISOString(), actor: 'player', target: 'lore', phase: 'corrected',
+              id: randomUUID(), at: nowIso(), actor: 'player', target: 'lore', phase: 'corrected',
               detailKey: 'detail.loreWritten', detailName: draft.name,
             })
             console.log(TAG + ' lore committed for ' + sessionId + ': ' + draft.name)
@@ -482,18 +413,6 @@ export function registerLoreRoute(ctx: Context): void {
   }, 'dsh-rrp: lore route')
 }
 
-interface CommandInvocationLike {
-  rawInput: string
-  agent?: { id: string; session: SessionLike }
-}
-interface CommandsService {
-  register(definition: {
-    name: string
-    description: string
-    handler: (invocation: CommandInvocationLike) => { kind: string; text?: string }
-  }): () => void
-}
-
 /**
  * The player-facing `/lore` trigger: same Scribe pass as the panel button, so
  * the draft still lands in 「设定集」 for review before anything is written.
@@ -501,15 +420,15 @@ interface CommandsService {
  */
 export function registerLoreCommand(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
-  const commands = runtime.get('commands') as CommandsService | undefined
+  const commands = face<CommandsService>(runtime, 'commands')
   if (commands === undefined) {
     console.warn(TAG + ' /lore command idle (missing commands)')
     return
   }
-  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
-  const agents = runtime.get('agents') as AgentsService | undefined
-  const llm = runtime.get('llm') as LlmService | undefined
-  const jobs = runtime.get('jobs') as JobsService | undefined
+  const projections = face<ProjectionsService>(runtime, 'sessionProjections')
+  const agents = face<AgentsService>(runtime, 'agents')
+  const llm = face<LlmService>(runtime, 'llm')
+  const jobs = face<JobsService>(runtime, 'jobs')
   const faces: ScribeFaces | undefined = llm === undefined || jobs === undefined || agents === undefined || projections === undefined
     ? undefined
     : { llm, jobs, agents, projections }
@@ -523,8 +442,7 @@ export function registerLoreCommand(ctx: Context): void {
         if (session === undefined || faces === undefined) return { kind: 'error', text: '设定集编纂不可用' }
         // Same guard as the HTTP write paths: a draft on a non-RP session would
         // burn an LLM pass and stage a draft nobody can confirm.
-        const preset = projections?.stateOf(session, 'agentPreset')
-        if (typeof preset === 'string' && !belongsToRpPreset(preset)) {
+        if (!acceptsRrpWrites(projections, session)) {
           return { kind: 'error', text: '当前不是 RP 会话，设定集编纂不可用' }
         }
         ensureLoreArmed(ctx, session.id)

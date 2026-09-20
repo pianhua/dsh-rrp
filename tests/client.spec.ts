@@ -138,8 +138,8 @@ describe('dsh-rrp client half', () => {
       layout: { selectPanel() {} },
     })
     vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith(RRP_ROUTES.cardWorkspace)
-      ? { ok: false, status: 503, text: async () => '' }
-      : { ok: true, text: async () => '' }))
+      ? { ok: false, status: 503, text: async (): Promise<string> => '' }
+      : { ok: true, text: async (): Promise<string> => '' }))
     client.apply(ctx as never)
 
     const injected = bodies.find((entry) => entry.name === 'main')?.inject?.() as {

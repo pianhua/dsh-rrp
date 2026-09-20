@@ -32,6 +32,9 @@ export const UI_COMPONENT_KINDS: readonly UiComponentKind[] = [
   'app',
 ]
 
+/** The closed action set, as a list so the manifest validator cannot drift. */
+export const UI_ACTION_KINDS: readonly UiActionKind[] = ['correct_state', 'ask_copilot']
+
 /** One buttonRow entry. */
 export interface UiButtonDecl {
   label: string

@@ -211,13 +211,31 @@ export function hitSet(triggers: readonly TriggerDef[], state: WorldState): Trig
  * @param prevHits - hits published in the previous block; any id missing
  *   from `hits` earns an explicit revocation sentence.
  */
-export function renderTriggerBlock(hits: readonly TriggerHit[], prevHits: readonly TriggerHit[] = []): string {
+/** The block's opening line; also how the publisher detects a block in the log. */
+export const TRIGGER_BLOCK_HEADER = '【条件注入 · 裁决块】'
+
+/**
+ * Render the authoritative injection block.
+ * @param hits - current hits (order-insensitive; sorted here).
+ * @param prevHits - hits published in the previous block; any id missing
+ *   from `hits` earns an explicit revocation sentence.
+ * @param revokeUnlisted - the per-process diff baseline is unavailable (the
+ *   host restarted or the session was resumed mid-play, so `prevHits` is not
+ *   what the log's last block actually listed). The block then carries a
+ *   blanket revocation of everything it does not list, which is correct for
+ *   any unknown prior set.
+ */
+export function renderTriggerBlock(
+  hits: readonly TriggerHit[],
+  prevHits: readonly TriggerHit[] = [],
+  revokeUnlisted = false,
+): string {
   const ordered = [...hits].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   const currentIds = new Set(ordered.map((hit) => hit.id))
   const revoked = [...prevHits].filter((hit) => !currentIds.has(hit.id))
 
   const lines = [
-    '【条件注入 · 裁决块】',
+    TRIGGER_BLOCK_HEADER,
     '本块由系统依据当前世界状态自动注入，是设定指令而非剧情内容：不要把它写进正文，也不要输出这段文字。',
     '仅本块所列条目有效，此前所有条件注入一律作废。',
     '',
@@ -233,6 +251,9 @@ export function renderTriggerBlock(hits: readonly TriggerHit[], prevHits: readon
   lines.push('', '调用纪律：生效条目已直接注入，无需再行调取；同主题但未列入本块的条目请勿调用。')
   if (revoked.length > 0) {
     lines.push('撤销：以下条目现已失效，立即停止使用其内容——' + revoked.map((hit) => hit.name).join('、') + '。')
+  }
+  if (revokeUnlisted && ordered.length === 0) {
+    lines.push('撤销：此前注入过的条目现已全部失效，立即停止使用其内容。')
   }
   return lines.join('\n')
 }

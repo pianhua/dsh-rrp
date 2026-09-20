@@ -50,6 +50,19 @@ export function matchesPreset(id: string | undefined, base: string): boolean {
   return id === base || (id !== undefined && id.startsWith(base + '-'))
 }
 
+/**
+ * Invert {@link presetIdForCard}: the card id a derived preset belongs to.
+ * @param id - a session's `agentPreset`.
+ * @returns the card id, or undefined for the base preset and any id that is
+ *   not a canonical card preset (a hand-sliced prefix would accept both).
+ */
+export function cardIdFromPreset(id: string | undefined): string | undefined {
+  const prefix = BASE_PRESET_ID + '-'
+  if (id === undefined || !id.startsWith(prefix)) return undefined
+  const cardId = id.slice(prefix.length)
+  return isCardId(cardId) ? cardId : undefined
+}
+
 /** Whether a session's preset is any RP-family preset. */
 export function belongsToRpPreset(id: string | undefined): boolean {
   return matchesPreset(id, BASE_PRESET_ID)

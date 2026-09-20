@@ -19,8 +19,7 @@ export const name = 'dsh-rrp/client'
  *  All entries are HOST capabilities the client composition declares; the
  *  panels still treat each one as optional at runtime (see context-types.ts):
  *  `sessions` / `remote` / `layout` absence degrades the gallery, never the
- *  sidebar tabs. `uiConversation` is declared for future composer work and
- *  currently has no consumer. */
+ *  sidebar tabs. */
 // Cordis Remote proxies are namespaced: accessing ctx.remote.agentPresets
 // requires declaring 'remote.agentPresets' (not just 'remote').
 export const inject = [
@@ -31,7 +30,6 @@ export const inject = [
   'remote',
   'remote.agentPresets',
   'layout',
-  'uiConversation',
   // Session navigation for 读档/开局跳转 (worldline map, gallery).
   'uiWorkspace',
 ]
@@ -119,6 +117,8 @@ const ZH: Record<string, string> = {
   'detail.stagedDraft': '草稿：{name}（待确认）',
   'detail.loreWritten': '已沉淀：{name}',
   'detail.playerCorrected': '玩家就地矫正',
+  'detail.cardInitialState': '卡包初始状态',
+  'detail.summaryCompass': '宏观罗盘更新：{name}',
   'actor.card': '卡包',
   'actor.scribe': '知识起草',
   'lore.title': '设定集',
@@ -191,13 +191,13 @@ const ZH: Record<string, string> = {
   'gallery.orphanSession': '（未能自动清理的残留会话：',
   'gallery.unavailable': '会话服务不可用',
   'gallery.workspaceFallback': '已开始（卡分组暂不可用，会话落在未分组）',
-  'copilot.title': '副驾驶',
-  'copilot.guide': '总管家（OOC 视角，全知本项目）：咨询设定、人物秘密与破局思路，或让她代劳——改世界状态、起草设定集、提案卡包与文档维护（确认后落盘）。',
+  'copilot.title': '月停',
+  'copilot.guide': '月停（OOC 视角，全知本项目）：咨询设定、人物秘密与破局思路，或让它代劳——改世界状态、起草设定集、提案卡包与文档维护（确认后落盘）。',
   'copilot.placeholder': '问剧情、问设定，或直接下指令…',
   'copilot.send': '发送',
   'copilot.busy': '上一次咨询尚未完成',
-  'copilot.failed': '副驾驶出错了，请重试',
-  'copilot.empty': '还没有对话。向副驾驶提问，或直接让她修改世界状态。',
+  'copilot.failed': '月停出错了，请重试',
+  'copilot.empty': '还没有对话。向月停提问，或直接让它修改世界状态。',
   'copilot.you': '玩家',
   'copilot.applied': '已执行变更',
   'copilot.staged': '已起草设定集（待确认）',
@@ -207,9 +207,9 @@ const ZH: Record<string, string> = {
   'copilot.cleared': '对话已清空',
   'copilot.noModel': '当前会话尚未配置模型路由，先在宿主设置里为 RP 模式选好模型',
   'copilot.clearConfirm': '再点一次确认清空',
-  'copilot.clearConfirmTitle': '清空副驾驶对话（不可恢复），再点一次确认',
-  'actor.copilot': '副驾驶',
-  'detail.copilotUndone': '已撤销副驾驶的状态修改',
+  'copilot.clearConfirmTitle': '清空月停对话（不可恢复），再点一次确认',
+  'actor.copilot': '月停',
+  'detail.copilotUndone': '已撤销月停的状态修改',
   'copilot.copyCode': '复制代码',
   'copilot.copiedCode': '已复制',
   'copilot.proposal.cardEdit': '卡包改动提案',
@@ -256,7 +256,7 @@ const EN: Record<string, string> = {
   'relations.none': 'No relations yet',
   'budget.title': 'Context size',
   'budget.card': 'Card setting',
-  'budget.summary': 'Chronicle',
+  'budget.summary': 'Story compass',
   'budget.state': 'World state',
   'budget.triggers': 'Conditional injection',
   'budget.hint': "Estimated share of the model's context window",
@@ -301,6 +301,8 @@ const EN: Record<string, string> = {
   'detail.stagedDraft': 'Draft: {name} (awaiting review)',
   'detail.loreWritten': 'Written: {name}',
   'detail.playerCorrected': 'Corrected in place',
+  'detail.cardInitialState': 'Initial card state',
+  'detail.summaryCompass': 'Compass updated: {name}',
   'actor.card': 'Card',
   'actor.scribe': 'Scribe',
   'lore.title': 'Lore',
@@ -373,7 +375,7 @@ const EN: Record<string, string> = {
   'gallery.unavailable': 'Session service unavailable',
   'gallery.workspaceFallback': 'Started (card grouping unavailable — session landed ungrouped)',
   'copilot.title': 'Copilot',
-  'copilot.guide': 'Steward (OOC, omniscient about this project): ask about lore, secrets and strategy — or have her act: edit world state, stage lore drafts, propose card and doc maintenance (lands on your confirm).',
+  'copilot.guide': 'Your own omniscient copilot (OOC, knows this whole project): ask about lore, secrets and strategy, or have it act — edit world state, stage lore drafts, propose card and doc maintenance (lands on your confirm).',
   'copilot.placeholder': 'Ask about the story, lore, or give a command…',
   'copilot.send': 'Send',
   'copilot.busy': 'The previous turn is still running',

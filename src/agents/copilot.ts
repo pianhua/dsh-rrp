@@ -1,8 +1,8 @@
 /**
- * dsh-rrp — the Copilot advisor (prompt + action-block vocabulary).
+ * dsh-rrp — 月停, the player's Copilot (prompt + action-block vocabulary).
  *
  * Issue #33: the Copilot is promoted from an in-fiction OOC staff officer to
- * the player's private omniscient Steward (总管家). She knows the whole
+ * the player's private omniscient copilot (月停). It knows the whole
  * project — card bundles, sedimented lore, engine rules, docs — and serves
  * the player absolutely across both fiction and meta levels: in-fiction
  * errands (state patches, lore drafts) and project maintenance (card-edit
@@ -49,7 +49,7 @@ export interface CopilotDocNoteAction {
 export type CopilotAction = CopilotWorldAction | CopilotLoreAction | CopilotCardEditAction | CopilotDocNoteAction
 
 /** Static persona + capability map + action-block spec. */
-export const COPILOT_SYSTEM_PROMPT = `你是「总管家」——玩家私属的全知管家，以 OOC（出戏）视角全权服侍玩家本人。你完整知晓本局与整个项目的一切：世界设定、人物秘密、剧情走向、沉淀的设定集、卡包结构与规范、乃至本项目引擎的运作方式与既定决策。玩家的意志就是你的命令：玩家说什么，你做什么；你的立场就是玩家的立场。
+export const COPILOT_SYSTEM_PROMPT = `你是「月停」——玩家私属的全知管家，以 OOC（出戏）视角全权服侍玩家本人。你完整知晓本局与整个项目的一切：世界设定、人物秘密、剧情走向、沉淀的设定集、卡包结构与规范、乃至本项目引擎的运作方式与既定决策。玩家的意志就是你的命令：玩家说什么，你做什么；你的立场就是玩家的立场。
 
 【每次提问随附的资料区块】
 - 【卡包设定】：本局的基调、铁律与核心设定
@@ -60,7 +60,7 @@ export const COPILOT_SYSTEM_PROMPT = `你是「总管家」——玩家私属的
 使用规则：事实冲突时以【世界状态】为准，【剧情记录】只说明发生了什么；数值一律从【世界状态】取，不要凭剧情记录猜；某区块显示（暂无）表示该维度不存在，不要据此推断。【卡包设定】为提问时实时读盘的卡包源文件，落盘改动后再问即是最新内容。
 
 【项目知识（常驻，已内置）】回答项目级问题时依据以下事实，不要凭空猜测：
-- 五智体权能：Author 只写第三人称文学正文（严禁代打、严禁写状态）；Chronicler 每轮正文后异步推演完整 WorldState（characters/inventory/scene/flags/relations），可用 createFields 创建 number/string/boolean 自定义字段（ID 限英文字母数字下划线，同一概念只建一次，创建后顶层直改）；Summarizer 每 N 轮产出宏观罗盘（goal/conflict/turningPoints/threads，各最多 5 条）；Scribe 只把已发生事实起草成单条设定草稿，必须玩家确认后才入库；你（总管家）负责答疑与代劳，绝不代写正文、绝不替玩家做决定。
+- 五智体权能：Author 只写第三人称文学正文（严禁代打、严禁写状态）；Chronicler 每轮正文后异步推演完整 WorldState（characters/inventory/scene/flags/relations），可用 createFields 创建 number/string/boolean 自定义字段（ID 限英文字母数字下划线，同一概念只建一次，创建后顶层直改）；Summarizer 每 N 轮产出宏观罗盘（goal/conflict/turningPoints/threads，各最多 5 条）；Scribe 只把已发生事实起草成单条设定草稿，必须玩家确认后才入库；你（月停）负责答疑与代劳，绝不代写正文、绝不替玩家做决定。
 - 世界状态合并语义：characters/inventory 按名字合并、只写变更子字段；scene 按字段合并；flags 按键合并；自定义动态字段整体替换且受 min/max 钳制；值设 null 表示删除。
 - 卡包规范：卡包是一个目录——card.md（frontmatter 必填 id（kebab-case，与目录同名）与 name，正文为世界核心）+ 可选 state.json（初始世界状态）+ openings/（第二人称开场白）+ skills/*/SKILL.md（description 写清何时加载；正文只写稳定事实、陈述句不用命令句；可带 when 条件，仅 number/boolean 字面量）。
 - 决策红线：状态只走投影追加发布；绝不发明会话事件类型；上下文注入只追加不替换；个人玩具定位，拒绝企业级复杂度；创作授权只属于 Author 与你，后台数据管道（Chronicler/Summarizer/Scribe）永不注入。
@@ -93,8 +93,8 @@ export const COPILOT_SYSTEM_PROMPT = `你是「总管家」——玩家私属的
 - 只允许四种 type：update_world_state、draft_lore、propose_card_edit、propose_doc_note；其他任何 type 一律被忽略。
 - update_world_state：patch 按【世界状态】的结构给出要改的字段。角色（characters）与物品（inventory）按名字合并、只写要变的子字段，不要把未变化的整条记录重复粘贴；场景（scene）按字段合并；事件（flags）按键合并；自定义动态字段必须给完整 {"type":"number|string|boolean","value":...}。把某个值设为 null 表示删除该项。立即生效、可撤销。
 - draft_lore：{"type":"draft_lore","draft":{"name":"mia-family-secret","description":"触发描述（何时该查这条知识）","body":"Markdown 正文"}}——只起草为待确认草稿，玩家在「设定集」页签确认后才生效，绝不直接写入。name 必须是 kebab-case 标识符：全小写字母与数字、以连字符分段（如 "mia-family-secret"），严禁下划线、大写或空格。
-- propose_card_edit：{"type":"propose_card_edit","proposal":{"card":"<卡包id>","file":"<相对路径，如 card.md 或 skills/tone/SKILL.md>","content":"<该文件的完整新内容>","reason":"一句话说明"}}——起草一项卡包改动提案，玩家在副驾驶面板确认后才落盘。content 必须是目标文件的完整替换内容，不要给 diff 片段。保真铁律：只提案你确知原文内容的文件；拿不准原文时向玩家索要文件内容，或只对有把握的小范围做逐段替换——绝不凭记忆重建整卡。
-- propose_doc_note：{"type":"propose_doc_note","note":{"title":"备忘标题","body":"<Markdown 正文>"}}——起草一份项目文档/设定修订备忘，供玩家审阅后自行采纳；备忘只进入副驾驶面板的待确认列表，不改动任何文件。
+- propose_card_edit：{"type":"propose_card_edit","proposal":{"card":"<卡包id>","file":"<相对路径，如 card.md 或 skills/tone/SKILL.md>","content":"<该文件的完整新内容>","reason":"一句话说明"}}——起草一项卡包改动提案，玩家在月停面板确认后才落盘。content 必须是目标文件的完整替换内容，不要给 diff 片段。保真铁律：只提案你确知原文内容的文件；拿不准原文时向玩家索要文件内容，或只对有把握的小范围做逐段替换——绝不凭记忆重建整卡。
+- propose_doc_note：{"type":"propose_doc_note","note":{"title":"备忘标题","body":"<Markdown 正文>"}}——起草一份项目文档/设定修订备忘，供玩家审阅后自行采纳；备忘只进入月停面板的待确认列表，不改动任何文件。
 - 一次可包含多个动作，但各动作必须相互独立，后者不得依赖前者的执行结果。
 - 失败语义：块内必须是合法 JSON；解析失败的块会被整体静默丢弃，你的修改不会生效。输出后请自检 JSON 的括号与引号是否闭合。`
 
@@ -130,134 +130,63 @@ export function buildCopilotPrompt(input: CopilotPromptInput): string {
 }
 
 /**
- * Tolerate models appending extra closing braces (`}}`) to a long generated
- * block: string-aware depth count, then drop trailing closers past balance.
- */
-function balanceTrailingClosers(text: string): string {
-  let depth = 0
-  let inString = false
-  let escaped = false
-  for (const ch of text) {
-    if (inString) {
-      if (escaped) escaped = false
-      else if (ch === '\\') escaped = true
-      else if (ch === '"') inString = false
-      continue
-    }
-    if (ch === '"') inString = true
-    else if (ch === '{' || ch === '[') depth += 1
-    else if (ch === '}' || ch === ']') depth -= 1
-  }
-  let trimmed = text
-  while (depth < 0 && trimmed.length > 0 && (trimmed.endsWith('}') || trimmed.endsWith(']'))) {
-    trimmed = trimmed.slice(0, -1)
-    depth += 1
-  }
-  return trimmed
-}
-
-/**
  * Extract the fenced rrp-action block from a finished reply and validate each
- * action loosely (strict validation happens at execution time). A reply with
- * no block — or a block that is not valid JSON — yields zero actions: pure
- * Q&A is the common case and must never fail.
+ * action against {@link copilotActionSchema} (strict validation happens at
+ * execution time). A reply with no block — or a block that is not valid JSON —
+ * yields zero actions: pure Q&A is the common case and must never fail. One
+ * malformed action is skipped, never the whole batch.
  */
 export function parseCopilotActions(replyText: string): CopilotAction[] {
   const match = /```rrp-action\s*([\s\S]*?)```/.exec(replyText)
   if (match === null) return []
-  const raw = balanceTrailingClosers((match[1] ?? '').trim())
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    // Last-resort ladder: fences/prose-wrapped, or cut mid-stream.
-    parsed = extractFirstJsonObject(raw)
-  }
+  // One repair ladder for every agent (json-extract): fences, prose wrap,
+  // trailing commas, missing closers and surplus closers.
+  const parsed = extractFirstJsonObject((match[1] ?? '').trim())
   if (typeof parsed !== 'object' || parsed === null) return []
   const rawActions = (parsed as { actions?: unknown }).actions
   if (!Array.isArray(rawActions)) return []
   const actions: CopilotAction[] = []
-  for (const raw of rawActions) {
-    if (typeof raw !== 'object' || raw === null) continue
-    const record = raw as Record<string, unknown>
-    if (record.type === 'update_world_state' && typeof record.patch === 'object' && record.patch !== null) {
-      actions.push({
-        type: 'update_world_state',
-        patch: record.patch as Record<string, unknown>,
-        ...(typeof record.reason === 'string' ? { reason: record.reason } : {}),
-      })
-      continue
-    }
-    if (record.type === 'draft_lore') {
-      const draft = record.draft as Record<string, unknown> | undefined
-      if (typeof draft?.name === 'string' && typeof draft.description === 'string' && typeof draft.body === 'string') {
-        actions.push({
-          type: 'draft_lore',
-          draft: { name: draft.name, description: draft.description, body: draft.body },
-        })
-      }
-      continue
-    }
-    if (record.type === 'propose_card_edit') {
-      const proposal = record.proposal as Record<string, unknown> | undefined
-      if (typeof proposal?.card === 'string' && typeof proposal.file === 'string' && typeof proposal.content === 'string') {
-        actions.push({
-          type: 'propose_card_edit',
-          proposal: {
-            card: proposal.card,
-            file: proposal.file,
-            content: proposal.content,
-            ...(typeof proposal.reason === 'string' ? { reason: proposal.reason } : {}),
-          },
-        })
-      }
-      continue
-    }
-    if (record.type === 'propose_doc_note') {
-      const note = record.note as Record<string, unknown> | undefined
-      if (typeof note?.title === 'string' && typeof note.body === 'string') {
-        actions.push({ type: 'propose_doc_note', note: { title: note.title, body: note.body } })
-      }
-    }
+  for (const candidate of rawActions) {
+    const result = copilotActionSchema.safeParse(candidate)
+    if (result.success) actions.push(result.data)
   }
   return actions
 }
 
+/** One action of the fenced block: the shape 月停 may ask the host to run. */
+export const copilotActionSchema = z.union([
+  z.object({
+    type: z.literal('update_world_state'),
+    patch: z.record(z.string(), z.unknown()),
+    reason: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('draft_lore'),
+    draft: z.object({ name: z.string(), description: z.string(), body: z.string() }),
+  }),
+  z.object({
+    type: z.literal('propose_card_edit'),
+    proposal: z.object({
+      card: z.string(),
+      file: z.string(),
+      content: z.string(),
+      reason: z.string().optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal('propose_doc_note'),
+    note: z.object({ title: z.string(), body: z.string() }),
+  }),
+])
+
 /** Zod binding for the fenced action block's JSON envelope (issue #32). */
-export const copilotActionBlockSchema = z.object({
-  actions: z.array(
-    z.union([
-      z.object({
-        type: z.literal('update_world_state'),
-        patch: z.record(z.string(), z.unknown()),
-        reason: z.string().optional(),
-      }),
-      z.object({
-        type: z.literal('draft_lore'),
-        draft: z.object({ name: z.string(), description: z.string(), body: z.string() }),
-      }),
-      z.object({
-        type: z.literal('propose_card_edit'),
-        proposal: z.object({
-          card: z.string(),
-          file: z.string(),
-          content: z.string(),
-          reason: z.string().optional(),
-        }),
-      }),
-      z.object({
-        type: z.literal('propose_doc_note'),
-        note: z.object({ title: z.string(), body: z.string() }),
-      }),
-    ]),
-  ),
-})
+export const copilotActionBlockSchema = z.object({ actions: z.array(copilotActionSchema) })
 
 /** The Copilot's unified prompt contract (issue #32). Pure-Q&A replies carry
  * zero actions, so `parseReply` never fails — an empty list is a valid answer. */
 export const copilotAgent: AgentPromptContract<CopilotPromptInput, CopilotAction[]> = {
   id: 'copilot',
-  name: '副驾驶（Copilot）',
+  name: '月停（Copilot）',
   systemPrompt: COPILOT_SYSTEM_PROMPT,
   buildUserPrompt: buildCopilotPrompt,
   parseReply: parseCopilotActions,

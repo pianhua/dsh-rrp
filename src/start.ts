@@ -26,41 +26,20 @@ const TAG = '[dsh-rrp]'
 import { RRP_ROUTES } from './route-contract.ts'
 const START_PATH = RRP_ROUTES.start
 
-interface SessionLike {
-  readonly id: string
-  append(type: string, data: unknown, intent?: unknown): unknown
-}
-interface SessionsService {
-  get(id: string): SessionLike | undefined
-}
-interface AgentLike {
-  options?: { provider?: string; model?: string }
-}
-interface AgentsService {
-  get(id: string): AgentLike | undefined
-}
-interface ProjectionsService {
-  stateOf(session: unknown, key: string): unknown
-}
-interface RequestLike {
-  method?: string
-  [Symbol.asyncIterator](): AsyncIterator<string | Uint8Array>
-}
-interface ResponseLike {
-  statusCode: number
-  setHeader?(name: string, value: string): void
-  end(body?: string): void
-}
-interface WebServerService {
-  register(route: {
-    kind: 'exact'
-    path: string
-    handler: (req: RequestLike, res: ResponseLike) => void | Promise<void>
-  }): () => void
-}
-interface RuntimeFaces {
-  get(name: string): unknown
-}
+import {
+  type AgentsService,
+  type ProjectionsService,
+  type RequestLike,
+  type ResponseLike,
+  type RuntimeFaces,
+  type SessionLike,
+  type SessionsService,
+  type WebServerService,
+  nowIso,
+  readJsonBody,
+  routeOf,
+  send,
+} from './host-faces.ts'
 
 /** Coerce a loose request value into a card context, or undefined when unusable. */
 function parseCardContext(value: unknown): CardContext | undefined {
@@ -85,32 +64,6 @@ function parseCardContext(value: unknown): CardContext | undefined {
     }
   }
   return context
-}
-
-/** Read the whole request body as UTF-8 text. */
-async function readBody(req: RequestLike): Promise<string> {
-  let text = ''
-  for await (const chunk of req) {
-    text += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
-  }
-  return text
-}
-
-/** Respond with a JSON body. */
-function send(res: ResponseLike, status: number, payload: unknown): void {
-  res.statusCode = status
-  res.setHeader?.('content-type', 'application/json; charset=utf-8')
-  res.end(JSON.stringify(payload))
-}
-
-/** Resolve the provider/model route of the session's live agent. */
-function routeOf(agents: AgentsService | undefined, sessionId: string): { provider: string; model: string } | undefined {
-  const owner = agents?.get(sessionId)
-  const provider = owner?.options?.provider
-  const model = owner?.options?.model
-  if (provider === undefined || provider.length === 0) return undefined
-  if (model === undefined || model.length === 0) return undefined
-  return { provider, model }
 }
 
 /**
@@ -182,14 +135,12 @@ export function registerStartRoute(ctx: Context): void {
           send(res, 405, { error: 'method not allowed' })
           return
         }
-        let parsed: unknown
-        try {
-          parsed = JSON.parse(await readBody(req))
-        } catch {
+        const parsedBody = await readJsonBody(req)
+        if (parsedBody === undefined) {
           send(res, 400, { error: 'invalid JSON body' })
           return
         }
-        const request = parsed as {
+        const request = parsedBody as {
           sessionId?: unknown
           state?: unknown
           opening?: unknown
@@ -245,11 +196,11 @@ export function registerStartRoute(ctx: Context): void {
         if (state !== undefined) {
           recordActivity(session.id, {
             id: randomUUID(),
-            at: new Date().toISOString(),
+            at: nowIso(),
             actor: 'card',
             target: 'world-state',
             phase: 'committed',
-            detail: '卡包初始状态',
+            detailKey: 'detail.cardInitialState',
           })
         }
 

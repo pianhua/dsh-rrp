@@ -48,6 +48,21 @@ export interface RrpSessionQuery {
   sessionId: string
 }
 
+// ── /dsh-rrp/cards/import (tavern card conversion) ─────────────────────────
+export interface CardImportRequest {
+  /** `png` = card embedded in a PNG; `json` = tavern v2/v3 export. */
+  kind: 'png' | 'json'
+  /** Base64 of the file (png) or of its JSON text. */
+  data: string
+}
+
+/** The card as written into the user card root, ready to open. */
+export interface CardImportResponse {
+  ok: true
+  id: string
+  name: string
+}
+
 // ── /dsh-rrp/start ──────────────────────────────────────────────────────────
 export interface StartRequest {
   sessionId: string
@@ -102,7 +117,13 @@ export interface LoreEntryView {
   name: string
   description: string
   bytes: number
-  updatedAt: string
+}
+
+/** One staged Scribe draft, waiting for the player's confirmation. */
+export interface LoreDraftView {
+  name: string
+  description: string
+  body: string
 }
 
 /** One conditional-injection trigger and whether it currently hits. */
@@ -113,7 +134,7 @@ export interface LoreTriggerView {
 
 export interface LoreGetResponse {
   skills: LoreEntryView[]
-  pending: { name: string; description: string; body: string } | null
+  pending: LoreDraftView | null
   drafting: boolean
   triggers: LoreTriggerView[]
   injectedChars: number
@@ -183,7 +204,8 @@ export interface CardWorkspaceResponse {
 export type CopilotTurnAction =
   | { kind: 'world-state'; digest: string }
   | { kind: 'lore'; name: string }
-  | { kind: 'proposal'; proposalKind: 'card-edit' | 'doc-note'; label: string }
+  /** `subject` is the dynamic half (file path / note title); the panel owns the fixed wording. */
+  | { kind: 'proposal'; proposalKind: 'card-edit' | 'doc-note'; subject: string }
   | { kind: 'failed'; error: string }
 
 export interface CopilotTurn {
@@ -233,6 +255,9 @@ export interface CopilotProposalResponse {
  * which the server closes the response. A stream that ends without a terminal
  * frame is a transport failure; the client must reload history to converge.
  */
+/** The machine-readable 503 reason: this session has no provider/model route. */
+export const COPILOT_NO_MODEL_ROUTE = 'no provider/model route'
+
 export const COPILOT_SSE = {
   chunk: 'chunk',
   action: 'action',
@@ -260,6 +285,16 @@ export interface CopilotSseError {
 /** Whether an event name ends the stream (either outcome). */
 export function isTerminalCopilotEvent(event: string): boolean {
   return event === COPILOT_SSE.done || event === COPILOT_SSE.error
+}
+
+// ── Route URLs (the panels build them, the routes parse them) ───────────────
+/**
+ * One route path carrying `sessionId` plus any extra query params, encoded the
+ * way the host routes read them back (`host-faces.queryOf`). Seven panels used
+ * to hand-stringify `'?sessionId=' + encodeURIComponent(...)`.
+ */
+export function routeUrl(path: string, sessionId: string, params: Record<string, string> = {}): string {
+  return path + '?' + new URLSearchParams({ sessionId, ...params }).toString()
 }
 
 // ── SSE frame codec (server encodes, client drains — one implementation) ───

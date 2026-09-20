@@ -24,7 +24,7 @@ export interface CardMeta {
   player?: CardPlayer
 }
 
-/** One opening greeting. */
+/** One opening (first message of a run). */
 export interface CardOpening {
   id: string
   body: string

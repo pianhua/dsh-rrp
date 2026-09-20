@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SCRIBE_SYSTEM_PROMPT, buildScribePrompt, parseScribeReply } from '../src/agents/scribe.ts'
+import { LORE_LIMITS } from '../src/lore-state.ts'
 
 describe('Scribe reply contract', () => {
   it('parses a bare JSON draft and tolerates surrounding prose', () => {
@@ -55,5 +56,22 @@ describe('Scribe reply contract', () => {
     })
     expect(prompt).toContain('青丘法则')
     expect(prompt).toContain('不得违背')
+  })
+})
+
+describe('Scribe reply contract binds its declared schema', () => {
+  it('rejects an oversized body instead of waving it through', () => {
+    const long = '设'.repeat(LORE_LIMITS.bodyChars + 1)
+    expect(parseScribeReply(JSON.stringify({ name: 'qing-qiu-rule', description: '新设定出现时', body: long }))).toBeUndefined()
+    expect(parseScribeReply(JSON.stringify({ name: 'Qing Qiu', description: 'x', body: '正文' }))).toBeUndefined()
+    expect(parseScribeReply(JSON.stringify({ name: 'qing-qiu-rule', description: '新设定出现时', body: '青丘法则。' }))).toEqual({
+      name: 'qing-qiu-rule',
+      description: '新设定出现时',
+      body: '青丘法则。',
+    })
+  })
+
+  it('treats the empty candidate as "nothing to lore", not a parse failure', () => {
+    expect(parseScribeReply('{"name":"","description":"","body":""}')).toBeUndefined()
   })
 })

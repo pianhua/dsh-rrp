@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildChroniclerPrompt, parseChroniclerReply } from '../src/agents/chronicler.ts'
 import { forgetActivity, readActivity } from '../src/activity.ts'
-import { registerChronicler } from '../src/chronicler.ts'
+import { forgetInference, registerChronicler } from '../src/chronicler.ts'
 import { forgetState } from '../src/state-publisher.ts'
 import { emptyWorldState } from '../src/world-state.ts'
 import { transcriptProjections } from './stubs/transcript-projections.ts'
@@ -264,7 +264,7 @@ describe('Chronicler trigger', () => {
   })
 
   it('discards inference and marks as stale when player corrected world state during inference', async () => {
-    forgetState('session-1'); forgetActivity('session-1')
+    forgetState('session-1'); forgetActivity('session-1'); forgetInference('session-1')
     let callCount = 0
     const host = fakeHost('rp', {
       stateOf: (_session, key) => {
@@ -289,6 +289,12 @@ describe('Chronicler trigger', () => {
     const activity = readActivity('session-1').entries
     expect(activity.map((entry) => entry.phase)).toEqual(['started', 'stale'])
     expect(activity[1]?.detailKey).toBe('detail.staleDiscarded')
+    // The discarded turn's prose is not left uncounted: exactly one covering
+    // rerun is queued, and it runs against the player's corrected slice.
+    expect(host.startCount()).toBe(2)
+    const retry = await host.started()!.run().done
+    expect(retry.status).toBe('completed')
+    expect(readActivity('session-1').entries.map((entry) => entry.phase).at(-1)).not.toBe('stale')
   })
 
   it('skips publish and marks ledger as no change when inferred state matches prior', async () => {

@@ -10,7 +10,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { RRP_ROUTES } from './route-contract.ts'
-import { rrpPayloadOf } from './state-payload.ts'
+import { collectTextBlocks, isPluginNotice, rrpPayloadOf } from './state-payload.ts'
 
 const TAG = '[dsh-rrp]'
 const EXPORT_PATH = RRP_ROUTES.novelExport
@@ -27,47 +27,7 @@ interface ReadHandleLike {
 interface PersistenceService {
   open(id: string, access: 'read'): Promise<ReadHandleLike>
 }
-interface RuntimeFaces {
-  get(name: string): unknown
-}
-interface RequestLike {
-  method?: string
-  url?: string
-  [Symbol.asyncIterator](): AsyncIterator<string | Uint8Array>
-}
-interface ResponseLike {
-  statusCode: number
-  setHeader?(name: string, value: string): void
-  end(body?: string): void
-}
-
-function sendJson(res: ResponseLike, status: number, payload: unknown): void {
-  res.statusCode = status
-  res.setHeader?.('content-type', 'application/json; charset=utf-8')
-  res.end(JSON.stringify(payload))
-}
-
-/** Same predicate as the transcript projection: plugin bookkeeping, never prose. */
-function isPluginNotice(event: SessionEventLike): boolean {
-  const source = (event.data as { source?: { kind?: unknown } } | undefined)?.source
-  return source?.kind === 'plugin' && rrpPayloadOf(event) === undefined
-}
-
-/** Recursively collect { type: 'text', text } blocks from an event payload. */
-function collectTextBlocks(value: unknown, out: string[]): void {
-  if (value === null || value === undefined) return
-  if (Array.isArray(value)) {
-    for (const item of value) collectTextBlocks(item, out)
-    return
-  }
-  if (typeof value !== 'object') return
-  const record = value as Record<string, unknown>
-  if (record.type === 'text' && typeof record.text === 'string') {
-    out.push(record.text)
-    return
-  }
-  for (const item of Object.values(record)) collectTextBlocks(item, out)
-}
+import { type RequestLike, type ResponseLike, type RuntimeFaces, queryOf, face, send } from './host-faces.ts'
 
 /**
  * Extract the story prose from one session's event log, in seq order: every
@@ -106,7 +66,7 @@ export function registerExportRoute(ctx: Context): void {
   const webServer = runtime.get('webServer') as
     | { register(route: { kind: 'exact'; path: string; handler: (req: RequestLike, res: ResponseLike) => void | Promise<void> }): () => void }
     | undefined
-  const persistence = runtime.get('sessionPersistence') as PersistenceService | undefined
+  const persistence = face<PersistenceService>(runtime, 'sessionPersistence')
   if (webServer === undefined || persistence === undefined) {
     console.warn(TAG + ' export route idle (missing webServer/sessionPersistence)')
     return
@@ -118,30 +78,24 @@ export function registerExportRoute(ctx: Context): void {
       path: EXPORT_PATH,
       handler: async (req, res) => {
         if (req.method !== undefined && req.method !== 'GET') {
-          sendJson(res, 405, { error: 'method not allowed' })
+          send(res, 405, { error: 'method not allowed' })
           return
         }
-        let url: URL
-        try {
-          url = new URL(req.url ?? '', 'http://localhost')
-        } catch {
-          sendJson(res, 400, { error: 'invalid URL' })
-          return
-        }
-        const sessionId = url.searchParams.get('sessionId') ?? ''
+        const query = queryOf(req)
+        const sessionId = query?.get('sessionId') ?? ''
         if (sessionId.length === 0) {
-          sendJson(res, 400, { error: 'missing sessionId' })
+          send(res, 400, { error: 'missing sessionId' })
           return
         }
-        const format = url.searchParams.get('format') === 'txt' ? 'txt' : 'md'
+        const format = query?.get('format') === 'txt' ? 'txt' : 'md'
         // Title doubles as the download name; keep it filename-safe.
-        const title = (url.searchParams.get('title') ?? '').trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 80)
+        const title = (query?.get('title') ?? '').trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 80)
 
         let handle: ReadHandleLike
         try {
           handle = await persistence.open(sessionId, 'read')
         } catch {
-          sendJson(res, 404, { error: 'unknown session' })
+          send(res, 404, { error: 'unknown session' })
           return
         }
         try {
@@ -153,7 +107,7 @@ export function registerExportRoute(ctx: Context): void {
           res.setHeader?.('content-disposition', "attachment; filename*=UTF-8''" + filename)
           res.end(body)
         } catch (cause) {
-          sendJson(res, 500, { error: 'export failed: ' + String(cause) })
+          send(res, 500, { error: 'export failed: ' + String(cause) })
         } finally {
           await handle.close().catch(() => {})
         }

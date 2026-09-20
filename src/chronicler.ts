@@ -16,56 +16,37 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
 import { CHRONICLER_SYSTEM_PROMPT, buildChroniclerPrompt, parseChroniclerReply } from './agents/chronicler.ts'
+import {
+  type AgentsService,
+  type ControllableJobsService,
+  type ListeningRuntimeFaces,
+  type LlmService,
+  type ProjectionsService,
+  type ProviderRoute,
+  type SessionLike,
+  collectText,
+  emptyReplyError,
+  face,
+  isEmptyReply,
+  messageOf,
+  nowIso,
+  routeOf,
+} from './host-faces.ts'
 import { matchesPreset } from './preset-id.ts'
 import { publishState } from './state-publisher.ts'
-import { TRANSCRIPT_KEY, emptyTranscriptSlice, type TranscriptSlice } from './transcript.ts'
-import { NO_WORLD_STATE_CHANGE, WORLD_STATE_KEY, diffWorldState, emptyWorldState, type WorldState } from './world-state.ts'
+import { pendingTranscriptOf, proseHeadSeqOf } from './transcript-reader.ts'
+import { TRANSCRIPT_KEY, type TranscriptSlice } from './transcript.ts'
+import { NO_WORLD_STATE_CHANGE, WORLD_STATE_KEY, diffWorldState, emptyWorldState, worldStatesEqual, type WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'chronicler'
-/** Default cap for broad transcript rendered for summarization / lore. */
-export const DEFAULT_TRANSCRIPT_LIMIT = 16000
-/** Cap the latest turn transcript handed to the Chronicler (characters, tail-biased). */
-export const CHRONICLER_TRANSCRIPT_LIMIT = 8000
 
-/** Structural host faces, kept local so the bundle imports no host package. */
-interface SessionLike {
-  readonly id: string
-  append(type: string, data: unknown): unknown
-}
-interface StreamChunkLike {
-  type?: string
-  text?: string
-}
-interface LlmService {
-  stream(options: Record<string, unknown>): AsyncIterable<StreamChunkLike>
-}
-interface JobHooksLike {
-  cancel(reason?: string): void
-  done: Promise<{ status: string }>
-}
-interface JobsService {
-  attachController(name: string): () => void
-  start(spec: { kind: string; label: string; owner?: unknown; run(): JobHooksLike }): string
-}
-interface AgentLike {
-  options?: { provider?: string; model?: string }
-}
-interface AgentsService {
-  get(id: string): AgentLike | undefined
-}
-interface ProjectionsService {
-  stateOf(session: unknown, key: string): unknown
-}
+/** The host faces this runner speaks to, gathered once at registration. */
 interface HostFaces {
   readonly llm: LlmService
-  readonly jobs: JobsService
+  readonly jobs: ControllableJobsService
   readonly agents: AgentsService
   readonly projections: ProjectionsService
-}
-interface RuntimeFaces {
-  get(name: string): unknown
-  on(event: string, listener: (...args: unknown[]) => void): () => void
 }
 
 /**
@@ -74,11 +55,11 @@ interface RuntimeFaces {
  * @param presetId - only sessions composed from this preset are inferred.
  */
 export function registerChronicler(ctx: Context, presetId: string): void {
-  const runtime = ctx as unknown as RuntimeFaces
-  const llm = runtime.get('llm') as LlmService | undefined
-  const jobs = runtime.get('jobs') as JobsService | undefined
-  const agents = runtime.get('agents') as AgentsService | undefined
-  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
+  const runtime = ctx as unknown as ListeningRuntimeFaces
+  const llm = face<LlmService>(runtime, 'llm')
+  const jobs = face<ControllableJobsService>(runtime, 'jobs')
+  const agents = face<AgentsService>(runtime, 'agents')
+  const projections = face<ProjectionsService>(runtime, 'sessionProjections')
   if (llm === undefined || jobs === undefined || agents === undefined || projections === undefined) {
     console.warn(TAG + ' Chronicler idle (missing llm/jobs/agents/sessionProjections)')
     return
@@ -109,32 +90,31 @@ export function registerChronicler(ctx: Context, presetId: string): void {
   }, 'dsh-rrp: Chronicler trigger')
 }
 
-/** Resolve the provider/model route for the session's live agent. */
-function routeFor(owner: AgentLike | undefined): { provider: string; model: string } | undefined {
-  const provider = owner?.options?.provider
-  const model = owner?.options?.model
-  if (provider === undefined || provider.length === 0) return undefined
-  if (model === undefined || model.length === 0) return undefined
-  return { provider, model }
-}
-
-/** Schedule one background inference job. Never throws into the session feed. */
-function scheduleInference(faces: HostFaces, session: SessionLike): void {
+/** Schedule one background inference job. Never throws into the session feed.
+ * @param throughSeq - fold the prose up to this seq and no further: the
+ *   boundary this pass owes. A deferral records the head as it stood when the
+ *   turn completed, so a pass never folds a newer turn than the one it was
+ *   triggered for, and no turn is ever skipped.
+ */
+function scheduleInference(faces: HostFaces, session: SessionLike, throughSeq?: number): void {
   // Concurrency guard: rapid successive turns must never run two inferences
-  // for one session in parallel (the stale check cannot see same-state races,
-  // so the later job could overwrite the earlier one's folds). Defer instead:
-  // queue one rerun that covers everything not yet state-written.
+  // for one session in parallel (the later job could overwrite the earlier
+  // one's folds). Defer instead, and remember the newest boundary owed so the
+  // covering pass folds every turn that piled up in the meantime.
   if (INFERENCE_IN_FLIGHT.has(session.id)) {
-    RERUN_PENDING.add(session.id)
-    console.log(TAG + ' Chronicler busy for ' + session.id + '; queued a covering rerun')
+    const owed = Math.max(throughSeq ?? proseHeadSeqOf(faces.projections, session), PENDING_UNTIL.get(session.id) ?? -1)
+    PENDING_UNTIL.set(session.id, owed)
+    console.log(TAG + ' Chronicler busy for ' + session.id + '; queued a covering rerun through seq ' + String(owed))
     return
   }
   const owner = faces.agents.get(session.id)
-  const route = routeFor(owner)
+  const route = routeOf(faces.agents, session.id)
   if (route === undefined) {
     console.warn(TAG + ' Chronicler skipped ' + session.id + ': no provider/model route')
     return
   }
+  const target = throughSeq ?? PENDING_UNTIL.get(session.id) ?? proseHeadSeqOf(faces.projections, session)
+  PENDING_UNTIL.delete(session.id)
   INFERENCE_IN_FLIGHT.add(session.id)
   try {
     faces.jobs.start({
@@ -144,7 +124,7 @@ function scheduleInference(faces: HostFaces, session: SessionLike): void {
       run: () => {
         const controller = new AbortController()
         let cancelled = false
-        const done = runInference(faces, session, route, controller.signal, () => cancelled, false)
+        const done = runInference(faces, session, route, controller.signal, () => cancelled, target)
         return {
           cancel: () => {
             cancelled = true
@@ -160,45 +140,53 @@ function scheduleInference(faces: HostFaces, session: SessionLike): void {
   }
 }
 
-/** Sessions with an inference currently in flight, and queued covering reruns. */
+/** Sessions with an inference in flight, and the newest boundary still owed. */
 const INFERENCE_IN_FLIGHT = new Set<string>()
-const RERUN_PENDING = new Set<string>()
+const PENDING_UNTIL = new Map<string, number>()
+/**
+ * Seq of the newest prose a pass actually committed lives in the session log
+ * (`TranscriptSlice.lastFoldSeq`), not here: the log's own
+ * `lastStateSeq` cannot answer "what is un-folded", because a turn deferred
+ * behind a busy pass sits in the log BEFORE the next state write.
+ */
+/** Covering reruns queued after a discard, per session, reset by a commit. */
+const DISCARD_RETRIES = new Map<string, number>()
+/** How many times one session may re-fold a discarded turn (no livelock). */
+const MAX_DISCARD_RETRIES = 3
 
 /** Drop the concurrency markers when a session is disposed. */
 export function forgetInference(sessionId: string): void {
   INFERENCE_IN_FLIGHT.delete(sessionId)
-  RERUN_PENDING.delete(sessionId)
+  PENDING_UNTIL.delete(sessionId)
+  DISCARD_RETRIES.delete(sessionId)
 }
 
 /** Drop every concurrency marker (plugin unload must not leave stale sessions behind). */
 export function forgetAllInference(): void {
   INFERENCE_IN_FLIGHT.clear()
-  RERUN_PENDING.clear()
+  PENDING_UNTIL.clear()
+  DISCARD_RETRIES.clear()
 }
 
 /** One inference pass: prompt -> model -> parse -> append. */
 async function runInference(
   faces: HostFaces,
   session: SessionLike,
-  route: { provider: string; model: string },
+  route: ProviderRoute,
   signal: AbortSignal,
   isCancelled: () => boolean,
-  coveringRerun: boolean,
+  throughSeq: number,
 ): Promise<{ status: string }> {
   const activityId = randomUUID()
-  const stamp = (): string => new Date().toISOString()
   try {
     const prior = (faces.projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ?? emptyWorldState()
-    // The Chronicler already receives the complete prior state, so it only
-    // needs THIS turn's prose — re-feeding older turns is pure token waste.
-    // A covering rerun instead folds everything not yet state-written.
-    const transcript = coveringRerun
-      ? unprocessedTranscriptOf(faces.projections, session)
-      : latestTurnTranscriptOf(faces.projections, session)
-    if (transcript.trim().length === 0) return { status: 'completed' }
+    // Everything since the last committed fold, up to the boundary this pass
+    // owes — no re-feeding of already-booked turns, no skipped ones.
+    const transcript = pendingTranscriptOf(faces.projections, session, throughSeq)
+    if (isEmptyReply(transcript)) return { status: 'completed' }
 
     recordActivity(session.id, {
-      id: activityId, at: stamp(), actor: 'chronicler', target: 'world-state', phase: 'started',
+      id: activityId, at: nowIso(), actor: 'chronicler', target: 'world-state', phase: 'started',
     })
 
     const prompt = buildChroniclerPrompt({ prior, transcript })
@@ -218,16 +206,13 @@ async function runInference(
     const text = await collectText(stream)
     if (isCancelled()) {
       recordActivity(session.id, {
-        id: activityId, at: stamp(), actor: 'chronicler', target: 'world-state', phase: 'failed', detailKey: 'detail.cancelled',
+        id: activityId, at: nowIso(), actor: 'chronicler', target: 'world-state', phase: 'failed', detailKey: 'detail.cancelled',
       })
       return { status: 'killed' }
     }
     // Distinguish an empty stream (infrastructure failure, retry-worthy) from
     // a malformed payload — both used to surface as the same format error.
-    if (text.trim().length === 0) {
-      console.warn(TAG + ' Chronicler EMPTY reply for ' + session.id + ' (treated as failure)')
-      throw new Error('Chronicler reply was empty')
-    }
+    if (isEmptyReply(text)) throw emptyReplyError('Chronicler', session.id)
 
     const reply = parseChroniclerReply(text, prior)
     if (reply === undefined) {
@@ -238,19 +223,32 @@ async function runInference(
       throw new Error('Chronicler reply was not a valid WorldState')
     }
     
-    // D6: Temporal race check. If the player corrected the state while inference was running,
-    // discard the Chronicler's result to ensure player edits always take precedence.
+    // D6: the player's edit always wins, so a correction that landed while this
+    // pass was running discards it. The discarded prose is not thereby
+    // uncounted: queue the covering rerun so the next pass folds everything
+    // since the last state write, not just the newest turn.
     const currentPrior = (faces.projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ?? emptyWorldState()
-    if (prior !== currentPrior && (diffWorldState(prior, currentPrior) !== NO_WORLD_STATE_CHANGE || JSON.stringify(prior) !== JSON.stringify(currentPrior))) {
+    if (prior !== currentPrior && !worldStatesEqual(prior, currentPrior)) {
+      // Bounded so continuous editing cannot livelock the queue; a committed
+      // pass resets the budget. The next completed turn folds it regardless.
+      const retries = (DISCARD_RETRIES.get(session.id) ?? 0) + 1
+      if (retries <= MAX_DISCARD_RETRIES) {
+        DISCARD_RETRIES.set(session.id, retries)
+        // Re-fold the very window this pass owed: the cursor never advanced,
+        // so nothing is lost between the discard and the rerun.
+        PENDING_UNTIL.set(session.id, throughSeq)
+      } else {
+        console.warn(TAG + ' Chronicler discard retries exhausted for ' + session.id + '; the next completed turn folds it')
+      }
       recordActivity(session.id, {
         id: activityId,
-        at: stamp(),
+        at: nowIso(),
         actor: 'chronicler',
         target: 'world-state',
         phase: 'stale',
         detailKey: 'detail.staleDiscarded',
       })
-      console.log(TAG + ' Chronicler inferred state is stale (player corrected), discarding for session ' + session.id)
+      console.log(TAG + ' Chronicler result discarded (player corrected); queued a covering rerun for session ' + session.id)
       return { status: 'stale' }
     }
 
@@ -262,9 +260,14 @@ async function runInference(
 
     const diff = diffWorldState(prior, reply.state)
     if (diff === NO_WORLD_STATE_CHANGE) {
+      // Nothing to book, so nothing is published — and the durable cursor
+      // stays put. The next pass re-reads this turn's prose, which is bounded
+      // by CHRONICLER_TRANSCRIPT_LIMIT and idempotent against the full prior
+      // state; appending a duplicate facts block would cost more than that.
+      DISCARD_RETRIES.delete(session.id)
       recordActivity(session.id, {
         id: activityId,
-        at: stamp(),
+        at: nowIso(),
         actor: 'chronicler',
         target: 'world-state',
         phase: 'committed',
@@ -274,12 +277,16 @@ async function runInference(
       return { status: 'completed' }
     }
     
-    if (!publishState(session, faces.projections, { worldState: reply.state })) {
+    // The cursor travels inside this same publish: it is the log that says
+    // what has been booked, so a restart or a fork resumes from the right
+    // piece of prose.
+    if (!publishState(session, faces.projections, { worldState: reply.state, stateFoldSeq: throughSeq })) {
       throw new Error('WorldState append failed')
     }
+    DISCARD_RETRIES.delete(session.id)
     recordActivity(session.id, {
       id: activityId,
-      at: stamp(),
+      at: nowIso(),
       actor: 'chronicler',
       target: 'world-state',
       phase: 'committed',
@@ -290,118 +297,18 @@ async function runInference(
   } catch (error) {
     console.warn(TAG + ' Chronicler inference failed:', error)
     recordActivity(session.id, {
-      id: activityId, at: stamp(), actor: 'chronicler', target: 'world-state', phase: 'failed', detail: messageOf(error),
+      id: activityId, at: nowIso(), actor: 'chronicler', target: 'world-state', phase: 'failed', detail: messageOf(error),
     })
     return { status: isCancelled() ? 'killed' : 'failed' }
   } finally {
     INFERENCE_IN_FLIGHT.delete(session.id)
-    // A turn ended while this pass was running: fold everything since the
-    // last state write so no turn's changes are lost to the deferral.
-    if (RERUN_PENDING.delete(session.id) && !isCancelled()) scheduleInference(faces, session)
-  }
-}
-
-/** Readable error text for a ledger entry. */
-export function messageOf(error: unknown): string {
-  const message = (error as { message?: unknown } | undefined)?.message
-  return typeof message === 'string' && message.length > 0 ? message : String(error)
-}
-
-/** Concatenate streamed text deltas. */
-async function collectText(stream: AsyncIterable<StreamChunkLike>): Promise<string> {
-  let text = ''
-  for await (const chunk of stream) {
-    if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') text += chunk.text
-  }
-  return text
-}
-
-/**
- * Read the transcript slice, degrading to empty when the projection read
- * throws (e.g. racing session disposal) so these readers stay total.
- */
-function transcriptSliceOf(projections: Pick<ProjectionsService, 'stateOf'>, session: unknown): TranscriptSlice {
-  try {
-    return (projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined) ?? emptyTranscriptSlice()
-  } catch {
-    return emptyTranscriptSlice()
-  }
-}
-
-/** Shared renderer: non-empty slice entries as 【玩家】/【叙述】 parts, tail-capped.
- * The cap drops whole entries from the front instead of slicing mid-string, so
- * the retained head stays byte-identical across runs and keeps its prefix-cache
- * alignment for the Summarizer (H1: sliding char windows destroyed that). */
-function renderSliceTranscript(slice: TranscriptSlice, fromIndex: number, minSeq: number, limit: number): string {
-  const parts: string[] = []
-  for (let index = fromIndex; index < slice.entries.length; index += 1) {
-    const entry = slice.entries[index]
-    if (entry === undefined || entry.seq <= minSeq) continue
-    if (entry.text.length === 0) continue
-    parts.push('【' + (entry.role === 'user' ? '玩家' : '叙述') + '】\n' + entry.text)
-  }
-  // Entry-aligned tail cap: skip leading parts until the remainder fits. Whole
-  // parts only — never a mid-text cut — so surviving bytes are prefix-stable.
-  let total = parts.length > 0 ? parts.length * 2 - 2 : 0
-  for (const part of parts) total += part.length
-  let start = 0
-  while (start < parts.length && total > limit) {
-    total -= (parts[start]?.length ?? 0) + 2
-    start += 1
-  }
-  return parts.slice(start).join('\n\n')
-}
-
-/**
- * Render ONLY the latest turn's prose. The Chronicler holds the
- * full prior state, so older turns add cost without adding information.
- *
- * NOTE: the fold's front-trim (500 entries / 64k chars) may have dropped very
- * old user boundary markers; the boundary then resolves to the oldest retained
- * entry instead of the true latest turn start. Intentional and irrelevant in
- * practice — a live turn never sits 500 messages behind the slice head.
- * @param projections - the session-projection read face.
- * @param session - the session whose newest turn is rendered.
- * @returns the latest turn's prose, capped.
- */
-export function latestTurnTranscriptOf(projections: Pick<ProjectionsService, 'stateOf'>, session: unknown): string {
-  const slice = transcriptSliceOf(projections, session)
-  let start = 0
-  for (let index = slice.entries.length - 1; index >= 0; index -= 1) {
-    // Empty-text and plugin-notice user entries count: they mark the boundary
-    // exactly like the old raw-log rule (last payload-less user/message).
-    if (slice.entries[index]?.role === 'user') {
-      start = index
-      break
+    // Turns that ended while this pass ran are owed a fold: hand the newest
+    // boundary to a rerun, unless this job was cancelled (the next completed
+    // turn covers it from the same cursor).
+    const owed = PENDING_UNTIL.get(session.id)
+    if (owed !== undefined) {
+      PENDING_UNTIL.delete(session.id)
+      if (!isCancelled()) scheduleInference(faces, session, owed)
     }
   }
-  return renderSliceTranscript(slice, start, -1, CHRONICLER_TRANSCRIPT_LIMIT)
-}
-
-/**
- * Render every turn AFTER the most recent state-bearing write —
- * i.e. everything the Chronicler has not folded yet. Used by covering reruns
- * queued while a pass was still in flight, so deferred turns lose no changes.
- * @param projections - the session-projection read face.
- * @param session - the session whose unprocessed prose is rendered.
- * @returns the unprocessed prose, tail-biased and capped.
- */
-export function unprocessedTranscriptOf(projections: Pick<ProjectionsService, 'stateOf'>, session: unknown): string {
-  const slice = transcriptSliceOf(projections, session)
-  return renderSliceTranscript(slice, 0, slice.lastStateSeq, CHRONICLER_TRANSCRIPT_LIMIT)
-}
-
-/**
- * Render the session's prose entries, tail-biased and capped.
- * Exported so the Summarizer and the Scribe consume the same rendering.
- * @param projections - the session-projection read face.
- * @param session - the session whose prose is rendered.
- * @param limit - character cap (default {@link DEFAULT_TRANSCRIPT_LIMIT}).
- */
-export function transcriptOf(
-  projections: Pick<ProjectionsService, 'stateOf'>,
-  session: unknown,
-  limit: number = DEFAULT_TRANSCRIPT_LIMIT,
-): string {
-  return renderSliceTranscript(transcriptSliceOf(projections, session), 0, -1, limit)
 }

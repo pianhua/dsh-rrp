@@ -44,7 +44,7 @@ export const AUTHOR_SYSTEM_PROMPT = [
   "- Anchor the viewpoint at the player's location; the reader knows only what the player knows. Never switch scenes to show what is happening elsewhere.",
   '',
   '## Authority of Record',
-  'When sources conflict, the authority order is: the Chronicle (剧情脉络) outranks the latest World State (世界状态), which outranks distant prose history. Distant history serves only for detail lookup — what an item looks like, the exact wording of a line — and never overrides the Chronicle or the latest state on story direction.',
+  'When sources conflict, split by domain: concrete FACTS (who is where, affinity, inventory, relations) are governed by the latest World State (世界状态) — including any correction the player just made to it; STORY DIRECTION (goal, live conflicts, foreshadowing) is governed by the macro compass (剧情脉络). Distant prose history serves only for detail lookup — what an item looks like, the exact wording of a line — and overrides neither. The two never compete: the compass says where the story is heading, the state says what is true while it gets there.',
   '',
   '## Banned Patterns',
   'The following are high-frequency templates of Chinese AI-flavored prose. Any hit must be rewritten; synonym swaps and sentence splitting still count as violations.',
@@ -136,7 +136,7 @@ export const AUTHOR_SYSTEM_PROMPT = [
  */
 export const authorAgent: AgentPromptContract<string, string> = {
   id: 'author',
-  name: '叙事作家（Author）',
+  name: '叙事执笔（Author）',
   systemPrompt: AUTHOR_SYSTEM_PROMPT,
   buildUserPrompt: (playerText: string) => playerText,
   parseReply: (rawReply: string) => rawReply,

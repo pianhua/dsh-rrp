@@ -12,6 +12,7 @@
  * agent that already exists when the plugin boots.
  */
 import type { Context } from '@deepseek-ai/cordis'
+import { type ListeningRuntimeFaces, type ProjectionsService, face } from './host-faces.ts'
 import { harnessHome } from './home.ts'
 import { belongsToRpPreset } from './preset-id.ts'
 import { createLoreProvider, type LoreProviderControl } from './lore-provider.ts'
@@ -23,7 +24,13 @@ import { forgetLore } from './lore-route.ts'
 
 const TAG = '[dsh-rrp]'
 
-interface SessionLike {
+/**
+ * The agent-scoped surfaces this module speaks to. Named apart from the
+ * `host-faces.ts` faces on purpose: a LoreSession whose `append` may be absent
+ * (an agent can outlive its writable session), and a LoreAgent carrying its own
+ * `ctx` — which is how one worldline's lore stays agent-local.
+ */
+interface LoreSession {
   readonly id: string
   append?(type: string, data: unknown, intent?: unknown): unknown
 }
@@ -36,20 +43,13 @@ interface AgentContextLike {
   /** Inject-free service read; the returned service is still traced to this context. */
   get?(name: string): unknown
 }
-interface AgentLike {
+interface LoreAgent {
   id: string
-  session?: SessionLike
+  session?: LoreSession
   ctx?: AgentContextLike
 }
-interface AgentsService {
-  get(id: string): AgentLike | undefined
-}
-interface ProjectionsService {
-  stateOf(session: unknown, key: string): unknown
-}
-interface RuntimeFaces {
-  get(name: string): unknown
-  on(event: string, listener: (...args: unknown[]) => void): () => void
+interface LoreAgentRegistry {
+  get(id: string): LoreAgent | undefined
 }
 
 /** Live Session-scoped providers, so writes invalidate and preset switches unwind them. */
@@ -68,7 +68,7 @@ function disarm(sessionId: string): void {
 }
 
 /** Whether this Session has ever adopted the event-backed lore model. */
-function hasLoreEvent(projections: ProjectionsService, session: SessionLike): boolean {
+function hasLoreEvent(projections: ProjectionsService, session: LoreSession): boolean {
   try {
     return ((projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined)?.sedimentSeen) ?? false
   } catch {
@@ -82,7 +82,7 @@ function hasLoreEvent(projections: ProjectionsService, session: SessionLike): bo
  * directory is renamed, so any failure leaves the user's files untouched.
  */
 export function migrateLegacyLore(
-  session: SessionLike,
+  session: LoreSession,
   projections: ProjectionsService,
   home: string = harnessHome(),
 ): boolean {
@@ -120,7 +120,7 @@ function skillsOf(ctx: AgentContextLike | undefined): SkillsServiceLike | undefi
 }
 
 /** Arm one agent when it belongs to the RP family and is not armed already. */
-function maybeArm(agent: AgentLike, projections: ProjectionsService): void {
+function maybeArm(agent: LoreAgent, projections: ProjectionsService): void {
   // agent/created listeners run inside session creation: a throw here would
   // fail the whole create, so nothing may escape.
   try {
@@ -154,16 +154,16 @@ function maybeArm(agent: AgentLike, projections: ProjectionsService): void {
  * @param ctx - the host context owning the registration.
  */
 export function registerLoreRuntime(ctx: Context): void {
-  const runtime = ctx as unknown as RuntimeFaces
-  const agents = runtime.get('agents') as AgentsService | undefined
-  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
+  const runtime = ctx as unknown as ListeningRuntimeFaces
+  const agents = face<LoreAgentRegistry>(runtime, 'agents')
+  const projections = face<ProjectionsService>(runtime, 'sessionProjections')
   if (agents === undefined || projections === undefined) {
     console.warn(TAG + ' lore runtime idle (missing agents/sessionProjections)')
     return
   }
   ctx.effect(() => {
     const disposeCreated = runtime.on('agent/created', (...args: unknown[]) => {
-      const agent = (args[0] as { agent?: AgentLike } | undefined)?.agent
+      const agent = (args[0] as { agent?: LoreAgent } | undefined)?.agent
       if (agent !== undefined) maybeArm(agent, projections)
     })
     const disposeSelected = runtime.on('agent-preset/selected', (...args: unknown[]) => {
@@ -187,7 +187,7 @@ export function registerLoreRuntime(ctx: Context): void {
       }
     })
     const disposeDisposed = runtime.on('agent/disposed', (...args: unknown[]) => {
-      const agent = (args[0] as { agent?: AgentLike } | undefined)?.agent
+      const agent = (args[0] as { agent?: LoreAgent } | undefined)?.agent
       const sessionId = agent?.session?.id ?? agent?.id
       if (sessionId !== undefined) {
         disarm(sessionId)
@@ -214,9 +214,9 @@ export function registerLoreRuntime(ctx: Context): void {
  * @param sessionId - the session to arm.
  */
 export function ensureLoreArmed(ctx: Context, sessionId: string): void {
-  const runtime = ctx as unknown as RuntimeFaces
-  const agents = runtime.get('agents') as AgentsService | undefined
-  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
+  const runtime = ctx as unknown as ListeningRuntimeFaces
+  const agents = face<LoreAgentRegistry>(runtime, 'agents')
+  const projections = face<ProjectionsService>(runtime, 'sessionProjections')
   const agent = agents?.get(sessionId)
   if (agent !== undefined && projections !== undefined) maybeArm(agent, projections)
 }

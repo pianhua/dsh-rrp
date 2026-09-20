@@ -20,12 +20,24 @@ import { renderWorldState } from './world-state.ts'
  */
 export const PROMPT_BUDGET_WINDOW_TOKENS = 128_000
 
+/** Rough token estimate: Chinese text averages ~3.2 chars per token. */
+const CHARS_PER_TOKEN = 3.2
+
 /**
- * Rough token estimate: Chinese text averages ~3.2 chars per token, rounded UP.
- * @param chineseText - the text to size (any language; tuned for Chinese).
+ * Tokens for a text that is not in hand — the same estimate, rounded UP,
+ * without materializing a stand-in string.
+ * @param charCount - characters to size.
+ */
+export function estimateTokensOfChars(charCount: number): number {
+  return Math.ceil(charCount / CHARS_PER_TOKEN)
+}
+
+/**
+ * Rough token estimate for a text (any language; tuned for Chinese).
+ * @param chineseText - the text to size.
  */
 export function estimateTokens(chineseText: string): number {
-  return Math.ceil(chineseText.length / 3.2)
+  return estimateTokensOfChars(chineseText.length)
 }
 
 /** One gauge segment: the rendered text of one injection channel. */
@@ -64,7 +76,7 @@ export function promptBudgetReport(input: {
   if (input.summary !== undefined) push('summary', renderMacroSummary(input.summary))
   if (input.state !== undefined) push('state', renderWorldState(input.state))
   if (input.injectedChars !== undefined && input.injectedChars > 0) {
-    sections.push({ id: 'triggers', chars: input.injectedChars, tokens: estimateTokens('x'.repeat(input.injectedChars)) })
+    sections.push({ id: 'triggers', chars: input.injectedChars, tokens: estimateTokensOfChars(input.injectedChars) })
   }
 
   const totalTokens = sections.reduce((sum, section) => sum + section.tokens, 0)

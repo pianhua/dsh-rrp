@@ -7,7 +7,7 @@
  * facts route; nothing here ever scans the log.
  */
 import { z } from 'zod'
-import { rrpPayloadOf } from '../state-payload.ts'
+import { collectTextBlocks, isHostReminder, isPluginNotice, rrpPayloadOf } from '../state-payload.ts'
 import { emptyWorldlineDigest, WORLDLINE_DIGEST_KEY, type WorldlineBadge, type WorldlineDigest } from '../worldline-digest.ts'
 
 /** Slot budgets: the map shows dozens of lines, keep every node small. */
@@ -44,25 +44,6 @@ const summaryPayloadSchema = z.object({
   goal: z.string().optional(),
   conflict: z.string().optional(),
 })
-
-/** Text blocks of either message shape: user data IS the message; assistant wraps it in `message`. */
-function blocksOf(event: { data?: unknown }): string[] {
-  const data = event.data as { content?: unknown; message?: { content?: unknown } } | undefined
-  const blocks = Array.isArray(data?.content) ? data.content : Array.isArray(data?.message?.content) ? data.message?.content : null
-  if (blocks === null) return []
-  return blocks
-    .map((block) => {
-      const text = (block as { text?: unknown })?.text
-      return typeof text === 'string' ? text : ''
-    })
-    .filter((text) => text.length > 0)
-}
-
-/** True for plugin-issued messages WITHOUT an rrp payload (notices, fallbacks). */
-function isPluginNotice(event: { type: string; data?: unknown }): boolean {
-  const source = (event.data as { source?: { kind?: unknown } } | undefined)?.source
-  return source?.kind === 'plugin' && rrpPayloadOf(event) === undefined
-}
 
 /** Read the badge fields a state publish contributes (defensive: any shape passes through). */
 function badgeFromState(raw: unknown, base: WorldlineBadge | undefined): WorldlineBadge | undefined {
@@ -120,7 +101,10 @@ export const worldlineDigestProjection = {
     }
 
     if (isPluginNotice(event)) return state
-    const blocks = blocksOf(event)
+    // Both prose folds read text the same way now: one recursive collector.
+    const found: string[] = []
+    collectTextBlocks(event.data, found)
+    const blocks = found.filter((text) => text.length > 0)
     if (event.type === 'assistant/message') {
       // The turn's prose is the LAST assistant text: models may emit an
       // English planning message (or block) before the finished Chinese prose,
@@ -135,7 +119,7 @@ export const worldlineDigestProjection = {
     // A real player message opens the next save slot. Host-injected
     // system-reminders ride user messages too but are never the player's turn.
     const text = blocks.join('\n').trim()
-    if (text.length === 0 || text.startsWith('<system-reminder>')) return state
+    if (text.length === 0 || isHostReminder(text)) return state
     const turns = [...state.turns, {
       turn: state.turns.length === 0 ? 0 : (state.turns[state.turns.length - 1]?.turn ?? -1) + 1,
       seq,

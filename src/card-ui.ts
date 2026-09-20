@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import { parseWhen, whenPathWarning } from './lore-condition.ts'
 import type { WorldState } from './world-state.ts'
-import { UI_BUTTON_LIMIT, UI_PANEL_LIMIT, type UiManifest, type UiPanelDecl } from './ui-schema.ts'
+import { UI_ACTION_KINDS, UI_BUTTON_LIMIT, UI_COMPONENT_KINDS, UI_PANEL_LIMIT, type UiManifest, type UiPanelDecl } from './ui-schema.ts'
 
 /** The manifest's fixed filename inside a card's `ui/` directory. */
 export const UI_MANIFEST_FILE = 'manifest.json'
@@ -20,7 +20,7 @@ export const UI_MANIFEST_FILE = 'manifest.json'
 const buttonSchema = z
   .object({
     label: z.string().min(1),
-    action: z.enum(['correct_state', 'ask_copilot']),
+    action: z.enum(UI_ACTION_KINDS),
     patch: z.record(z.string(), z.unknown()).optional(),
     question: z.string().min(1).optional(),
   })
@@ -29,7 +29,9 @@ const buttonSchema = z
 const panelSchema = z
   .object({
     id: z.string().min(1),
-    component: z.enum(['gauge', 'characterCard', 'relationTable', 'timeline', 'buttonRow', 'app']),
+    // The closed sets come from ui-schema.ts, so a new component there is
+    // accepted here by construction instead of by memory.
+    component: z.enum(UI_COMPONENT_KINDS),
     title: z.string().optional(),
     bind: z.string().min(1).optional(),
     min: z.number().optional(),

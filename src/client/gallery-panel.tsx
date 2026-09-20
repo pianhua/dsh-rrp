@@ -28,7 +28,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { interpolateCardText, type CardMeta, type CardOpening, type CardPack, type CardPlayer } from '../card-types.ts'
 import { presetIdForCard } from '../preset-id.ts'
-import { RRP_ROUTES } from '../route-contract.ts'
+import { RRP_ROUTES, type CardImportResponse, type RrpErrorBody } from '../route-contract.ts'
 import { uniqueMainTitle } from '../save-naming.ts'
 import { withPlayerPersona } from '../world-state.ts'
 import type { RrpClientContext } from './context-types.ts'
@@ -39,7 +39,7 @@ export const GALLERY_PANEL_ID = 'dsh-rrp/chronicle'
 type Translate = (key: string) => string
 
 /** Start outcome the panel renders. */
-interface StartOutcome {
+interface GalleryStartResult {
   ok: boolean
   message?: string
 }
@@ -50,7 +50,7 @@ interface GalleryPanelProps {
   loadList?: () => Promise<CardMeta[]>
   loadCard?: (id: string) => Promise<CardPack | undefined>
   /** playerNameOverride: per-session player-name override (#25); empty/undefined = card-declared. */
-  start?: (card: CardPack, playerNameOverride?: string, openingId?: string, playerPersona?: string) => Promise<StartOutcome>
+  start?: (card: CardPack, playerNameOverride?: string, openingId?: string, playerPersona?: string) => Promise<GalleryStartResult>
 }
 
 /** Small status line state. */
@@ -166,14 +166,15 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ kind, data }),
       })
-      const body = await response.json() as { ok?: boolean; id?: string; name?: string; error?: string }
-      if (!response.ok || body.ok !== true) {
-        setStatus({ tone: 'error', text: t('gallery.importFailed') + (body.error === undefined ? '' : ': ' + body.error) })
+      const body = await response.json() as CardImportResponse | RrpErrorBody
+      if (!response.ok || !('id' in body)) {
+        const reason = 'error' in body ? body.error : String(response.status)
+        setStatus({ tone: 'error', text: t('gallery.importFailed') + ': ' + reason })
         return
       }
-      setStatus({ tone: 'ok', text: t('gallery.imported') + '：' + (body.name ?? body.id ?? '') })
+      setStatus({ tone: 'ok', text: t('gallery.imported') + '：' + body.name })
       refresh()
-      if (body.id !== undefined) select(body.id, true)
+      select(body.id, true)
     } catch (error: unknown) {
       setStatus({ tone: 'error', text: t('gallery.importFailed') + ': ' + String((error as { message?: string })?.message ?? error) })
     } finally {
@@ -609,7 +610,7 @@ export function registerGallery(ctx: RrpClientContext): void {
     }
   }
 
-  const start = async (card: CardPack, playerNameOverride?: string, openingId?: string, playerPersona?: string): Promise<StartOutcome> => {
+  const start = async (card: CardPack, playerNameOverride?: string, openingId?: string, playerPersona?: string): Promise<GalleryStartResult> => {
     const sessions = ctx.sessions
     const remote = ctx.remote
     if (sessions === undefined || remote === undefined) return { ok: false, message: t('gallery.unavailable') }
@@ -617,7 +618,7 @@ export function registerGallery(ctx: RrpClientContext): void {
     const sessionId = await sessions.create(cardWorkspace.workspaceId === undefined ? {} : { workspaceId: cardWorkspace.workspaceId })
     // Best-effort orphan cleanup: the session exists on the host now, so any
     // later failure must not leave a preset-bound empty session behind.
-    const abortStart = async (reason: string): Promise<StartOutcome> => {
+    const abortStart = async (reason: string): Promise<GalleryStartResult> => {
       let recovered = false
       try {
         const destroy = (sessions as unknown as {

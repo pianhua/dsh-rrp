@@ -12,7 +12,7 @@
  */
 import { Button, IconLoadingOutline16, IconRefreshOutline16, IconSparkle16, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
-import { RRP_ROUTES, type WorldlineTreeResponse } from '../route-contract.ts'
+import { RRP_ROUTES, routeUrl, type WorldlineTreeResponse } from '../route-contract.ts'
 import { branchTitle } from '../save-naming.ts'
 import type { WorldlineNode, WorldlineTree } from '../worldline-tree.ts'
 import type { RrpClientContext } from './context-types.ts'
@@ -220,10 +220,7 @@ export function registerWorldlineTab(ctx: RrpClientContext): void {
     },
     async exportNovel(sessionId) {
       const title = sessions?.list?.getSnapshot().byId[sessionId]?.displayTitle ?? ''
-      const response = await fetch(RRP_ROUTES.novelExport
-        + '?sessionId=' + encodeURIComponent(sessionId)
-        + '&title=' + encodeURIComponent(title)
-        + '&format=md')
+      const response = await fetch(routeUrl(RRP_ROUTES.novelExport, sessionId, { title, format: 'md' }))
       if (!response.ok) throw new Error('export HTTP ' + String(response.status))
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)

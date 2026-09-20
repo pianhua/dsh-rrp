@@ -182,9 +182,10 @@ export function apply(ctx: Context): void {
     registerCardWorkspaceRoute(scoped)
   })
 
-  // Copilot: the player's omniscient advisor in the third right-sidebar tab.
-  // Conversation history lives on the host Storage domain (never the session
-  // log, issue #21); her writes ride the same published lanes with actor 'copilot'.
+  // Copilot (月停): the player's omniscient advisor in the third right-sidebar
+  // tab. Conversation history lives on the host Storage domain (never the
+  // session log, issue #21); its writes ride the same published lanes with
+  // actor 'copilot'.
   ctx.inject(['webServer', 'sessions', 'sessionProjections', 'llm', 'agents', 'storageDomain'], (scoped: Context) => {
     registerCopilotRoute(scoped)
   })

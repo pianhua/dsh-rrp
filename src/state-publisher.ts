@@ -17,7 +17,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
-import { hitSet, renderTriggerBlock, type TriggerHit } from './lore-condition.ts'
+import { hitSet, renderTriggerBlock, TRIGGER_BLOCK_HEADER, type TriggerHit } from './lore-condition.ts'
 import { triggersOfCard } from './cards.ts'
 import { SUMMARY_KEY, renderMacroSummary, type MacroSummary } from './macro-summary.ts'
 import { RRP_SETTINGS_KEY, rrpSettingsOf, type RrpSettings } from './settings.ts'
@@ -45,6 +45,8 @@ export interface StateProjections {
 export interface RrpStatePatch {
   card?: CardContext
   worldState?: WorldState
+  /** Seq of the newest prose this fold covered (the Chronicler's cursor). */
+  stateFoldSeq?: number
   summary?: MacroSummary | null
   /** Turn that produced `summary`; persisted as the durable Summarizer watermark. */
   summaryTurn?: number
@@ -56,8 +58,18 @@ export interface RrpStatePatch {
 interface Retained {
   cardFingerprint?: string
   factsFingerprint?: string
+  /** Chronicler fold cursor at the last publish (must never be deduped away). */
+  factsFoldSeq?: number
   /** Conditional-injection hits at the last publish (revoke diff baseline). */
   triggerHits?: TriggerHit[]
+  /**
+   * True when this process adopted a facts lane that already carries an
+   * injection block but cannot know which skills that block listed: the hit
+   * set is a diff baseline, not a folded fact, so a restart/resume loses it.
+   * The next publish then revokes blanketly instead of silently leaving the
+   * unreferenced old block standing in the prefix.
+   */
+  triggerBaselineUnknown?: boolean
 }
 
 /** Per-session retained lanes. Bounded by the number of live sessions. */
@@ -69,21 +81,25 @@ function appendLane(session: StateSession, text: string, payload: RrpStatePayloa
 }
 
 /**
+ * Facts-lane content key. The settings are folded in because a cadence-only
+ * change must still republish — otherwise `/summary every N` never reaches the
+ * log and is lost on restart.
+ */
+function factsFingerprint(text: string, settings: RrpSettings): string {
+  return text + '\u0000summary=' + String(settings.summaryEnabled) + '\u0000every=' + String(settings.summaryEveryTurns)
+}
+
+/** Card-lane content key: the rendered text plus which card produced it. */
+function cardFingerprint(text: string, card: CardContext): string {
+  return text + '\u0000card=' + card.id
+}
+
+/**
  * Adopt the lanes the transcript slice already folded, so a restart/resume
  * does not republish the constant card or duplicate an unchanged facts
  * message. The projection read may throw (racing disposal) — same outcome as
  * the old missing snapshot: nothing is retained.
  */
-function factsFingerprint(text: string, settings: RrpSettings): string {
-  // summaryEveryTurns included: a cadence-only change must still republish,
-  // otherwise /summary every N never reaches the log and is lost on restart.
-  return text + '\u0000summary=' + String(settings.summaryEnabled) + '\u0000every=' + String(settings.summaryEveryTurns)
-}
-
-function cardFingerprint(card: CardContext, text: string): string {
-  return text + '\u0000card=' + card.id
-}
-
 function adopt(session: StateSession, projections: StateProjections): Retained {
   const retained: Retained = {}
   let slice: TranscriptSlice | undefined
@@ -98,6 +114,10 @@ function adopt(session: StateSession, projections: StateProjections): Retained {
       slice.facts.text,
       rrpSettingsOf(projections.stateOf(session, RRP_SETTINGS_KEY)),
     )
+    // The hit set is a diff baseline, never a folded fact, so it cannot come
+    // back from the log: an adopted block means "unknown what it listed".
+    retained.triggerBaselineUnknown = slice.facts.text.includes(TRIGGER_BLOCK_HEADER)
+    retained.factsFoldSeq = slice.lastFoldSeq
   }
   return retained
 }
@@ -120,9 +140,9 @@ export function publishState(session: StateSession, projections: StateProjection
     const card = patch.card
     if (card !== undefined) {
       const cardText = renderCardContext(card)
-      if (retained.cardFingerprint !== cardFingerprint(card, cardText)) {
+      if (retained.cardFingerprint !== cardFingerprint(cardText, card)) {
         appendLane(session, cardText, { card })
-        retained.cardFingerprint = cardFingerprint(card, cardText)
+        retained.cardFingerprint = cardFingerprint(cardText, card)
       }
     }
 
@@ -145,16 +165,26 @@ export function publishState(session: StateSession, projections: StateProjection
         if (activeCard !== null) {
           const triggers = triggersOfCard(activeCard.id)
           if (triggers.length > 0) {
+            // One publish can only supersede the log's last block, so the
+            // unknown-baseline flag is consumed here either way.
+            const baselineUnknown = retained.triggerBaselineUnknown === true
+            retained.triggerBaselineUnknown = false
             const prevHits = retained.triggerHits ?? []
             const hits = hitSet(triggers, state)
             retained.triggerHits = hits
-            if (hits.length > 0 || prevHits.length > 0) parts.push(renderTriggerBlock(hits, prevHits))
+            if (hits.length > 0 || prevHits.length > 0 || baselineUnknown) {
+              parts.push(renderTriggerBlock(hits, prevHits, baselineUnknown))
+            }
           }
         }
       }
       const factsText = parts.join('\n\n')
       const fingerprint = factsFingerprint(factsText, settings)
-      if (patch.sediment !== undefined || retained.factsFingerprint !== fingerprint) {
+      // The cursor always travels with its state: a fold that rendered
+      // byte-identical facts still has to be booked, or the Chronicler would
+      // re-read the same prose forever.
+      const foldMoved = patch.stateFoldSeq !== undefined && retained.factsFoldSeq !== patch.stateFoldSeq
+      if (patch.sediment !== undefined || retained.factsFingerprint !== fingerprint || foldMoved) {
         // Metadata-only publish (e.g. a confirmed lore entry whose state text is
         // unchanged): keep the model-visible content to one breadcrumb line
         // instead of re-rendering the full state — the lore data itself
@@ -168,8 +198,10 @@ export function publishState(session: StateSession, projections: StateProjection
           ...(patch.summaryTurn === undefined ? {} : { summaryTurn: patch.summaryTurn }),
           settings,
           ...(patch.sediment === undefined ? {} : { sediment: patch.sediment }),
+          ...(patch.stateFoldSeq === undefined ? {} : { stateFoldSeq: patch.stateFoldSeq }),
         })
         retained.factsFingerprint = fingerprint
+        if (patch.stateFoldSeq !== undefined) retained.factsFoldSeq = patch.stateFoldSeq
       }
     }
     return true

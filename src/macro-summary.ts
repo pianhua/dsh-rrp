@@ -18,6 +18,20 @@ export interface MacroSummary {
   threads: string[]
 }
 
+/**
+ * Caps for one macro compass. The Summarizer prompt states these numbers and
+ * `parseSummarizerReply` enforces them, so the soft instruction and the hard
+ * shape can never drift apart (issue #32's alignment rule).
+ */
+export const SUMMARY_LIMITS = {
+  /** goal / conflict: one sentence each. */
+  headlineChars: 40,
+  /** One turning point or thread line. */
+  entryChars: 30,
+  /** Lines kept per list; anything past the tail is dropped. */
+  entries: 5,
+} as const
+
 /** Projection key, also the client `useProjection(key)` lookup key. */
 export const SUMMARY_KEY = 'rrpSummary'
 

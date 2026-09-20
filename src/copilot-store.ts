@@ -19,9 +19,11 @@
  * every record write and declares "one writer per process, last-write-wins".
  * A second harness process sharing DSH_HOME therefore evaporates records with
  * its stale in-memory table. We cannot serialize across processes, so we make
- * the dangerous state LOUD: a best-effort writer-lock sidecar next to the unit
- * file, refreshed on every mutate. An open that finds a DIFFERENT live process
+ * the dangerous state LOUD: a best-effort witness file next to the unit,
+ * refreshed on every mutate. An open that finds a DIFFERENT live process
  * holding a fresh heartbeat warns instead of silently accepting the race.
+ * It is a smoke alarm, not a lock: nothing here blocks, serializes or retries
+ * (AGENTS 铁律一 forbids cross-process coordination machinery in this toy).
  */
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
@@ -64,7 +66,7 @@ export interface CopilotHistoryView {
 const turnActionSchema = z.union([
   z.object({ kind: z.literal('world-state'), digest: z.string() }),
   z.object({ kind: z.literal('lore'), name: z.string() }),
-  z.object({ kind: z.literal('proposal'), proposalKind: z.enum(['card-edit', 'doc-note']), label: z.string() }),
+  z.object({ kind: z.literal('proposal'), proposalKind: z.enum(['card-edit', 'doc-note']), subject: z.string() }),
   z.object({ kind: z.literal('failed'), error: z.string() }),
 ])
 
@@ -111,47 +113,48 @@ export function setCopilotLegacyDirForTesting(dir: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Writer lock (issue #27) — see the module header for why this exists.
+// Second-writer witness (issue #27) — see the module header for why this exists.
+// Deliberately NOT a lock: it never refuses a write and never waits.
 
-interface WriterLock {
+interface WriterWitness {
   pid: number
   hostname: string
   openedAt: number
   heartbeatAt: number
 }
 
-/** A foreign lock younger than this is a live race; older is a crashed remnant. */
-const LOCK_FRESH_MS = 10 * 60 * 1000
+/** A foreign witness younger than this is a live race; older is a crashed remnant. */
+const WITNESS_FRESH_MS = 10 * 60 * 1000
 
-let lockPath = join(harnessHome(), 'storages', 'dsh_rrp_copilot.writer.json')
-let lockNow = (): number => Date.now()
+let witnessPath = join(harnessHome(), 'storages', 'dsh_rrp_copilot.writer.json')
+let witnessNow = (): number => Date.now()
 
 /** Test hook: redirect the lock file and (optionally) the clock. */
-export function setCopilotLockForTesting(path: string | undefined, now?: () => number): void {
-  if (path !== undefined) lockPath = path
-  if (now !== undefined) lockNow = now
+export function setCopilotWitnessForTesting(path: string | undefined, now?: () => number): void {
+  if (path !== undefined) witnessPath = path
+  if (now !== undefined) witnessNow = now
 }
 
-function readLock(): WriterLock | undefined {
+function readWitness(): WriterWitness | undefined {
   try {
-    const parsed = JSON.parse(readFileSync(lockPath, 'utf8')) as Record<string, unknown>
+    const parsed = JSON.parse(readFileSync(witnessPath, 'utf8')) as Record<string, unknown>
     if (typeof parsed.pid !== 'number' || typeof parsed.heartbeatAt !== 'number') return undefined
-    return parsed as unknown as WriterLock
+    return parsed as unknown as WriterWitness
   } catch {
     return undefined
   }
 }
 
-function writeLock(openedAt: number): void {
+function writeWitness(openedAt: number): void {
   try {
-    writeFileSync(lockPath, JSON.stringify({
+    writeFileSync(witnessPath, JSON.stringify({
       pid: process.pid,
       hostname: hostname(),
       openedAt,
-      heartbeatAt: lockNow(),
+      heartbeatAt: witnessNow(),
     }), 'utf8')
   } catch {
-    /* best effort only — a lock we cannot write must never break the store */
+    /* best effort only — a witness we cannot write must never break the store */
   }
 }
 
@@ -171,9 +174,9 @@ function pidAlive(pid: number): boolean {
  * restarts of this same toy must not cry wolf.
  */
 function guardAgainstSecondWriter(): void {
-  const existing = readLock()
+  const existing = readWitness()
   if (existing === undefined || existing.pid === process.pid) return
-  if (lockNow() - existing.heartbeatAt < LOCK_FRESH_MS && pidAlive(existing.pid)) {
+  if (witnessNow() - existing.heartbeatAt < WITNESS_FRESH_MS && pidAlive(existing.pid)) {
     console.warn(
       TAG + ' copilot history: ANOTHER LIVE HARNESS (pid ' + existing.pid + ') is writing '
       + 'dsh_rrp_copilot on this DSH_HOME. The host backend is last-write-wins per process, '
@@ -264,8 +267,8 @@ export async function openCopilotStore(
   }
   const domain = await facility.open(copilotDomainSpec)
   guardAgainstSecondWriter()
-  const openedAt = lockNow()
-  writeLock(openedAt)
+  const openedAt = witnessNow()
+  writeWitness(openedAt)
   const table = domain.table('history')
   const handle: CopilotStoreHandle = {
     load(sessionId) {
@@ -286,7 +289,7 @@ export async function openCopilotStore(
         result = fn(draft)
         return draft
       })
-      writeLock(openedAt)
+      writeWitness(openedAt)
       return result
     },
     async remove(sessionId) {

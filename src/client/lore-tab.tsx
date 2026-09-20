@@ -28,7 +28,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { RRP_LORE_KEY, type LoreEntry } from '../lore-state.ts'
-import { RRP_ROUTES } from '../route-contract.ts'
+import { RRP_ROUTES, routeUrl, type LoreEntryView, type LoreGetResponse } from '../route-contract.ts'
 import type { RrpClientContext, RrpJobView, RrpUseProjection, RrpUseSessions } from './context-types.ts'
 
 /** Implementation identity; also the key the body registers under. */
@@ -42,26 +42,10 @@ const POLL_MS = 2000
 
 type Translate = (key: string) => string
 
-/** One written skill (structural copy of the host's list entry). */
-interface SedSkill {
-  name: string
-  description: string
-  bytes: number
-  updatedAt: string
-}
-/** One staged draft. */
-interface SedDraft {
-  name: string
-  description: string
-  body: string
-}
-/** The list response. */
-interface SedList {
-  skills: SedSkill[]
-  pending: SedDraft | null
-  drafting: boolean
-  /** Card conditional-injection triggers (issue #16); absent on old hosts. */
-  triggers?: Array<{ name: string; active: boolean }>
+/** The list response: the shared route contract, with the pre-#16 fields
+ * still optional so an older host's shorter answer degrades to no triggers. */
+type SedList = Omit<LoreGetResponse, 'triggers' | 'injectedChars'> & {
+  triggers?: LoreGetResponse['triggers']
   injectedChars?: number
 }
 
@@ -76,12 +60,11 @@ interface LorePanelProps {
 const byteLengthOf = (text: string): number => new TextEncoder().encode(text).length
 
 /** Host-pushed projection rows → panel rows (same shape the route used to send). */
-function skillRows(entries: readonly LoreEntry[]): SedSkill[] {
+function skillRows(entries: readonly LoreEntry[]): LoreEntryView[] {
   return entries.map((entry) => ({
     name: entry.name,
     description: entry.description,
     bytes: byteLengthOf(entry.body),
-    updatedAt: '',
   }))
 }
 
@@ -149,7 +132,7 @@ function LorePanel(props: LorePanelProps): ReactNode {
 
   const refresh = (): void => {
     if (sessionId === undefined) return
-    void fetch(LORE_PATH + '?sessionId=' + encodeURIComponent(sessionId))
+    void fetch(routeUrl(LORE_PATH, sessionId))
       .then((response) => (response.ok ? response.json() as Promise<SedList> : undefined))
       .then((body) => { if (body !== undefined) setFetched(body) })
       .catch(() => { /* best-effort */ })
@@ -201,7 +184,7 @@ function LorePanel(props: LorePanelProps): ReactNode {
   const remove = (name: string): void => {
     if (sessionId === undefined) return
     setBusy(true)
-    void fetch(LORE_PATH + '?sessionId=' + encodeURIComponent(sessionId) + '&name=' + encodeURIComponent(name), { method: 'DELETE' })
+    void fetch(routeUrl(LORE_PATH, sessionId, { name }), { method: 'DELETE' })
       .then((response) => {
         if (!response.ok) throw new Error(String(response.status))
         refresh()

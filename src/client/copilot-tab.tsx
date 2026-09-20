@@ -1,5 +1,5 @@
 /**
- * dsh-rrp — the 「副驾驶」 right-sidebar tab (Copilot advisor).
+ * dsh-rrp — the 「月停」 right-sidebar tab (Copilot advisor).
  *
  * The player's omniscient stage-director assistant, fully out-of-band: the
  * conversation rides one SSE POST against the host route and lands in
@@ -20,7 +20,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useCopilotPrefill } from './copilot-prefill.ts'
-import { COPILOT_SSE, RRP_ROUTES, drainSse, type CopilotTurn, type StewardProposal } from '../route-contract.ts'
+import { COPILOT_NO_MODEL_ROUTE, COPILOT_SSE, RRP_ROUTES, drainSse, routeUrl, type CopilotTurn, type StewardProposal } from '../route-contract.ts'
 import type { RrpClientContext } from './context-types.ts'
 
 /** Implementation identity; also the key the body registers under. */
@@ -119,7 +119,7 @@ function CopilotPanel(props: CopilotPanelProps) {
   const load = useCallback(async () => {
     if (sessionId === undefined) return
     try {
-      const response = await fetch(COPILOT_PATH + '?sessionId=' + encodeURIComponent(sessionId))
+      const response = await fetch(routeUrl(COPILOT_PATH, sessionId))
       if (!response.ok) return
       const body = await response.json() as { turns: CopilotTurn[]; undoCount: number; proposals?: StewardProposal[] }
       setTurns(body.turns)
@@ -158,7 +158,7 @@ function CopilotPanel(props: CopilotPanelProps) {
         body: JSON.stringify({ sessionId, message }),
       })
       if (!response.ok || response.body === null) {
-        // 503 carries a machine reason in the body: 'no provider/model route'
+        // 503 carries a machine reason in the body: COPILOT_NO_MODEL_ROUTE
         // (session has no model configured) vs history-store outages.
         let reason = ''
         if (response.status === 503) {
@@ -168,7 +168,7 @@ function CopilotPanel(props: CopilotPanelProps) {
         }
         setError(response.status === 409
           ? t('copilot.busy')
-          : reason === 'no provider/model route' ? t('copilot.noModel') : t('copilot.failed'))
+          : reason === COPILOT_NO_MODEL_ROUTE ? t('copilot.noModel') : t('copilot.failed'))
         setBusy(false)
         void load()
         return
@@ -252,7 +252,7 @@ function CopilotPanel(props: CopilotPanelProps) {
     }
     disarmClear()
     try {
-      await fetch(COPILOT_PATH + '?sessionId=' + encodeURIComponent(sessionId), { method: 'DELETE' })
+      await fetch(routeUrl(COPILOT_PATH, sessionId), { method: 'DELETE' })
       setTurns([])
       setUndoCount(0)
       setNotice(t('copilot.cleared'))
@@ -340,7 +340,10 @@ function CopilotPanel(props: CopilotPanelProps) {
         {turn.actions.map((action, index) => {
           if (action.kind === 'world-state') return <div key={index} style={S.actionRow}>{action.digest}</div>
           if (action.kind === 'lore') return <div key={index} style={S.actionRow}>{t('copilot.staged') + '：' + action.name}</div>
-          if (action.kind === 'proposal') return <div key={index} style={S.actionRow}>{action.label}</div>
+          if (action.kind === 'proposal') {
+            const frame = action.proposalKind === 'doc-note' ? 'copilot.proposal.docNote' : 'copilot.proposal.cardEdit'
+            return <div key={index} style={S.actionRow}>{t(frame) + ' · ' + action.subject}</div>
+          }
           return <div key={index} style={S.actionFailed}>{action.error}</div>
         })}
       </div>

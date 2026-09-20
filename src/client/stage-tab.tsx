@@ -34,7 +34,7 @@ export interface StageApi {
   loadManifest(cardId: string): Promise<UiManifest | null>
   /** Post a whole corrected slice through the player-correction channel. */
   correctState(sessionId: string, state: WorldState): Promise<void>
-  /** Reveal 副驾驶 and pre-fill one question (never auto-sent). */
+  /** Reveal 月停 and pre-fill one question (never auto-sent). */
   askCopilot(question: string): void
   /** Drop one card's cached declaration so the next load re-reads the disk. */
   forget(cardId: string): void
@@ -253,7 +253,9 @@ export function StagePanel(props: StagePanelProps): ReactNode {
   // The tail of the latest turn, so a card app can react to what just happened
   // without re-reading the transcript itself.
   const digest = useProjection?.(WORLDLINE_DIGEST_KEY) as WorldlineDigest | undefined
-  const transcript = digest === undefined || digest.turns.length === 0 ? '' : (digest.turns[digest.turns.length - 1]?.prose ?? '').slice(0, 600)
+  // The digest entry is already excerpt-bounded at the fold (PROSE_CHARS), so
+  // the card app gets the latest turn's tail as-is.
+  const transcript = digest?.turns[digest.turns.length - 1]?.prose ?? ''
   return (
     <div style={S.wrap}>
       <div style={S.head}>

@@ -24,8 +24,8 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { pendingActivity, type RrpActivityLog } from '../activity.ts'
-import type { CardContext } from '../card-types.ts'
-import type { MacroSummary } from '../macro-summary.ts'
+import { CARD_KEY, type CardContext } from '../card-types.ts'
+import { SUMMARY_KEY, type MacroSummary } from '../macro-summary.ts'
 import { promptBudgetReport, type BudgetReport, type BudgetSection } from '../prompt-budget.ts'
 import type { RrpUseSessions, RrpJobView } from './context-types.ts'
 import {
@@ -47,7 +47,7 @@ import type { RrpClientContext } from './context-types.ts'
 const TAB_ID = 'dsh-rrp/world-state'
 /** Type discriminator openTab names. */
 const TAB_KIND = 'dsh-rrp-worldstate'
-import { RRP_ROUTES } from '../route-contract.ts'
+import { RRP_ROUTES, routeUrl, type LoreGetResponse } from '../route-contract.ts'
 
 /** Paths come from the shared route contract (#22). */
 const CORRECTION_PATH = RRP_ROUTES.worldState
@@ -427,10 +427,10 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
   // The two other injection channels the Author actually sees (A3 gauge):
   // the active card setting and the macro chronicle. Both ride projections.
   const cardContext = typeof props.useProjection === 'function'
-    ? (props.useProjection('rrpCard') as CardContext | null | undefined)
+    ? (props.useProjection(CARD_KEY) as CardContext | null | undefined)
     : undefined
   const macroSummary = typeof props.useProjection === 'function'
-    ? (props.useProjection('rrpSummary') as MacroSummary | undefined)
+    ? (props.useProjection(SUMMARY_KEY) as MacroSummary | undefined)
     : undefined
   // Conditional-injection payload size (issue #16): served by the lore route.
   // Fetch failure degrades silently — the gauge simply omits the segment.
@@ -529,7 +529,7 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
   // fallback for hosts where the jobs mirror is not injected into this seat.
   const loadActivity = (): void => {
     if (sessionId === undefined) return
-    void fetch(ACTIVITY_PATH + '?sessionId=' + encodeURIComponent(sessionId))
+    void fetch(routeUrl(ACTIVITY_PATH, sessionId))
       .then((response) => (response.ok ? response.json() as Promise<RrpActivityLog> : undefined))
       .then((log) => {
         if (log !== undefined) setActivity(log)
@@ -537,8 +537,8 @@ function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
       .catch(() => {
         /* the ledger is best-effort */
       })
-    void fetch(LORE_PATH + '?sessionId=' + encodeURIComponent(sessionId))
-      .then((response) => (response.ok ? response.json() as Promise<{ injectedChars?: number }> : undefined))
+    void fetch(routeUrl(LORE_PATH, sessionId))
+      .then((response) => (response.ok ? response.json() as Promise<Pick<LoreGetResponse, 'injectedChars'>> : undefined))
       .then((body) => {
         if (body !== undefined && typeof body.injectedChars === 'number') setInjectedChars(body.injectedChars)
       })

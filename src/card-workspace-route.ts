@@ -22,6 +22,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { harnessHome } from './home.ts'
 import { isCardId } from './preset-id.ts'
 import { RRP_ROUTES } from './route-contract.ts'
+import { type RequestLike, type ResponseLike, type RuntimeFaces, type WebServerService, readJsonBody, face, send } from './host-faces.ts'
 
 const TAG = '[dsh-rrp]'
 const PATH = RRP_ROUTES.cardWorkspace
@@ -38,42 +39,6 @@ interface WorkspaceRegistryLike {
   resolveByPath?(path: string): Promise<WorkspaceEntityLike | undefined>
 }
 
-interface RequestLike {
-  method?: string
-  [Symbol.asyncIterator](): AsyncIterator<string | Uint8Array>
-}
-interface ResponseLike {
-  statusCode: number
-  setHeader?(name: string, value: string): void
-  end(body?: string): void
-}
-interface WebServerService {
-  register(route: {
-    kind: 'exact'
-    path: string
-    handler: (req: RequestLike, res: ResponseLike) => void | Promise<void>
-  }): () => void
-}
-interface RuntimeFaces {
-  get(name: string): unknown
-}
-
-/** Read the whole request body as UTF-8 text. */
-async function readBody(req: RequestLike): Promise<string> {
-  let text = ''
-  for await (const chunk of req) {
-    text += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
-  }
-  return text
-}
-
-/** Respond with a JSON body. */
-function send(res: ResponseLike, status: number, payload: unknown): void {
-  res.statusCode = status
-  res.setHeader?.('content-type', 'application/json; charset=utf-8')
-  res.end(JSON.stringify(payload))
-}
-
 /** The card's save-group directory (also the sessions' cwd inside the group). */
 export function cardSaveDir(cardId: string, home: string = harnessHome()): string {
   return join(home, '.dsh-rrp', 'saves', cardId)
@@ -85,7 +50,7 @@ export function cardSaveDir(cardId: string, home: string = harnessHome()): strin
  */
 export function registerCardWorkspaceRoute(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
-  const webServer = runtime.get('webServer') as WebServerService | undefined
+  const webServer = face<WebServerService>(runtime, 'webServer')
   if (webServer === undefined) {
     console.warn(TAG + ' card workspace route idle (missing webServer)')
     return
@@ -100,14 +65,12 @@ export function registerCardWorkspaceRoute(ctx: Context): void {
           send(res, 405, { error: 'method not allowed' })
           return
         }
-        let parsed: unknown
-        try {
-          parsed = JSON.parse(await readBody(req))
-        } catch {
+        const body = await readJsonBody(req)
+        if (body === undefined) {
           send(res, 400, { error: 'invalid JSON body' })
           return
         }
-        const request = parsed as { cardId?: unknown; cardName?: unknown }
+        const request = body as { cardId?: unknown; cardName?: unknown }
         if (typeof request.cardId !== 'string' || !isCardId(request.cardId)) {
           send(res, 400, { error: 'invalid cardId' })
           return
@@ -120,7 +83,7 @@ export function registerCardWorkspaceRoute(ctx: Context): void {
 
         // Lazy probe per request: the registry may mount after this plugin,
         // and a missing one must degrade the client flow, not arm-time.
-        const registry = runtime.get('workspaceRegistry') as WorkspaceRegistryLike | undefined
+        const registry = face<WorkspaceRegistryLike>(runtime, 'workspaceRegistry')
         if (registry === undefined) {
           send(res, 503, { error: 'workspaceRegistry unavailable' })
           return

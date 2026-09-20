@@ -14,60 +14,38 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
 import { SUMMARIZER_SYSTEM_PROMPT, buildSummarizerPrompt, parseSummarizerReply } from './agents/summarizer.ts'
-import { messageOf, transcriptOf } from './chronicler.ts'
+import {
+  type AgentsService,
+  type CommandsService,
+  type JobsService,
+  type ListeningRuntimeFaces,
+  type LlmService,
+  type ProjectionsService,
+  type ProviderRoute,
+  type SessionLike,
+  collectText,
+  emptyReplyError,
+  face,
+  isEmptyReply,
+  messageOf,
+  nowIso,
+  routeOf,
+} from './host-faces.ts'
 import { SUMMARY_KEY, diffMacroSummary, NO_SUMMARY_CHANGE, type MacroSummary } from './macro-summary.ts'
 import { matchesPreset } from './preset-id.ts'
 import { RRP_SETTINGS_KEY, clampSummaryEveryTurns, rrpSettingsOf } from './settings.ts'
 import { publishState } from './state-publisher.ts'
+import { DEFAULT_TRANSCRIPT_LIMIT, transcriptOf } from './transcript-reader.ts'
 import { TRANSCRIPT_KEY, type TranscriptSlice } from './transcript.ts'
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'summarizer'
-const TRANSCRIPT_LIMIT = 16000
 
-interface SessionLike {
-  readonly id: string
-  append(type: string, data: unknown): unknown
-}
-interface StreamChunkLike {
-  type?: string
-  text?: string
-}
-interface LlmService {
-  stream(options: Record<string, unknown>): AsyncIterable<StreamChunkLike>
-}
-interface JobHooksLike {
-  cancel(reason?: string): void
-  done: Promise<{ status: string }>
-}
-interface JobsService {
-  start(spec: { kind: string; label: string; owner?: unknown; run(): JobHooksLike }): string
-}
-interface AgentLike {
-  options?: { provider?: string; model?: string }
-}
-interface AgentsService {
-  get(id: string): AgentLike | undefined
-}
-interface ProjectionsService {
-  stateOf(session: unknown, key: string): unknown
-}
-interface CommandsService {
-  register(definition: {
-    name: string
-    description: string
-    handler: (invocation: { rawInput: string; agent?: { session?: SessionLike } }) => { kind: string; text?: string }
-  }): () => void
-}
 interface HostFaces {
   readonly llm: LlmService
   readonly jobs: JobsService
   readonly agents: AgentsService
   readonly projections: ProjectionsService
-}
-interface RuntimeFaces {
-  get(name: string): unknown
-  on(event: string, listener: (...args: unknown[]) => void): () => void
 }
 
 /** Last summarized turn per session, to prevent duplicate runs on the same turn. */
@@ -101,11 +79,11 @@ export function getLastSummarizedTurn(sessionId: string): number | undefined {
  * @param presetId - the RP mode id whose sessions we watch.
  */
 export function registerSummarizer(ctx: Context, presetId: string): void {
-  const runtime = ctx as unknown as RuntimeFaces
-  const llm = runtime.get('llm') as LlmService | undefined
-  const jobs = runtime.get('jobs') as JobsService | undefined
-  const agents = runtime.get('agents') as AgentsService | undefined
-  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
+  const runtime = ctx as unknown as ListeningRuntimeFaces
+  const llm = face<LlmService>(runtime, 'llm')
+  const jobs = face<JobsService>(runtime, 'jobs')
+  const agents = face<AgentsService>(runtime, 'agents')
+  const projections = face<ProjectionsService>(runtime, 'sessionProjections')
   if (llm === undefined || jobs === undefined || agents === undefined || projections === undefined) {
     console.warn(TAG + ' Summarizer idle (missing llm/jobs/agents/sessionProjections)')
     return
@@ -145,15 +123,6 @@ export function registerSummarizer(ctx: Context, presetId: string): void {
   }, 'dsh-rrp: Summarizer trigger')
 }
 
-/** Resolve the provider/model route for the session's live agent. */
-function routeFor(owner: AgentLike | undefined): { provider: string; model: string } | undefined {
-  const provider = owner?.options?.provider
-  const model = owner?.options?.model
-  if (provider === undefined || provider.length === 0) return undefined
-  if (model === undefined || model.length === 0) return undefined
-  return { provider, model }
-}
-
 /** Schedule one summarization job. Never throws into the session feed.
  * @returns whether the turn is covered (started now, or deferred behind the
  * in-flight job). A boundary deferred here is summarized by a later covering
@@ -170,7 +139,7 @@ function scheduleSummary(faces: HostFaces, session: SessionLike, turn: number): 
     return true
   }
   const owner = faces.agents.get(session.id)
-  const route = routeFor(owner)
+  const route = routeOf(faces.agents, session.id)
   if (route === undefined) {
     console.warn(TAG + ' Summarizer skipped ' + session.id + ': no provider/model route')
     return false
@@ -225,20 +194,19 @@ async function runSummary(
   faces: HostFaces,
   session: SessionLike,
   turn: number,
-  route: { provider: string; model: string },
+  route: ProviderRoute,
   signal: AbortSignal,
   isCancelled: () => boolean,
 ): Promise<{ status: string }> {
   const activityId = randomUUID()
-  const stamp = (): string => new Date().toISOString()
   try {
     // transcriptOf already caps at whole-entry boundaries (prefix-cache stable);
     // no second char-level cut here.
-    const transcript = transcriptOf(faces.projections, session, TRANSCRIPT_LIMIT)
-    if (transcript.trim().length === 0) return { status: 'completed' }
+    const transcript = transcriptOf(faces.projections, session, DEFAULT_TRANSCRIPT_LIMIT)
+    if (isEmptyReply(transcript)) return { status: 'completed' }
 
     recordActivity(session.id, {
-      id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'started',
+      id: activityId, at: nowIso(), actor: 'summarizer', target: 'summary', phase: 'started',
     })
 
     const stream = faces.llm.stream({
@@ -254,22 +222,16 @@ async function runSummary(
       sessionId: session.id,
       signal,
     })
-    let text = ''
-    for await (const chunk of stream) {
-      if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') text += chunk.text
-    }
+    const text = await collectText(stream)
     if (isCancelled()) {
       recordActivity(session.id, {
-        id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'failed', detailKey: 'detail.cancelled',
+        id: activityId, at: nowIso(), actor: 'summarizer', target: 'summary', phase: 'failed', detailKey: 'detail.cancelled',
       })
       return { status: 'killed' }
     }
     // Same empty-stream guard as the other inference agents: an empty stream
     // is an infrastructure failure, not a malformed-summary verdict.
-    if (text.trim().length === 0) {
-      console.warn(TAG + ' Summarizer EMPTY reply for ' + session.id + ' (treated as failure)')
-      throw new Error('Summarizer reply was empty')
-    }
+    if (isEmptyReply(text)) throw emptyReplyError('Summarizer', session.id)
 
     const summary = parseSummarizerReply(text)
     if (summary === undefined) throw new Error('Summarizer reply was not a valid MacroSummary')
@@ -279,7 +241,7 @@ async function runSummary(
     const slice = faces.projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined
     if ((slice?.lastSummaryTurn ?? -1) >= turn) {
       recordActivity(session.id, {
-        id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'stale', detailKey: 'detail.staleSuperseded',
+        id: activityId, at: nowIso(), actor: 'summarizer', target: 'summary', phase: 'stale', detailKey: 'detail.staleSuperseded',
       })
       console.log(TAG + ' Summarizer result for turn ' + turn + ' is stale (newer summary committed), discarding for session ' + session.id)
       return { status: 'stale' }
@@ -291,7 +253,7 @@ async function runSummary(
       const diff = diffMacroSummary(priorSummary, summary)
       if (diff === NO_SUMMARY_CHANGE) {
         recordActivity(session.id, {
-          id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'committed', detailKey: 'detail.noChange',
+          id: activityId, at: nowIso(), actor: 'summarizer', target: 'summary', phase: 'committed', detailKey: 'detail.noChange',
         })
         console.log(TAG + ' Summarizer skipped publish (no summary change) for session ' + session.id)
         return { status: 'completed' }
@@ -302,18 +264,19 @@ async function runSummary(
     }
     recordActivity(session.id, {
       id: activityId,
-      at: stamp(),
+      at: nowIso(),
       actor: 'summarizer',
       target: 'summary',
       phase: 'committed',
-      detail: '目标：' + summary.goal + '；矛盾：' + summary.conflict,
+      detailKey: 'detail.summaryCompass',
+      detailName: summary.goal + ' · ' + summary.conflict,
     })
     console.log(TAG + ' Summarizer committed a macro summary for session ' + session.id)
     return { status: 'completed' }
   } catch (error) {
     console.warn(TAG + ' Summarizer failed:', error)
     recordActivity(session.id, {
-      id: activityId, at: stamp(), actor: 'summarizer', target: 'summary', phase: 'failed', detail: messageOf(error),
+      id: activityId, at: nowIso(), actor: 'summarizer', target: 'summary', phase: 'failed', detail: messageOf(error),
     })
     return { status: isCancelled() ? 'killed' : 'failed' }
   }
@@ -324,9 +287,9 @@ async function runSummary(
  * @param ctx - the host context owning the registration.
  */
 export function registerSummaryCommand(ctx: Context): void {
-  const runtime = ctx as unknown as RuntimeFaces
-  const commands = runtime.get('commands') as CommandsService | undefined
-  const projections = runtime.get('sessionProjections') as ProjectionsService | undefined
+  const runtime = ctx as unknown as ListeningRuntimeFaces
+  const commands = face<CommandsService>(runtime, 'commands')
+  const projections = face<ProjectionsService>(runtime, 'sessionProjections')
   if (commands === undefined || projections === undefined) {
     console.warn(TAG + ' /summary command idle (missing commands/sessionProjections)')
     return

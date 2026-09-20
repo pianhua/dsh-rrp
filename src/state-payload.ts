@@ -31,6 +31,12 @@ export interface RrpStatePayload {
   card?: CardContext
   /** Complete post-change world state (whole-value rule). */
   worldState?: WorldState
+  /**
+   * Seq of the newest prose this world-state fold actually covered. Carried
+   * beside the state so the Chronicler's "what is still un-booked" cursor
+   * survives a restart, a resume and a fork exactly like the state does.
+   */
+  stateFoldSeq?: number
   /** Complete post-change macro summary; explicit `null` clears it. */
   summary?: MacroSummary | null
   /** Turn number that produced this summary (durable Summarizer watermark). */
@@ -86,4 +92,43 @@ export function messageTextOf(event: PayloadEventLike | undefined): string {
   const content = data?.content
   if (!Array.isArray(content)) return ''
   return content.map((block) => (block as { text?: unknown }).text ?? '').join('')
+}
+
+/**
+ * Host-injected reminder text (memory dumps, tool notices) rides a
+ * `user/message`, but it is never the player's voice: every prose reader and
+ * both prose folds (transcript and worldline digest) skip it via this one test.
+ */
+export function isHostReminder(text: string): boolean {
+  return text.startsWith('<system-reminder>')
+}
+
+/**
+ * True for plugin-issued messages that carry no rrp payload — notices and
+ * fallback greetings. They are bookkeeping, never player prose, so every prose
+ * reader (the transcript fold, the worldline digest, novel export) skips them.
+ */
+export function isPluginNotice(event: PayloadEventLike | undefined): boolean {
+  const source = (event?.data as { source?: { kind?: unknown } } | undefined)?.source
+  return source?.kind === 'plugin' && rrpPayloadOf(event) === undefined
+}
+
+/**
+ * Recursively collect the `text` of every `{ type: 'text', text }` block found
+ * in an event payload. Use this for foreign-authored messages, whose shape the
+ * plugin does not control; `messageTextOf` is for our own publishes.
+ */
+export function collectTextBlocks(value: unknown, out: string[]): void {
+  if (value === null || value === undefined) return
+  if (Array.isArray(value)) {
+    for (const item of value) collectTextBlocks(item, out)
+    return
+  }
+  if (typeof value !== 'object') return
+  const record = value as Record<string, unknown>
+  if (record.type === 'text' && typeof record.text === 'string') {
+    out.push(record.text)
+    return
+  }
+  for (const item of Object.values(record)) collectTextBlocks(item, out)
 }

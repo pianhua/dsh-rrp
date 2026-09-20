@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { latestTurnTranscriptOf, transcriptOf } from '../src/chronicler.ts'
+import { latestTurnTranscriptOf, transcriptOf } from '../src/transcript-reader.ts'
 import { renderTriggerBlock } from '../src/lore-condition.ts'
 import { rrpStateMessage } from '../src/state-payload.ts'
 import { emptyWorldState, renderWorldState } from '../src/world-state.ts'

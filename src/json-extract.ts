@@ -63,7 +63,39 @@ function stripTrailingCommas(text: string): string {
   return out
 }
 
-/** Parse as-is, else without trailing commas, else with an auto closing suffix. */
+/**
+ * Drop closers that have no opener (`{"a":1}}` → `{"a":1}`): the mirror image
+ * of {@link autoClose} for a model that finishes the payload and then keeps
+ * stamping braces. String-aware; stops at the first closer that balances.
+ */
+function dropSurplusClosers(text: string): string {
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (const ch of text) {
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === '{' || ch === '[') depth += 1
+    else if (ch === '}' || ch === ']') depth -= 1
+  }
+  let trimmed = text
+  while (depth < 0 && trimmed.length > 0 && (trimmed.endsWith('}') || trimmed.endsWith(']'))) {
+    trimmed = trimmed.slice(0, -1)
+    depth += 1
+  }
+  return trimmed
+}
+
+/**
+ * Parse as-is, else without trailing commas, else with an auto closing suffix,
+ * else with surplus closers dropped. Each rung only runs when the one above
+ * threw, so a well-formed reply never pays for the ladder.
+ */
 function tryParseLoose(candidate: string): unknown | undefined {
   try {
     return JSON.parse(candidate)
@@ -77,6 +109,11 @@ function tryParseLoose(candidate: string): unknown | undefined {
   }
   try {
     return JSON.parse(candidate + autoClose(candidate))
+  } catch {
+    /* try over-closed */
+  }
+  try {
+    return JSON.parse(dropSurplusClosers(candidate))
   } catch {
     return undefined
   }
