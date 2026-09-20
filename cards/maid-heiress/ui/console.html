@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>现场控制台</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font: 12px/1.65 -apple-system, "Microsoft YaHei", sans-serif; color: #e8e8f0; }
+  .box { border: 1px solid rgba(128,128,128,.28); border-radius: 10px; padding: 12px 14px; background: linear-gradient(160deg, rgba(96,64,86,.28), rgba(38,44,66,.34)); }
+  .lbl { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; opacity: .55; font-weight: 700; }
+  .big { font-size: 32px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .row { display: flex; gap: 16px; align-items: flex-end; margin-bottom: 12px; }
+  .col { flex: 1; min-width: 0; }
+  .acts { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+  button { font: inherit; color: inherit; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); border-radius: 7px; padding: 5px 10px; cursor: pointer; }
+  button:hover { background: rgba(255,255,255,.17); }
+  input { font: inherit; color: inherit; background: rgba(0,0,0,.26); border: 1px solid rgba(255,255,255,.14); border-radius: 7px; padding: 5px 8px; width: 100%; }
+  .probe { margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,.14); font-size: 11px; opacity: .7; }
+  .ok { color: #86dcaa; } .bad { color: #ff9a9a; }
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="row">
+    <div class="col" style="flex:0 0 auto"><div class="lbl">米娅好感</div><div class="big" id="aff">—</div></div>
+    <div class="col"><div class="lbl">此刻</div><div id="scene">—</div></div>
+  </div>
+  <div class="lbl">快速行动</div>
+  <div class="acts">
+    <button data-bump="2">递毛巾 +2</button>
+    <button data-bump="5">认真道谢 +5</button>
+    <button id="reveal">记一笔：已摊牌</button>
+  </div>
+  <div class="acts">
+    <input id="q" placeholder="想问管家什么…">
+    <button id="ask">问管家</button>
+  </div>
+  <div class="probe">沙箱自检：<span id="p1">…</span> / <span id="p2">…</span></div>
+</div>
+<script>
+  var current = null;
+  window.rrp.onState(function (msg) {
+    current = msg.state || null;
+    var s = current || {};
+    var mia = (s.characters || {})['米娅'] || {};
+    document.getElementById('aff').textContent = typeof mia.affinity === 'number' ? String(mia.affinity) : '—';
+    var sc = s.scene || {};
+    document.getElementById('scene').textContent = [sc.time, sc.location, sc.weather].filter(Boolean).join(' · ') || '—';
+  });
+  function bump(n) {
+    var cur = parseInt(document.getElementById('aff').textContent, 10);
+    if (!isFinite(cur)) return;
+    window.rrp.correctState({ characters: { '米娅': { affinity: Math.min(100, cur + n) } } });
+  }
+  document.querySelectorAll('[data-bump]').forEach(function (b) {
+    b.onclick = function () { bump(parseInt(b.getAttribute('data-bump'), 10)); };
+  });
+  document.getElementById('reveal').onclick = function () {
+    window.rrp.correctState({ flags: { '米娅已摊牌': true } });
+  };
+  document.getElementById('ask').onclick = function () {
+    var v = document.getElementById('q').value.trim();
+    if (v) window.rrp.askCopilot(v);
+  };
+  // Both probes must fail: the sandbox gives this page no host reach and no network.
+  try { void window.parent.document.body; say('p1', false, '竟然读到了宿主 DOM'); }
+  catch (e) { say('p1', true, '父窗口被拒（' + e.name + '）'); }
+  fetch('https://example.com/').then(function () { say('p2', false, '竟然外联成功'); },
+    function () { say('p2', true, '外联被 CSP 拦截'); });
+  function say(id, good, text) {
+    var el = document.getElementById(id);
+    el.textContent = text;
+    el.className = good ? 'ok' : 'bad';
+  }
+</script>
+</body>
+</html>

@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { parseWhen, whenPathWarning } from './lore-condition.ts'
+import type { WorldState } from './world-state.ts'
 import { UI_BUTTON_LIMIT, UI_PANEL_LIMIT, type UiManifest, type UiPanelDecl } from './ui-schema.ts'
 
 /** The manifest's fixed filename inside a card's `ui/` directory. */
@@ -57,7 +58,7 @@ export type UiLoadResult = { kind: 'absent' } | { kind: 'ok'; manifest: UiManife
  * Load and validate one card directory's UI declaration.
  * @param cardDir - the resolved card directory (user root first, shipped fallback).
  */
-export function loadUiManifest(cardDir: string, initialState = null): UiLoadResult {
+export function loadUiManifest(cardDir: string, initialState: WorldState | null = null): UiLoadResult {
   const file = join(cardDir, 'ui', UI_MANIFEST_FILE)
   if (!existsSync(file)) return { kind: 'absent' }
   let raw: unknown

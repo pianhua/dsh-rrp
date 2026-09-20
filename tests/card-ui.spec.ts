@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { isUiHtmlName, loadUiManifest, UI_MANIFEST_FILE } from '../src/card-ui.ts'
+import { readCard, shippedCardRoot } from '../src/cards.ts'
 import { renderCardContext } from '../src/card-types.ts'
 import { registerCardUiRoute } from '../src/card-ui-route.ts'
 import { RRP_ROUTES, type CardUiResponse } from '../src/route-contract.ts'
@@ -181,6 +182,38 @@ describe('UI panel resolution (shared by host preview and the client)', () => {
     expect(readGaugeValue('characters.米娅.mood', { ...emptyWorldState(), characters: { 米娅: { mood: '羞涩' } } })).toBeUndefined()
     expect(readGaugeValue('scene', state)).toBeUndefined()
     expect(readGaugeValue(undefined, state)).toBeUndefined()
+  })
+})
+
+describe('shipped card packs ship a valid UI', () => {
+  // An official card with a broken manifest would log a warning on every boot
+  // and show the player an empty Stage tab, so this is a release gate, not a
+  // nicety: every bundled pack must validate, app pages included.
+  const SHIPPED_WITH_UI = ['maid-heiress', 'yanmen-inn']
+
+  for (const cardId of SHIPPED_WITH_UI) {
+    it(cardId + ' declares a UI that loads clean', () => {
+      const dir = join(shippedCardRoot(), cardId)
+      expect(existsSync(join(dir, 'ui', UI_MANIFEST_FILE))).toBe(true)
+      const loaded = loadUiManifest(dir, readCard(cardId, undefined)?.initialState ?? null)
+      if (loaded.kind !== 'ok') throw new Error('shipped card UI broke: ' + (loaded.kind === 'error' ? loaded.error : 'absent'))
+      const ids = loaded.manifest.panels.map((panel) => panel.id)
+      expect(new Set(ids).size).toBe(ids.length)
+      expect(loaded.manifest.panels.length).toBeGreaterThan(2)
+    })
+  }
+
+  it('the maid console app page is shipped, and reaches nothing but the bridge', () => {
+    const page = join(shippedCardRoot(), 'maid-heiress', 'ui', 'console.html')
+    expect(existsSync(page)).toBe(true)
+    const html = readFileSync(page, 'utf8')
+    expect(html).toContain('window.rrp.onState')
+    // No external assets: the injected CSP would refuse them anyway.
+    expect(html).not.toMatch(/<script[^>]+src=/i)
+    expect(html).not.toMatch(/<link[^>]+href=/i)
+    // The only remote URL in the file is the deliberate network probe.
+    const remote = [...html.matchAll(/https?:\/\/[a-z0-9.-]+/gi)].map((m) => m[0])
+    expect(remote).toEqual(['https://example.com'])
   })
 })
 

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "title": "孤灯客栈 · 案头",
+  "layout": "grid",
+  "panels": [
+    { "id": "now", "component": "timeline", "title": "此刻", "span": 2 },
+    { "id": "wenyan", "component": "gauge", "title": "温衍", "bind": "characters.温衍.affinity", "min": -100, "max": 100 },
+    { "id": "swordsman", "component": "gauge", "title": "灰袍剑客", "bind": "characters.灰袍剑客.affinity", "min": -100, "max": 100 },
+    { "id": "brute", "component": "gauge", "title": "青脸汉", "bind": "characters.青脸汉.affinity", "min": -100, "max": 100 },
+    { "id": "guests", "component": "characterCard", "title": "在场住客", "span": 2 },
+    { "id": "ties", "component": "relationTable", "title": "关系与猜忌" },
+    { "id": "ask", "component": "buttonRow", "title": "出戏求助", "span": 2, "buttons": [
+      { "label": "现在谁最可疑", "action": "ask_copilot", "question": "按当前世界状态和已发生的剧情，谁最可疑？给我每条判断依据的具体状态条目。" },
+      { "label": "我还有什么没问过", "action": "ask_copilot", "question": "列出我还没向任何住客问过、但按伏笔该问的问题。" }
+    ] }
+  ]
+}
