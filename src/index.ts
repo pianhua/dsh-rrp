@@ -32,6 +32,7 @@ import { registerSummarizer, registerSummaryCommand, forgetAllSummary, forgetSum
 import { forgetAllActivity, forgetActivity } from './activity.ts'
 import { forgetAllLore, forgetLore } from './lore-route.ts'
 import { forgetAllState, forgetState } from './state-publisher.ts'
+import { forgetAllProposals, forgetProposals } from './steward-proposals.ts'
 
 /** Loader row id. Keep in sync with cordis.patch.yml. */
 export const name = 'dsh-rrp'
@@ -218,6 +219,7 @@ export function cleanupSession(sessionId: string): void {
   forgetSummary(sessionId)
   forgetInference(sessionId)
   forgetCopilot(sessionId)
+  forgetProposals(sessionId)
 }
 
 /**
@@ -232,6 +234,7 @@ export function cleanupAllSessions(): void {
   forgetAllSummary()
   forgetAllInference()
   forgetAllCopilot()
+  forgetAllProposals()
 }
 
 /** Resolve a Session id from an event payload. */

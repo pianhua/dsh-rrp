@@ -10,8 +10,11 @@
  * framework, per the personal-toy positioning.
  */
 import type { CardContext, CardMeta, CardPack } from './card-types.ts'
+import type { StewardProposal } from './steward-proposals.ts'
 import type { WorldState } from './world-state.ts'
 import type { WorldlineTree } from './worldline-tree.ts'
+
+export type { StewardProposal } from './steward-proposals.ts'
 
 // ── Paths (host registers these; clients fetch these) ──────────────────────
 export const RRP_ROUTES = {
@@ -23,6 +26,7 @@ export const RRP_ROUTES = {
   lore: '/dsh-rrp/lore',
   copilot: '/dsh-rrp/copilot',
   copilotUndo: '/dsh-rrp/copilot/undo',
+  copilotProposals: '/dsh-rrp/copilot/proposals',
   worldlineTree: '/dsh-rrp/worldlines/tree',
   worldlineHidden: '/dsh-rrp/worldlines/hidden',
 } as const
@@ -150,6 +154,7 @@ export interface WorldlineHiddenSetRequest {
 export type CopilotTurnAction =
   | { kind: 'world-state'; digest: string }
   | { kind: 'lore'; name: string }
+  | { kind: 'proposal'; proposalKind: 'card-edit' | 'doc-note'; label: string }
   | { kind: 'failed'; error: string }
 
 export interface CopilotTurn {
@@ -167,12 +172,29 @@ export interface CopilotAskRequest {
 export interface CopilotHistoryView {
   turns: CopilotTurn[]
   undoCount: number
+  /** Steward proposals staged for player confirmation (issue #33 P1). */
+  proposals: StewardProposal[]
 }
 
 export interface CopilotUndoResponse {
   ok: true
   digest: string
   undoCount: number
+}
+
+// ── /dsh-rrp/copilot/proposals (issue #33 P1) ──────────────────────────────
+export interface CopilotProposalRequest {
+  sessionId: string
+  action: 'confirm' | 'discard'
+  id: string
+}
+
+export interface CopilotProposalResponse {
+  ok: boolean
+  /** action=confirm 的落盘/已阅摘要。 */
+  summary?: string
+  /** 操作后的最新提案列表（面板直接刷新）。 */
+  proposals: StewardProposal[]
 }
 
 // ── Copilot SSE event vocabulary ────────────────────────────────────────────

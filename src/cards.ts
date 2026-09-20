@@ -75,6 +75,18 @@ export function shippedCardRoot(): string {
   return SHIPPED_CARDS_DIR
 }
 
+/**
+ * The user-root directory of one card pack (issue #33): the Steward's
+ * card-edit proposals may only target packs the player owns under
+ * `<home>/.dsh-rrp/cards/`; shipped packs stay read-only. Returns undefined
+ * when the pack is absent from the user root (shipped-only or unknown).
+ */
+export function cardDirOf(cardId: string, home: string = harnessHome()): string | undefined {
+  if (!isCardId(cardId)) return undefined
+  const dir = join(cardRoots(home)[0] ?? '', cardId)
+  return existsSync(join(dir, 'card.md')) ? dir : undefined
+}
+
 /** Coerce a frontmatter value to a string when possible. */
 function asString(value: FrontmatterValue | undefined): string | undefined {
   return typeof value === 'string' ? value : undefined

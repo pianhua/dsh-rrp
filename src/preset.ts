@@ -12,6 +12,10 @@
  * and each card gets a derived `rp-<card-id>` preset whose own `skills/` root
  * holds only that card's bundles (see ./preset-id.ts). Mounting every card into
  * one shared root would leak one card's world knowledge into every session.
+ * The base skills/ root DOES carry the steward bundles (issue #33: the Copilot's
+ * project-maintenance knowledge — engine overview, card spec, decision red
+ * lines); they ship in presets/rp/skills/ and are therefore inherited by every
+ * card preset too (the card preset is a superset of the base source).
  * The composition carries a `bundledSkillDir` placeholder that materialization
  * replaces with the copy's absolute `skills/` path.
  *

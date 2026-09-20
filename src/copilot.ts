@@ -1,5 +1,5 @@
 /**
- * dsh-rrp — the Copilot advisor (route + history + undo).
+ * dsh-rrp — the Copilot advisor (route + history + undo + steward proposals).
  *
  * The Copilot lives in the right sidebar's third tab and talks to the player
  * out-of-band: her conversation history is kept OUT of the session log (the
@@ -38,6 +38,7 @@ import { belongsToRpPreset } from './preset-id.ts'
 import { stageLoreDraft, reservedNames } from './lore-route.ts'
 import { RRP_LORE_KEY, loreEntriesOf, validateLoreEntry } from './lore-state.ts'
 import { publishState } from './state-publisher.ts'
+import { confirmProposal, discardProposal, listProposals, stageProposal } from './steward-proposals.ts'
 import { COPILOT_SSE, RRP_ROUTES, encodeSseFrame } from './route-contract.ts'
 import { WORLD_STATE_KEY, applyConstraints, diffWorldState, emptyWorldState, pruneWorldState, renderWorldState, type DynamicFieldValue, type WorldState, type WorldStateRelation } from './world-state.ts'
 import { worldStateSchema } from './projection/world-state.ts'
@@ -45,6 +46,7 @@ import { worldStateSchema } from './projection/world-state.ts'
 const TAG = '[dsh-rrp]'
 const COPILOT_PATH = RRP_ROUTES.copilot
 const UNDO_PATH = RRP_ROUTES.copilotUndo
+const PROPOSALS_PATH = RRP_ROUTES.copilotProposals
 
 /** Kept turns per session; the panel only renders a recent window anyway. */
 const TURNS_LIMIT = 50
@@ -318,6 +320,57 @@ export function registerCopilotRoute(ctx: Context): void {
       },
     })
 
+    const disposeProposals = webServer.register({
+      kind: 'exact',
+      path: PROPOSALS_PATH,
+      handler: async (req, res) => {
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { error: 'method not allowed' })
+          return
+        }
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(await readBody(req))
+        } catch {
+          sendJson(res, 400, { error: 'invalid JSON body' })
+          return
+        }
+        const sessionId = (parsed as { sessionId?: unknown }).sessionId
+        const action = (parsed as { action?: unknown }).action
+        const id = (parsed as { id?: unknown }).id
+        if (typeof sessionId !== 'string' || sessionId.length === 0) {
+          sendJson(res, 400, { error: 'missing sessionId' })
+          return
+        }
+        if (resolveSession(sessionId, res) === undefined) return
+        if ((action !== 'confirm' && action !== 'discard') || typeof id !== 'string' || id.length === 0) {
+          sendJson(res, 400, { error: 'unknown action' })
+          return
+        }
+
+        if (action === 'discard') {
+          discardProposal(sessionId, id)
+          sendJson(res, 200, { ok: true, proposals: listProposals(sessionId) })
+          return
+        }
+
+        // confirm：提案种类决定账本 target；落盘/已阅结果写一条矫正记录。
+        const proposal = listProposals(sessionId).find((entry) => entry.id === id)
+        const result = confirmProposal(sessionId, id)
+        if (!result.ok) {
+          sendJson(res, 400, { error: result.error })
+          return
+        }
+        recordActivity(sessionId, {
+          id: randomUUID(), at: new Date().toISOString(), actor: 'copilot',
+          target: proposal?.kind === 'doc-note' ? 'doc-note' : 'card', phase: 'corrected',
+          detail: result.summary,
+        })
+        console.log(TAG + ' copilot proposal confirmed for ' + sessionId + ': ' + result.summary)
+        sendJson(res, 200, { ok: true, summary: result.summary, proposals: listProposals(sessionId) })
+      },
+    })
+
     const disposeMain = webServer.register({
       kind: 'exact',
       path: COPILOT_PATH,
@@ -344,7 +397,7 @@ export function registerCopilotRoute(ctx: Context): void {
             return
           }
           if (resolveSession(sessionId, res) === undefined) return
-          sendJson(res, 200, readCopilotHistory(store, sessionId))
+          sendJson(res, 200, { ...readCopilotHistory(store, sessionId), proposals: listProposals(sessionId) })
           return
         }
         if (req.method === 'DELETE') {
@@ -493,6 +546,32 @@ export function registerCopilotRoute(ctx: Context): void {
                 applied.push({ kind: 'world-state', digest })
                 continue
               }
+              // propose_card_edit / propose_doc_note: stage for player
+              // confirmation in the panel — nothing touches the disk here.
+              if (action.type === 'propose_card_edit') {
+                stageProposal(sessionId, {
+                  kind: 'card-edit',
+                  card: action.proposal.card,
+                  file: action.proposal.file,
+                  content: action.proposal.content,
+                  ...(action.proposal.reason !== undefined ? { reason: action.proposal.reason } : {}),
+                })
+                recordActivity(sessionId, {
+                  id: randomUUID(), at: new Date().toISOString(), actor: 'copilot', target: 'card', phase: 'corrected',
+                  detailKey: 'detail.stagedCardEdit', detailName: action.proposal.card + '/' + action.proposal.file,
+                })
+                applied.push({ kind: 'proposal', proposalKind: 'card-edit', label: '卡包提案：' + action.proposal.card + '/' + action.proposal.file })
+                continue
+              }
+              if (action.type === 'propose_doc_note') {
+                stageProposal(sessionId, { kind: 'doc-note', title: action.note.title, body: action.note.body })
+                recordActivity(sessionId, {
+                  id: randomUUID(), at: new Date().toISOString(), actor: 'copilot', target: 'doc-note', phase: 'corrected',
+                  detailKey: 'detail.stagedDocNote', detailName: action.note.title,
+                })
+                applied.push({ kind: 'proposal', proposalKind: 'doc-note', label: '文档备忘：' + action.note.title })
+                continue
+              }
               // draft_lore: validate then stage for player confirmation.
               const existing = loreEntriesOf(projections.stateOf(session, RRP_LORE_KEY)).map((skill) => skill.name)
               const result = validateLoreEntry(action.draft, existing, reservedNames(projections, session))
@@ -552,6 +631,7 @@ export function registerCopilotRoute(ctx: Context): void {
       void storeReady.then((handle) => handle.close()).catch(() => {})
       disposeMain()
       disposeUndo()
+      disposeProposals()
     }
   }, 'dsh-rrp: copilot route')
 }

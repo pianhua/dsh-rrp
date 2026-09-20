@@ -9,6 +9,8 @@
  */
 import {
   Button,
+  DisclosureRow,
+  IconEditOutline16,
   IconLoadingOutline16,
   IconRefreshOutline16,
   IconTrashOutline16,
@@ -17,7 +19,7 @@ import {
   StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { COPILOT_SSE, RRP_ROUTES, drainSse, type CopilotTurn } from '../route-contract.ts'
+import { COPILOT_SSE, RRP_ROUTES, drainSse, type CopilotTurn, type StewardProposal } from '../route-contract.ts'
 import type { RrpClientContext } from './context-types.ts'
 
 /** Implementation identity; also the key the body registers under. */
@@ -26,6 +28,8 @@ const TAB_ID = 'dsh-rrp/copilot'
 const TAB_KIND = 'dsh-rrp-copilot'
 /** Host route driving the advisory conversation (path from the shared contract). */
 const COPILOT_PATH = RRP_ROUTES.copilot
+/** Host route confirming/discarding staged steward proposals. */
+const PROPOSALS_PATH = RRP_ROUTES.copilotProposals
 
 type Translate = (key: string) => string
 
@@ -62,6 +66,19 @@ const S: Record<string, CSSProperties> = {
   actionsTitle: { fontWeight: 600, marginBottom: 2 },
   actionRow: { color: 'var(--dsw-alias-label-secondary)' },
   actionFailed: { color: 'var(--dsw-alias-label-danger, #d5484f)' },
+  proposal: {
+    marginBottom: 10, padding: '9px 11px', borderRadius: 10,
+    background: 'var(--dsw-alias-bg-layer-1)', border: '1px solid var(--dsw-alias-border-l1)',
+    fontSize: 12, lineHeight: 1.7,
+  },
+  proposalTitle: { fontWeight: 600 },
+  proposalReason: { color: 'var(--dsw-alias-label-tertiary)' },
+  proposalPreview: {
+    margin: '6px 0', padding: '7px 9px', borderRadius: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+    background: 'var(--dsw-alias-bg-base)', border: '1px solid var(--dsw-alias-border-l1)',
+    fontSize: 11.5, maxHeight: 180, overflowY: 'auto',
+  },
+  proposalActions: { display: 'flex', gap: 8, marginTop: 6 },
   composer: { flex: '0 0 auto', display: 'flex', gap: 8, alignItems: 'center', padding: '10px 14px 12px', borderTop: '1px solid var(--dsw-alias-border-l1)' },
   composerInput: { flex: 1, minWidth: 0, display: 'flex' },
   error: { margin: '0 14px 8px', fontSize: 12, color: 'var(--dsw-alias-label-danger, #d5484f)' },
@@ -75,6 +92,8 @@ function CopilotPanel(props: CopilotPanelProps) {
   const sessionId = props.sessionId
   const [turns, setTurns] = useState<CopilotTurn[]>([])
   const [undoCount, setUndoCount] = useState(0)
+  const [proposals, setProposals] = useState<StewardProposal[]>([])
+  const [openProposals, setOpenProposals] = useState<ReadonlySet<string>>(new Set())
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [streamed, setStreamed] = useState('')
@@ -93,9 +112,10 @@ function CopilotPanel(props: CopilotPanelProps) {
     try {
       const response = await fetch(COPILOT_PATH + '?sessionId=' + encodeURIComponent(sessionId))
       if (!response.ok) return
-      const body = await response.json() as { turns: CopilotTurn[]; undoCount: number }
+      const body = await response.json() as { turns: CopilotTurn[]; undoCount: number; proposals?: StewardProposal[] }
       setTurns(body.turns)
       setUndoCount(body.undoCount)
+      setProposals(body.proposals ?? [])
     } catch {
       /* history is best-effort; sending still works */
     }
@@ -104,6 +124,7 @@ function CopilotPanel(props: CopilotPanelProps) {
   useEffect(() => {
     setTurns([])
     setUndoCount(0)
+    setProposals([])
     setStreamed('')
     setError('')
     void load()
@@ -199,6 +220,74 @@ function CopilotPanel(props: CopilotPanelProps) {
     }
   }
 
+  /** 确认落盘 / 丢弃（doc-note 的「已阅丢弃」走 discard）一条暂存提案。 */
+  const resolveProposal = async (proposal: StewardProposal, action: 'confirm' | 'discard'): Promise<void> => {
+    if (sessionId === undefined || busy) return
+    setNotice('')
+    setError('')
+    try {
+      const response = await fetch(PROPOSALS_PATH, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId, action, id: proposal.id }),
+      })
+      const body = await response.json() as { ok?: boolean; error?: string; summary?: string; proposals?: StewardProposal[] }
+      if (!response.ok || body.ok !== true) {
+        setError(body.error ?? t('copilot.failed'))
+        return
+      }
+      setProposals(body.proposals ?? [])
+      setNotice(action === 'confirm' ? (body.summary ?? t('copilot.proposal.confirmed')) : t('copilot.proposal.discarded'))
+    } catch {
+      setError(t('copilot.failed'))
+    }
+  }
+
+  const toggleProposal = (id: string): void => {
+    setOpenProposals((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  /** One staged steward proposal: card-edit confirms to disk, doc-note is read-and-drop. */
+  const proposalCard = (proposal: StewardProposal): ReactNode => {
+    const title = proposal.kind === 'card-edit'
+      ? t('copilot.proposal.cardEdit') + '：' + proposal.card + '/' + proposal.file
+      : t('copilot.proposal.docNote') + '：' + proposal.title
+    const preview = proposal.kind === 'card-edit' ? proposal.content : proposal.body
+    const open = openProposals.has(proposal.id)
+    return (
+      <div key={proposal.id} style={S.proposal}>
+        <DisclosureRow
+          icon={<IconEditOutline16 />}
+          title={title}
+          open={open}
+          expandable={true}
+          onToggle={() => toggleProposal(proposal.id)}
+          collapsedContent={proposal.kind === 'card-edit' && proposal.reason !== undefined ? proposal.reason : undefined}
+        >
+          <div style={S.proposalPreview}>{preview}</div>
+        </DisclosureRow>
+        {proposal.kind === 'card-edit' && proposal.reason !== undefined && open ? (
+          <div style={S.proposalReason}>{proposal.reason}</div>
+        ) : null}
+        <div style={S.proposalActions}>
+          {proposal.kind === 'card-edit' ? (
+            <Button size="sm" variant="primary" disabled={busy} onClick={() => void resolveProposal(proposal, 'confirm')}>
+              {t('copilot.proposal.confirm')}
+            </Button>
+          ) : null}
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => void resolveProposal(proposal, 'discard')}>
+            {proposal.kind === 'card-edit' ? t('copilot.proposal.discard') : t('copilot.proposal.readDiscard')}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   if (sessionId === undefined) {
     return <div style={S.root}><div style={S.empty}>{t('noSession')}</div></div>
   }
@@ -210,6 +299,7 @@ function CopilotPanel(props: CopilotPanelProps) {
         {turn.actions.map((action, index) => {
           if (action.kind === 'world-state') return <div key={index} style={S.actionRow}>{action.digest}</div>
           if (action.kind === 'lore') return <div key={index} style={S.actionRow}>{t('copilot.staged') + '：' + action.name}</div>
+          if (action.kind === 'proposal') return <div key={index} style={S.actionRow}>{action.label}</div>
           return <div key={index} style={S.actionFailed}>{action.error}</div>
         })}
       </div>
@@ -235,6 +325,7 @@ function CopilotPanel(props: CopilotPanelProps) {
       </div>
       <div style={S.scroll} ref={scrollRef}>
         <p style={S.hint}>{t('copilot.guide')}</p>
+        {proposals.map(proposalCard)}
         {turns.length === 0 && streamed.length === 0 ? <div style={S.empty}>{t('copilot.empty')}</div> : null}
         {turns.map((turn, index) => (
           <div key={turn.at + String(index)} style={S.turn}>

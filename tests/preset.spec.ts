@@ -45,6 +45,11 @@ describe('RP preset materialization', () => {
     expect(persona?.config?.prefix).toBe(AUTHOR_SYSTEM_PROMPT)
     expect(existsSync(join(outcome.dir, 'preset.yml'))).toBe(true)
     expect(existsSync(join(outcome.dir, 'skills'))).toBe(true)
+    // Issue #33: the steward bundles ship in the base skills root and are
+    // therefore present in every materialized preset (base + card presets).
+    for (const steward of ['steward-project', 'steward-cards', 'steward-decisions']) {
+      expect(existsSync(join(outcome.dir, 'skills', steward, 'SKILL.md'))).toBe(true)
+    }
 
     expect(removePreset(home)).toBe('removed')
     expect(existsSync(outcome.dir)).toBe(false)

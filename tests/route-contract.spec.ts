@@ -65,6 +65,7 @@ describe('route contract (issue #22)', () => {
       RRP_ROUTES.cardOne,
       RRP_ROUTES.cards,
       RRP_ROUTES.copilot,
+      RRP_ROUTES.copilotProposals,
       RRP_ROUTES.copilotUndo,
       RRP_ROUTES.lore,
       RRP_ROUTES.start,

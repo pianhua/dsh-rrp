@@ -55,6 +55,7 @@ export interface CopilotHistoryView {
 const turnActionSchema = z.union([
   z.object({ kind: z.literal('world-state'), digest: z.string() }),
   z.object({ kind: z.literal('lore'), name: z.string() }),
+  z.object({ kind: z.literal('proposal'), proposalKind: z.enum(['card-edit', 'doc-note']), label: z.string() }),
   z.object({ kind: z.literal('failed'), error: z.string() }),
 ])
 

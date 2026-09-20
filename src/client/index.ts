@@ -184,6 +184,15 @@ const ZH: Record<string, string> = {
   'detail.copilotUndone': '已撤销副驾驶的状态修改',
   'copilot.copyCode': '复制代码',
   'copilot.copiedCode': '已复制',
+  'copilot.proposal.cardEdit': '卡包改动提案',
+  'copilot.proposal.docNote': '文档备忘',
+  'copilot.proposal.confirm': '确认落盘',
+  'copilot.proposal.discard': '丢弃',
+  'copilot.proposal.readDiscard': '已阅丢弃',
+  'copilot.proposal.confirmed': '提案已处理',
+  'copilot.proposal.discarded': '已丢弃提案',
+  'detail.stagedCardEdit': '卡包改动提案：{name}（待确认）',
+  'detail.stagedDocNote': '文档备忘：{name}（待确认）',
 }
 
 const EN: Record<string, string> = {
@@ -332,6 +341,15 @@ const EN: Record<string, string> = {
   'detail.copilotUndone': 'Reverted the Copilot edit',
   'copilot.copyCode': 'Copy code',
   'copilot.copiedCode': 'Copied',
+  'copilot.proposal.cardEdit': 'Card edit proposal',
+  'copilot.proposal.docNote': 'Doc note',
+  'copilot.proposal.confirm': 'Confirm & write',
+  'copilot.proposal.discard': 'Discard',
+  'copilot.proposal.readDiscard': 'Read & discard',
+  'copilot.proposal.confirmed': 'Proposal resolved',
+  'copilot.proposal.discarded': 'Proposal discarded',
+  'detail.stagedCardEdit': 'Card edit proposal: {name} (awaiting review)',
+  'detail.stagedDocNote': 'Doc note: {name} (awaiting review)',
 }
 
 /** Client plugin body. Registers only reversible effects. */

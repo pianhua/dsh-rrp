@@ -102,6 +102,12 @@ describe('unified AgentPromptContract (issue #32)', () => {
     expect(COPILOT_SYSTEM_PROMPT).toContain('失败语义')
   })
 
+  it('copilot prompt is the omniscient Steward and names both proposal actions (issue #33)', () => {
+    expect(COPILOT_SYSTEM_PROMPT).toContain('总管家')
+    expect(COPILOT_SYSTEM_PROMPT).toContain('propose_card_edit')
+    expect(COPILOT_SYSTEM_PROMPT).toContain('propose_doc_note')
+  })
+
   it('scribe prompt keeps the sanctioned empty-draft answer and ✓/✗ examples', () => {
     expect(SCRIBE_SYSTEM_PROMPT).toContain('只新增')
     expect(SCRIBE_SYSTEM_PROMPT).toContain('合格与不合格示例')

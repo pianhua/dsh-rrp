@@ -9,6 +9,7 @@ import { rrpPayloadOf } from '../src/state-payload.ts'
 import { emptyWorldState, WORLD_STATE_KEY, type WorldState } from '../src/world-state.ts'
 import { mergeWorldStatePatch, registerCopilotRoute, forgetCopilot } from '../src/copilot.ts'
 import { setCopilotLegacyDirForTesting } from '../src/copilot-store.ts'
+import { forgetProposals } from '../src/steward-proposals.ts'
 import { hasLoreDraft } from '../src/lore-route.ts'
 
 let copilotDir: string
@@ -63,6 +64,23 @@ describe('copilot agent (prompt + action parsing)', () => {
     expect(actions).toHaveLength(2)
     expect(actions[0]).toMatchObject({ type: 'update_world_state', patch: { scene: { weather: '大雨' } } })
     expect(actions[1]).toMatchObject({ type: 'draft_lore', draft: { name: 'inn-rule' } })
+  })
+
+  it('parses steward proposal blocks and skips incomplete or non-whitelist entries (issue #33 P1)', () => {
+    const reply = '好的。\n\n```rrp-action\n{"actions":[' +
+      '{"type":"propose_card_edit","proposal":{"card":"maid-heiress","file":"card.md","content":"# 新卡","reason":"修正基调"}},' +
+      '{"type":"propose_doc_note","note":{"title":"设定修订备忘","body":"# 备忘\\n正文"}},' +
+      '{"type":"propose_card_edit","proposal":{"card":"maid-heiress","file":"card.md"}},' +
+      '{"type":"propose_doc_note","note":{"title":"缺正文"}},' +
+      '{"type":"propose_card_delete","proposal":{"card":"maid-heiress"}}' +
+      ']}\n```'
+    const actions = parseCopilotActions(reply)
+    expect(actions).toHaveLength(2)
+    expect(actions[0]).toMatchObject({
+      type: 'propose_card_edit',
+      proposal: { card: 'maid-heiress', file: 'card.md', content: '# 新卡', reason: '修正基调' },
+    })
+    expect(actions[1]).toMatchObject({ type: 'propose_doc_note', note: { title: '设定修订备忘' } })
   })
 
   it('returns no actions for pure Q&A or an invalid block', () => {
@@ -271,6 +289,43 @@ describe('copilot route', () => {
     expect(hasLoreDraft('s-lore')).toBe(true)
     // Staging is not a session-log write.
     expect(host.appended).toHaveLength(0)
+  })
+
+  it('stages steward proposals instead of writing anything', async () => {
+    forgetState('s-prop'); forgetCopilot('s-prop'); forgetProposals('s-prop')
+    const reply = '好的。\n```rrp-action\n{"actions":[' +
+      '{"type":"propose_card_edit","proposal":{"card":"maid-heiress","file":"card.md","content":"# 新卡","reason":"修正基调"}},' +
+      '{"type":"propose_doc_note","note":{"title":"设定修订备忘","body":"# 备忘"}}' +
+      ']}\n```'
+    const host = fakeHost({ id: 's-prop', reply })
+    registerCopilotRoute(host.ctx as never)
+    const ask = exchange('POST', '/dsh-rrp/copilot', { sessionId: 's-prop', message: '改卡和备忘' })
+    await host.routes.get('/dsh-rrp/copilot')!.handler(ask.req, ask.res)
+    expect(host.appended).toHaveLength(0)
+
+    const get = exchange('GET', '/dsh-rrp/copilot?sessionId=s-prop')
+    await host.routes.get('/dsh-rrp/copilot')!.handler(get.req, get.res)
+    const body = JSON.parse((get.res as { chunks: string[] }).chunks[0] ?? '{}') as {
+      proposals: Array<{ kind: string; card?: string; title?: string }>
+    }
+    expect(body.proposals).toHaveLength(2)
+    expect(body.proposals[0]).toMatchObject({ kind: 'card-edit', card: 'maid-heiress' })
+    expect(body.proposals[1]).toMatchObject({ kind: 'doc-note', title: '设定修订备忘' })
+    const done = sseEvents(ask.res).find((entry) => entry.event === 'done')?.data as { turn: { actions?: Array<{ kind: string }> } }
+    expect(done.turn.actions?.map((action) => action.kind)).toEqual(['proposal', 'proposal'])
+
+    // discard 路由：丢弃后列表收敛；confirm 不存在的 id 报 400。
+    const first = body.proposals[0] as unknown as { id: string }
+    const discard = exchange('POST', '/dsh-rrp/copilot/proposals', { sessionId: 's-prop', action: 'discard', id: first.id })
+    await host.routes.get('/dsh-rrp/copilot/proposals')!.handler(discard.req, discard.res)
+    expect(discard.res.statusCode).toBe(200)
+    const after = JSON.parse((discard.res as { chunks: string[] }).chunks[0] ?? '{}') as { proposals: unknown[] }
+    expect(after.proposals).toHaveLength(1)
+
+    const missing = exchange('POST', '/dsh-rrp/copilot/proposals', { sessionId: 's-prop', action: 'confirm', id: 'nope' })
+    await host.routes.get('/dsh-rrp/copilot/proposals')!.handler(missing.req, missing.res)
+    expect(missing.res.statusCode).toBe(400)
+    forgetProposals('s-prop')
   })
 
   it('guards non-RP sessions on every method and reports unknown sessions', async () => {

@@ -60,6 +60,7 @@ dsh-rrp/
 │   ├── lore.ts / lore-provider.ts / lore-runtime.ts / lore-route.ts
 │   │                            # D8 知识沉淀：按会话存储、skill provider、路由与 /lore
 │   ├── correction.ts            # 玩家矫正写路径（宿主 webserver 路由）
+│   ├── steward-proposals.ts     # 总管家提案暂存/确认/落盘（issue #33，内存态+确认后写用户卡）
 │   ├── cards-route.ts / start.ts# 卡包只读路由 / 开卡（发布初始状态 + 开场白）
 │   ├── contracts.ts             # 对外只读契约（依赖为零）
 │   ├── home.ts                  # harnessHome() 叶子模块
@@ -83,7 +84,7 @@ dsh-rrp/
 │       ├── lore.ts          # D8 沉淀投影单元
 │       └── card.ts              # 当前卡包投影单元
 ├── presets/                     # 随包分发的原生 agent preset（RP 模式）
-│   └── rp/                      # 组合、元数据与随模式作用域的世界知识技能
+│   └── rp/                      # 组合、元数据、管家技能包（steward-*，issue #33）与随模式作用域的世界知识技能
 ├── cards/                       # 官方原生卡包
 ├── scripts/                     # link-dev / inspect-context / repair-legacy-sessions
 ├── cordis.patch.yml             # DSH profile patch 声明

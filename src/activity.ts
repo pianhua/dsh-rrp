@@ -19,7 +19,7 @@
 export type RrpActor = 'chronicler' | 'summarizer' | 'player' | 'card' | 'scribe' | 'copilot'
 
 /** Which artifact the writer touched. */
-export type RrpTarget = 'world-state' | 'summary' | 'lore'
+export type RrpTarget = 'world-state' | 'summary' | 'lore' | 'card' | 'doc-note'
 
 /** Lifecycle of one writer pass. */
 export type RrpPhase = 'started' | 'committed' | 'failed' | 'corrected' | 'stale'
