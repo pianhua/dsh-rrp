@@ -217,8 +217,30 @@ function CopilotPanel(props: CopilotPanelProps) {
     }
   }
 
+  /**
+   * 清空 is destructive and irreversible, and it used to sit between 撤销 and
+   * 刷新 as a third identical ghost icon (issue #27: one vanished transcript
+   * matches this being fat-fingered). Two-step arming: the first click only
+   * arms the button, a second click within the window actually deletes.
+   */
+  const [clearArmed, setClearArmed] = useState(false)
+  const clearArmTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(clearArmTimer.current), [])
+  const disarmClear = useCallback((): void => {
+    setClearArmed(false)
+    clearTimeout(clearArmTimer.current)
+  }, [])
+
   const clear = async (): Promise<void> => {
     if (sessionId === undefined || busy) return
+    if (!clearArmed) {
+      setClearArmed(true)
+      setNotice('')
+      setError('')
+      clearArmTimer.current = setTimeout(disarmClear, 4000)
+      return
+    }
+    disarmClear()
     try {
       await fetch(COPILOT_PATH + '?sessionId=' + encodeURIComponent(sessionId), { method: 'DELETE' })
       setTurns([])
@@ -325,8 +347,11 @@ function CopilotPanel(props: CopilotPanelProps) {
         <Button size="sm" variant="ghost" disabled={undoCount === 0 || busy} onClick={() => void undo()}>
           {t('copilot.undo')}{undoCount > 0 ? ' (' + String(undoCount) + ')' : ''}
         </Button>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={() => void clear()}>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => void clear()}
+          style={clearArmed ? { color: 'var(--dsw-alias-label-danger, #d5484f)' } : undefined}
+          title={clearArmed ? t('copilot.clearConfirmTitle') : undefined}>
           <IconTrashOutline16 />
+          {clearArmed ? <span style={{ marginLeft: 4 }}>{t('copilot.clearConfirm')}</span> : null}
         </Button>
         <Button size="sm" variant="ghost" disabled={busy} onClick={() => void load()}>
           <IconRefreshOutline16 />

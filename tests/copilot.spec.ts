@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { buildCopilotPrompt, COPILOT_SYSTEM_PROMPT, parseCopilotActions } from '../src/agents/copilot.ts'
 import { readActivity } from '../src/activity.ts'
 import { forgetState } from '../src/state-publisher.ts'
@@ -9,7 +10,7 @@ import { rrpPayloadOf } from '../src/state-payload.ts'
 import type { CardContext } from '../src/card-types.ts'
 import { emptyWorldState, WORLD_STATE_KEY, type WorldState } from '../src/world-state.ts'
 import { liveCardContextText, mergeWorldStatePatch, registerCopilotRoute, forgetCopilot } from '../src/copilot.ts'
-import { setCopilotLegacyDirForTesting } from '../src/copilot-store.ts'
+import { setCopilotLegacyDirForTesting, setCopilotLockForTesting, openCopilotStore } from '../src/copilot-store.ts'
 import { forgetProposals } from '../src/steward-proposals.ts'
 import { hasLoreDraft } from '../src/lore-route.ts'
 
@@ -37,6 +38,9 @@ function fakeStorageDomain() {
 beforeAll(() => {
   copilotDir = mkdtempSync(join(tmpdir(), 'rrp-copilot-'))
   setCopilotLegacyDirForTesting(copilotDir)
+  // Redirect the writer lock too: opening the store must never touch the
+  // real ~/.dsh/storages during tests.
+  setCopilotLockForTesting(join(copilotDir, 'writer-lock.json'))
 })
 
 afterAll(() => {
@@ -459,5 +463,76 @@ describe('copilot history on the storage domain (issue #21)', () => {
     expect(body.turns).toHaveLength(2)
     expect(body.turns[0]?.actions?.[0]).toEqual({ kind: 'lore', name: 'cecilia-background' })
     expect(body.turns[1]?.actions?.[0]?.kind).toBe('failed')
+  })
+})
+
+describe('copilot writer lock (issue #27)', () => {
+  const lockFile = (): string => join(copilotDir, 'writer-lock.json')
+  const readLock = (): { pid: number; heartbeatAt: number } =>
+    JSON.parse(readFileSync(lockFile(), 'utf8')) as { pid: number; heartbeatAt: number }
+
+  it('writes our lock on open and refreshes the heartbeat on mutate', async () => {
+    let now = 1_000_000
+    setCopilotLockForTesting(lockFile(), () => now)
+    const { facility } = fakeStorageDomain()
+    const { handle, viaHost } = await openCopilotStore(() => facility)
+    expect(viaHost).toBe(true)
+    expect(readLock().pid).toBe(process.pid)
+
+    now += 42_000
+    await handle.mutate('s-lock', (draft) => { draft.turns.push({ role: 'player', text: 'hi', at: 't' }) })
+    expect(readLock().heartbeatAt).toBe(now)
+    await handle.close()
+  })
+
+  it('warns when another LIVE process holds a fresh heartbeat', async () => {
+    let now = 5_000_000
+    setCopilotLockForTesting(lockFile(), () => now)
+    // A real child process, so pidAlive() has something true to observe.
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { stdio: 'ignore' })
+    try {
+      writeFileSync(lockFile(), JSON.stringify({
+        pid: child.pid, hostname: 'other', openedAt: now - 60_000, heartbeatAt: now - 1_000,
+      }), 'utf8')
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { facility } = fakeStorageDomain()
+      const { handle } = await openCopilotStore(() => facility)
+      expect(warn.mock.calls.some((args) => String(args[0]).includes('ANOTHER LIVE HARNESS'))).toBe(true)
+      warn.mockRestore()
+      // We still take over the lock for ourselves afterwards.
+      expect(readLock().pid).toBe(process.pid)
+      await handle.close()
+    } finally {
+      child.kill()
+    }
+  })
+
+  it('silently overwrites a stale heartbeat (crashed remnant)', async () => {
+    let now = 9_000_000
+    setCopilotLockForTesting(lockFile(), () => now)
+    writeFileSync(lockFile(), JSON.stringify({
+      pid: process.pid + 9999, hostname: 'ghost', openedAt: now - 3_600_000, heartbeatAt: now - 3_600_000,
+    }), 'utf8')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { facility } = fakeStorageDomain()
+    const { handle } = await openCopilotStore(() => facility)
+    expect(warn.mock.calls.some((args) => String(args[0]).includes('ANOTHER LIVE HARNESS'))).toBe(false)
+    warn.mockRestore()
+    expect(readLock().pid).toBe(process.pid)
+    await handle.close()
+  })
+
+  it('silently overwrites a fresh heartbeat from a DEAD pid (quick restart)', async () => {
+    let now = 12_000_000
+    setCopilotLockForTesting(lockFile(), () => now)
+    writeFileSync(lockFile(), JSON.stringify({
+      pid: 999_999_999, hostname: 'ghost', openedAt: now - 1_000, heartbeatAt: now - 1_000,
+    }), 'utf8')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { facility } = fakeStorageDomain()
+    const { handle } = await openCopilotStore(() => facility)
+    expect(warn.mock.calls.some((args) => String(args[0]).includes('ANOTHER LIVE HARNESS'))).toBe(false)
+    warn.mockRestore()
+    await handle.close()
   })
 })

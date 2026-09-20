@@ -429,6 +429,11 @@ export function registerCopilotRoute(ctx: Context): void {
             return
           }
           if (resolveSession(sessionId, res) === undefined) return
+          // Issue #27: this is the ONLY history-erasing path in the whole
+          // plugin. Audit it loudly so a vanished record can be diagnosed
+          // from the host log instead of archaeology.
+          console.warn(TAG + ' copilot history DELETED for ' + sessionId
+            + ' (' + String(store.load(sessionId).turns.length) + ' turns) at ' + new Date().toISOString())
           await store.remove(sessionId)
           sendJson(res, 200, { ok: true })
           return

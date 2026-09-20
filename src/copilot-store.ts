@@ -14,8 +14,17 @@
  *
  * `node:fs` survives here ONLY to read sidecar files this plugin wrote before
  * the migration; nothing new is ever written to them.
+ *
+ * Issue #27: the host's single-layout backend rewrites the whole unit file on
+ * every record write and declares "one writer per process, last-write-wins".
+ * A second harness process sharing DSH_HOME therefore evaporates records with
+ * its stale in-memory table. We cannot serialize across processes, so we make
+ * the dangerous state LOUD: a best-effort writer-lock sidecar next to the unit
+ * file, refreshed on every mutate. An open that finds a DIFFERENT live process
+ * holding a fresh heartbeat warns instead of silently accepting the race.
  */
-import { existsSync, readFileSync, unlinkSync } from 'node:fs'
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
@@ -101,6 +110,78 @@ export function setCopilotLegacyDirForTesting(dir: string): void {
   legacyDir = dir
 }
 
+// ---------------------------------------------------------------------------
+// Writer lock (issue #27) — see the module header for why this exists.
+
+interface WriterLock {
+  pid: number
+  hostname: string
+  openedAt: number
+  heartbeatAt: number
+}
+
+/** A foreign lock younger than this is a live race; older is a crashed remnant. */
+const LOCK_FRESH_MS = 10 * 60 * 1000
+
+let lockPath = join(harnessHome(), 'storages', 'dsh_rrp_copilot.writer.json')
+let lockNow = (): number => Date.now()
+
+/** Test hook: redirect the lock file and (optionally) the clock. */
+export function setCopilotLockForTesting(path: string | undefined, now?: () => number): void {
+  if (path !== undefined) lockPath = path
+  if (now !== undefined) lockNow = now
+}
+
+function readLock(): WriterLock | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(lockPath, 'utf8')) as Record<string, unknown>
+    if (typeof parsed.pid !== 'number' || typeof parsed.heartbeatAt !== 'number') return undefined
+    return parsed as unknown as WriterLock
+  } catch {
+    return undefined
+  }
+}
+
+function writeLock(openedAt: number): void {
+  try {
+    writeFileSync(lockPath, JSON.stringify({
+      pid: process.pid,
+      hostname: hostname(),
+      openedAt,
+      heartbeatAt: lockNow(),
+    }), 'utf8')
+  } catch {
+    /* best effort only — a lock we cannot write must never break the store */
+  }
+}
+
+/** True when `pid` names a process that is still alive. */
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * On open: warn when another LIVE process holds a fresh heartbeat. A dead pid
+ * (stale remnant of a crash or a quick restart) overwrites silently — rapid
+ * restarts of this same toy must not cry wolf.
+ */
+function guardAgainstSecondWriter(): void {
+  const existing = readLock()
+  if (existing === undefined || existing.pid === process.pid) return
+  if (lockNow() - existing.heartbeatAt < LOCK_FRESH_MS && pidAlive(existing.pid)) {
+    console.warn(
+      TAG + ' copilot history: ANOTHER LIVE HARNESS (pid ' + existing.pid + ') is writing '
+      + 'dsh_rrp_copilot on this DSH_HOME. The host backend is last-write-wins per process, '
+      + 'so copilot history records can silently vanish. Close one instance.',
+    )
+  }
+}
+
 function legacyPath(sessionId: string): string {
   return join(legacyDir, sessionId + '.json')
 }
@@ -182,6 +263,9 @@ export async function openCopilotStore(
     return { handle: memoryHandle(), viaHost: false }
   }
   const domain = await facility.open(copilotDomainSpec)
+  guardAgainstSecondWriter()
+  const openedAt = lockNow()
+  writeLock(openedAt)
   const table = domain.table('history')
   const handle: CopilotStoreHandle = {
     load(sessionId) {
@@ -202,6 +286,7 @@ export async function openCopilotStore(
         result = fn(draft)
         return draft
       })
+      writeLock(openedAt)
       return result
     },
     async remove(sessionId) {
