@@ -2,6 +2,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { parse as parseYaml } from 'yaml'
+import { AUTHOR_SYSTEM_PROMPT } from '../src/agents/author.ts'
 import { PRESET_ID, ensureCardPreset, materializePreset, presetDir, removeAllPresets, removePreset } from '../src/preset.ts'
 
 const homes: string[] = []
@@ -31,6 +33,16 @@ describe('RP preset materialization', () => {
     expect(composition).toContain('@deepseek-ai/dsh-tool-skill')
     expect(composition).not.toContain('__DSH_RRP_SKILL_DIR__')
     expect(composition).toContain(join(outcome.dir, 'skills'))
+    // Issue #32: the Author prompt token is replaced with the real system prompt.
+    expect(composition).not.toContain('__DSH_RRP_AUTHOR_PROMPT__')
+    expect(composition).toContain('You are the Author Agent of DSH-Chronicle')
+    expect(composition).toContain('## Output Discipline')
+    expect(composition).toContain(AUTHOR_SYSTEM_PROMPT.split('\n')[0])
+    // The materialized YAML must parse, and the deployed prefix must be
+    // byte-identical to the single-source constant (issue #32).
+    const doc = parseYaml(composition) as Array<{ id: string; config?: { prefix?: string } }>
+    const persona = doc.find((entry) => entry.id === 'persona')
+    expect(persona?.config?.prefix).toBe(AUTHOR_SYSTEM_PROMPT)
     expect(existsSync(join(outcome.dir, 'preset.yml'))).toBe(true)
     expect(existsSync(join(outcome.dir, 'skills'))).toBe(true)
 

@@ -25,6 +25,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, write
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { listCards, mountSkillsForCard } from './cards.ts'
+import { AUTHOR_SYSTEM_PROMPT } from './agents/author.ts'
 import { harnessHome } from './home.ts'
 import { BASE_PRESET_ID, belongsToRpPreset, isCardId, presetIdForCard } from './preset-id.ts'
 
@@ -35,9 +36,22 @@ export const PRESET_ID = BASE_PRESET_ID
 const MARKER_FILE = '.dsh-rrp.json'
 const MANAGED_BY = 'dsh-rrp'
 
-/** Composition file, and the token replaced with the materialized skills root. */
+/** Composition file, and the tokens replaced at materialization time. */
 const COMPOSITION_FILE = 'agent.cordis.yml'
 const SKILL_DIR_TOKEN = '__DSH_RRP_SKILL_DIR__'
+/** Author system prompt placeholder — single source: src/agents/author.ts (issue #32). */
+const AUTHOR_PROMPT_TOKEN = '__DSH_RRP_AUTHOR_PROMPT__'
+/** Block-scalar indent of `prefix:` inside the composition (two past `config:`). */
+const AUTHOR_PROMPT_INDENT = '      '
+
+/** Render the Author prompt as a YAML block-scalar body.
+ * The token's own line already carries the 6-space indent in the template, so
+ * only continuation lines (index > 0) are indented; blank lines stay bare. */
+function authorPromptBlock(): string {
+  return AUTHOR_SYSTEM_PROMPT.split('\n')
+    .map((line, index) => (index > 0 && line.length > 0 ? AUTHOR_PROMPT_INDENT + line : line))
+    .join('\n')
+}
 
 /** The shipped preset source (resolved against the bundled lib/index.js). */
 const SOURCE_DIR = fileURLToPath(new URL('../presets/rp/', import.meta.url))
@@ -132,6 +146,7 @@ function materializeOne(dir: string, cardId: string | undefined, home: string | 
 
   const templated = readFileSync(sourceComposition, 'utf8')
     .replaceAll(SKILL_DIR_TOKEN, join(dir, 'skills'))
+    .replace(AUTHOR_PROMPT_TOKEN, authorPromptBlock())
   writeFileSync(join(dir, COMPOSITION_FILE), templated)
 
   const marker = { managedBy: MANAGED_BY, files: contentHashes(dir) }

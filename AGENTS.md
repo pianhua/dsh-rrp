@@ -69,10 +69,13 @@ dsh-rrp/
 │   │   ├── lore-tab.tsx     # 设定集（D8）：起草/审阅/确认/删除
 │   │   ├── gallery-panel.tsx    # 卡片展厅 + 开卡流
 │   │   └── primitives.d.ts      # 宿主原子库结构面类型
-│   ├── agents/                  # 智体提示词与行为规范
+│   ├── agents/                  # 智体提示词与行为规范（统一 AgentPromptContract，issue #32）
+│   │   ├── contract.ts          # 统一提示词契约接口（六层结构 + Zod 绑定 + 缓存不变式）
+│   │   ├── author.ts            # Author 提示词单一来源 AUTHOR_SYSTEM_PROMPT（preset.ts 物化注入）
 │   │   ├── chronicler.ts        # 状态推演提示词与输出契约
 │   │   ├── summarizer.ts        # 剧情脉络摘要智能体
-│   │   └── scribe.ts            # D8 设定集编纂者（只起草一条）
+│   │   ├── scribe.ts            # D8 设定集编纂者（只起草一条）
+│   │   └── copilot.ts           # 副驾驶提示词 + rrp-action 动作块词汇与解析
 │   └── projection/              # 会话投影纯数学折叠器
 │       ├── world-state.ts       # WorldState 投影单元（zod 校验 + 纯折叠）
 │       ├── summary.ts           # 剧情脉络投影单元

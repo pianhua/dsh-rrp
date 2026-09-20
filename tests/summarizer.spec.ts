@@ -36,6 +36,12 @@ describe('Summarizer reply contract', () => {
     expect(parsed?.goal).toBe(VALID.goal)
     expect(parsed?.threads).toEqual(['枯河滩上的脚印'])
   })
+  it('hard-rejects more than 5 turning points or threads (issue #32)', () => {
+    const six = ['一', '二', '三', '四', '五', '六']
+    expect(parseSummarizerReply(JSON.stringify({ ...VALID, turningPoints: six }))).toBeUndefined()
+    expect(parseSummarizerReply(JSON.stringify({ ...VALID, threads: six }))).toBeUndefined()
+    expect(parseSummarizerReply(JSON.stringify({ ...VALID, turningPoints: six.slice(0, 5) }))).toBeDefined()
+  })
 })
 
 function fakeHost(preset: string, turn: number, summaryEnabled = true, seed?: Array<{ type: string; data: unknown }>) {

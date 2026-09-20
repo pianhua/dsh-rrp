@@ -9,12 +9,15 @@ import { z } from 'zod'
 import { SUMMARY_KEY, type MacroSummary } from '../macro-summary.ts'
 import { rrpPayloadOf } from '../state-payload.ts'
 
-/** Runtime validator for one macro summary. */
+/** Runtime validator for one macro summary.
+ * turningPoints/threads are hard-capped at 5 to stay byte-aligned with the
+ * Summarizer prompt's 「最多 5 条」 (issue #32: soft prompt limit and hard
+ * schema limit must never drift apart). */
 export const macroSummarySchema = z.object({
   goal: z.string(),
   conflict: z.string(),
-  turningPoints: z.array(z.string()),
-  threads: z.array(z.string()),
+  turningPoints: z.array(z.string()).max(5),
+  threads: z.array(z.string()).max(5),
 })
 
 const stateSchema = z.union([macroSummarySchema, z.null()])

@@ -6,9 +6,15 @@
  * COMPLETE WorldState (the session-projection whole-value rule).
  *
  * D5: Chronicler can create new dynamic fields when needed.
+ *
+ * Issue #32 upgrade: authority-ordering rule, anti-hallucination red lines,
+ * a key-name counter-example, an output skeleton, and a pre-send self-check —
+ * all in the unified six-layer contract layout. Data pipe, not a novelist:
+ * the Author's literary license must never leak in here.
  */
 import { worldStateSchema } from '../projection/world-state.ts'
 import { extractFirstJsonObject } from '../json-extract.ts'
+import type { AgentPromptContract } from './contract.ts'
 import {
   pruneWorldState,
   isValidFieldId,
@@ -37,12 +43,19 @@ export const CHRONICLER_SYSTEM_PROMPT = [
   '   - 保持精简（≤ 12 条），按重要度从高到低排列。',
   '5. characters / inventory 同样只保留当前仍然有效的状态，并按重要度排序。',
   '   - 角色键名规范：同一角色只用一个规范名作键（优先正名，不用泛称、绰号或带修饰的称呼）；更新已有角色时逐字复用 characters 现有键名，绝不另起别名开新键。',
+  '   - ✗ 反例：同一角色混用「那位小姐」「沈姑娘」「mia」三个键；✓ 只保留正名一个键，旧别名并入正名条目。',
   '6. 关系网（relations）：',
   '   - 顶层可选 relations 数组（≤ 12 条），只保留当前仍影响剧情的双向关系；已和解、已无关的关系应当移除。',
   '   - 端点必须使用 characters 中的规范角色名；指代玩家统一写「玩家」。',
   '   - label 用一两字到短语概括（主仆/猜忌/亏欠/同盟…），同义合并，不写括号修饰。',
   '7. 如实反映玩家行动造成的后果，但绝不替玩家角色杜撰新的行动、对白或心理。',
   '8. 忠于既有设定；可以补充合理的细节，但不得改写世界观。',
+  '',
+  '【权威排序】当【最近的剧情】与【此前的世界状态】冲突时（例如玩家改写了现实、就地修改了状态），以剧情为准并更新状态；判断不了的，保留原值，绝不猜测。',
+  '',
+  '铁律红线：',
+  '1. 严禁杜撰：不得记录正文未出现的新物品、新角色、新地点；数值变化必须有剧情依据，不得凭感觉调整好感或伤势。',
+  '2. 禁止扩写：你的输出是状态数据，严禁创作、复述或续写剧情正文；mood/condition 等短语只写客观结论，不写文学修辞。',
   '',
   '【D5】自定义状态字段（动态扩展）：',
   '- 当需要追踪四域（characters/inventory/scene/flags）无法容纳的状态时，可在输出中使用 createFields 数组创建自定义字段。',
@@ -54,7 +67,7 @@ export const CHRONICLER_SYSTEM_PROMPT = [
   '- 创建后的字段会并入 WorldState 顶层键值对，后续轮次直接在顶层更新其值（无需再次使用 createFields）。',
   '',
   '输出格式（严格遵守）：',
-  '- 只输出一个 JSON 对象，不要任何解释、Markdown 或代码围栏。',
+  '- 只输出一个 JSON 对象，不要任何解释、Markdown 或代码围栏，第一个字符必须是 {。',
   '- 基础字段（必须包含）：characters、inventory、scene、flags。',
   '- 可选字段：createFields（数组，创建新的自定义字段）。',
   '- 自定义字段直接作为对象的顶层键值对。',
@@ -64,7 +77,11 @@ export const CHRONICLER_SYSTEM_PROMPT = [
   '- flags 是「长期事实名 → 简短事实值（string | number | boolean）」的对象；不要用它记流水账。',
   '- relations 是数组，格式：[{ "a": "角色A", "b": "角色B", "label": "关系" }]，可选。',
   '- createFields 是数组，格式：[{ "id": "字段名", "type": "number"|"string"|"boolean", "value": 初始值, "min": 最小值?, "max": 最大值? }]',
+  '- 形状骨架（键名与结构照此，内容换成本局实际）：',
+  '  {"characters":{"米娅":{"affinity":60,"mood":"平静"}},"inventory":{},"scene":{"location":"客厅"},"flags":{"管家的真实立场":"忠于二房（玩家尚未知情）"},"relations":[{"a":"玩家","b":"米娅","label":"主仆"}]}',
   '- 该 JSON 必须是变化后的完整状态（当前切面），而不是增量，也不是历史记录。',
+  '',
+  '输出前逐项自检：① 第一个字符是 {，全文无任何引导语；② 输出的是完整切面而非增量；③ flags 每条都通过「下一幕测试」（下一幕还影响局面吗）；④ 已存在角色的键名与上一状态逐字一致；⑤ 没有出现正文里没有的新名词。',
 ].join('\n')
 
 /** Inputs the Chronicler sees: the prior state and the rendered transcript. */
@@ -201,4 +218,14 @@ export function parseChroniclerReply(reply: string, existingState?: WorldState):
   }
   
   return { state }
+}
+
+/** The Chronicler's unified prompt contract (issue #32). */
+export const chroniclerAgent: AgentPromptContract<ChroniclerPromptInput, ChroniclerReply> = {
+  id: 'chronicler',
+  name: '状态推演（Chronicler）',
+  systemPrompt: CHRONICLER_SYSTEM_PROMPT,
+  buildUserPrompt: buildChroniclerPrompt,
+  parseReply: parseChroniclerReply,
+  outputSchema: worldStateSchema,
 }

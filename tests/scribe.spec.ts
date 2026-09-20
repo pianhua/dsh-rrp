@@ -8,6 +8,18 @@ describe('Scribe reply contract', () => {
     expect(parseScribeReply('好的：\n' + JSON.stringify(draft) + '\n以上。')).toEqual(draft)
   })
 
+  it('tolerates Markdown fences and mid-stream truncation (issue #32 P0)', () => {
+    const draft = { name: 'qingqiu-fox-clan', description: '青丘狐族；涉及青丘时使用。', body: '# 青丘' }
+    // Fenced output — the old indexOf slicer choked on the fence text.
+    expect(parseScribeReply('```json\n' + JSON.stringify(draft) + '\n```')).toEqual(draft)
+    // Cut mid-body: the shared ladder salvages the last COMPLETE field prefix
+    // and drops the dangling partial string; a draft without its required body
+    // degrades to "nothing to lore" (the runtime logs `failed`, next round
+    // re-drafts) instead of sealing a half-word into the lore body.
+    const truncated = JSON.stringify(draft).slice(0, -2)
+    expect(parseScribeReply(truncated)).toBeUndefined()
+  })
+
   it('treats an empty candidate as "nothing to lore"', () => {
     expect(parseScribeReply('{"name":"","description":"","body":""}')).toBeUndefined()
     expect(parseScribeReply('没有可沉淀的内容')).toBeUndefined()
