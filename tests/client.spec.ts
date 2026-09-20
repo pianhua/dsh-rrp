@@ -9,6 +9,7 @@ function fakeContext() {
     name?: string
     key?: string
     id?: string
+    order?: number
     inject?: (...args: unknown[]) => Record<string, unknown>
   }> = []
   const ctx = {
@@ -37,6 +38,11 @@ function fakeContext() {
       bind() {
         return (key: string) => key
       },
+    },
+    // The real Cordis context answers for every optional face; an unregistered
+    // service is simply absent.
+    get(_name: string) {
+      return undefined
     },
   }
   return { ctx, types, bodies }
@@ -140,5 +146,16 @@ describe('dsh-rrp client half', () => {
     expect(injected.workspaces).toBeUndefined()
     expect((await injected.start?.(CARD))?.ok).toBe(true)
     expect(creates).toEqual([{}])
+  })
+
+  it('registers the Stage panel as a conversation view with the two-action API only', () => {
+    const { ctx, bodies } = fakeContext()
+    client.apply(ctx as never)
+
+    const views = bodies.filter((entry) => entry.name === 'conversation.view')
+    const stage = views.find((entry) => entry.id === 'dsh-rrp/stage')
+    expect(stage?.order).toBe(30)
+    const injected = stage?.inject?.() as { api?: Record<string, unknown> }
+    expect(Object.keys(injected.api ?? {}).sort()).toEqual(['askCopilot', 'correctState', 'forget', 'loadManifest'])
   })
 })

@@ -19,6 +19,7 @@ import {
   StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCopilotPrefill } from './copilot-prefill.ts'
 import { COPILOT_SSE, RRP_ROUTES, drainSse, type CopilotTurn, type StewardProposal } from '../route-contract.ts'
 import type { RrpClientContext } from './context-types.ts'
 
@@ -102,6 +103,7 @@ function CopilotPanel(props: CopilotPanelProps) {
   const [proposals, setProposals] = useState<StewardProposal[]>([])
   const [openProposals, setOpenProposals] = useState<ReadonlySet<string>>(new Set())
   const [input, setInput] = useState('')
+  useCopilotPrefill(setInput)
   const [busy, setBusy] = useState(false)
   const [streamed, setStreamed] = useState('')
   const [error, setError] = useState('')

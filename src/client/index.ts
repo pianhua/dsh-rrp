@@ -8,6 +8,7 @@ import type { RrpClientContext } from './context-types.ts'
 import { registerCopilotTab } from './copilot-tab.tsx'
 import { registerGallery } from './gallery-panel.tsx'
 import { registerWorldlineTab } from './worldline-tab.tsx'
+import { registerStageTab } from './stage-tab.tsx'
 import { registerLoreTab } from './lore-tab.tsx'
 import { registerWorldStateTab } from './world-state-tab.tsx'
 
@@ -155,6 +156,15 @@ const ZH: Record<string, string> = {
   'worldline.load': '读档',
   'worldline.reroll': '从这里重roll',
   'worldline.hide': '收起此线',
+  'stage.view': '舞台',
+  'stage.reload': '重新读取本卡界面',
+  'stage.noCard': '开局后这里会呈现本卡自带的界面。',
+  'stage.noUi': '这张卡没有声明界面（ui/manifest.json）。',
+  'stage.noPanels': '本卡的界面条件当前都不成立。',
+  'stage.noData': '暂无记录',
+  'stage.working': '处理中…',
+  'stage.appLoading': '正在载入本卡界面…',
+  'stage.appFailed': '本卡自带的页面载入失败（见 ui/manifest.json 与 ui/*.html）。',
   'gallery.skills': '世界知识',
   'gallery.opening': '开场白',
   'gallery.start': '开始这一局',
@@ -312,6 +322,15 @@ const EN: Record<string, string> = {
   'worldline.load': 'Load',
   'worldline.reroll': 'Reroll from here',
   'worldline.hide': 'Hide this line',
+  'stage.view': 'Stage',
+  'stage.reload': 'Re-read this card’s UI',
+  'stage.noCard': 'The card’s own UI appears here once a story starts.',
+  'stage.noUi': 'This card declares no UI (ui/manifest.json).',
+  'stage.noPanels': 'No panel of this card’s UI currently holds.',
+  'stage.noData': 'Nothing recorded yet',
+  'stage.working': 'Working…',
+  'stage.appLoading': 'Loading this card’s own page…',
+  'stage.appFailed': 'This card’s own page failed to load (check ui/manifest.json and ui/*.html).',
   'gallery.skills': 'World knowledge',
   'gallery.opening': 'Opening',
   'gallery.start': 'Start this story',
@@ -375,4 +394,5 @@ export function apply(ctx: RrpClientContext): void {
   registerCopilotTab(ctx)
   registerGallery(ctx)
   registerWorldlineTab(ctx)
+  registerStageTab(ctx)
 }
