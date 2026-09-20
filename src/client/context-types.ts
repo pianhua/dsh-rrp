@@ -69,6 +69,8 @@ export interface RrpSessionBindingFace {
 /** One listed session row (the fields the worldline map reads). */
 export interface RrpSessionSummary {
   displayTitle?: string
+  /** The durable user title (set by rename); displayTitle falls back to cwd. */
+  title?: string
   parentId?: string
   blank?: boolean
 }
@@ -89,24 +91,6 @@ export interface RrpSessionsService {
   readonly list?: RrpSessionListStore
   /** Fork a child session through an event seq; returns the child id. */
   fork?(opts: { sessionId: string; atSeq?: number; increaseTitle?: boolean }): Promise<string>
-}
-
-/** One native DSH Workspace row used by the optional gallery picker. */
-export interface RrpWorkspaceView {
-  workspaceId: string
-  path: string
-  title: string
-}
-
-/** Observable native Workspace list. */
-export interface RrpWorkspaceSource {
-  getSnapshot(): { readonly items: readonly RrpWorkspaceView[] }
-  subscribe(listener: () => void): () => void
-}
-
-/** Optional face of `@deepseek-ai/dsh-api-workspace-controller`. */
-export interface RrpWorkspacesService {
-  readonly list: RrpWorkspaceSource
 }
 
 /** Remote RPC face (subset of dsh-api-remotes). */
@@ -174,6 +158,4 @@ export type RrpClientContext = CordisContext & {
   layout?: RrpLayoutService
   /** Present whenever the conversation assembly core is loaded. */
   uiConversation?: RrpUiConversationService
-  /** Optional host capability; read through `ctx.get` to avoid a hard inject. */
-  workspaces?: RrpWorkspacesService
 }

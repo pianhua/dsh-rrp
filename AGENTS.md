@@ -62,6 +62,8 @@ dsh-rrp/
 │   ├── correction.ts            # 玩家矫正写路径（宿主 webserver 路由）
 │   ├── steward-proposals.ts     # 总管家提案暂存/确认/落盘（issue #33，内存态+确认后写用户卡）
 │   ├── cards-route.ts / start.ts# 卡包只读路由 / 开卡（发布初始状态 + 开场白）
+│   ├── card-workspace-route.ts  # 一卡一区（issue #37）：幂等收养卡级工作区，开卡/分叉自动归组
+│   ├── save-naming.ts           # 存档命名纯词汇（issue #37）：主线编号 + 分支带父档名
 │   ├── contracts.ts             # 对外只读契约（依赖为零）
 │   ├── home.ts                  # harnessHome() 叶子模块
 │   ├── client/                  # 客户端入口与面板

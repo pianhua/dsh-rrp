@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as client from '../src/client/index.ts'
 import type { CardPack } from '../src/card-types.ts'
+import { RRP_ROUTES } from '../src/route-contract.ts'
 
 /** Minimal fake of the client Context: records every registration. */
 function fakeContext() {
@@ -96,13 +97,11 @@ describe('dsh-rrp client half', () => {
     expect(nav?.id).toBe('dsh-rrp/chronicle')
   })
 
-  it('passes an optional native Workspace id into Session creation', async () => {
+  it('creates the session inside the card workspace ensured by the host route', async () => {
     const { ctx, bodies } = fakeContext()
     const creates: Array<Record<string, unknown>> = []
     Object.assign(ctx, {
-      get: (name: string) => name === 'workspaces'
-        ? { list: { getSnapshot: () => ({ items: [{ workspaceId: 'workspace-1', title: 'RP', path: 'D:/rp' }] }), subscribe: () => () => {} } }
-        : undefined,
+      get: () => undefined,
       sessions: {
         create: async (options: Record<string, unknown>) => { creates.push(options); return 'session-1' },
         open() {},
@@ -111,19 +110,21 @@ describe('dsh-rrp client half', () => {
       remote: { agentPresets: { select: async () => ({ ok: true }) } },
       layout: { selectPanel() {} },
     })
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, text: async () => '' })))
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith(RRP_ROUTES.cardWorkspace)
+      ? { ok: true, json: async () => ({ workspaceId: 'ws-1', path: 'D:/rp', created: true }) }
+      : { ok: true, text: async () => '' }))
     client.apply(ctx as never)
 
     const injected = bodies.find((entry) => entry.name === 'main')?.inject?.() as {
-      start?: (card: CardPack, workspaceId?: string) => Promise<{ ok: boolean }>
+      start?: (card: CardPack) => Promise<{ ok: boolean }>
       workspaces?: unknown
     }
-    expect(injected.workspaces).toBeDefined()
-    expect((await injected.start?.(CARD, 'workspace-1'))?.ok).toBe(true)
-    expect(creates).toEqual([{ workspaceId: 'workspace-1' }])
+    expect(injected.workspaces).toBeUndefined()
+    expect((await injected.start?.(CARD))?.ok).toBe(true)
+    expect(creates).toEqual([{ workspaceId: 'ws-1' }])
   })
 
-  it('keeps gallery start available when the Workspace service is absent', async () => {
+  it('keeps gallery start available when the workspace ensure fails (degraded fallback)', async () => {
     const { ctx, bodies } = fakeContext()
     const creates: Array<Record<string, unknown>> = []
     Object.assign(ctx, {
@@ -136,11 +137,13 @@ describe('dsh-rrp client half', () => {
       remote: { agentPresets: { select: async () => ({ ok: true }) } },
       layout: { selectPanel() {} },
     })
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, text: async () => '' })))
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith(RRP_ROUTES.cardWorkspace)
+      ? { ok: false, status: 503, text: async () => '' }
+      : { ok: true, text: async () => '' }))
     client.apply(ctx as never)
 
     const injected = bodies.find((entry) => entry.name === 'main')?.inject?.() as {
-      start?: (card: CardPack, workspaceId?: string) => Promise<{ ok: boolean }>
+      start?: (card: CardPack) => Promise<{ ok: boolean }>
       workspaces?: unknown
     }
     expect(injected.workspaces).toBeUndefined()

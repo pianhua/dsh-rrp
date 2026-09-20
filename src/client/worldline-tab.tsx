@@ -13,6 +13,7 @@
 import { Button, IconLoadingOutline16, IconRefreshOutline16, IconSparkle16, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { RRP_ROUTES, type WorldlineTreeResponse } from '../route-contract.ts'
+import { branchTitle } from '../save-naming.ts'
 import type { WorldlineNode, WorldlineTree } from '../worldline-tree.ts'
 import type { RrpClientContext } from './context-types.ts'
 
@@ -229,7 +230,10 @@ export function registerWorldlineTab(ctx: RrpClientContext): void {
       try {
         const anchor = document.createElement('a')
         anchor.href = url
-        // The filename rides in Content-Disposition from the route.
+        // fetch()+blob ignores the route's Content-Disposition; without an
+        // explicit download name the click only navigates to the blob.
+        const safe = (title.length > 0 ? title : 'novel').replace(/[\\/:*?"<>|]/g, '_')
+        anchor.download = safe + '.md'
         document.body.appendChild(anchor)
         anchor.click()
         anchor.remove()
@@ -243,24 +247,23 @@ export function registerWorldlineTab(ctx: RrpClientContext): void {
     async reroll(sessionId, atSeq, cardName) {
       if (sessions?.fork === undefined) return
       const childId = await sessions.fork({ sessionId, atSeq, increaseTitle: true })
-      // Name the new line 「卡名·线N」 once the child is addressable (the
-      // roster needs a beat to catch up after fork; increaseTitle is the
-      // fallback title if every rename attempt lands too early).
-      const list = sessions.list?.getSnapshot()
-      const sameCard = list === undefined ? 0 : list.ids.filter((id) => {
-        const row = list.byId[id]
-        return row !== undefined && (row.parentId !== undefined || id === sessionId) && (row.displayTitle ?? '').startsWith(cardName.split('·')[0] ?? cardName)
-      }).length
-      const wanted = cardName + '·线' + String(sameCard + 1)
-      // Open the child first: its binding is guaranteed live once current,
-      // and the rename is a nicety on top of the host's unique increaseTitle.
+      // Issue #37: the branch carries its PARENT SAVE's full title
+      // (「父档全名·线N」) — a flat roster inside one card drawer never hides
+      // which save a branch was cut from. The count is computed late, after
+      // the roster caught up with the fork, so N is right on the first try.
       openSession(childId)
       for (let attempt = 0; attempt < 8; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 400))
         const binding = sessions.binding(childId)
         if (binding !== undefined) {
+          const list = sessions.list?.getSnapshot()
+          const parent = list?.byId[sessionId]
+          const parentTitle = parent?.title ?? parent?.displayTitle ?? cardName
+          const siblings = list === undefined ? [] : list.ids
+            .filter((id) => list.byId[id]?.parentId === sessionId)
+            .map((id) => list.byId[id]?.title ?? list.byId[id]?.displayTitle ?? '')
           try {
-            await binding.session.rename?.(wanted)
+            await binding.session.rename?.(branchTitle(parentTitle, siblings))
           } catch {
             /* title only */
           }

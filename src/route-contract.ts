@@ -33,6 +33,7 @@ export const RRP_ROUTES = {
   worldlineHidden: '/dsh-rrp/worldlines/hidden',
   cardUi: '/dsh-rrp/card-ui',
   novelExport: '/dsh-rrp/export/novel',
+  cardWorkspace: '/dsh-rrp/card-workspace',
 } as const
 
 // ── Shared JSON vocabulary ──────────────────────────────────────────────────
@@ -158,6 +159,24 @@ export interface WorldlineHiddenSetRequest {
 // ── /dsh-rrp/card-ui ────────────────────────────────────────────────────────
 /** One card's validated UI declaration; `absent` is the normal plain-card case. */
 export type CardUiResponse = { manifest: UiManifest } | { absent: true } | RrpErrorBody
+
+// ── /dsh-rrp/card-workspace (issue #37) ─────────────────────────────────────
+/**
+ * Idempotent ensure of the card's own workspace (「一卡一区」): the host
+ * registry adopts `<dshHome>/.dsh-rrp/saves/<cardId>` once, later calls
+ * return the existing record; a drifted title (renamed card) is corrected.
+ */
+export interface CardWorkspaceRequest {
+  cardId: string
+  cardName: string
+}
+
+export interface CardWorkspaceResponse {
+  ok: true
+  workspaceId: string
+  path: string
+  created: boolean
+}
 
 // ── /dsh-rrp/copilot ────────────────────────────────────────────────────────
 /** One executed action as recorded on the turn (for the panel's action card). */

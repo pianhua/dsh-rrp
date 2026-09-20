@@ -13,6 +13,7 @@ import { registerActivityRoute } from './activity-route.ts'
 import { listCards } from './cards.ts'
 import { registerCardsRoute } from './cards-route.ts'
 import { registerCardUiRoute } from './card-ui-route.ts'
+import { registerCardWorkspaceRoute } from './card-workspace-route.ts'
 import { registerExportRoute } from './export-route.ts'
 import { registerCopilotRoute, forgetAllCopilot, forgetCopilot } from './copilot.ts'
 import { worldlineDigestProjection } from './projection/worldline-digest.ts'
@@ -172,6 +173,13 @@ export function apply(ctx: Context): void {
   // Card start: write the initial state and the opening the browser cannot.
   ctx.inject(['webServer', 'sessions', 'sessionProjections'], (scoped: Context) => {
     registerStartRoute(scoped)
+  })
+
+  // Card workspace (issue #37): one workspace per card is the save-grouping
+  // drawer; the registry is probed lazily per request so a host without it
+  // degrades the client flow to ungrouped instead of never arming.
+  ctx.inject(['webServer'], (scoped: Context) => {
+    registerCardWorkspaceRoute(scoped)
   })
 
   // Copilot: the player's omniscient advisor in the third right-sidebar tab.

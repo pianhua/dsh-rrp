@@ -25,12 +25,13 @@ import {
   StateDot,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { interpolateCardText, type CardMeta, type CardOpening, type CardPack, type CardPlayer } from '../card-types.ts'
 import { presetIdForCard } from '../preset-id.ts'
 import { RRP_ROUTES } from '../route-contract.ts'
+import { uniqueMainTitle } from '../save-naming.ts'
 import { withPlayerPersona } from '../world-state.ts'
-import type { RrpClientContext, RrpWorkspaceSource, RrpWorkspacesService } from './context-types.ts'
+import type { RrpClientContext } from './context-types.ts'
 
 /** Panel id: the \`main\` key and the \`sidebar.panellist\` id must match. */
 export const GALLERY_PANEL_ID = 'dsh-rrp/chronicle'
@@ -49,8 +50,7 @@ interface GalleryPanelProps {
   loadList?: () => Promise<CardMeta[]>
   loadCard?: (id: string) => Promise<CardPack | undefined>
   /** playerNameOverride: per-session player-name override (#25); empty/undefined = card-declared. */
-  start?: (card: CardPack, workspaceId?: string, playerNameOverride?: string, openingId?: string, playerPersona?: string) => Promise<StartOutcome>
-  workspaces?: RrpWorkspaceSource
+  start?: (card: CardPack, playerNameOverride?: string, openingId?: string, playerPersona?: string) => Promise<StartOutcome>
 }
 
 /** Small status line state. */
@@ -65,18 +65,6 @@ const DOT: Record<Tone, 'done' | 'warning' | 'ongoing' | 'error' | null> = {
   busy: 'ongoing',
   ok: 'done',
   error: 'error',
-}
-
-const EMPTY_WORKSPACES = Object.freeze({ items: [] as const })
-
-/** Subscribe to the optional host Workspace projection without owning it. */
-function useWorkspaces(source: RrpWorkspaceSource | undefined): readonly { workspaceId: string; path: string; title: string }[] {
-  const snapshot = useSyncExternalStore(
-    (listener) => source?.subscribe(listener) ?? (() => {}),
-    () => source?.getSnapshot() ?? EMPTY_WORKSPACES,
-    () => source?.getSnapshot() ?? EMPTY_WORKSPACES,
-  )
-  return snapshot.items
 }
 
 /**
@@ -145,7 +133,6 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
   const [status, setStatus] = useState<Status>({ tone: 'idle', text: '' })
   const [busy, setBusy] = useState(false)
   const [query, setQuery] = useState('')
-  const [workspaceId, setWorkspaceId] = useState('')
   // #25 per-session player-name override; empty = use the card-declared name.
   const [playerName, setPlayerName] = useState('')
   // P1-B self-authored persona (appearance/personality/background); empty =
@@ -154,7 +141,6 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
   // Multi-opening pick (#31-A); empty = the card's declared default opening.
   const [openingId, setOpeningId] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const workspaces = useWorkspaces(props.workspaces)
 
   /**
    * P1-D: import a tavern character card (PNG or raw v2/v3 JSON). The file is
@@ -246,17 +232,11 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
 
   useEffect(refresh, [])
 
-  useEffect(() => {
-    if (workspaceId.length > 0 && !workspaces.some((workspace) => workspace.workspaceId === workspaceId)) {
-      setWorkspaceId('')
-    }
-  }, [workspaceId, workspaces])
-
   const begin = (card: CardPack): void => {
     if (props.start === undefined) return
     setBusy(true)
     setStatus({ tone: 'busy', text: t('gallery.starting') })
-    void props.start(card, workspaceId.length === 0 ? undefined : workspaceId, playerName.trim(), openingId, playerPersona)
+    void props.start(card, playerName.trim(), openingId, playerPersona)
       .then((outcome) => {
         setStatus(outcome.ok
           ? { tone: 'ok', text: t('gallery.started') }
@@ -462,25 +442,6 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
                   {dot === null ? null : <StateDot state={dot} />}
                   <span>{status.text}</span>
                 </span>
-                {workspaces.length === 0 ? null : (
-                  <label style={S.workspacePicker}>
-                    <span style={S.workspaceLabel}>{t('gallery.workspace')}</span>
-                    <select
-                      aria-label={t('gallery.workspace')}
-                      value={workspaceId}
-                      disabled={busy}
-                      onChange={(event) => setWorkspaceId(event.target.value)}
-                      style={S.workspaceSelect}
-                    >
-                      <option value="">{t('gallery.workspaceUngrouped')}</option>
-                      {workspaces.map((workspace) => (
-                        <option key={workspace.workspaceId} value={workspace.workspaceId} title={workspace.path}>
-                          {workspace.title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
                 <Button
                   variant="primary"
                   icon={busy ? <IconLoadingOutline16 size={16} /> : <IconPlayOutline16 size={16} />}
@@ -587,13 +548,6 @@ const S: Record<string, CSSProperties> = {
     flex: 1, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12,
     color: 'var(--dsw-alias-label-tertiary)', minWidth: 120, overflow: 'hidden',
   },
-  workspacePicker: { display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 },
-  workspaceLabel: { fontSize: 11.5, color: 'var(--dsw-alias-label-tertiary)', flex: '0 0 auto' },
-  workspaceSelect: {
-    width: 168, minWidth: 0, height: 30, padding: '0 28px 0 9px', borderRadius: 6,
-    border: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-layer-1)',
-    color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12,
-  },
   openingPick: {
     minWidth: 0, maxWidth: 220, height: 26, padding: '0 24px 0 8px', borderRadius: 6,
     border: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-layer-1)',
@@ -617,16 +571,6 @@ function GalleryGlyph(props: { size?: number; active?: boolean }): ReactNode {
  */
 export function registerGallery(ctx: RrpClientContext): void {
   const t = ctx.locale.bind('rrp') as Translate
-  // Probe LAZILY (inside the slot-inject callback): the workspace controller
-  // may mount after this plugin, so an apply-time probe can miss it forever.
-  const probeWorkspaces = (): RrpWorkspaceSource | undefined => {
-    try {
-      const service = (ctx as unknown as { get?(name: string): unknown }).get?.('workspaces') as RrpWorkspacesService | undefined
-      return service?.list
-    } catch {
-      return undefined
-    }
-  }
 
   const loadList = async (): Promise<CardMeta[]> => {
     const response = await fetch(RRP_ROUTES.cards)
@@ -642,11 +586,35 @@ export function registerGallery(ctx: RrpClientContext): void {
     return body.card
   }
 
-  const start = async (card: CardPack, workspaceId?: string, playerNameOverride?: string, openingId?: string, playerPersona?: string): Promise<StartOutcome> => {
+  /**
+   * Ensure the card's own workspace (issue #37 「一卡一区」): the save-group
+   * drawer every session of this card lives in (forks re-attach natively).
+   * A host without the workspace registry (or a failed ensure) degrades to
+   * the old ungrouped flow — playing must never be blocked by grouping.
+   */
+  const ensureCardWorkspace = async (card: CardPack): Promise<{ workspaceId?: string; degraded: boolean }> => {
+    try {
+      const response = await fetch(RRP_ROUTES.cardWorkspace, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ cardId: card.id, cardName: card.meta.name }),
+      })
+      if (!response.ok) return { degraded: true }
+      const body = await response.json() as { workspaceId?: string }
+      return typeof body.workspaceId === 'string' && body.workspaceId.length > 0
+        ? { workspaceId: body.workspaceId, degraded: false }
+        : { degraded: true }
+    } catch {
+      return { degraded: true }
+    }
+  }
+
+  const start = async (card: CardPack, playerNameOverride?: string, openingId?: string, playerPersona?: string): Promise<StartOutcome> => {
     const sessions = ctx.sessions
     const remote = ctx.remote
     if (sessions === undefined || remote === undefined) return { ok: false, message: t('gallery.unavailable') }
-    const sessionId = await sessions.create(workspaceId === undefined ? {} : { workspaceId })
+    const cardWorkspace = await ensureCardWorkspace(card)
+    const sessionId = await sessions.create(cardWorkspace.workspaceId === undefined ? {} : { workspaceId: cardWorkspace.workspaceId })
     // Best-effort orphan cleanup: the session exists on the host now, so any
     // later failure must not leave a preset-bound empty session behind.
     const abortStart = async (reason: string): Promise<StartOutcome> => {
@@ -671,17 +639,6 @@ export function registerGallery(ctx: RrpClientContext): void {
     // world-knowledge skills are in the session's skill scope.
     const selected = await remote.agentPresets.select(sessionId, presetIdForCard(card.id))
     if (selected.ok === false) return abortStart(selected.error?.message ?? t('gallery.selectFailed'))
-
-    // The card name is the story's name; a rename is a nicety, never fatal.
-    // #28 naming convention: main lines read 「卡名·主线」, forks 「卡名·线N」.
-    const binding = sessions.binding(sessionId)
-    if (binding !== undefined) {
-      try {
-        await binding.session.rename?.(card.meta.name + '·主线')
-      } catch {
-        /* title only */
-      }
-    }
 
     const opening = pickOpening(card, (openingId ?? '').trim())?.body
     // P1-B: the self-authored persona rides the `player` dynamic field.
@@ -724,7 +681,28 @@ export function registerGallery(ctx: RrpClientContext): void {
       uiWorkspace.openSession(sessionId)
     }
     ctx.layout?.selectPanel(null)
-    return { ok: true }
+
+    // The save's title is the drawer-readable name: 「卡名·主线」, auto-
+    // numbered (主线2, 主线3…) when earlier saves of this card already hold
+    // the base (issue #37). The rename runs AFTER openSession: the binding
+    // only materializes once the conversation view retains the session, so a
+    // single shot at create time silently skipped. A title is a nicety, never
+    // fatal — the bounded retry gives up rather than blocking the start.
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      const binding = sessions.binding(sessionId)
+      if (binding !== undefined) {
+        try {
+          const roster = sessions.list?.getSnapshot()
+          const titles = roster === undefined ? [] : roster.ids.map((id) => roster.byId[id]?.title ?? roster.byId[id]?.displayTitle ?? '').filter((title) => title.length > 0)
+          await binding.session.rename?.(uniqueMainTitle(card.meta.name, titles))
+        } catch {
+          /* title only */
+        }
+        break
+      }
+    }
+    return { ok: true, message: cardWorkspace.degraded ? t('gallery.workspaceFallback') : undefined }
   }
 
   ctx.effect(() => {
@@ -733,7 +711,7 @@ export function registerGallery(ctx: RrpClientContext): void {
         name: 'main',
         key: GALLERY_PANEL_ID,
         locale: 'rrp',
-        inject: () => ({ t, loadList, loadCard, start, workspaces: probeWorkspaces() }),
+        inject: () => ({ t, loadList, loadCard, start }),
       },
       GalleryPanel as never,
     ))
