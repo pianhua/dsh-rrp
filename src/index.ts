@@ -13,6 +13,7 @@ import { registerActivityRoute } from './activity-route.ts'
 import { listCards } from './cards.ts'
 import { registerCardsRoute } from './cards-route.ts'
 import { registerCardUiRoute } from './card-ui-route.ts'
+import { registerExportRoute } from './export-route.ts'
 import { registerCopilotRoute, forgetAllCopilot, forgetCopilot } from './copilot.ts'
 import { worldlineDigestProjection } from './projection/worldline-digest.ts'
 import { registerWorldlineRoute } from './worldline-route.ts'
@@ -141,6 +142,12 @@ export function apply(ctx: Context): void {
   // validated declaration and its own HTML pages.
   ctx.inject(['webServer'], (scoped: Context) => {
     registerCardUiRoute(scoped)
+  })
+
+  // Novel export (issue #31-C): full-log prose download through the host's
+  // session-persistence read handles (works on live AND cold sessions).
+  ctx.inject(['webServer'], (scoped: Context) => {
+    registerExportRoute(scoped)
   })
 
   // Activity ledger: the right-sidebar panel polls this host-side, in-memory

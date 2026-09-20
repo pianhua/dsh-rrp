@@ -22,6 +22,8 @@ type Translate = (key: string) => string
 export interface WorldlineApi {
   /** Fold the whole map: host lineage + per-session facts minus hidden lines. */
   loadTrees(): Promise<WorldlineTree[]>
+  /** Download the session's whole story as clean prose (issue #31-C). */
+  exportNovel(sessionId: string): Promise<void>
   /** Jump the workspace view to a session (读档). */
   open(sessionId: string): void
   /** Fork from one turn's player-message seq and open the child (重roll). */
@@ -96,6 +98,7 @@ function WorldlinePanel(props: WorldlinePanelProps): ReactNode {
   const api = props.api
   const [trees, setTrees] = useState<WorldlineTree[]>([])
   const [busy, setBusy] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [error, setError] = useState('')
 
   const refresh = useCallback((): void => {
@@ -123,6 +126,22 @@ function WorldlinePanel(props: WorldlinePanelProps): ReactNode {
         {trees.map((tree) => <Pill key={tree.cardId}>{tree.cardName}</Pill>)}
         <span style={S.spacer} />
         {busy ? <IconLoadingOutline16 size={14} /> : null}
+        {props.sessionId === undefined ? null : (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy || exporting}
+            onClick={() => {
+              setExporting(true)
+              setError('')
+              void api.exportNovel(props.sessionId as string)
+                .catch((cause: unknown) => { setError(String((cause as { message?: string })?.message ?? cause)) })
+                .finally(() => { setExporting(false) })
+            }}
+          >
+            {exporting ? t('worldline.exporting') : t('worldline.export')}
+          </Button>
+        )}
         <Button size="sm" variant="ghost" icon={<IconRefreshOutline16 size={14} />} onClick={refresh} aria-label={t('worldline.refresh')} />
       </header>
       {error.length > 0 ? <div style={S.error}>{error}</div> : null}
@@ -197,6 +216,26 @@ export function registerWorldlineTab(ctx: RrpClientContext): void {
       }
       for (const tree of body.trees) fill(tree.roots)
       return body.trees
+    },
+    async exportNovel(sessionId) {
+      const title = sessions?.list?.getSnapshot().byId[sessionId]?.displayTitle ?? ''
+      const response = await fetch(RRP_ROUTES.novelExport
+        + '?sessionId=' + encodeURIComponent(sessionId)
+        + '&title=' + encodeURIComponent(title)
+        + '&format=md')
+      if (!response.ok) throw new Error('export HTTP ' + String(response.status))
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      try {
+        const anchor = document.createElement('a')
+        anchor.href = url
+        // The filename rides in Content-Disposition from the route.
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+      } finally {
+        URL.revokeObjectURL(url)
+      }
     },
     open(sessionId) {
       openSession(sessionId)

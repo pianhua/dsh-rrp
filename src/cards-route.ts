@@ -8,6 +8,7 @@
  * handler failures degrade to a JSON error, never a crash.
  */
 import type { Context } from '@deepseek-ai/cordis'
+import { importCardFromJson, importCardFromPng, writeImportedCard } from './card-import.ts'
 import { listCards, readCard } from './cards.ts'
 import { ensureCardPreset } from './preset.ts'
 
@@ -16,10 +17,12 @@ const TAG = '[dsh-rrp]'
 import { RRP_ROUTES } from './route-contract.ts'
 const LIST_PATH = RRP_ROUTES.cards
 const ONE_PATH = RRP_ROUTES.cardOne
+const IMPORT_PATH = RRP_ROUTES.cardImport
 
 interface RequestLike {
   method?: string
   url?: string
+  [Symbol.asyncIterator](): AsyncIterator<string | Uint8Array>
 }
 interface ResponseLike {
   statusCode: number
@@ -42,6 +45,14 @@ function send(res: ResponseLike, status: number, payload: unknown): void {
   res.statusCode = status
   res.setHeader?.('content-type', 'application/json; charset=utf-8')
   res.end(JSON.stringify(payload))
+}
+
+async function readBody(req: RequestLike): Promise<string> {
+  let text = ''
+  for await (const chunk of req) {
+    text += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
+  }
+  return text
 }
 
 /**
@@ -101,10 +112,54 @@ export function registerCardsRoute(ctx: Context): void {
         }
       },
     })
+    const disposeImport = webServer.register({
+      kind: 'exact',
+      path: IMPORT_PATH,
+      handler: async (req, res) => {
+        if (req.method !== undefined && req.method !== 'POST') {
+          send(res, 405, { error: 'method not allowed' })
+          return
+        }
+        try {
+          let parsed: unknown
+          try {
+            parsed = JSON.parse(await readBody(req))
+          } catch {
+            send(res, 400, { error: 'invalid JSON body' })
+            return
+          }
+          const body = parsed as { kind?: unknown; data?: unknown }
+          if (body.kind !== 'png' && body.kind !== 'json') {
+            send(res, 400, { error: 'kind must be png or json' })
+            return
+          }
+          if (typeof body.data !== 'string' || body.data.length === 0) {
+            send(res, 400, { error: 'missing data' })
+            return
+          }
+          const source = body.kind === 'png'
+            ? importCardFromPng(Buffer.from(body.data, 'base64'))
+            : importCardFromJson(Buffer.from(body.data, 'base64').toString('utf8'))
+          if (source === undefined) {
+            send(res, 422, { error: 'not a recognizable character card (tavern PNG / v2 / v3 JSON)' })
+            return
+          }
+          const written = writeImportedCard(source)
+          if (written === undefined) {
+            send(res, 500, { error: 'could not allocate a card id' })
+            return
+          }
+          send(res, 200, { ok: true, ...written })
+        } catch (error) {
+          send(res, 500, { error: String(error) })
+        }
+      },
+    })
     console.log(TAG + ' card routes armed at ' + LIST_PATH + ' and ' + ONE_PATH)
     return () => {
       disposeList()
       disposeOne()
+      disposeImport()
     }
   }, 'dsh-rrp: card routes')
 }

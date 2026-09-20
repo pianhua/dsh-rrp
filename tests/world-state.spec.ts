@@ -9,6 +9,7 @@ import {
   normalizeRelations,
   pruneWorldState,
   renderWorldState,
+  withPlayerPersona,
 } from '../src/world-state.ts'
 
 /** One plugin context message carrying a structured world-state payload. */
@@ -154,5 +155,37 @@ describe('Relation normalization', () => {
     })
     expect(rendered).toContain('relations: ')
     expect(rendered).toContain('主仆')
+  })
+})
+
+describe('withPlayerPersona (issue #31 P1-B)', () => {
+  it('empty persona passes the state through untouched (same ref)', () => {
+    const state = emptyWorldState()
+    expect(withPlayerPersona(state, '   ')).toBe(state)
+    expect(withPlayerPersona(null, '')).toBe(null)
+  })
+
+  it('merges the persona as the player dynamic string field', () => {
+    const state = { ...emptyWorldState(), scene: { location: '客栈' } }
+    const merged = withPlayerPersona(state, '  黑衣剑客，寡言，背负旧案。 ')
+    expect(merged).not.toBe(state)
+    expect(merged?.scene.location).toBe('客栈')
+    expect(merged?.player).toEqual({ type: 'string', value: '黑衣剑客，寡言，背负旧案。' })
+    // The Author's fact baseline renders it like any D5 field.
+    expect(renderWorldState(merged!)).toContain('player: "黑衣剑客，寡言，背负旧案。"')
+  })
+
+  it('builds a fresh state for cards without an initial state', () => {
+    const merged = withPlayerPersona(null, '旅人')
+    expect(merged?.characters).toEqual({})
+    expect(merged?.player).toEqual({ type: 'string', value: '旅人' })
+  })
+
+  it('caps an overlong persona and survives pruneWorldState round-trips', () => {
+    const long = '长'.repeat(500)
+    const merged = withPlayerPersona(emptyWorldState(), long)
+    const field = merged?.player as { type: string; value: string }
+    expect(field.value).toHaveLength(400)
+    expect(pruneWorldState(merged!)).toEqual(merged)
   })
 })

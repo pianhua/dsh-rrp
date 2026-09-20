@@ -62,6 +62,7 @@ describe('route contract (issue #22)', () => {
     registerCopilotRoute(host.ctx as never)
     expect([...host.registered].sort()).toEqual([
       RRP_ROUTES.activity,
+      RRP_ROUTES.cardImport,
       RRP_ROUTES.cardOne,
       RRP_ROUTES.cards,
       RRP_ROUTES.copilot,

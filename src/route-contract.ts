@@ -21,6 +21,7 @@ export type { StewardProposal } from './steward-proposals.ts'
 export const RRP_ROUTES = {
   cards: '/dsh-rrp/cards',
   cardOne: '/dsh-rrp/cards/one',
+  cardImport: '/dsh-rrp/cards/import',
   start: '/dsh-rrp/start',
   worldState: '/dsh-rrp/world-state',
   activity: '/dsh-rrp/activity',
@@ -31,6 +32,7 @@ export const RRP_ROUTES = {
   worldlineTree: '/dsh-rrp/worldlines/tree',
   worldlineHidden: '/dsh-rrp/worldlines/hidden',
   cardUi: '/dsh-rrp/card-ui',
+  novelExport: '/dsh-rrp/export/novel',
 } as const
 
 // ── Shared JSON vocabulary ──────────────────────────────────────────────────

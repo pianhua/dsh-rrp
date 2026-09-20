@@ -469,3 +469,18 @@ export function createDynamicField(
   if (constraints?.max !== undefined) field.max = constraints.max
   return applyConstraints(field)
 }
+
+/**
+ * P1-B (issue #31): merge the player's self-authored persona (appearance,
+ * personality, background) into the initial state as the `player` dynamic
+ * string field. It then rides the facts lane the Author already reads every
+ * turn, survives Chronicler replays like any D5 field, and stays editable
+ * mid-run in the world-state tab's dynamic-field editor — zero schema
+ * changes. Empty persona = the state passes through untouched (same ref).
+ */
+export function withPlayerPersona(state: WorldState | null, persona: string): WorldState | null {
+  const text = persona.trim()
+  if (text.length === 0) return state
+  const base = state ?? emptyWorldState()
+  return { ...base, player: createDynamicField('string', text.slice(0, 400)) }
+}

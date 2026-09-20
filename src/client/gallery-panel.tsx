@@ -26,9 +26,10 @@ import {
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
-import { interpolateCardText, type CardMeta, type CardPack, type CardPlayer } from '../card-types.ts'
+import { interpolateCardText, type CardMeta, type CardOpening, type CardPack, type CardPlayer } from '../card-types.ts'
 import { presetIdForCard } from '../preset-id.ts'
 import { RRP_ROUTES } from '../route-contract.ts'
+import { withPlayerPersona } from '../world-state.ts'
 import type { RrpClientContext, RrpWorkspaceSource, RrpWorkspacesService } from './context-types.ts'
 
 /** Panel id: the \`main\` key and the \`sidebar.panellist\` id must match. */
@@ -48,7 +49,7 @@ interface GalleryPanelProps {
   loadList?: () => Promise<CardMeta[]>
   loadCard?: (id: string) => Promise<CardPack | undefined>
   /** playerNameOverride: per-session player-name override (#25); empty/undefined = card-declared. */
-  start?: (card: CardPack, workspaceId?: string, playerNameOverride?: string) => Promise<StartOutcome>
+  start?: (card: CardPack, workspaceId?: string, playerNameOverride?: string, openingId?: string, playerPersona?: string) => Promise<StartOutcome>
   workspaces?: RrpWorkspaceSource
 }
 
@@ -126,6 +127,17 @@ function SkeletonRow(): ReactNode {
   )
 }
 
+/**
+ * Which opening starts the run: the player's gallery pick wins, then the
+ * card's declared default, then the first opening (defensive). Shared by the
+ * preview and the start request so what you read is what you get (#31-A).
+ */
+function pickOpening(card: CardPack, openingId: string): CardOpening | undefined {
+  return card.openings.find((entry) => entry.id === openingId)
+    ?? card.openings.find((entry) => entry.id === card.meta.opening)
+    ?? card.openings[0]
+}
+
 function GalleryPanel(props: GalleryPanelProps): ReactNode {
   const t: Translate = typeof props.t === 'function' ? props.t : (key) => key
   const [cards, setCards] = useState<CardMeta[] | null>(null)
@@ -136,7 +148,52 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
   const [workspaceId, setWorkspaceId] = useState('')
   // #25 per-session player-name override; empty = use the card-declared name.
   const [playerName, setPlayerName] = useState('')
+  // P1-B self-authored persona (appearance/personality/background); empty =
+  // the card-declared player description stands alone.
+  const [playerPersona, setPlayerPersona] = useState('')
+  // Multi-opening pick (#31-A); empty = the card's declared default opening.
+  const [openingId, setOpeningId] = useState('')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const workspaces = useWorkspaces(props.workspaces)
+
+  /**
+   * P1-D: import a tavern character card (PNG or raw v2/v3 JSON). The file is
+   * read client-side, posted as base64, and the gallery refreshes on success.
+   */
+  const importFile = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (file === undefined) return
+    setBusy(true)
+    setStatus({ tone: 'busy', text: t('gallery.importing') })
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => { resolve(String(reader.result)) }
+        reader.onerror = () => { reject(new Error('read failed')) }
+        reader.readAsDataURL(file)
+      })
+      const data = dataUrl.slice(dataUrl.indexOf(',') + 1)
+      const kind = file.name.toLowerCase().endsWith('.json') ? 'json' : 'png'
+      const response = await fetch(RRP_ROUTES.cardImport, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind, data }),
+      })
+      const body = await response.json() as { ok?: boolean; id?: string; name?: string; error?: string }
+      if (!response.ok || body.ok !== true) {
+        setStatus({ tone: 'error', text: t('gallery.importFailed') + (body.error === undefined ? '' : ': ' + body.error) })
+        return
+      }
+      setStatus({ tone: 'ok', text: t('gallery.imported') + '：' + (body.name ?? body.id ?? '') })
+      refresh()
+      if (body.id !== undefined) select(body.id, true)
+    } catch (error: unknown) {
+      setStatus({ tone: 'error', text: t('gallery.importFailed') + ': ' + String((error as { message?: string })?.message ?? error) })
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const loadList = props.loadList
   const loadCard = props.loadCard
@@ -153,8 +210,11 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
       .then((card) => {
         if (seq !== selectSeq.current) return
         setSelected(card ?? null)
-        // A fresh selection gets a fresh per-run name override (#25).
+        // A fresh selection gets a fresh per-run name override (#25),
+        // persona (P1-B), and falls back to the card's declared default opening.
         setPlayerName('')
+        setPlayerPersona('')
+        setOpeningId('')
         if (!quiet) setStatus(card === undefined ? { tone: 'error', text: t('gallery.failed') } : { tone: 'idle', text: '' })
       })
       .catch((error: unknown) => {
@@ -196,7 +256,7 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
     if (props.start === undefined) return
     setBusy(true)
     setStatus({ tone: 'busy', text: t('gallery.starting') })
-    void props.start(card, workspaceId.length === 0 ? undefined : workspaceId, playerName.trim())
+    void props.start(card, workspaceId.length === 0 ? undefined : workspaceId, playerName.trim(), openingId, playerPersona)
       .then((outcome) => {
         setStatus(outcome.ok
           ? { tone: 'ok', text: t('gallery.started') }
@@ -218,9 +278,7 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
     })
   }, [cards, query])
 
-  const opening = selected === null
-    ? undefined
-    : (selected.openings.find((entry) => entry.id === selected.meta.opening) ?? selected.openings[0])
+  const opening = selected === null ? undefined : pickOpening(selected, openingId)
 
   // #25: the effective player for previews and the start request — the
   // per-run override replaces only the name; the description stays as declared.
@@ -253,6 +311,18 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
         <Tooltip label={t('gallery.reload')}>
           <Button variant="ghost" size="sm" icon={<IconRefreshOutline16 size={16} />} onClick={refresh} aria-label={t('gallery.reload')} />
         </Tooltip>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".png,.json,image/png,application/json"
+          style={{ display: 'none' }}
+          aria-hidden="true"
+          tabIndex={-1}
+          onChange={(event) => { void importFile(event) }}
+        />
+        <Button variant="ghost" size="sm" disabled={busy} onClick={() => { fileInputRef.current?.click() }}>
+          {t('gallery.import')}
+        </Button>
       </header>
 
       <div style={S.body}>
@@ -329,6 +399,25 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
                   <span style={S.overrideHint}>{t('gallery.playerNameHint')}</span>
                 </div>
 
+                {/* P1-B self-authored persona; rides the `player` dynamic field
+                    so the Author reads it every turn and the player can edit it
+                    mid-run in the world-state tab's dynamic-field editor. */}
+                <div style={S.playerOverride}>
+                  <span style={S.overrideLabel}>{t('gallery.playerPersona')}</span>
+                  <span style={{ flex: 1, display: 'flex', minWidth: 0 }}>
+                    <textarea
+                      value={playerPersona}
+                      onChange={(event) => { setPlayerPersona(event.target.value) }}
+                      placeholder={t('gallery.playerPersonaPlaceholder')}
+                      maxLength={400}
+                      rows={3}
+                      style={S.personaInput}
+                      aria-label={t('gallery.playerPersona')}
+                    />
+                  </span>
+                  <span style={S.overrideHint}>{t('gallery.playerPersonaHint')}</span>
+                </div>
+
                 <div style={S.section}>
                   <span style={S.sectionIcon}><IconSkillOutline16 size={16} /></span>
                   <span style={S.sectionTitle}>{t('gallery.skills')}</span>
@@ -347,6 +436,21 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
                   <>
                     <div style={S.section}>
                       <span style={S.sectionTitle}>{t('gallery.opening')}</span>
+                      {selected.openings.length > 1 ? (
+                        <select
+                          aria-label={t('gallery.openingPick')}
+                          value={opening.id}
+                          disabled={busy}
+                          onChange={(event) => { setOpeningId(event.target.value) }}
+                          style={S.openingPick}
+                        >
+                          {selected.openings.map((entry, index) => (
+                            <option key={entry.id} value={entry.id}>
+                              {entry.id.length === 0 ? t('gallery.openingN').replace('{n}', String(index + 1)) : entry.id}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
                     </div>
                     <blockquote style={S.opening}>{interpolateCardText(opening.body, effectivePlayer)}</blockquote>
                   </>
@@ -451,6 +555,11 @@ const S: Record<string, CSSProperties> = {
   playerOverride: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12 },
   overrideLabel: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12, flex: '0 0 auto' },
   overrideInput: { width: 200, display: 'flex' },
+  personaInput: {
+    width: '100%', resize: 'vertical', minHeight: 56, padding: '6px 9px', borderRadius: 6,
+    border: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-layer-1)',
+    color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12, lineHeight: 1.6,
+  },
   overrideHint: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11 },
   section: { display: 'flex', alignItems: 'center', gap: 8, margin: '22px 0 10px' },
   sectionIcon: { display: 'inline-flex', color: 'var(--dsw-alias-label-tertiary)' },
@@ -482,6 +591,11 @@ const S: Record<string, CSSProperties> = {
   workspaceLabel: { fontSize: 11.5, color: 'var(--dsw-alias-label-tertiary)', flex: '0 0 auto' },
   workspaceSelect: {
     width: 168, minWidth: 0, height: 30, padding: '0 28px 0 9px', borderRadius: 6,
+    border: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-layer-1)',
+    color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12,
+  },
+  openingPick: {
+    minWidth: 0, maxWidth: 220, height: 26, padding: '0 24px 0 8px', borderRadius: 6,
     border: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-layer-1)',
     color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12,
   },
@@ -528,7 +642,7 @@ export function registerGallery(ctx: RrpClientContext): void {
     return body.card
   }
 
-  const start = async (card: CardPack, workspaceId?: string, playerNameOverride?: string): Promise<StartOutcome> => {
+  const start = async (card: CardPack, workspaceId?: string, playerNameOverride?: string, openingId?: string, playerPersona?: string): Promise<StartOutcome> => {
     const sessions = ctx.sessions
     const remote = ctx.remote
     if (sessions === undefined || remote === undefined) return { ok: false, message: t('gallery.unavailable') }
@@ -569,7 +683,9 @@ export function registerGallery(ctx: RrpClientContext): void {
       }
     }
 
-    const opening = (card.openings.find((entry) => entry.id === card.meta.opening) ?? card.openings[0])?.body
+    const opening = pickOpening(card, (openingId ?? '').trim())?.body
+    // P1-B: the self-authored persona rides the `player` dynamic field.
+    const state = withPlayerPersona(card.initialState, (playerPersona ?? '').trim())
     // #25: the per-run override rides the card player slot — description stays
     // as declared; the effective name flows into the card projection, the
     // facts fingerprint and the pre-log opening interpolation on the host side.
@@ -583,7 +699,7 @@ export function registerGallery(ctx: RrpClientContext): void {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         sessionId,
-        state: card.initialState,
+        state,
         opening,
         card: {
           id: card.id,
