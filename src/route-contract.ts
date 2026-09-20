@@ -133,10 +133,12 @@ export interface LoreDeleteResponse {
 
 // ── /dsh-rrp/worldlines (issue #28 save map) ───────────────────────────────
 /**
- * The whole map in one shot, folded server-side over LIVE sessions only
- * (the host keeps unloaded sessions off the service; opening one from the
- * host roster brings it into the map). Node titles arrive empty and are
- * filled client-side from the host's own session list display names.
+ * The whole map in one shot, folded server-side over live sessions plus COLD
+ * skeleton placeholders for persisted-but-unloaded RP sessions (issue #29,
+ * via the host's session-query service; absent = live-only map). Node titles
+ * arrive empty for live nodes and are filled client-side from the host's own
+ * session list display names; skeleton nodes carry their cold-read titles and
+ * `loaded: false`, and the client must not overwrite them from the roster.
  */
 export interface WorldlineTreeResponse {
   trees: WorldlineTree[]

@@ -1,18 +1,24 @@
 /**
- * dsh-rrp — the worldline map route (issue #28).
+ * dsh-rrp — the worldline map route (issue #28, cold skeletons issue #29).
  *
  * GET /dsh-rrp/worldlines/tree folds the WHOLE map server-side in one shot:
  * the host's live sessions (`sessions.list()` — exactly the sessions the
  * player can currently see loaded, and the only ones whose projections are
  * warm), each session's card ownership + turn digest, and the host's own
- * fork stamps for lineage. The client decorates node titles from its
- * session list and renders; it never fans out one request per session.
+ * fork stamps for lineage. On top of that, the host's session-query service
+ * contributes COLD skeleton facts for persisted-but-unloaded RP sessions
+ * (issue #29): lineage + title only, no turn digests — the fold renders them
+ * as 「（未加载）」 placeholders so a cold start shows the whole forest, not
+ * just the desk. The client decorates node titles from its session list and
+ * renders; it never fans out one request per session.
  *
  * POST/GET /dsh-rrp/worldlines/hidden serve the soft-archive ledger —
  * hiding prunes the map only, never the host session.
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { CARD_KEY, type CardContext } from './card-types.ts'
+import { listCards } from './cards.ts'
+import { BASE_PRESET_ID, isCardId } from './preset-id.ts'
 import { RRP_ROUTES, type WorldlineTreeResponse } from './route-contract.ts'
 import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from './worldline-digest.ts'
 import { foldWorldlineTrees, type WorldlineSessionFact, type WorldlineTree } from './worldline-tree.ts'
@@ -40,6 +46,22 @@ interface SessionsService {
 }
 interface ProjectionsService {
   stateOf(session: unknown, key: string): unknown
+}
+/**
+ * Host session-query service (issue #29): lists persisted sessions WITHOUT
+ * loading them and reads their titles cold. Structural face only — the same
+ * `ctx.get(name)` discipline as every other host seam. Absent (profile
+ * without session-query) = graceful live-only degradation, never an error.
+ */
+interface SessionQueryService {
+  listSessions(): Promise<Array<{ header: SessionQueryHeader }>>
+  readTitleSnapshots(ids: string[]): Promise<Array<{ status: string; value?: { title?: { title?: string } } }>>
+}
+interface SessionQueryHeader {
+  readonly id?: string
+  readonly parentSession?: string
+  readonly origin?: string
+  readonly agentPreset?: string
 }
 interface RequestLike {
   method?: string
@@ -109,6 +131,54 @@ function collectFacts(sessions: SessionsService, projections: ProjectionsService
 }
 
 /**
+ * Cold skeleton facts (issue #29): persisted-but-unloaded RP sessions, from
+ * the host's session-query service. Card ownership comes from the preset id
+ * (`rp-<cardId>`, the same rule the preset materializer uses); the title is
+ * read cold via readTitleSnapshots — no session is loaded, no log is parsed.
+ * Unknown cards fall back to their id as the display name (the pack may have
+ * been deleted; the line itself is still real).
+ */
+async function collectSkeletonFacts(query: SessionQueryService, live: readonly WorldlineSessionFact[]): Promise<WorldlineSessionFact[]> {
+  const liveIds = new Set(live.map((fact) => fact.id))
+  const records = await query.listSessions()
+  const cold = records.filter((record) => {
+    const header = record.header
+    if (header === undefined || header.id === undefined || liveIds.has(header.id)) return false
+    if (header.origin === 'subagent') return false
+    const preset = header.agentPreset
+    if (preset === undefined || !preset.startsWith(BASE_PRESET_ID + '-')) return false
+    return isCardId(preset.slice(BASE_PRESET_ID.length + 1))
+  })
+  if (cold.length === 0) return []
+
+  const titles = new Map<string, string>()
+  const snapshots = await query.readTitleSnapshots(cold.map((record) => record.header.id as string))
+  for (const snapshot of snapshots) {
+    if (snapshot.status === 'fulfilled' && snapshot.value?.title?.title !== undefined) {
+      const id = (snapshot.value as { session?: { id?: string } }).session?.id
+      if (id !== undefined) titles.set(id, snapshot.value.title.title)
+    }
+  }
+  const names = new Map(listCards().map((card) => [card.id, card.name]))
+
+  const facts: WorldlineSessionFact[] = []
+  for (const record of cold) {
+    const header = record.header
+    const cardId = (header.agentPreset as string).slice(BASE_PRESET_ID.length + 1)
+    facts.push({
+      id: header.id as string,
+      cardId,
+      cardName: names.get(cardId) ?? cardId,
+      title: titles.get(header.id as string) ?? '',
+      ...(header.parentSession === undefined ? {} : { parentId: header.parentSession }),
+      stub: true,
+      turns: [],
+    })
+  }
+  return facts
+}
+
+/**
  * Register the worldline routes.
  * @param ctx - the host context owning the registration.
  */
@@ -152,7 +222,19 @@ export function registerWorldlineRoute(ctx: Context): void {
           sendJson(res, 503, { error: 'worldline archive unavailable' })
           return
         }
-        const trees: WorldlineTree[] = foldWorldlineTrees(collectFacts(sessions, projections), store.listHidden())
+        const liveFacts = collectFacts(sessions, projections)
+        // Cold skeletons are a map-completeness nicety, never a failure mode:
+        // a missing or failing session-query degrades to the live-only map.
+        const query = runtime.get('sessionQuery') as SessionQueryService | undefined
+        let facts = liveFacts
+        if (query !== undefined) {
+          try {
+            facts = [...liveFacts, ...await collectSkeletonFacts(query, liveFacts)]
+          } catch (cause) {
+            console.warn(TAG + ' worldline cold skeletons unavailable: ' + String(cause))
+          }
+        }
+        const trees: WorldlineTree[] = foldWorldlineTrees(facts, store.listHidden())
         const body: WorldlineTreeResponse = { trees }
         sendJson(res, 200, body)
       },

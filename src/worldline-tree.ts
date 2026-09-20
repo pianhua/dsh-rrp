@@ -35,6 +35,12 @@ export interface WorldlineSessionFact {
   parentId?: string
   /** How many FULL turns of the parent this fork inherited (seedLength converted). */
   seedTurns?: number
+  /**
+   * True for COLD skeleton facts (issue #29): the session exists on disk but is
+   * not loaded, so there are no turn digests — only lineage and a title. The
+   * fold renders it as one placeholder node instead of skipping it.
+   */
+  stub?: boolean
   /** Every player turn of this session, in order, turn indices 0..n-1. */
   turns: readonly WorldlineTurnFact[]
 }
@@ -50,6 +56,12 @@ export interface WorldlineNode {
   playerExcerpt: string
   proseExcerpt: string
   badge?: WorldlineBadge
+  /**
+   * False exactly on cold skeleton nodes (issue #29): the session is on disk
+   * but not loaded, so excerpts are empty and reroll/load must not be offered.
+   * Absent means true (every turn-bearing node is live by construction).
+   */
+  loaded?: boolean
   /** True when more than one line continues from this turn (its children). */
   fork: boolean
   children: WorldlineNode[]
@@ -64,7 +76,15 @@ export interface WorldlineTree {
 
 /**
  * Fold session facts into per-card worldline trees.
- * @param sessions - live session facts (any order; roots follow input order).
+ *
+ * Live sessions contribute their turn chains exactly as before. Cold skeleton
+ * facts (issue #29 — `stub: true`, no turns) become single placeholder nodes:
+ * they hang off the parent's visible chain tail when the parent is in the map
+ * (the real fork cut is unknown until the session is loaded, so the tail is
+ * the honest approximation), nest under a parent placeholder, or stand as
+ * roots when no ancestor is visible.
+ *
+ * @param sessions - live + skeleton session facts (any order; roots follow input order).
  * @param hidden - soft-archived session ids; their whole subtree is pruned.
  * @returns one tree per card that has visible sessions.
  */
@@ -92,13 +112,39 @@ export function foldWorldlineTrees(
 
   // Group by card, preserving first-seen order for roots.
   const trees = new Map<string, WorldlineTree>()
+  const pushRoot = (head: WorldlineNode, session: WorldlineSessionFact): void => {
+    let tree = trees.get(session.cardId)
+    if (tree === undefined) {
+      tree = { cardId: session.cardId, cardName: session.cardName, roots: [] }
+      trees.set(session.cardId, tree)
+    }
+    tree.roots.push(head)
+  }
 
-  // First pass: every session's live tail becomes a linear chain.
+  // First pass: every session's live tail becomes a linear chain; every
+  // skeleton becomes a single placeholder node.
   const chains = new Map<string, { head: WorldlineNode; tail: WorldlineNode }>()
+  const stubs = new Map<string, WorldlineNode>()
   for (const session of visible) {
     const seed = session.seedTurns ?? 0
     const live = session.turns.filter((entry) => entry.turn >= seed)
-    if (live.length === 0) continue
+    if (live.length === 0) {
+      if (session.stub === true) {
+        stubs.set(session.id, {
+          key: session.id + ':stub',
+          sessionId: session.id,
+          sessionTitle: session.title,
+          turn: -1,
+          seq: -1,
+          playerExcerpt: '',
+          proseExcerpt: '',
+          loaded: false,
+          fork: false,
+          children: [],
+        })
+      }
+      continue
+    }
     let head: WorldlineNode | undefined
     let prev: WorldlineNode | undefined
     for (const turn of live) {
@@ -125,23 +171,38 @@ export function foldWorldlineTrees(
   // inherited turn — or promote them to roots (main lines and orphans).
   for (const session of visible) {
     const chain = chains.get(session.id)
-    if (chain === undefined) continue
-    // The fork grows from the parent's turn seedTurns - 1 (0-based).
-    const seed = session.seedTurns ?? 0
-    const parent = session.parentId !== undefined ? byId.get(session.parentId) : undefined
-    const cut = parent !== undefined && !pruned.has(parent.id) && seed > 0
-      ? findNode(chains.get(parent.id), seed - 1)
-      : undefined
-    if (cut !== undefined) {
-      cut.children.push(chain.head)
+    if (chain !== undefined) {
+      // The fork grows from the parent's turn seedTurns - 1 (0-based).
+      const seed = session.seedTurns ?? 0
+      const parent = session.parentId !== undefined ? byId.get(session.parentId) : undefined
+      const cut = parent !== undefined && !pruned.has(parent.id) && seed > 0
+        ? findNode(chains.get(parent.id), seed - 1)
+        : undefined
+      if (cut !== undefined) {
+        cut.children.push(chain.head)
+        continue
+      }
+      pushRoot(chain.head, session)
       continue
     }
-    let tree = trees.get(session.cardId)
-    if (tree === undefined) {
-      tree = { cardId: session.cardId, cardName: session.cardName, roots: [] }
-      trees.set(session.cardId, tree)
+    // Skeleton: no turns, so no exact cut. Attach to the parent's visible
+    // chain tail / parent placeholder when possible, else stand as a root.
+    const stub = stubs.get(session.id)
+    if (stub === undefined) continue
+    const parent = session.parentId !== undefined ? byId.get(session.parentId) : undefined
+    if (parent !== undefined && !pruned.has(parent.id)) {
+      const parentChain = chains.get(parent.id)
+      if (parentChain !== undefined) {
+        parentChain.tail.children.push(stub)
+        continue
+      }
+      const parentStub = stubs.get(parent.id)
+      if (parentStub !== undefined) {
+        parentStub.children.push(stub)
+        continue
+      }
     }
-    tree.roots.push(chain.head)
+    pushRoot(stub, session)
   }
 
   // Mark fork points: a node with more than one continuation.

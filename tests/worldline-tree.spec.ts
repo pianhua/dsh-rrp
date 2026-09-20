@@ -104,3 +104,65 @@ describe('worldline tree fold (issue #28)', () => {
     expect(trees[0]?.roots.map((root) => root.sessionId)).toEqual(['m', 'f'])
   })
 })
+
+describe('cold skeleton folds (issue #29)', () => {
+  const stub = (id: string, extra: Partial<WorldlineSessionFact> = {}): WorldlineSessionFact =>
+    session(id, { stub: true, ...extra })
+
+  it('hangs a cold skeleton off the live parent chain tail (cut unknown until loaded)', () => {
+    const trees = foldWorldlineTrees([
+      session('m', { turns: turns(3) }),
+      stub('cold', { parentId: 'm', title: '冷支线' }),
+    ])
+    expect(trees[0]?.roots).toHaveLength(1)
+    // m:0 → m:1 → m:2, and the placeholder hangs on the tail.
+    const tail = trees[0]?.roots[0]?.children[0]?.children[0]
+    expect(tail?.sessionId).toBe('m')
+    expect(tail?.turn).toBe(2)
+    const placeholder = tail?.children[0]
+    expect(placeholder?.sessionId).toBe('cold')
+    expect(placeholder?.loaded).toBe(false)
+    expect(placeholder?.turn).toBe(-1)
+    expect(placeholder?.sessionTitle).toBe('冷支线')
+  })
+
+  it('chains cold stubs together and roots them when no ancestor is visible', () => {
+    const trees = foldWorldlineTrees([
+      session('m', { turns: turns(2) }),
+      stub('cold-parent', { parentId: 'm' }),
+      stub('cold-child', { parentId: 'cold-parent' }),
+      stub('cold-orphan', { parentId: 'ghost' }),
+    ])
+    expect(trees[0]?.roots.map((root) => root.sessionId)).toEqual(['m', 'cold-orphan'])
+    const tail = trees[0]?.roots[0]?.children[0]
+    const parent = tail?.children[0]
+    expect(parent?.sessionId).toBe('cold-parent')
+    expect(parent?.loaded).toBe(false)
+    expect(parent?.children[0]?.sessionId).toBe('cold-child')
+  })
+
+  it('hiding a line prunes its cold stub children too (subtree semantics)', () => {
+    const trees = foldWorldlineTrees(
+      [
+        session('m', { turns: turns(2) }),
+        session('b', { parentId: 'm', seedTurns: 1, turns: turns(2, 'b') }),
+        stub('cold', { parentId: 'b' }),
+      ],
+      ['b'],
+    )
+    const flat = (nodes: WorldlineNode[]): string[] =>
+      nodes.flatMap((node) => [node.sessionId, ...flat(node.children)])
+    expect(flat(trees[0]?.roots ?? [])).not.toContain('cold')
+    expect(flat(trees[0]?.roots ?? [])).not.toContain('b')
+  })
+
+  it('live behavior is unchanged when no stubs are present', () => {
+    const trees = foldWorldlineTrees([
+      session('m', { turns: turns(3) }),
+      session('f', { parentId: 'm', seedTurns: 2, turns: turns(3, 'f') }),
+    ])
+    expect(trees[0]?.roots).toHaveLength(1)
+    expect(chain(trees[0]?.roots[0])).toEqual([0, 1, 2])
+    expect(trees[0]?.roots[0]?.loaded).toBeUndefined()
+  })
+})

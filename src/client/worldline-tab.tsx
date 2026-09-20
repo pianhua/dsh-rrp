@@ -2,12 +2,13 @@
  * dsh-rrp — the worldline save map (issue #28), a native `conversation.view`
  * tab next to 对话/轨迹.
  *
- * The tree is folded CLIENT-side from the host's own lineage (sessions.list
- * parentId/displayTitle) plus per-session turn facts from our route — the
- * plugin never scans logs and never stores lineage. Nodes are turns (every
- * turn is an autosave); a save-slot shows what happened and what the world
- * looked like; the three verbs are the host's own: open (读档), fork at the
- * player message's seq (重roll), and the soft-hide ledger (收起).
+ * The tree is folded SERVER-side by our route (live turn facts + the host's
+ * lineage, plus cold skeleton placeholders for persisted-but-unloaded lines,
+ * issue #29); this tab renders what the route returns — the plugin never
+ * scans logs and never stores lineage. Nodes are turns (every turn is an
+ * autosave); a save-slot shows what happened and what the world looked like;
+ * the three verbs are the host's own: open (读档), fork at the player
+ * message's seq (重roll), and the soft-hide ledger (收起).
  */
 import { Button, IconLoadingOutline16, IconRefreshOutline16, IconSparkle16, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
@@ -42,6 +43,17 @@ function Slot(props: { node: WorldlineNode; cardName: string; currentId?: string
   const { node, cardName, currentId, api, t, onHid } = props
   const badge = node.badge
   const isCurrent = node.sessionId === currentId
+  // Cold skeleton (issue #29): the line exists on disk but is not loaded.
+  // Show its existence and how to materialize it; offer no verbs — reroll
+  // needs the fork cut and open needs roster bindings we do not have here.
+  if (node.loaded === false) {
+    return (
+      <div style={{ ...S.slot, ...S.slotStub }} title={node.sessionId}>
+        {props.branchLabel === undefined ? null : <span style={S.branchTag}>{props.branchLabel}</span>}
+        <div style={S.slotStubHint}>{t('worldline.stubHint')}</div>
+      </div>
+    )
+  }
   return (
     <div style={{ ...S.slot, ...(isCurrent ? S.slotCurrent : {}) }} title={node.proseExcerpt}>
       {props.branchLabel === undefined ? null : <span style={S.branchTag}>{props.branchLabel}</span>}
@@ -139,6 +151,8 @@ const S: Record<string, CSSProperties> = {
   cardTitle: { fontSize: 12, fontWeight: 600, color: 'var(--dsw-alias-label-secondary)', marginBottom: 8 },
   slot: { border: '1px solid var(--dsw-alias-border-l1)', borderRadius: 8, padding: '8px 10px', margin: '6px 0', background: 'var(--dsw-alias-bg-layer-1)', maxWidth: 460 },
   slotCurrent: { borderColor: 'var(--dsw-alias-brand-primary)' },
+  slotStub: { borderStyle: 'dashed', background: 'transparent' },
+  slotStubHint: { fontSize: 11.5, color: 'var(--dsw-alias-label-tertiary)' },
   branchTag: { display: 'inline-block', fontSize: 10.5, color: 'var(--dsw-alias-label-tertiary)', marginBottom: 3 },
   slotPlayer: { fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   slotProse: { fontSize: 11.5, color: 'var(--dsw-alias-label-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
@@ -171,12 +185,13 @@ export function registerWorldlineTab(ctx: RrpClientContext): void {
       // not masquerade as "no worldlines yet" (issue #36).
       if (!response.ok) throw new Error('worldline route HTTP ' + String(response.status))
       const body = await response.json() as WorldlineTreeResponse
-      // Node titles are the host roster's business: decorate from its own list.
+      // Node titles are the host roster's business for LIVE nodes; cold
+      // skeletons (issue #29) are not in the roster — their titles were read
+      // server-side and must survive untouched.
       const byId = sessions?.list?.getSnapshot().byId ?? {}
-      const title = (id: string): string => byId[id]?.displayTitle ?? id
       const fill = (nodes: WorldlineNode[]): void => {
         for (const node of nodes) {
-          node.sessionTitle = title(node.sessionId)
+          if (node.loaded !== false) node.sessionTitle = byId[node.sessionId]?.displayTitle ?? node.sessionTitle
           fill(node.children)
         }
       }

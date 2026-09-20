@@ -16,7 +16,7 @@ interface FakeSession {
   digest: WorldlineDigest
 }
 
-function fakeHost(sessions: Record<string, FakeSession>) {
+function fakeHost(sessions: Record<string, FakeSession>, sessionQuery?: unknown) {
   const list = Object.values(sessions)
   const sessionsValue = { get: (id: string) => sessions[id], list: () => list }
   const projections = {
@@ -36,7 +36,7 @@ function fakeHost(sessions: Record<string, FakeSession>) {
   }
   const ctx = {
     effect: (fn: () => (() => void) | void) => fn(),
-    get: (name: string) => ({ webServer, sessions: sessionsValue, sessionProjections: projections } as Record<string, unknown>)[name],
+    get: (name: string) => ({ webServer, sessions: sessionsValue, sessionProjections: projections, sessionQuery } as Record<string, unknown>)[name],
   }
   return { ctx, handlers }
 }
@@ -154,5 +154,71 @@ describe('worldline routes (issue #28)', () => {
     expect(typeof bad.body.error).toBe('string')
     const method = await call(host, RRP_ROUTES.worldlineTree, { method: 'POST', body: {} })
     expect(method.status).toBe(405)
+  })
+})
+
+describe('cold skeleton facts (issue #29)', () => {
+  /** Host session-query face: cold persisted records + cold title reads. */
+  function fakeSessionQuery(cold: Array<{ header: Record<string, unknown>; title?: string }>) {
+    return {
+      listSessions: async () => cold.map((record) => ({ header: record.header, live: false, persisted: true })),
+      readTitleSnapshots: async (ids: string[]) => cold
+        .filter((record) => ids.includes(String(record.header.id)))
+        .map((record) => ({
+          status: 'fulfilled',
+          value: { session: { id: record.header.id }, title: record.title === undefined ? undefined : { title: record.title } },
+        })),
+    }
+  }
+
+  it('a cold RP branch enters the map as a stub hung on the live parent tail', async () => {
+    const query = fakeSessionQuery([
+      { header: { id: 'cold1', parentSession: 'm', agentPreset: 'rp-c1' }, title: '雪夜·线2' },
+    ])
+    const host = fakeHost({ m: MAIN, b: BRANCH }, query)
+    registerWorldlineRoute(host.ctx as never)
+    const res = await call(host, RRP_ROUTES.worldlineTree)
+    expect(res.status).toBe(200)
+    const trees = (res.body as unknown as WorldlineTreeResponse).trees
+    const flat = (nodes: typeof trees[0]['roots']): Array<{ id: string; loaded?: boolean; title: string }> =>
+      nodes.flatMap((node) => [{ id: node.sessionId, loaded: node.loaded, title: node.sessionTitle }, ...flat(node.children)])
+    const stub = flat(trees[0]?.roots ?? []).find((node) => node.id === 'cold1')
+    expect(stub).toBeDefined()
+    expect(stub?.loaded).toBe(false)
+    expect(stub?.title).toBe('雪夜·线2')
+    // Live facts untouched: m is still the only root, b still at the cut.
+    expect(trees[0]?.roots.map((root) => root.sessionId)).toEqual(['m'])
+  })
+
+  it('ignores cold non-RP, subagent, and live sessions; degrades silently without the service', async () => {
+    const query = fakeSessionQuery([
+      { header: { id: 'assistant-cold', agentPreset: 'assistant' } },
+      { header: { id: 'sub-cold', parentSession: 'm', origin: 'subagent', agentPreset: 'rp-c1' } },
+      { header: { id: 'm', agentPreset: 'rp-c1' } },
+      { header: { id: 'unknown-card', agentPreset: 'rp-Not A Card!' } },
+    ])
+    const host = fakeHost({ m: MAIN, b: BRANCH }, query)
+    registerWorldlineRoute(host.ctx as never)
+    const res = await call(host, RRP_ROUTES.worldlineTree)
+    const trees = (res.body as unknown as WorldlineTreeResponse).trees
+    const flat = (nodes: typeof trees[0]['roots']): string[] =>
+      nodes.flatMap((node) => [node.sessionId, ...flat(node.children)])
+    expect(flat(trees[0]?.roots ?? [])).toEqual(['m', 'm', 'm', 'b'])
+
+    // No sessionQuery service at all: live-only map, no error.
+    const bare = fakeHost({ m: MAIN, b: BRANCH })
+    registerWorldlineRoute(bare.ctx as never)
+    const bareRes = await call(bare, RRP_ROUTES.worldlineTree)
+    expect(bareRes.status).toBe(200)
+  })
+
+  it('a failing session-query degrades to the live-only map, never a 503', async () => {
+    const query = { listSessions: async () => { throw new Error('sqlite gone') } }
+    const host = fakeHost({ m: MAIN, b: BRANCH }, query)
+    registerWorldlineRoute(host.ctx as never)
+    const res = await call(host, RRP_ROUTES.worldlineTree)
+    expect(res.status).toBe(200)
+    const trees = (res.body as unknown as WorldlineTreeResponse).trees
+    expect(trees[0]?.roots.map((root) => root.sessionId)).toEqual(['m'])
   })
 })
