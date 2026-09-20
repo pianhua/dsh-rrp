@@ -29,6 +29,7 @@ export default defineConfig({
           text: '做卡教程',
           items: [
             { text: '卡包解剖学', link: '/authoring/card-anatomy' },
+            { text: '让卡包自带界面', link: '/authoring/card-ui' },
             { text: '技能与 when: 条件注入', link: '/authoring/skills-when' },
             { text: '酒馆卡迁移清单', link: '/authoring/tavern-migration' },
           ],
