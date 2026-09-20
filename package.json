@@ -1,6 +1,6 @@
 {
   "name": "dsh-rrp",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "DSH-Chronicle — 个人单机沉浸式角色扮演插件（正统 DSH 薄插件）",
   "type": "module",
   "license": "MIT",
@@ -12,9 +12,6 @@
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
-    "AGENTS.md",
-    "docs/DESIGN.md",
-    "docs/HOST_ALIGNMENT.md",
     "presets"
   ],
   "exports": {

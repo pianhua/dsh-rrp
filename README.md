@@ -5,10 +5,10 @@
 ## 特性
 
 - **开卡即玩**：宿主左栏「卡片展厅」选卡开局，内置两张官方卡（落魄大小姐女仆 · 米娅 / 雪夜雁门客栈）
-- **三智体分立**：Author 纯正文（零代打）→ Chronicler 每轮异步推演世界状态 → Summarizer 大局编年（`/summary` 按局开关、周期可调）
+- **三智体分立**：Author 纯正文（零代打）→ Chronicler 每轮异步推演世界状态 → Summarizer 剧情脉络（`/summary` 按局开关、周期可调）
 - **无锁矫正**：右栏世界状态就地修改即生效（Last-Write-Wins），下一轮执笔以最新切面为准
-- **副驾驶（Copilot）**：右栏常驻全知幕僚（OOC），咨询设定、人物秘密与破局思路，或代劳修改状态、起草典籍（诚实可撤销）
-- **Skills 知识体系**：卡包设定全量 Skill 化、按需调取；剧情新设定经 `/lore` 或典籍面板审阅后沉淀进当前世界线
+- **月停（Copilot）**：右栏常驻全知幕僚（OOC），咨询设定、人物秘密与破局思路，或代劳修改状态、起草设定集（诚实可撤销）
+- **Skills 知识体系**：卡包设定全量 Skill 化、按需调取；剧情新设定经 `/lore` 或设定集面板审阅后沉淀进当前世界线
 - **原生世界线**：分支 = DSH `Session.fork`，状态由会话投影纯数学重放，零幽灵状态
 
 ## 环境要求
@@ -41,6 +41,8 @@ pnpm test
 真实宿主验证：`node scripts/link-dev.mjs` 把本仓库链接进 `$DSH_HOME/profiles/rp-dev`，随后 `dsh --profile rp-dev --port 3099 --no-open`。
 
 ## 文档
+
+以下开发文档只存在于源码仓库，不随 npm 包分发：
 
 - [`docs/DESIGN.md`](docs/DESIGN.md) — 唯一产品目标规格
 - [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) — 宿主能力映射与反重复造轮子红线

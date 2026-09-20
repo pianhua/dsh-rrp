@@ -15,7 +15,7 @@ dsh-rrp（DSH-Chronicle 现代重启版）是面向 DeepSeek Harness（DSH）的
 | Chronicler（状态推演） | 每轮正文后异步推演世界状态变化，输出完整 WorldState JSON | 创作正文；杜撰正文未提及的事实 |
 | Summarizer（剧情脉络官） | 每 N 轮把长剧情压缩成宏观罗盘（goal/conflict/turningPoints/threads） | 预测未来；写无信息量的空话 |
 | Scribe（设定集编纂者） | 从已发生剧情起草单条知识技能 | 直接入库（必须玩家确认）；写推测 |
-| Copilot（总管家） | 全知服侍玩家：答疑 + 代劳（改状态/起草设定/维护项目） | 代写正文；替玩家做决定；静默落盘 |
+| Copilot（月停） | 全知服侍玩家：答疑 + 代劳（改状态/起草设定/维护项目） | 代写正文；替玩家做决定；静默落盘 |
 
 ## 核心时序（自然流，无锁）
 

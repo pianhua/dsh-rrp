@@ -21,10 +21,10 @@
   - 数据投影严格依托 DSH 会话投影（`ctx.sessionProjections`），领域只写纯数学折叠；
   - 后台异步任务统一挂载至 DSH 官方后台队列（`ctx.jobs`）；
   - 设定系统全面拥抱现代大模型原生认知规范——**DSH Skills（`@deepseek-ai/dsh-skill`）**，彻底淘汰老一代酒馆死板正则世界书（Lorebook）；
-  - 世界线分支完全映射 DSH 原生会话分叉（`Session.fork`），从物理拓扑上兼容 `dsh-synapse` 会话地图。
+  - 世界线分支完全映射 DSH 原生会话分叉（`Session.fork`）；分支地图由本插件的「世界线」页签呈现（issue #28），`dsh-synapse` 已于 2026-09-20 撤装（D10 后续演变）。
 
 ### ③ 权能硬分权与自然时序流（No Locks, Just Natural Flow）
-- **Author Agent（叙事作家）**：只读消费精简工作区与 Skills，专注高质量第三人称文学正文创作，严禁替玩家代打，严禁写状态；
+- **Author Agent（叙事执笔）**：只读消费精简工作区与 Skills，专注高质量第三人称文学正文创作，严禁替玩家代打，严禁写状态；
 - **Chronicler Agent（状态推演）**：独立的客观智能体，在每轮正文产出后异步推演物理与心理变化，生成状态变动；允许根据剧情动态增加追踪维度；
 - **玩家矫正（Player Correction，自然时序无锁流）**：
   - 彻底废除旧项目的“CAS 锁、永久硬锁、解绑通道”等防御性过度设计；
@@ -47,44 +47,60 @@ dsh-rrp/
 │   └── reference/               # 为什么这么设计：决策/术语/经验/技能
 │       └── HOST_BASELINE.md     # 宿主版本基线、seam 清单与升级流程（升级宿主前必读）
 ├── src/                         # 源码
-│   ├── index.ts                 # 插件后端入口 (Cordis 插件)
+│   ├── index.ts                 # 插件后端入口 (Cordis 插件)：注册 + 会话清理接线
 │   ├── preset.ts / preset-id.ts # RP 模式物化（基础 rp + 每卡 rp-<id>）与 id 规则
-│   ├── cards.ts / card-types.ts # 卡包解析与词汇（host/client 共享的纯类型）
-│   ├── world-state.ts           # WorldState 纯词汇（host/client 共享）
-│   ├── macro-summary.ts         # 四维大局观纯词汇（host/client 共享）
-│   ├── state-payload.ts         # 状态载体：user/message 的 source.rrp
-│   ├── state-publisher.ts       # 追加式发布（卡包 / 事实两通道）
+│   ├── cards.ts / cards-route.ts / card-types.ts / card-import.ts
+│   │                            # 卡包解析与触发注册表 / 只读路由 / host-client 共享词汇 / 酒馆卡转译导入
+│   ├── world-state.ts           # WorldState 纯词汇（含 fold 判等 worldStatesEqual）
+│   ├── state-payload.ts         # 状态载体：user/message 的 source.rrp（含 stateFoldSeq 折叠游标）
+│   ├── state-publisher.ts       # 追加式发布（卡包 / 事实两通道，指纹去重）
+│   ├── transcript.ts + projection/transcript.ts
+│   │                            # 转录切片词汇与折叠器（宿主已禁同步读日志）
+│   ├── transcript-reader.ts     # 投影→正文转录渲染（智体与路由共用，不牵入推演器）
+│   ├── host-faces.ts            # 宿主服务面类型与管线工具单一来源（send/readBody/routeOf/collectText）
 │   ├── chronicler.ts            # 状态推演触发与异步推演（ctx.jobs + ctx.llm）
-│   ├── summarizer.ts            # 剧情脉络触发与推演（ctx.jobs + ctx.llm + /summary）
+│   ├── summarizer.ts / macro-summary.ts  # 剧情脉络触发与推演（ctx.jobs + /summary）与四维词汇
 │   ├── activity.ts / activity-route.ts   # 归因账本（宿主内存 + 只读路由）
-│   ├── lore.ts / lore-provider.ts / lore-runtime.ts / lore-route.ts
-│   │                            # D8 知识沉淀：按会话存储、skill provider、路由与 /lore
+│   ├── lore.ts / lore-state.ts / lore-condition.ts / lore-provider.ts / lore-runtime.ts / lore-route.ts
+│   │                            # D8 设定集：旧 sidecar 迁移 / 词汇 / 条件注入求值 / provider / 运行时 / 路由与 /lore
 │   ├── correction.ts            # 玩家矫正写路径（宿主 webserver 路由）
-│   ├── steward-proposals.ts     # 总管家提案暂存/确认/落盘（issue #33，内存态+确认后写用户卡）
-│   ├── cards-route.ts / start.ts# 卡包只读路由 / 开卡（发布初始状态 + 开场白）
-│   ├── card-workspace-route.ts  # 一卡一区（issue #37）：幂等收养卡级工作区，开卡/分叉自动归组
-│   ├── save-naming.ts           # 存档命名纯词汇（issue #37）：主线编号 + 分支带父档名
+│   ├── copilot.ts / copilot-store.ts / steward-proposals.ts
+│   │                            # 月停路由与动作执行 / 宿主存储域历史 / 提案暂存确认落盘（issue #21 #33）
+│   ├── worldline-tree.ts / worldline-digest.ts / worldline-store.ts / worldline-route.ts
+│   │                            # 世界线树折叠 / 存档点摘要投影词汇 / 软归档名单 / 全图与归档路由（issue #28 #29）
+│   ├── card-ui.ts / card-ui-route.ts / ui-schema.ts / ui-bridge.ts
+│   │                            # 卡包界面声明校验 / 只读路由 / 组件与动作契约 / 沙箱桥（issue #18）
+│   ├── cards-route.ts / start.ts / export-route.ts / card-workspace-route.ts / save-naming.ts
+│   │                            # 卡包只读路由 / 开卡 / 小说导出 / 一卡一区（#37）/ 存档命名纯词汇
+│   ├── route-contract.ts        # 前后端 HTTP+SSE 契约单一来源（#22）
+│   ├── json-extract.ts          # 模型回复容错解析（四个后台智体共用）
+│   ├── settings.ts / prompt-budget.ts    # 会话级 RP 设置投影词汇 / 上下文体积估算词汇
 │   ├── contracts.ts             # 对外只读契约（依赖为零）
 │   ├── home.ts                  # harnessHome() 叶子模块
 │   ├── client/                  # 客户端入口与面板
 │   │   ├── index.ts             # 客户端入口（locale + 注册）
+│   │   ├── context-types.ts     # 宿主客户端注入面的结构类型
 │   │   ├── world-state-tab.tsx  # 世界状态：结构化就地编辑器
-│   │   ├── lore-tab.tsx     # 设定集（D8）：起草/审阅/确认/删除
-│   │   ├── gallery-panel.tsx    # 卡片展厅 + 开卡流
+│   │   ├── lore-tab.tsx         # 设定集（D8）：起草/审阅/确认/删除
+│   │   ├── copilot-tab.tsx / copilot-prefill.ts  # 月停面板（SSE）/ 舞台「问月停」预填
+│   │   ├── gallery-panel.tsx    # 卡片展厅 + 开卡流（含导入、工作区归组）
+│   │   ├── worldline-tab.tsx    # 世界线存档图：读档 / 重roll / 收起 / 导出
+│   │   ├── stage-tab.tsx / stage-frame.tsx      # 舞台页签：声明式解释器 + 沙箱卡页面
 │   │   └── primitives.d.ts      # 宿主原子库结构面类型
 │   ├── agents/                  # 智体提示词与行为规范（统一 AgentPromptContract，issue #32）
 │   │   ├── contract.ts          # 统一提示词契约接口（六层结构 + Zod 绑定 + 缓存不变式）
 │   │   ├── author.ts            # Author 提示词单一来源 AUTHOR_SYSTEM_PROMPT（preset.ts 物化注入）
 │   │   ├── chronicler.ts        # 状态推演提示词与输出契约
 │   │   ├── summarizer.ts        # 剧情脉络摘要智能体
-│   │   ├── scribe.ts            # D8 设定集编纂者（只起草一条）
-│   │   └── copilot.ts           # 副驾驶提示词 + rrp-action 动作块词汇与解析
+│   │   ├── scribe.ts            # D8 设定集知识起草（只起草一条）
+│   │   └── copilot.ts           # 月停提示词 + rrp-action 动作块词汇与解析
 │   └── projection/              # 会话投影纯数学折叠器
 │       ├── world-state.ts       # WorldState 投影单元（zod 校验 + 纯折叠）
 │       ├── summary.ts           # 剧情脉络投影单元
 │       ├── settings.ts          # RP 设置投影单元（摘要开关）
-│       ├── lore.ts          # D8 沉淀投影单元
-│       └── card.ts              # 当前卡包投影单元
+│       ├── lore.ts              # D8 设定集投影单元
+│       ├── card.ts              # 当前卡包投影单元
+│       └── worldline-digest.ts  # 存档点摘要投影单元（#28）
 ├── presets/                     # 随包分发的原生 agent preset（RP 模式）
 │   └── rp/                      # 组合、元数据、管家技能包（steward-*，issue #33）与随模式作用域的世界知识技能
 ├── cards/                       # 官方原生卡包

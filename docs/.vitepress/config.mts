@@ -18,7 +18,7 @@ export default defineConfig({
           items: [
             { text: '快速上手', link: '/guide/getting-started' },
             { text: '游玩循环与界面', link: '/guide/play-loop' },
-            { text: '副驾驶：全知幕僚', link: '/guide/copilot' },
+            { text: '月停：全知幕僚', link: '/guide/copilot' },
             { text: '世界线地图（读档）', link: '/guide/worldline' },
             { text: '设定集与条件注入', link: '/guide/lore-and-injection' },
           ],

@@ -1,4 +1,4 @@
-# dsh-rrp · RP 模式（Author 执笔智体）的 agent-plane 组合。
+# dsh-rrp · RP 模式（Author 叙事执笔）的 agent-plane 组合。
 #
 # 一个 preset 就是 DSH 原生的「模式」：本文件声明该模式下的 agent 组合。
 # persona 行是 scope-only 的：它只在这个 preset 的 agent 作用域里遮蔽部署默认
