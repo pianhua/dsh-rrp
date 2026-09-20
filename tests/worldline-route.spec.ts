@@ -3,8 +3,14 @@ import { registerWorldlineRoute } from '../src/worldline-route.ts'
 import { RRP_ROUTES, type WorldlineTreeResponse } from '../src/route-contract.ts'
 import { emptyWorldlineDigest, type WorldlineDigest } from '../src/worldline-digest.ts'
 
+/**
+ * Host-truth session shape (issue #36): `inheritedEventCount` is top-level and
+ * `parentSession` sits directly on the header — mirroring the host typert
+ * declaration so the fake can never again agree with a wrong reader.
+ */
 interface FakeSession {
   id: string
+  inheritedEventCount?: number
   header: Record<string, unknown>
   card?: { id: string; name: string }
   digest: WorldlineDigest
@@ -61,6 +67,15 @@ const MAIN: FakeSession = {
 }
 const BRANCH: FakeSession = {
   id: 'b',
+  inheritedEventCount: 5,
+  header: { parentSession: 'm' },
+  card: { id: 'c1', name: '雁门' },
+  digest: { turns: [turnOf(0, 1), turnOf(1, 3), turnOf(2, 7)] },
+}
+// 旧版虚构结构（header.inheritedEventCount + header.meta.parentSession）——
+// 作为回归守卫喂入时必须失效，绝不能再与错误实现"自洽"。
+const LEGACY_FICTION: FakeSession = {
+  id: 'legacy',
   header: { inheritedEventCount: 5, meta: { parentSession: 'm' } },
   card: { id: 'c1', name: '雁门' },
   digest: { turns: [turnOf(0, 1), turnOf(1, 3), turnOf(2, 7)] },
@@ -83,8 +98,39 @@ describe('worldline routes (issue #28)', () => {
     expect(cut?.children.map((child) => child.sessionId + ':' + String(child.turn))).toEqual(['m:2', 'b:2'])
   })
 
-  it('hiding a line prunes it from the served tree and persists across calls', async () => {
-    const host = fakeHost({ m: MAIN, b: BRANCH })
+  it('the legacy fictional shape must NOT attach (issue #36 regression guard)', async () => {
+    // 旧实现读的是 header.inheritedEventCount / header.meta.parentSession；
+    // 真实宿主结构下这些字段不存在，旧结构喂入后必须退化为独立 root，
+    // 用"旧结构必然失效"钉死正确读法，防止测试与实现再次一起错。
+    const host = fakeHost({ m: MAIN, legacy: LEGACY_FICTION })
+    registerWorldlineRoute(host.ctx as never)
+    const res = await call(host, RRP_ROUTES.worldlineTree)
+    const trees = (res.body as unknown as WorldlineTreeResponse).trees
+    expect(trees).toHaveLength(1)
+    expect(trees[0]?.roots.map((root) => root.sessionId).sort()).toEqual(['legacy', 'm'])
+  })
+
+  it('subagent children are never folded as worldline branches (issue #36)', async () => {
+    const subagent: FakeSession = {
+      id: 'agent-child',
+      inheritedEventCount: 5,
+      header: { parentSession: 'm', origin: 'subagent' },
+      card: { id: 'c1', name: '雁门' },
+      digest: { turns: [turnOf(0, 1), turnOf(1, 3)] },
+    }
+    const host = fakeHost({ m: MAIN, b: BRANCH, sub: subagent })
+    registerWorldlineRoute(host.ctx as never)
+    const res = await call(host, RRP_ROUTES.worldlineTree)
+    const trees = (res.body as unknown as WorldlineTreeResponse).trees
+    const flat = (nodes: typeof trees[0]['roots']): string[] =>
+      nodes.flatMap((node) => [node.sessionId, ...flat(node.children)])
+    expect(flat(trees[0]?.roots ?? [])).not.toContain('agent-child')
+    // b 仍是合法 fork，挂在 m 的切点下；唯一的 root 是 m。
+    expect(flat(trees[0]?.roots ?? [])).toContain('b')
+    expect(trees[0]?.roots.map((root) => root.sessionId)).toEqual(['m'])
+  })
+
+  it('hiding a line prunes it from the served tree and persists across calls', async () => {    const host = fakeHost({ m: MAIN, b: BRANCH })
     registerWorldlineRoute(host.ctx as never)
     const set = await call(host, RRP_ROUTES.worldlineHidden, { method: 'POST', body: { sessionId: 'b', hidden: true } })
     expect(set.status).toBe(200)

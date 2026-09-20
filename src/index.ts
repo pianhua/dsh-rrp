@@ -169,7 +169,9 @@ export function apply(ctx: Context): void {
 
   // Worldline map (issue #28): turn facts for the client-side tree fold and
   // the soft-hide ledger; lineage itself stays the host's own sessions data.
-  ctx.inject(['webServer', 'sessions', 'sessionProjections', 'storageDomain'], (scoped: Context) => {
+  // No storageDomain precondition: the worldline store degrades to an
+  // in-memory ledger when the domain service is absent (issue #36).
+  ctx.inject(['webServer', 'sessions', 'sessionProjections'], (scoped: Context) => {
     registerWorldlineRoute(scoped)
   })
 

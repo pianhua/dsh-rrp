@@ -115,7 +115,7 @@ function WorldlinePanel(props: WorldlinePanelProps): ReactNode {
       </header>
       {error.length > 0 ? <div style={S.error}>{error}</div> : null}
       <div style={S.scroll}>
-        {total === 0 && !busy ? <div style={S.empty}>{t('worldline.empty')}</div> : null}
+        {total === 0 && !busy && error.length === 0 ? <div style={S.empty}>{t('worldline.empty')}</div> : null}
         {trees.map((tree) => (
           <section key={tree.cardId} style={S.cardGroup}>
             <div style={S.cardTitle}>{tree.cardName}</div>
@@ -167,7 +167,9 @@ export function registerWorldlineTab(ctx: RrpClientContext): void {
   const api: WorldlineApi = {
     async loadTrees() {
       const response = await fetch(RRP_ROUTES.worldlineTree)
-      if (!response.ok) return []
+      // Never swallow: a missing/unready route must surface as an error banner,
+      // not masquerade as "no worldlines yet" (issue #36).
+      if (!response.ok) throw new Error('worldline route HTTP ' + String(response.status))
       const body = await response.json() as WorldlineTreeResponse
       // Node titles are the host roster's business: decorate from its own list.
       const byId = sessions?.list?.getSnapshot().byId ?? {}

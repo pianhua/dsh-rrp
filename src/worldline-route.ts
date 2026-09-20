@@ -22,9 +22,17 @@ const TAG = '[dsh-rrp]'
 const TREE_PATH = RRP_ROUTES.worldlineTree
 const HIDDEN_PATH = RRP_ROUTES.worldlineHidden
 
+/**
+ * Host session shape (verified against the host's own typert declaration,
+ * issue #36): `inheritedEventCount` is a TOP-LEVEL Session property and
+ * `parentSession` sits directly on the header — there is no `header.meta`
+ * layer. Subagent children also carry `parentSession`, so they are filtered
+ * out: worldlines come only from Session.fork (D9/D10).
+ */
 interface SessionLike {
   readonly id: string
-  readonly header?: { inheritedEventCount?: number; meta?: { parentSession?: string } }
+  readonly inheritedEventCount?: number
+  readonly header?: { parentSession?: string; origin?: string }
 }
 interface SessionsService {
   get(id: string): SessionLike | undefined
@@ -72,14 +80,15 @@ async function readBody(req: RequestLike): Promise<string> {
 function collectFacts(sessions: SessionsService, projections: ProjectionsService): WorldlineSessionFact[] {
   const facts: WorldlineSessionFact[] = []
   for (const session of sessions.list?.() ?? []) {
+    if (session.header?.origin === 'subagent') continue
     const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
     if (card === null || card === undefined || card.id.length === 0) continue
     const digest = (projections.stateOf(session, WORLDLINE_DIGEST_KEY) as WorldlineDigest | undefined) ?? { turns: [] }
     // The fork cut is stamped in EVENTS; the digest carries each turn's seq,
     // so seed turns are simply the folded turns before the cut.
-    const inherited = Number(session.header?.inheritedEventCount ?? 0)
+    const inherited = Number(session.inheritedEventCount ?? 0)
     const seedTurns = digest.turns.filter((entry) => entry.seq < inherited).length
-    const parentId = session.header?.meta?.parentSession
+    const parentId = session.header?.parentSession
     facts.push({
       id: session.id,
       cardId: card.id,
