@@ -86,6 +86,13 @@ const S: Record<string, CSSProperties> = {
   caret: { display: 'inline-block', width: 7, marginLeft: 1, animation: 'rrp-copilot-blink 1s steps(2) infinite', color: 'var(--dsw-alias-brand-primary)' },
 }
 
+/** Strip the fenced rrp-action block from displayed prose: its content is
+ * already rendered as a structured action card below the bubble, so showing
+ * both double-renders every action (and long card proposals flood the panel). */
+function withoutActionBlock(text: string): string {
+  return text.replace(/```rrp-action[\s\S]*?(?:```|$)/g, '').trimEnd()
+}
+
 /** The advisory panel body. */
 function CopilotPanel(props: CopilotPanelProps) {
   const t = props.t ?? ((key: string) => key)
@@ -331,7 +338,7 @@ function CopilotPanel(props: CopilotPanelProps) {
           <div key={turn.at + String(index)} style={S.turn}>
             <div style={S.turnLabel}>{turn.role === 'player' ? t('copilot.you') : t('copilot.title')}</div>
             <div style={turn.role === 'player' ? S.bubblePlayer : S.bubbleCopilot}>
-              {turn.role === 'player' ? turn.text : <MarkdownText text={turn.text} labels={markdownLabels} variant="compact" />}
+              {turn.role === 'player' ? turn.text : <MarkdownText text={withoutActionBlock(turn.text)} labels={markdownLabels} variant="compact" />}
             </div>
             {actionCard(turn)}
           </div>

@@ -20,10 +20,14 @@ dsh-rrp（DSH-Chronicle 现代重启版）是面向 DeepSeek Harness（DSH）的
 ## 核心时序（自然流，无锁）
 
 1. 玩家行动 → Author 产出正文；
-2. Chronicler 异步推演，追加发布新 WorldState；
+2. Chronicler 异步推演，追加发布新 WorldState（D5：可用 createFields 创建 number/string/boolean 自定义字段，ID 限英文字母数字下划线，同一概念只建一次，创建后后续轮次在顶层直接改值）；
 3. Summarizer 按轮数周期产出剧情脉络；
-4. 玩家在右侧栏查看状态，不满意就**就地直接修改**（Last-Write-Wins）；
+4. 玩家在右侧栏查看状态，不满意就**就地直接修改**（Last-Write-Wins，D6）；
 5. 下一轮 Author 以最新切面为基准起笔。
+
+## 知识沉淀（D8）
+
+Scribe 只把**已发生并确立**的事实起草成单条技能草稿；玩家不确认就永不入库；只新增不覆写；材料不足时空草稿。
 
 ## 世界线与存档
 

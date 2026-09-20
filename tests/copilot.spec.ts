@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -6,8 +6,9 @@ import { buildCopilotPrompt, COPILOT_SYSTEM_PROMPT, parseCopilotActions } from '
 import { readActivity } from '../src/activity.ts'
 import { forgetState } from '../src/state-publisher.ts'
 import { rrpPayloadOf } from '../src/state-payload.ts'
+import type { CardContext } from '../src/card-types.ts'
 import { emptyWorldState, WORLD_STATE_KEY, type WorldState } from '../src/world-state.ts'
-import { mergeWorldStatePatch, registerCopilotRoute, forgetCopilot } from '../src/copilot.ts'
+import { liveCardContextText, mergeWorldStatePatch, registerCopilotRoute, forgetCopilot } from '../src/copilot.ts'
 import { setCopilotLegacyDirForTesting } from '../src/copilot-store.ts'
 import { forgetProposals } from '../src/steward-proposals.ts'
 import { hasLoreDraft } from '../src/lore-route.ts'
@@ -56,6 +57,21 @@ describe('copilot agent (prompt + action parsing)', () => {
     expect(prompt.indexOf('【剧情记录】')).toBeLessThan(prompt.indexOf('【玩家】'))
     expect(prompt.trim().endsWith('米娅现在穿什么？')).toBe(true)
     expect(prompt).toContain('（剧情脉络未开启或尚未产出）')
+  })
+
+  it('re-reads the card block from disk instead of the start-time snapshot (issue #34)', () => {
+    const home = mkdtempSync(join(tmpdir(), 'rrp-copilot-live-'))
+    const dir = join(home, '.dsh-rrp', 'cards', 'live-card')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'card.md'), ['---', 'id: live-card', 'name: 实时卡', '---', '', '# 磁盘上的新世界核心', ''].join('\n'), 'utf8')
+    // 开局投影是旧快照；提问时必须拿到磁盘上的最新内容。
+    const snapshot: CardContext = { id: 'live-card', name: '旧卡名', persona: '旧人设', worldCore: '旧世界核心' }
+    const text = liveCardContextText(snapshot, home)
+    expect(text).toContain('卡包：实时卡')
+    expect(text).toContain('磁盘上的新世界核心')
+    expect(text).toContain('实时读盘')
+    expect(text).not.toContain('旧世界核心')
+    rmSync(home, { recursive: true, force: true })
   })
 
   it('parses a fenced action block and skips malformed entries', () => {

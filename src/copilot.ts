@@ -22,6 +22,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { COPILOT_SYSTEM_PROMPT, buildCopilotPrompt, parseCopilotActions } from './agents/copilot.ts'
 import { recordActivity } from './activity.ts'
 import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
+import { readCard } from './cards.ts'
 import {
   emptyCopilotStore,
   openCopilotStore,
@@ -78,6 +79,27 @@ export function forgetCopilot(sessionId: string): void {
 /** Drop every in-flight marker (plugin unload must not leave state behind). */
 export function forgetAllCopilot(): void {
   IN_FLIGHT.clear()
+}
+
+/**
+ * Re-render the card block from the on-disk source at question time (issue #34):
+ * the CARD_KEY projection is a start-time snapshot, so without this a card-edit
+ * proposal that landed mid-session would keep feeding the steward stale text.
+ * The per-run player override (session projection) wins over the card's declared
+ * player; a card that vanished from disk falls back to the snapshot.
+ */
+export function liveCardContextText(card: CardContext, home?: string): string {
+  const live = readCard(card.id, home)
+  if (live === undefined) return renderCardContext(card)
+  return (
+    renderCardContext({
+      id: live.meta.id,
+      name: live.meta.name,
+      persona: live.persona,
+      worldCore: live.worldCore,
+      player: card.player ?? live.meta.player,
+    }) + '\n（本区块为提问时实时读盘的卡包源文件。）'
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -470,7 +492,7 @@ export function registerCopilotRoute(ctx: Context): void {
           const lore = loreEntriesOf(projections.stateOf(session, RRP_LORE_KEY))
           const prompt = buildCopilotPrompt({
             question: message,
-            card: card === null || card === undefined ? '' : renderCardContext(card),
+            card: card === null || card === undefined ? '' : liveCardContextText(card),
             worldState: renderWorldState(state),
             summary: summaryValue === null || summaryValue === undefined ? '' : renderMacroSummary(summaryValue as Parameters<typeof renderMacroSummary>[0]),
             lore: lore.map((skill) => '- ' + skill.name + '：' + skill.description).join('\n'),

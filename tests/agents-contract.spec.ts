@@ -115,6 +115,18 @@ describe('unified AgentPromptContract (issue #32)', () => {
     expect(COPILOT_SYSTEM_PROMPT).toContain('失败语义')
   })
 
+  it('copilot embeds the steward knowledge and the card-edit fidelity rule (issues #34/#35)', () => {
+    // DEF-06 short-term fix: project knowledge ships inside the prompt, not via
+    // unreachable skill files.
+    expect(COPILOT_SYSTEM_PROMPT).toContain('【项目知识（常驻，已内置）】')
+    expect(COPILOT_SYSTEM_PROMPT).toContain('createFields')
+    // DEF-05: the proposal must never rebuild a whole card from memory.
+    expect(COPILOT_SYSTEM_PROMPT).toContain('保真铁律')
+    expect(COPILOT_SYSTEM_PROMPT).toContain('绝不凭记忆重建整卡')
+    // The old promise of on-demand skill lookup is gone (no seam delivered it).
+    expect(COPILOT_SYSTEM_PROMPT).not.toContain('通过技能按需调取')
+  })
+
   it('copilot prompt is the omniscient Steward and names both proposal actions (issue #33)', () => {
     expect(COPILOT_SYSTEM_PROMPT).toContain('总管家')
     expect(COPILOT_SYSTEM_PROMPT).toContain('propose_card_edit')

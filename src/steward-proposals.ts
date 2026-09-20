@@ -14,8 +14,8 @@
  */
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, extname, isAbsolute, relative, resolve } from 'node:path'
-import { cardDirOf, readCard } from './cards.ts'
+import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path'
+import { cardDirOf, parseFrontmatter, readCard } from './cards.ts'
 import { harnessHome } from './home.ts'
 
 /** One staged Steward proposal, discriminated by kind. */
@@ -124,6 +124,17 @@ export function confirmProposal(
   // 红线二：路径必须留在卡包根内，扩展名必须白名单。
   const target = resolveTargetFile(dir, proposal.file)
   if ('error' in target) return { ok: false, error: target.error }
+
+  // 红线三（DEF-05）：改写 card.md 必须先过 frontmatter 必填校验，
+  // 宁可拒绝落盘，也不让缺 id/name 的坏卡写进目录。
+  if (basename(target.path) === 'card.md') {
+    const parsed = parseFrontmatter(proposal.content)
+    const id = parsed?.data.id
+    const name = parsed?.data.name
+    if (typeof id !== 'string' || id.trim().length === 0 || typeof name !== 'string' || name.trim().length === 0) {
+      return { ok: false, error: '落盘校验失败：card.md 的 frontmatter 必须包含非空 id 与 name（kebab-case，同目录名）。请让管家按原文小改后重新提案。' }
+    }
+  }
 
   // 写入前读旧内容存档（审计用），随后落盘并重建该卡的条件触发缓存。
   const oldContent = existsSync(target.path) ? readFileSync(target.path, 'utf8') : ''

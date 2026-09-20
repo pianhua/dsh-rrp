@@ -111,11 +111,27 @@ describe('steward proposals confirm (card-edit)', () => {
     const home = tempHomeWithCard()
     const cardMd = join(home, '.dsh-rrp', 'cards', 'test-card', 'card.md')
     const oldContent = readFileSync(cardMd, 'utf8')
-    const staged = stageProposal('s1', { kind: 'card-edit', card: 'test-card', file: 'card.md', content: '# 替换' })
+    const replacement = ['---', 'id: test-card', 'name: 测试卡（改）', '---', '', '# 替换', ''].join('\n')
+    const staged = stageProposal('s1', { kind: 'card-edit', card: 'test-card', file: 'card.md', content: replacement })
     const result = confirmProposal('s1', staged.id, home)
     expect(result.ok).toBe(true)
-    expect(readFileSync(cardMd, 'utf8')).toBe('# 替换')
+    expect(readFileSync(cardMd, 'utf8')).toBe(replacement)
     expect(proposalArchiveOf('s1').get(staged.id)).toBe(oldContent)
+  })
+
+  it('DEF-05: refuses a card.md whose frontmatter lost the required id/name', () => {
+    const home = tempHomeWithCard()
+    const cardMd = join(home, '.dsh-rrp', 'cards', 'test-card', 'card.md')
+    const before = readFileSync(cardMd, 'utf8')
+    // 管家凭残稿重建整卡的经典事故：frontmatter 只剩 name，id 丢失。
+    const broken = ['---', 'name: 测试卡', '---', '', '# 重建的世界核心', ''].join('\n')
+    const staged = stageProposal('s1', { kind: 'card-edit', card: 'test-card', file: 'card.md', content: broken })
+    const result = confirmProposal('s1', staged.id, home)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain('frontmatter')
+    // 磁盘原样 + 提案保留待修正。
+    expect(readFileSync(cardMd, 'utf8')).toBe(before)
+    expect(listProposals('s1')).toHaveLength(1)
   })
 
   it('refuses shipped packs as read-only', () => {
