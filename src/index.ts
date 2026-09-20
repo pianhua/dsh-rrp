@@ -12,6 +12,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { registerActivityRoute } from './activity-route.ts'
 import { listCards } from './cards.ts'
 import { registerCardsRoute } from './cards-route.ts'
+import { registerCardUiRoute } from './card-ui-route.ts'
 import { registerCopilotRoute, forgetAllCopilot, forgetCopilot } from './copilot.ts'
 import { worldlineDigestProjection } from './projection/worldline-digest.ts'
 import { registerWorldlineRoute } from './worldline-route.ts'
@@ -134,6 +135,12 @@ export function apply(ctx: Context): void {
   // Card packs (Stage 6): read-only routes the gallery/start flow consumes.
   ctx.inject(['webServer'], (scoped: Context) => {
     registerCardsRoute(scoped)
+  })
+
+  // Card UI (issue #18): the Stage panel's read-only door to a card's
+  // validated declaration and its own HTML pages.
+  ctx.inject(['webServer'], (scoped: Context) => {
+    registerCardUiRoute(scoped)
   })
 
   // Activity ledger: the right-sidebar panel polls this host-side, in-memory

@@ -98,7 +98,7 @@ export function parseWhen(src: string, locator: string): WhenCondition | Error {
   if (pathSrc.length === 0) return fail('when 条件缺少路径：' + text)
   if (literalSrc.length === 0) return fail('when 条件缺少右值字面量：' + text)
 
-  const path = parsePath(pathSrc)
+  const path = parseWhenPath(pathSrc)
   if (path instanceof Error) return fail(path.message)
 
   if (literalSrc === 'true') return { path, op, value: true }
@@ -107,8 +107,8 @@ export function parseWhen(src: string, locator: string): WhenCondition | Error {
   return fail('不支持的右值字面量「' + literalSrc + '」。' + STRING_LITERAL_HINT)
 }
 
-/** Parse the path segment of a condition. */
-function parsePath(src: string): WhenPath | Error {
+/** Parse one bare condition path (also the address grammar card UI binds to). */
+export function parseWhenPath(src: string): WhenPath | Error {
   const segments = src.split('.').map((part) => part.trim())
   if (segments.some((part) => part.length === 0)) {
     return new Error('when 路径含空段：' + src)
@@ -135,7 +135,7 @@ function parsePath(src: string): WhenPath | Error {
 }
 
 /** Resolve a condition path to a raw state value (undefined when absent). */
-function resolvePath(path: WhenPath, state: WorldState): unknown {
+export function resolveWhenPath(path: WhenPath, state: WorldState): unknown {
   switch (path.kind) {
     case 'characters':
       return (state.characters?.[path.name] as Record<string, unknown> | undefined)?.[path.field]
@@ -160,7 +160,7 @@ function resolvePath(path: WhenPath, state: WorldState): unknown {
  * the mechanism's floor must degrade silently rather than break a publish.
  */
 export function evalCondition(cond: WhenCondition, state: WorldState): boolean {
-  const left = resolvePath(cond.path, state)
+  const left = resolveWhenPath(cond.path, state)
   if (typeof left !== typeof cond.value) return false
   if (typeof left === 'boolean') {
     if (cond.op === '==') return left === cond.value

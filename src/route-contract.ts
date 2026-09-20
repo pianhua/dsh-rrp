@@ -13,6 +13,7 @@ import type { CardContext, CardMeta, CardPack } from './card-types.ts'
 import type { StewardProposal } from './steward-proposals.ts'
 import type { WorldState } from './world-state.ts'
 import type { WorldlineTree } from './worldline-tree.ts'
+import type { UiManifest } from './ui-schema.ts'
 
 export type { StewardProposal } from './steward-proposals.ts'
 
@@ -29,6 +30,7 @@ export const RRP_ROUTES = {
   copilotProposals: '/dsh-rrp/copilot/proposals',
   worldlineTree: '/dsh-rrp/worldlines/tree',
   worldlineHidden: '/dsh-rrp/worldlines/hidden',
+  cardUi: '/dsh-rrp/card-ui',
 } as const
 
 // ── Shared JSON vocabulary ──────────────────────────────────────────────────
@@ -148,6 +150,10 @@ export interface WorldlineHiddenSetRequest {
   sessionId: string
   hidden: boolean
 }
+
+// ── /dsh-rrp/card-ui ────────────────────────────────────────────────────────
+/** One card's validated UI declaration; `absent` is the normal plain-card case. */
+export type CardUiResponse = { manifest: UiManifest } | { absent: true } | RrpErrorBody
 
 // ── /dsh-rrp/copilot ────────────────────────────────────────────────────────
 /** One executed action as recorded on the turn (for the panel's action card). */
