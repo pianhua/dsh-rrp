@@ -536,3 +536,19 @@ describe('copilot writer lock (issue #27)', () => {
     await handle.close()
   })
 })
+
+describe('copilot empty-reply guard (testing round)', () => {
+  it('treats an empty model stream as a failure: error event, no copilot turn persisted', async () => {
+    forgetState('s-empty'); forgetCopilot('s-empty')
+    const host = fakeHost({ id: 's-empty', reply: '' })
+    registerCopilotRoute(host.ctx as never)
+    const ask = exchange('POST', '/dsh-rrp/copilot', { sessionId: 's-empty', message: '还在吗？' })
+    await host.routes.get('/dsh-rrp/copilot')!.handler(ask.req, ask.res)
+    const events = sseEvents(ask.res)
+    expect(events.some((entry) => entry.event === 'error')).toBe(true)
+    expect(events.some((entry) => entry.event === 'done')).toBe(false)
+    // Only the player turn is in history; no blank copilot bubble is stored.
+    const record = host.records.get('s-empty') as { turns: Array<{ role: string; text: string }> }
+    expect(record.turns.map((turn) => turn.role)).toEqual(['player'])
+  })
+})

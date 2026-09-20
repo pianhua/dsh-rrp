@@ -264,6 +264,12 @@ async function runSummary(
       })
       return { status: 'killed' }
     }
+    // Same empty-stream guard as the other inference agents: an empty stream
+    // is an infrastructure failure, not a malformed-summary verdict.
+    if (text.trim().length === 0) {
+      console.warn(TAG + ' Summarizer EMPTY reply for ' + session.id + ' (treated as failure)')
+      throw new Error('Summarizer reply was empty')
+    }
 
     const summary = parseSummarizerReply(text)
     if (summary === undefined) throw new Error('Summarizer reply was not a valid MacroSummary')

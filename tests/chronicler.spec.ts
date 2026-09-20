@@ -312,3 +312,28 @@ describe('Chronicler trigger', () => {
   })
 })
 
+
+describe('parseChroniclerReply salvage (testing-round hardening)', () => {
+  it('drops a malformed dynamic key instead of failing the whole turn', () => {
+    const reply = JSON.stringify({
+      characters: {},
+      inventory: {},
+      scene: { location: '客栈' },
+      flags: {},
+      relations: [],
+      inner_monologue: ['不该多嘴'],
+      mood_board: { tone: '阴郁' },
+    })
+    const parsed = parseChroniclerReply(reply)
+    expect(parsed).toBeDefined()
+    expect(parsed?.state.scene.location).toBe('客栈')
+    expect(parsed?.state.inner_monologue).toBeUndefined()
+    expect(parsed?.state.mood_board).toBeUndefined()
+  })
+
+  it('still rejects core-domain corruption', () => {
+    expect(parseChroniclerReply(JSON.stringify({
+      characters: [], inventory: {}, scene: {}, flags: {}, relations: [],
+    }))).toBeUndefined()
+  })
+})

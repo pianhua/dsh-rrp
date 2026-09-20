@@ -36,3 +36,15 @@ describe('extractFirstJsonObject', () => {
     expect(extractFirstJsonObject('')).toBeUndefined()
   })
 })
+
+describe('trailing-comma tolerance (testing-round hardening)', () => {
+  it('drops stray commas before closers, nested included', () => {
+    expect(extractFirstJsonObject('{"a":1,}')).toEqual({ a: 1 })
+    expect(extractFirstJsonObject('{"a":[1,2,],}')).toEqual({ a: [1, 2] })
+    expect(extractFirstJsonObject('```json\n{"a":{"b":2,},}\n```')).toEqual({ a: { b: 2 } })
+  })
+
+  it('leaves commas inside string literals alone', () => {
+    expect(extractFirstJsonObject('{"a":"x,}y",}')).toEqual({ a: 'x,}y' })
+  })
+})

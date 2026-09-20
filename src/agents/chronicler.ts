@@ -175,8 +175,32 @@ export function parseChroniclerReply(reply: string, existingState?: WorldState):
     }
   }
   
+/** True when `value` is a well-formed D5 DynamicFieldValue. */
+function isWellFormedDynamicField(value: unknown): boolean {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  const type = record.type
+  if (type !== 'number' && type !== 'string' && type !== 'boolean') return false
+  return typeof record.value === type
+}
+
   // Validate base state
-  const result = worldStateSchema.safeParse(obj)
+  let result = worldStateSchema.safeParse(obj)
+  if (!result.success) {
+    // Salvage: a single malformed dynamic (non-core) key — an array, a nested
+    // object, a mistyped value — must not cost the whole turn. Drop the junk
+    // keys and retry; core-domain errors still reject outright.
+    const salvaged = { ...obj }
+    let dropped = false
+    for (const key of Object.keys(salvaged)) {
+      if (isCoreKey(key)) continue
+      if (!isWellFormedDynamicField(salvaged[key])) {
+        delete salvaged[key]
+        dropped = true
+      }
+    }
+    if (dropped) result = worldStateSchema.safeParse(salvaged)
+  }
   if (!result.success) return undefined
   
   const state = pruneWorldState(result.data as WorldState)

@@ -222,9 +222,21 @@ async function runInference(
       })
       return { status: 'killed' }
     }
+    // Distinguish an empty stream (infrastructure failure, retry-worthy) from
+    // a malformed payload — both used to surface as the same format error.
+    if (text.trim().length === 0) {
+      console.warn(TAG + ' Chronicler EMPTY reply for ' + session.id + ' (treated as failure)')
+      throw new Error('Chronicler reply was empty')
+    }
 
     const reply = parseChroniclerReply(text, prior)
-    if (reply === undefined) throw new Error('Chronicler reply was not a valid WorldState')
+    if (reply === undefined) {
+      // Log a bounded preview so a format regression names its cause instead
+      // of leaving "not a valid WorldState" as the whole story.
+      const preview = text.replace(/\s+/g, ' ').slice(0, 160)
+      console.warn(TAG + ' Chronicler reply was not a valid WorldState (len ' + String(text.length) + '): ' + preview)
+      throw new Error('Chronicler reply was not a valid WorldState')
+    }
     
     // D6: Temporal race check. If the player corrected the state while inference was running,
     // discard the Chronicler's result to ensure player edits always take precedence.

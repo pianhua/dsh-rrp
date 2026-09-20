@@ -544,6 +544,17 @@ export function registerCopilotRoute(ctx: Context): void {
             throw error
           }
 
+          // An empty stream is a failure, not a turn: persisting a blank
+          // bubble (real-world rate was 2/3 during testing) would leave the
+          // player a silent answer and feed an empty assistant message back
+          // as history context. Surface the error instead; nothing is stored.
+          if (reply.trim().length === 0) {
+            console.warn(TAG + ' copilot EMPTY reply for ' + sessionId + ' (treated as failure, not persisted)')
+            writeSse(res, COPILOT_SSE.error, { error: 'empty reply' })
+            res.end()
+            return
+          }
+
           // Execute the action block, if any. Failures are reported per action
           // and never abort the turn — the player still got her answer.
           const applied: CopilotTurnAction[] = []

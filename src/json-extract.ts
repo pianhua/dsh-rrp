@@ -34,10 +34,44 @@ function autoClose(text: string): string {
   return suffix
 }
 
-/** Parse as-is, else with an auto-generated closing suffix. */
+/** Drop commas that sit directly before a closer (`{"a":1,}` → `{"a":1}`). String-aware. */
+function stripTrailingCommas(text: string): string {
+  let out = ''
+  let inString = false
+  let escaped = false
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i] as string
+    if (inString) {
+      out += ch
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') {
+      inString = true
+      out += ch
+      continue
+    }
+    if (ch === ',') {
+      let j = i + 1
+      while (j < text.length && /\s/.test(text[j] as string)) j += 1
+      if (text[j] === '}' || text[j] === ']') continue // drop the stray comma
+    }
+    out += ch
+  }
+  return out
+}
+
+/** Parse as-is, else without trailing commas, else with an auto closing suffix. */
 function tryParseLoose(candidate: string): unknown | undefined {
   try {
     return JSON.parse(candidate)
+  } catch {
+    /* try de-commaed */
+  }
+  try {
+    return JSON.parse(stripTrailingCommas(candidate))
   } catch {
     /* try closed */
   }

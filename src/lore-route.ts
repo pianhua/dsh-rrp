@@ -285,6 +285,14 @@ async function runDraft(
       recordActivity(session.id, { id: activityId, at: stamp(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.cancelled' })
       return { status: 'killed' }
     }
+    // An empty stream is an infrastructure failure, NOT a "nothing to lore"
+    // verdict — conflating them hid a silent-empty epidemic behind the
+    // 「目前没有待确认草稿」message (same pathology the copilot route had).
+    if (text.trim().length === 0) {
+      console.warn(TAG + ' Scribe EMPTY reply for ' + session.id + ' (treated as failure, not nothing-to-lore)')
+      recordActivity(session.id, { id: activityId, at: stamp(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.emptyReply' })
+      return { status: 'failed' }
+    }
     const draft = parseScribeReply(text)
     if (draft === undefined) {
       recordActivity(session.id, {
