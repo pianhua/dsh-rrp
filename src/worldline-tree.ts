@@ -62,6 +62,10 @@ export interface WorldlineNode {
    * Absent means true (every turn-bearing node is live by construction).
    */
   loaded?: boolean
+  /**
+   * True for freshly forked sessions that have not yet recorded their first turn.
+   */
+  pending?: boolean
   /** True when more than one line continues from this turn (its children). */
   fork: boolean
   children: WorldlineNode[]
@@ -77,12 +81,11 @@ export interface WorldlineTree {
 /**
  * Fold session facts into per-card worldline trees.
  *
- * Live sessions contribute their turn chains exactly as before. Cold skeleton
- * facts (issue #29 — `stub: true`, no turns) become single placeholder nodes:
- * they hang off the parent's visible chain tail when the parent is in the map
- * (the real fork cut is unknown until the session is loaded, so the tail is
- * the honest approximation), nest under a parent placeholder, or stand as
- * roots when no ancestor is visible.
+ * Live sessions contribute their turn chains exactly as before. Freshly forked
+ * live sessions without turns yet become pending placeholder nodes at the cut.
+ * Cold skeleton facts (issue #29 — `stub: true`, no turns) become single placeholder
+ * nodes: they hang off the parent's visible chain tail when the parent is in the map,
+ * nest under a parent placeholder, or stand as roots when no ancestor is visible.
  *
  * @param sessions - live + skeleton session facts (any order; roots follow input order).
  * @param hidden - soft-archived session ids; their whole subtree is pruned.
@@ -126,7 +129,8 @@ export function foldWorldlineTrees(
   }
 
   // First pass: every session's live tail becomes a linear chain; every
-  // skeleton becomes a single placeholder node.
+  // skeleton becomes a single placeholder node; freshly forked live sessions
+  // with no turns yet become a single pending leaf on the branch.
   const chains = new Map<string, { head: WorldlineNode; tail: WorldlineNode }>()
   const stubs = new Map<string, WorldlineNode>()
   for (const session of visible) {
@@ -146,6 +150,21 @@ export function foldWorldlineTrees(
           fork: false,
           children: [],
         })
+      } else if (session.parentId !== undefined) {
+        // Freshly forked live session: waiting for first player message on this branch.
+        const pendingNode: WorldlineNode = {
+          key: session.id + ':' + String(seed),
+          sessionId: session.id,
+          sessionTitle: session.title,
+          turn: seed,
+          seq: -1,
+          playerExcerpt: '',
+          proseExcerpt: '',
+          pending: true,
+          fork: false,
+          children: [],
+        }
+        chains.set(session.id, { head: pendingNode, tail: pendingNode })
       }
       continue
     }
@@ -172,7 +191,8 @@ export function foldWorldlineTrees(
   }
 
   // Second pass: attach chains at the durable fork cut — the parent's LAST
-  // inherited turn — or promote them to roots (main lines and orphans).
+  // inherited turn (recursively searching ancestors if needed) — or promote
+  // them to roots (main lines and orphans).
   for (const session of visible) {
     const chain = chains.get(session.id)
     if (chain !== undefined) {
@@ -181,7 +201,7 @@ export function foldWorldlineTrees(
       const parent = session.parentId !== undefined ? byId.get(session.parentId) : undefined
       const cut =
         parent !== undefined && !pruned.has(parent.id) && seed > 0
-          ? findNode(chains.get(parent.id), seed - 1)
+          ? findNodeInLineage(parent.id, seed - 1, byId, chains, pruned)
           : undefined
       if (cut !== undefined) {
         cut.children.push(chain.head)
@@ -213,6 +233,26 @@ export function foldWorldlineTrees(
   // Mark fork points: a node with more than one continuation.
   for (const tree of trees.values()) markForks(tree.roots)
   return [...trees.values()]
+}
+
+function findNodeInLineage(
+  startParentId: string,
+  turn: number,
+  byId: Map<string, WorldlineSessionFact>,
+  chains: Map<string, { head: WorldlineNode; tail: WorldlineNode }>,
+  pruned: Set<string>,
+): WorldlineNode | undefined {
+  let currId: string | undefined = startParentId
+  const visited = new Set<string>()
+  while (currId !== undefined && !visited.has(currId) && !pruned.has(currId)) {
+    visited.add(currId)
+    const chain = chains.get(currId)
+    const found = findNode(chain, turn)
+    if (found !== undefined) return found
+    const currSession = byId.get(currId)
+    currId = currSession?.parentId
+  }
+  return undefined
 }
 
 function findNode(

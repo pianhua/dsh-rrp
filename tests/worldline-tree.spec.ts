@@ -119,6 +119,39 @@ describe('worldline tree fold (issue #28)', () => {
     ])
     expect(trees[0]?.roots.map((root) => root.sessionId)).toEqual(['m', 'f'])
   })
+
+  it('supports grandchild forking from grandparent turn without disconnecting as root', () => {
+    const trees = foldWorldlineTrees([
+      session('m', { turns: turns(3) }),
+      session('a', { parentId: 'm', seedTurns: 1, turns: turns(3, 'a') }),
+      session('b', { parentId: 'a', seedTurns: 1, turns: turns(3, 'b') }),
+    ])
+    expect(trees[0]?.roots).toHaveLength(1)
+    const mHead = trees[0]?.roots[0]
+    expect(mHead?.turn).toBe(0)
+    expect(mHead?.children.map((c) => c.sessionId + ':' + String(c.turn))).toEqual([
+      'm:1',
+      'a:1',
+      'b:1',
+    ])
+  })
+
+  it('shows newly forked live sessions with zero live turns as pending branch nodes', () => {
+    const trees = foldWorldlineTrees([
+      session('m', { turns: turns(3) }),
+      session('f', { parentId: 'm', seedTurns: 2, turns: turns(2, 'm') }), // inherited 0, 1; no live turns yet
+    ])
+    expect(trees[0]?.roots).toHaveLength(1)
+    const cut = trees[0]?.roots[0]?.children[0]
+    expect(cut?.turn).toBe(1)
+    expect(cut?.children.map((c) => c.sessionId + ':' + String(c.turn))).toEqual([
+      'm:2',
+      'f:2',
+    ])
+    const pending = cut?.children[1]
+    expect(pending?.pending).toBe(true)
+    expect(pending?.sessionId).toBe('f')
+  })
 })
 
 describe('cold skeleton folds (issue #29)', () => {
