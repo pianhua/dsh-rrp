@@ -1,7 +1,7 @@
 /**
  * dsh-rrp — host half.
  *
- * The host half materializes the RP preset family, registers the six pure
+ * The host half materializes the RP preset family, registers the seven pure
  * Session projections, and wires the DSH-native routes/jobs/agent scopes used
  * by the card, WorldState, summary, and lore flows.
  *

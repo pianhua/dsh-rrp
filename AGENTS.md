@@ -61,8 +61,8 @@ dsh-rrp/
 │   ├── chronicler.ts            # 状态推演触发与异步推演（ctx.jobs + ctx.llm）
 │   ├── summarizer.ts / macro-summary.ts  # 剧情脉络触发与推演（ctx.jobs + /summary）与四维词汇
 │   ├── activity.ts / activity-route.ts   # 归因账本（宿主内存 + 只读路由）
-│   ├── lore.ts / lore-state.ts / lore-condition.ts / lore-provider.ts / lore-runtime.ts / lore-route.ts
-│   │                            # D8 设定集：旧 sidecar 迁移 / 词汇 / 条件注入求值 / provider / 运行时 / 路由与 /lore
+│   ├── lore.ts / lore-state.ts / lore-condition.ts / lore-provider.ts / lore-runtime.ts / lore-route.ts / lore-drafts.ts
+│   │                            # D8 设定集：旧 sidecar 迁移 / 词汇 / 条件注入求值 / provider / 运行时 / 路由与草稿暂存
 │   ├── correction.ts            # 玩家矫正写路径（宿主 webserver 路由）
 │   ├── copilot.ts / copilot-store.ts / steward-proposals.ts
 │   │                            # 月停路由与动作执行 / 宿主存储域历史 / 提案暂存确认落盘（issue #21 #33）
@@ -73,19 +73,19 @@ dsh-rrp/
 │   ├── cards-route.ts / start.ts / export-route.ts / card-workspace-route.ts / save-naming.ts
 │   │                            # 卡包只读路由 / 开卡 / 小说导出 / 一卡一区（#37）/ 存档命名纯词汇
 │   ├── route-contract.ts        # 前后端 HTTP+SSE 契约单一来源（#22）
-│   ├── json-extract.ts          # 模型回复容错解析（四个后台智体共用）
+│   ├── json-extract.ts          # 模型回复容错解析（Chronicler/Copilot/Scribe/Summarizer 四个后台智体共用；Author 走正文流不用它）
 │   ├── settings.ts / prompt-budget.ts    # 会话级 RP 设置投影词汇 / 上下文体积估算词汇
 │   ├── contracts.ts             # 对外只读契约（依赖为零）
 │   ├── home.ts                  # harnessHome() 叶子模块
 │   ├── client/                  # 客户端入口与面板
 │   │   ├── index.ts             # 客户端入口（locale + 注册）
 │   │   ├── context-types.ts     # 宿主客户端注入面的结构类型
-│   │   ├── world-state-tab.tsx  # 世界状态：结构化就地编辑器
+│   │   ├── world-state-tab.tsx / components/  # 世界状态：装配器 + components/ 维度分组件
 │   │   ├── lore-tab.tsx         # 设定集（D8）：起草/审阅/确认/删除
 │   │   ├── copilot-tab.tsx / copilot-prefill.ts  # 月停面板（SSE）/ 舞台「问月停」预填
 │   │   ├── gallery-panel.tsx    # 卡片展厅 + 开卡流（含导入、工作区归组）
 │   │   ├── worldline-tab.tsx    # 世界线存档图：读档 / 重roll / 收起 / 导出
-│   │   ├── stage-tab.tsx / stage-frame.tsx      # 舞台页签：声明式解释器 + 沙箱卡页面
+│   │   ├── stage-tab.tsx / stage-frame.tsx / stage-types.ts  # 舞台页签：声明式解释器 + 沙箱卡页面 + 共享接口
 │   │   └── primitives.d.ts      # 宿主原子库结构面类型
 │   ├── agents/                  # 智体提示词与行为规范（统一 AgentPromptContract，issue #32）
 │   │   ├── contract.ts          # 统一提示词契约接口（六层结构 + Zod 绑定 + 缓存不变式）
@@ -94,8 +94,9 @@ dsh-rrp/
 │   │   ├── summarizer.ts        # 剧情脉络摘要智能体
 │   │   ├── scribe.ts            # D8 设定集知识起草（只起草一条）
 │   │   └── copilot.ts           # 月停提示词 + rrp-action 动作块词汇与解析
-│   └── projection/              # 会话投影纯数学折叠器
+│   └── projection/              # 会话投影纯数学折叠器（7 单元）
 │       ├── world-state.ts       # WorldState 投影单元（zod 校验 + 纯折叠）
+│       ├── transcript.ts        # 转录切片投影单元（宿主已禁同步读日志）
 │       ├── summary.ts           # 剧情脉络投影单元
 │       ├── settings.ts          # RP 设置投影单元（摘要开关）
 │       ├── lore.ts              # D8 设定集投影单元
@@ -123,3 +124,4 @@ dsh-rrp/
    - **绝不发明会话事件类型** —— 状态寄存在已知 `user/message` 的 `source`；
    - **不在陌生 context 上属性读取服务** —— 用 `ctx.get(name)`；agent 生命周期监听器整体 try/catch；
    - **注入上下文只追加、绝不 replace** —— 前缀缓存是性能命脉。
+6. **流程纪律**：需求类改动先走 [`docs/dev/workflow.md`](docs/dev/workflow.md)——术语先行对齐 → 拷问确认即落盘 → 编码前对照本文件与 `docs/reference/` 规则文档做冲突检查；工作区盘点与待决事项记入 [`docs/dev/worklog.md`](docs/dev/worklog.md)。

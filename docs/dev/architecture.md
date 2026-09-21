@@ -13,7 +13,7 @@ DSH-Chronicle 是挂在 DeepSeek Harness（DSH）上的**正统薄插件**：不
 | 上下文无脑堆砌 | Skills 按需调取（抬上限）+ `when:` 确定性注入（保下限） |
 | 正则世界书关键词激活 | 机制与内容分离：卡作者写声明，引擎写一次求值器 |
 | `< 1/3 >` 翻页伪分支 + 幽灵状态 | 原生 `Session.fork` + 投影纯数学折叠——切线状态严丝合缝重放 |
-| 单模型既写文又记账 | 三智体权能分立（执笔/状态推演/脉络），月停独立 OOC 频道 |
+| 单模型既写文又记账 | 叙事核心三智体权能分立（执笔/状态推演/脉络）+ Scribe 与月停两辅助，共 5 智体；月停走独立 OOC 频道 |
 | 锁与仲裁的防御性包袱 | 玩家矫正 = 自然时序最后写入获胜，无锁 |
 
 ## 数据主干：追加式发布 + 投影折叠
@@ -37,7 +37,7 @@ publishState()                          ctx.sessionProjections
 - **分支免费正确**：fork 复制日志，投影从日志重算——读档时正文/状态/设定集/脉络一切倒回，不需要任何"恢复"逻辑；
 - **历史永不重写**：改状态 = 追加一条新事实；撤销 = 发布一次还原快照（历史留痕）。
 
-## 三智体 + 两配角
+## 五个智体（三核心 + 两辅助）
 
 | 智体 | 触发 | 权限 |
 | :--- | :--- | :--- |
@@ -45,7 +45,9 @@ publishState()                          ctx.sessionProjections
 | Chronicler 状态推演 | 每轮正文后，`ctx.jobs` 异步 | 只写状态（含 D5 自创字段）；不写正文 |
 | Summarizer 脉络 | 每 N 轮，可关 | 只写脉络罗盘 |
 | Scribe 知识起草 | `/lore` 命令 | 只产草稿，玩家确认才入库 |
-| Copilot 月停 | 面板 SSE 请求 | 问答 + 动作块（改状态走矫正通道、起草设定集只进草稿）；历史存宿主存储域，**不进会话日志** |
+| Copilot 月停 | 面板 SSE 请求 | 问答 + 四种动作块（改状态走矫正通道、起草设定集只进草稿、卡包/文档提案待确认）；历史存宿主存储域，**不进会话日志** |
+
+> 五个智体统一接入 `src/agents/contract.ts` 的 `AgentPromptContract`（D18 / issue #32）：Author 与四个后台智体共用工程结构，但业务内容严格分流——Author 的 Creative License 与反 AI 腔词库永不进入数据管道，后台的 JSON 纪律也永不约束正文。
 
 ## 条件注入（本项目的独门）
 
@@ -53,7 +55,9 @@ facts 通道每轮对世界状态求值 `when:` 声明（纯数值/布尔），�
 
 ## 世界线地图（#28）
 
-树 = 宿主 fork 血缘字段（`header.meta.parentSession` + `inheritedEventCount`）+ 存档点摘要投影，**服务端对 live 会话一次折全图**；客户端零存储。软归档（hidden 表）走宿主存储域。
+树 = 宿主 fork 血缘字段（`header.parentSession` + **顶层** `inheritedEventCount`）+ 存档点摘要投影，**服务端对 live 会话一次折全图**；客户端零存储。软归档（hidden 表）走宿主存储域。
+
+> ⚠️ 读宿主 Session 字段务必照抄上面这两个位置：`inheritedEventCount` 是 **Session 顶层属性**，`parentSession` 直接挂在 `header` 上，**没有 `meta` 中间层**（issue #36 真机教训，详见 `docs/dev/host-seams.md`）。写错只会静默回退默认值——分支全成 root，且测试与实现会一起错。
 
 ## 模块地图
 
@@ -63,14 +67,16 @@ src/
 ├── preset.ts / preset-id # RP 模式物化（基础 rp + 每卡 rp-<id>）
 ├── cards.ts / card-types # 卡包解析与共享词汇
 ├── state-publisher.ts    # 追加式发布（唯一写通道）
-├── projection/           # 纯折叠器（world-state/transcript/summary/lore/card/digest）
+├── projection/           # 纯折叠器（7 单元：world-state/transcript/summary/settings/lore/card/worldline-digest）
 ├── world-state.ts        # 状态词汇（host/client 共享纯模块）
 ├── chronicler / summarizer / lore-route / correction / copilot / worldline-route
 ├── route-contract.ts     # 前后端 HTTP/SSE 契约单一来源（#22）
-├── agents/               # 各智体提示词与输出契约
-└── client/               # 面板（展厅/状态/设定集/月停/世界线）
+├── agents/               # 各智体提示词与输出契约（5 智体，统一 AgentPromptContract）
+└── client/               # 面板（展厅/状态/设定集/月停/世界线/舞台）
 ```
 
 ## 延伸阅读（仓库内）
 
-`docs/DESIGN.md`（产品规格）· `docs/HOST_ALIGNMENT.md`（宿主映射红线）· `docs/DEVELOPMENT.md`（开发循环）· `docs/reference/DECISIONS.md`（D1-D15 决策理由）。
+`docs/DESIGN.md`（产品规格）· `docs/HOST_ALIGNMENT.md`（宿主映射红线）· `docs/DEVELOPMENT.md`（开发循环）· `docs/reference/DECISIONS.md`（D1-D22 决策理由）。
+
+> 上述 `docs/reference/**`（含 `DECISIONS.md`）与 `DESIGN.md`/`HOST_ALIGNMENT.md`/`DEVELOPMENT.md` 是**仓库内路径**：它们在本地工作区与克隆里可读，但被 `docs/.vitepress/config.mts` 的 `srcExclude` 排除在发布站点之外，站点上不可达。

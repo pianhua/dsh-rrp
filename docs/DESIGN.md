@@ -80,6 +80,8 @@
 
 ## 3. 三智体权能分立矩阵
 
+> **术语**：本节矩阵只讲**叙事核心三智体**（Author 叙事执笔 / Chronicler 状态推演 / Summarizer 剧情脉络）。全仓另有 **Scribe**（设定集起草）与 **Copilot 月停**（玩家私属幕僚）两个辅助智体，合共 **5 智体**；Scribe 与月停不在本矩阵的轮次主链上，见 [D18](reference/DECISIONS.md) 与 [`docs/dev/architecture.md`](dev/architecture.md)。
+
 ```text
 玩家行动输入 (Player Action)
      │

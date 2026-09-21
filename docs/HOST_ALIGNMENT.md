@@ -36,7 +36,7 @@
 | **子智体编排** | Subagent seam | `@deepseek-ai/dsh-subagent` → `ctx.subagents` | 需要派生/隔离智体时用官方 provider，不自造流水线 |
 | **工具注册** | 工具管线 | `@deepseek-ai/dsh-tools` → `defineTool` | Codex 查阅等只读工具按官方规范定义（含 `presentResult`） |
 | **技能知识** | Skill 体系 | `@deepseek-ai/dsh-skill` / `dsh-skill-filesystem` | 世界设定即 Skill，按需调取（替代 Lorebook） |
-| **非会话存储** | 存储中心 | `@deepseek-ai/dsh-storage`（json / sqlite backend + domain form） | 域数据挂 storage domain，**不自建连接池/迁移链** |
+| **非会话存储** | 存储中心 | `@deepseek-ai/dsh-storage-domain`（域名 + 表声明；底下的 json / sqlite backend 由宿主提供） | 域数据挂 storage domain，**不自建连接池/迁移链** |
 | **会话持久化** | 官方持久化 | `@deepseek-ai/dsh-session-persistence-sqlite` | 正文落盘交给宿主，不自建 story 库 |
 | **执行轨迹观测** | 原生轨迹面板 | `@deepseek-ai/dsh-client-ui-trajectory` / `dsh-client-ui-tool` | 直接使用宿主原生轨迹，**不自建 DevConsole** |
 | **会话统计遥测** | 原生统计 | `@deepseek-ai/dsh-session-telemetry` / session-stats | 复用宿主指标，**不自建 packet-log** |
@@ -52,7 +52,7 @@
 | :--- | :--- | :--- |
 | Cordis 插件与 bundle | `package.json.dsh.bundle.patch` + `cordis.patch.yml`；host/client 分包 | ✅ 符合 |
 | UI | 原生 slots、右侧栏、session/controller 与 primitives；无独立 SPA | ✅ 符合 |
-| 会话状态 | 已知 `user/message.source.rrp` + 五个纯投影（Card / WorldState / Summary / Settings / Lore）；无自造必需事件类型 | ✅ 符合 |
+| 会话状态 | 已知 `user/message.source.rrp` + **7 个纯投影**（WorldState / Transcript / Summary / Settings / Lore / Card / WorldlineDigest）；无自造必需事件类型 | ✅ 符合 |
 | 后台推演 | Chronicler / Summarizer / Scribe 走 `ctx.jobs + ctx.llm`；没有自建队列或 Agent loop | ✅ 符合 |
 | 卡包 Skills | 每卡派生 `rp-<card>` preset，利用官方 standing scope 隔离 | ✅ 符合，不是重复造轮子 |
 | 投影注册生命周期 | `sessionProjections.register()` 在宿主中本身是 calling-fiber effect；未保存提前 disposer 不等于 HMR 泄漏 | ✅ 符合 |
@@ -77,7 +77,7 @@ D8 的语义已经确定：沉淀属于世界线，子会话继承分叉点前�
 | `src/packet-log/**` 自建数据包日志 | 775 | ❌ 不迁移 | 宿主 session telemetry |
 | `src/background/**` 自研任务队列/死信 | 1769 | ❌ 不迁移 | `ctx.jobs` |
 | `src/runtime/**` 自研回合编排 OS | 5706 | ❌ 不迁移 | `ctx.agents` + 领域胶水 |
-| `src/persistence/**` 通用 SQLite 框架 | 1596 | ❌ 不迁移 | `ctx.storage` + 官方 session persistence |
+| `src/persistence/**` 通用 SQLite 框架 | 1596 | ❌ 不迁移 | `ctx.storageDomain` + 官方 session persistence |
 | `src/change/rp-change-state.ts` 巨石状态机 | 3463 | ❌ 不迁移 | `sessionProjections` 纯折叠 |
 | 34 套 `*-store.ts` / `*-persistence.ts` 样板 | — | ❌ 不迁移 | storage domain |
 | `scripts/admin/rp-admin.mjs` 自建运维 CLI | 数百 | ❌ 不迁移 | 宿主内置管理能力 |
@@ -85,6 +85,17 @@ D8 的语义已经确定：沉淀属于世界线，子会话继承分叉点前�
 | 原生卡包三资产**设计理念** | — | ✅ 保留重设计 | 格式将重新制定 |
 | 世界线**非线性哲学** | — | ✅ 保留 | 映射原生 fork |
 | 玩家矫正**产品承诺** | — | ✅ 保留简化 | 自然时序流（无锁） |
+
+### 3.1 现实演变：酒馆卡导入（issue #31 P1-D）——与 D14 的张力待拍板
+
+`src/card-import.ts` 在**核心引擎内**解析酒馆卡：PNG 的 `ccv3`/`chara`/`ccv2` tEXt chunk（base64 → gzip → JSON）、V2 顶层布局与 V3 `{ spec: 'chara_card_v3', data }`，映射 `description`/`scenario`/`personality`/`mes_example`/`first_mes`/`tags`/`creator`，并暴露 `POST /dsh-rrp/cards/import` 与展厅上传入口。
+
+这与 **D14「核心引擎零酒馆字段解析代码」**及本节第 4 部分红线字面冲突。事实是：
+
+- 它**不是运行时兼容层**（读卡后立即固化为原生卡包目录，之后零酒馆字段残留），与 D14 真正要防的东西（运行时 ST 模拟器）不同；
+- 但它是**一次性转换器**，而 D14 把转译职责划给了「独立工具 / Skill」，HOST_ALIGNMENT 红线也写着「转译由独立 Skill 负责」。
+
+**故本次按「已知例外」记录，不改 D14 原文**——收窄或重写 D14 属决策变更，须所有者拍板（`DECISIONS.md` 变更纪律第 1、3 条）。第 4 部分红线表已就本条加注指向此处。
 
 ---
 
@@ -96,12 +107,12 @@ D8 的语义已经确定：沉淀属于世界线，子会话继承分叉点前�
 | :--- | :--- |
 | `node:http` `createServer` / 第二端口 | 宿主已有唯一 Web Server |
 | 自制整站前端 SPA、自制弹窗/Toast 样式栈 | 应使用原生 Slot 与右侧栏 |
-| 通用 SQLite 连接池、WAL 管理、schema 迁移链 | 应使用 `ctx.storage` / 官方 session persistence |
-| CAS 乐观锁、分布式锁、多进程租约、永久仲裁保护盾 | 个人单机玩具不需要；采用自然时序流 |
+| 通用 SQLite 连接池、WAL 管理、schema 迁移链 | 应使用 `ctx.storageDomain` / 官方 session persistence |
+| CAS 乐观锁、分布式锁、多进程租约、永久仲裁保护盾 | 个人单机玩具不需要；采用自然时序流（`copilot-store` 的第二写手哨兵文件是「只报警不拦截」的例外，见下） |
 | 自建后台任务队列 / 死信 / 自愈矩阵 | 应使用 `ctx.jobs` |
-| 自建 DAG 图数据库 / 图投影平台 | 映射 `Session.fork`，可视化交给社区地图插件 |
+| 自建 DAG 图数据库 / 图投影平台 | 映射 `Session.fork`，地图由本仓库「世界线」页签呈现（#28；`dsh-synapse` 已于 2026-09-20 撤装） |
 | 自建 Trace / DevConsole / packet-log | 宿主原生轨迹与遥测已足够 |
-| 在核心引擎内解析酒馆 PNG / 兼容旧酒馆字段 | 核心只认原生格式；转译由独立 Skill 负责 |
+| 在核心引擎内解析酒馆 PNG / 兼容旧酒馆字段 | 核心只认原生格式；**唯一例外**是显式的一次性导入转换器（`POST /dsh-rrp/cards/import`），见第 3 节末注 |
 | 前端组件硬编码中文文案 | 必须走 `ctx.locale.register` |
 | 不可逆的服务端注册（无 disposer） | 必须支持 HMR 干净释放 |
 
@@ -119,13 +130,23 @@ D8 的语义已经确定：沉淀属于世界线，子会话继承分叉点前�
   "exports": {
     ".": { "types": "./lib/types/index.d.ts", "default": "./lib/index.js" },
     "./client": { "types": "./lib/types/client/index.d.ts", "default": "./lib/client.js" },
+    "./contracts": { "types": "./lib/types/contracts.d.ts", "default": "./lib/contracts.js" },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": {
-      "inject": ["@deepseek-ai/dsh-client-locale", "@deepseek-ai/dsh-client-ui-slots"],
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
       "platform": "web"
     }
   },
@@ -134,6 +155,8 @@ D8 的语义已经确定：沉淀属于世界线，子会话继承分叉点前�
   }
 }
 ```
+
+> 上例是**工程形态骨架**（`exports` / `dsh.bundle` / `dsh.client`）；`inject` 与 `peerDependencies` 以本仓库 `package.json` 为实例（9 项 peer，其中 8 项标 `peerDependenciesMeta.optional`）。
 
 约定要点：
 

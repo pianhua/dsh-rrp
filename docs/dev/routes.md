@@ -28,9 +28,6 @@
 | `/dsh-rrp/copilot/proposals` | POST | 卡包/笔记提案裁决（`action: confirm\|discard` + `id`；待裁清单随 GET `/dsh-rrp/copilot` 返回） | `{ ok: true, proposals: StewardProposal[] }` |
 | `/dsh-rrp/worldlines/tree` | GET | 世界线全图（live 会话折叠 + 冷会话骨架） | `WorldlineTreeResponse` |
 | `/dsh-rrp/worldlines/hidden` | GET/POST | 软归档名单 | `WorldlineHiddenResponse` |
-| `/dsh-rrp/card-ui?card=&file=` | GET | 卡包声明式界面：`ui/manifest.json` 或 `ui/*.html` 原文 | `CardUiResponse` |
-| `/dsh-rrp/export/novel?sessionId=&format=&title=` | GET | 小说导出（`md`/`txt`，附件下载） | 文本流（非 JSON） |
-| `/dsh-rrp/card-workspace` | POST | 一卡一区：幂等确保本卡专属工作区（#37） | `CardWorkspaceResponse`（`workspaceId`/`path`/`created`） |
 
 ## Copilot SSE 协议
 
