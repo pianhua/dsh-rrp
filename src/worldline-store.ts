@@ -40,7 +40,9 @@ interface DomainFacilityLike {
 }
 
 /** Open the archive domain, falling back to a process-lifetime memory set. */
-export async function openWorldlineStore(get: (name: string) => unknown): Promise<{ handle: WorldlineStoreHandle; viaHost: boolean }> {
+export async function openWorldlineStore(
+  get: (name: string) => unknown,
+): Promise<{ handle: WorldlineStoreHandle; viaHost: boolean }> {
   const facility = get('storageDomain') as DomainFacilityLike | undefined
   if (facility === undefined) {
     console.warn('[dsh-rrp] worldline archive in memory-only mode (storageDomain unavailable)')

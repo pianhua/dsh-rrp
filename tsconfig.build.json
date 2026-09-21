@@ -7,16 +7,8 @@
     "declarationMap": false,
     "outDir": "lib/types",
     "rootDir": "src",
-    "types": [
-      "node"
-    ]
+    "types": ["node"]
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx"
-  ],
-  "exclude": [
-    "tests",
-    "tsdown.config.ts"
-  ]
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["tests", "tsdown.config.ts"]
 }

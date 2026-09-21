@@ -76,7 +76,11 @@ export function promptBudgetReport(input: {
   if (input.summary !== undefined) push('summary', renderMacroSummary(input.summary))
   if (input.state !== undefined) push('state', renderWorldState(input.state))
   if (input.injectedChars !== undefined && input.injectedChars > 0) {
-    sections.push({ id: 'triggers', chars: input.injectedChars, tokens: estimateTokensOfChars(input.injectedChars) })
+    sections.push({
+      id: 'triggers',
+      chars: input.injectedChars,
+      tokens: estimateTokensOfChars(input.injectedChars),
+    })
   }
 
   const totalTokens = sections.reduce((sum, section) => sum + section.tokens, 0)

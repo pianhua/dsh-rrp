@@ -42,12 +42,20 @@ export const CHRONICLER_SYSTEM_PROMPT = [
   '   - ❌ 不记只对刚过去那一幕有意义的桥段。反例：「某角色对某物不熟悉」「某角色差点说漏嘴」「某角色已陪某人出门」「某危机已解决」——这些属于正文或剧情脉络，不属于状态。',
   '   - 判断法：如果一件事下一幕就不再影响局面，就不要写进 flags。',
   '   - 写法：优先写「键 → 简短事实」，而不是「键 → true」。例：「某人的真实身份」→「某隐秘身份（玩家尚未知情）」。',
-  '   - 保持精简（目标 ≤ ' + String(WORLD_STATE_TARGETS.flags) + ' 条，硬上限 ' + String(WORLD_STATE_LIMITS.flags) + ' 条，超出即被丢弃），按重要度从高到低排列。',
+  '   - 保持精简（目标 ≤ ' +
+    String(WORLD_STATE_TARGETS.flags) +
+    ' 条，硬上限 ' +
+    String(WORLD_STATE_LIMITS.flags) +
+    ' 条，超出即被丢弃），按重要度从高到低排列。',
   '5. characters / inventory 同样只保留当前仍然有效的状态，并按重要度排序。',
   '   - 角色键名规范：同一角色只用一个规范名作键（优先正名，不用泛称、绰号或带修饰的称呼）；更新已有角色时逐字复用 characters 现有键名，绝不另起别名开新键。',
   '   - ✗ 反例：同一角色混用「那位小姐」「沈姑娘」「mia」三个键；✓ 只保留正名一个键，旧别名并入正名条目。',
   '6. 关系网（relations）：',
-  '   - 顶层可选 relations 数组（目标 ≤ ' + String(WORLD_STATE_TARGETS.relations) + ' 条，硬上限 ' + String(WORLD_STATE_LIMITS.relations) + ' 条），只保留当前仍影响剧情的双向关系；已和解、已无关的关系应当移除。',
+  '   - 顶层可选 relations 数组（目标 ≤ ' +
+    String(WORLD_STATE_TARGETS.relations) +
+    ' 条，硬上限 ' +
+    String(WORLD_STATE_LIMITS.relations) +
+    ' 条），只保留当前仍影响剧情的双向关系；已和解、已无关的关系应当移除。',
   '   - 端点必须使用 characters 中的规范角色名；指代玩家统一写「玩家」。',
   '   - label 用一两字到短语概括（主仆/猜忌/亏欠/同盟…），同义合并，不写括号修饰。',
   '7. 如实反映玩家行动造成的后果，但绝不替玩家角色杜撰新的行动、对白或心理。',
@@ -145,14 +153,17 @@ function isWellFormedDynamicField(value: unknown): boolean {
  * @param reply - the raw model output.
  * @returns the validated state and field creation requests, or undefined when unusable.
  */
-export function parseChroniclerReply(reply: string, existingState?: WorldState): ChroniclerReply | undefined {
+export function parseChroniclerReply(
+  reply: string,
+  existingState?: WorldState,
+): ChroniclerReply | undefined {
   const parsed = extractFirstJsonObject(reply)
   if (!parsed || typeof parsed !== 'object') return undefined
   const obj = parsed as Record<string, unknown>
-  
+
   // Extract createFields if present
   const createFields = obj.createFields as CreateFieldRequest[] | undefined
-  delete obj.createFields  // Remove from state object
+  delete obj.createFields // Remove from state object
 
   // Preprocess dynamic fields: wrap bare scalars into DynamicFieldValue format
   for (const key of Object.keys(obj)) {
@@ -160,9 +171,12 @@ export function parseChroniclerReply(reply: string, existingState?: WorldState):
     const val = obj[key]
     if (typeof val === 'number' || typeof val === 'string' || typeof val === 'boolean') {
       const existing = existingState?.[key] as DynamicFieldValue | undefined
-      const type: DynamicFieldType = (existing && typeof existing === 'object' && (existing.type === 'number' || existing.type === 'string' || existing.type === 'boolean'))
-        ? existing.type
-        : (typeof val as DynamicFieldType)
+      const type: DynamicFieldType =
+        existing &&
+        typeof existing === 'object' &&
+        (existing.type === 'number' || existing.type === 'string' || existing.type === 'boolean')
+          ? existing.type
+          : (typeof val as DynamicFieldType)
 
       let value: number | string | boolean = val
       if (type === 'number' && typeof val !== 'number') {
@@ -185,7 +199,7 @@ export function parseChroniclerReply(reply: string, existingState?: WorldState):
       obj[key] = field
     }
   }
-  
+
   // Validate base state
   let result = worldStateSchema.safeParse(obj)
   if (!result.success) {
@@ -204,17 +218,17 @@ export function parseChroniclerReply(reply: string, existingState?: WorldState):
     if (dropped) result = worldStateSchema.safeParse(salvaged)
   }
   if (!result.success) return undefined
-  
+
   const state = pruneWorldState(result.data as WorldState)
-  
+
   // Validate and apply createFields
   if (createFields && Array.isArray(createFields)) {
     const validatedFields: CreateFieldRequest[] = []
-    
+
     for (const req of createFields) {
       // Validate field request
       if (!req.id || typeof req.id !== 'string') continue
-      if (!isValidFieldId(req.id)) continue  // Check naming rules
+      if (!isValidFieldId(req.id)) continue // Check naming rules
       if (req.id in state) {
         const existingField = state[req.id] as DynamicFieldValue
         if (typeof existingField === 'object' && existingField !== null) {
@@ -226,23 +240,23 @@ export function parseChroniclerReply(reply: string, existingState?: WorldState):
         continue
       }
       if (!['number', 'string', 'boolean'].includes(req.type)) continue
-      
+
       // Check for duplicate with existing fields (prevent synonyms)
-      const existing = Object.keys(state).filter(k => !isCoreKey(k))
+      const existing = Object.keys(state).filter((k) => !isCoreKey(k))
       const normalized = req.id.toLowerCase().replace(/_/g, '')
-      const isDuplicate = existing.some(k => k.toLowerCase().replace(/_/g, '') === normalized)
+      const isDuplicate = existing.some((k) => k.toLowerCase().replace(/_/g, '') === normalized)
       if (isDuplicate) continue
-      
+
       validatedFields.push(req)
-      
+
       // Apply to state
       const field = createDynamicField(req.type, req.value, { min: req.min, max: req.max })
       state[req.id] = field
     }
-    
+
     return { state, createFields: validatedFields.length > 0 ? validatedFields : undefined }
   }
-  
+
   return { state }
 }
 

@@ -84,7 +84,10 @@ describe('/dsh-rrp/card-workspace route', () => {
     async function* stream() {
       yield JSON.stringify(body)
     }
-    await routes.get(RRP_ROUTES.cardWorkspace)?.({ method: 'POST', [Symbol.asyncIterator]: stream }, res)
+    await routes.get(RRP_ROUTES.cardWorkspace)?.(
+      { method: 'POST', [Symbol.asyncIterator]: stream },
+      res,
+    )
     let parsed = {} as Record<string, unknown>
     if (res.text !== undefined) {
       try {
@@ -147,7 +150,10 @@ describe('/dsh-rrp/card-workspace route', () => {
       get: (name: string) =>
         name === 'webServer'
           ? {
-              register: (route: { path: string; handler: (req: unknown, res: unknown) => void }) => {
+              register: (route: {
+                path: string
+                handler: (req: unknown, res: unknown) => void
+              }) => {
                 routes.set(route.path, route.handler)
                 return () => undefined
               },

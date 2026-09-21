@@ -5,9 +5,16 @@ import { assembleSandboxDoc } from '../src/client/stage-frame.tsx'
 describe('card app bridge protocol', () => {
   it('accepts exactly the verbs a card app may raise', () => {
     expect(parseUiCall({ t: 'rrp:hello' })).toEqual({ t: 'rrp:hello' })
-    expect(parseUiCall({ t: 'rrp:correct_state', patch: { flags: { 已摊牌: true } } })).toMatchObject({ t: 'rrp:correct_state' })
-    expect(parseUiCall({ t: 'rrp:ask_copilot', question: '现在怎么办' })).toMatchObject({ t: 'rrp:ask_copilot' })
-    expect(parseUiCall({ t: 'rrp:resize', height: 421.7 })).toEqual({ t: 'rrp:resize', height: 422 })
+    expect(
+      parseUiCall({ t: 'rrp:correct_state', patch: { flags: { 已摊牌: true } } }),
+    ).toMatchObject({ t: 'rrp:correct_state' })
+    expect(parseUiCall({ t: 'rrp:ask_copilot', question: '现在怎么办' })).toMatchObject({
+      t: 'rrp:ask_copilot',
+    })
+    expect(parseUiCall({ t: 'rrp:resize', height: 421.7 })).toEqual({
+      t: 'rrp:resize',
+      height: 422,
+    })
   })
 
   it('drops anything else, including smuggled verbs', () => {
@@ -30,7 +37,9 @@ describe('card app bridge protocol', () => {
   it('clamps a resize instead of trusting the page', () => {
     expect(parseUiCall({ t: 'rrp:resize', height: 1 })?.t).toBe('rrp:resize')
     expect((parseUiCall({ t: 'rrp:resize', height: 1 }) as { height: number }).height).toBe(80)
-    expect((parseUiCall({ t: 'rrp:resize', height: 99999 }) as { height: number }).height).toBe(4000)
+    expect((parseUiCall({ t: 'rrp:resize', height: 99999 }) as { height: number }).height).toBe(
+      4000,
+    )
   })
 
   it('rejects an oversized question rather than truncating silently', () => {
@@ -40,7 +49,11 @@ describe('card app bridge protocol', () => {
 
 describe('sandbox document assembly', () => {
   it('puts the CSP and the shim inside <head>, ahead of the card’s own scripts', () => {
-    const doc = assembleSandboxDoc('<!DOCTYPE html><html><head><title>卡</title></head><body><scr' + 'ipt>var a=1</scr' + 'ipt></body></html>')
+    const doc = assembleSandboxDoc(
+      '<!DOCTYPE html><html><head><title>卡</title></head><body><scr' +
+        'ipt>var a=1</scr' +
+        'ipt></body></html>',
+    )
     const cspAt = doc.indexOf('Content-Security-Policy')
     const shimAt = doc.indexOf('window.rrp')
     const cardScriptAt = doc.indexOf('var a=1')

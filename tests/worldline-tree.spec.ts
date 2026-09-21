@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { foldWorldlineTrees, type WorldlineNode, type WorldlineSessionFact, type WorldlineTurnFact } from '../src/worldline-tree.ts'
+import {
+  foldWorldlineTrees,
+  type WorldlineNode,
+  type WorldlineSessionFact,
+  type WorldlineTurnFact,
+} from '../src/worldline-tree.ts'
 
 function turns(count: number, tag = ''): WorldlineTurnFact[] {
   return Array.from({ length: count }, (_, turn) => ({
@@ -46,7 +51,10 @@ describe('worldline tree fold (issue #28)', () => {
     const cut = root?.children[0]
     expect(cut?.turn).toBe(1)
     expect(cut?.fork).toBe(true)
-    expect(cut?.children.map((child) => child.sessionId + ':' + String(child.turn))).toEqual(['m:2', 'f:2'])
+    expect(cut?.children.map((child) => child.sessionId + ':' + String(child.turn))).toEqual([
+      'm:2',
+      'f:2',
+    ])
     expect(chain(cut?.children[1])).toEqual([2, 3])
   })
 
@@ -60,10 +68,16 @@ describe('worldline tree fold (issue #28)', () => {
     const mHead = trees[0]?.roots[0]
     expect(mHead?.sessionId).toBe('m')
     expect(mHead?.fork).toBe(true)
-    expect(mHead?.children.map((child) => child.sessionId + ':' + String(child.turn))).toEqual(['m:1', 'a:1'])
+    expect(mHead?.children.map((child) => child.sessionId + ':' + String(child.turn))).toEqual([
+      'm:1',
+      'a:1',
+    ])
     // b grows from a's turn 1 (seed 2 → parent turn 1): a:1 carries a:2 and b:2.
     const aHead = mHead?.children[1]
-    expect(aHead?.children.map((child) => child.sessionId + ':' + String(child.turn))).toEqual(['a:2', 'b:2'])
+    expect(aHead?.children.map((child) => child.sessionId + ':' + String(child.turn))).toEqual([
+      'a:2',
+      'b:2',
+    ])
   })
 
   it('hiding a line prunes its whole subtree, keeping the parent trunk intact', () => {
@@ -91,7 +105,9 @@ describe('worldline tree fold (issue #28)', () => {
   })
 
   it('promotes orphans (parent absent or hidden) to roots instead of dropping them', () => {
-    const trees = foldWorldlineTrees([session('o', { parentId: 'ghost', seedTurns: 2, turns: turns(3) })])
+    const trees = foldWorldlineTrees([
+      session('o', { parentId: 'ghost', seedTurns: 2, turns: turns(3) }),
+    ])
     expect(trees[0]?.roots).toHaveLength(1)
     expect(chain(trees[0]?.roots[0])).toEqual([2])
   })

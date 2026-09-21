@@ -26,9 +26,15 @@ export const CHRONICLER_TRANSCRIPT_LIMIT = 8000
  * Read the transcript slice, degrading to empty when the projection read
  * throws (e.g. racing session disposal) so these readers stay total.
  */
-export function transcriptSliceOf(projections: ProjectionReader, session: unknown): TranscriptSlice {
+export function transcriptSliceOf(
+  projections: ProjectionReader,
+  session: unknown,
+): TranscriptSlice {
   try {
-    return (projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined) ?? emptyTranscriptSlice()
+    return (
+      (projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined) ??
+      emptyTranscriptSlice()
+    )
   } catch {
     return emptyTranscriptSlice()
   }

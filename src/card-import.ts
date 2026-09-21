@@ -47,7 +47,9 @@ function asText(value: unknown): string {
 
 function asTags(value: unknown): string[] {
   if (!Array.isArray(value)) return []
-  return [...new Set(value.map((entry) => String(entry).trim()).filter((entry) => entry.length > 0))].slice(0, 8)
+  return [
+    ...new Set(value.map((entry) => String(entry).trim()).filter((entry) => entry.length > 0)),
+  ].slice(0, 8)
 }
 
 /**
@@ -57,20 +59,26 @@ function asTags(value: unknown): string[] {
 export function normalizeCharacterCard(parsed: unknown): ImportedCardSource | undefined {
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
   const root = parsed as Record<string, unknown>
-  const data = root.spec === 'chara_card_v3' && root.data !== null && typeof root.data === 'object'
-    ? root.data as Record<string, unknown>
-    : root
+  const data =
+    root.spec === 'chara_card_v3' && root.data !== null && typeof root.data === 'object'
+      ? (root.data as Record<string, unknown>)
+      : root
   const name = asText(data.name)
   if (name.length === 0) return undefined
 
   const description = asText(data.description)
   const scenario = asText(data.scenario)
   const worldCore = [description, scenario.length > 0 ? '【情境】\n' + scenario : '']
-    .filter((part) => part.length > 0).join('\n\n')
+    .filter((part) => part.length > 0)
+    .join('\n\n')
   const personality = asText(data.personality)
   const examples = asText(data.mes_example)
-  const persona = [personality, examples.length > 0 ? '示例对话（学习文风，勿照抄）：\n' + examples : '']
-    .filter((part) => part.length > 0).join('\n\n')
+  const persona = [
+    personality,
+    examples.length > 0 ? '示例对话（学习文风，勿照抄）：\n' + examples : '',
+  ]
+    .filter((part) => part.length > 0)
+    .join('\n\n')
   const creator = asText(data.creator) || asText(root.creator)
 
   return {
@@ -153,7 +161,9 @@ export function importCardFromPng(buffer: Buffer): ImportedCardSource | undefine
 
 /** Derive a canonical card id from the character name; '' when nothing usable. */
 export function cardIdFromName(name: string): string {
-  const slug = name.toLowerCase().normalize('NFKD')
+  const slug = name
+    .toLowerCase()
+    .normalize('NFKD')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 40)
@@ -180,7 +190,10 @@ export interface ImportWriteResult {
  * Write one imported card into the USER card root and materialize its preset
  * so it is playable immediately. Returns undefined when no safe id exists.
  */
-export function writeImportedCard(source: ImportedCardSource, home: string = harnessHome()): ImportWriteResult | undefined {
+export function writeImportedCard(
+  source: ImportedCardSource,
+  home: string = harnessHome(),
+): ImportWriteResult | undefined {
   const base = cardIdFromName(source.name) || 'imported'
   const id = uniqueCardId(base, home)
   if (id === undefined) return undefined
@@ -194,11 +207,19 @@ export function writeImportedCard(source: ImportedCardSource, home: string = har
   }
   if (source.tags.length > 0) frontmatter.tags = source.tags
   if (source.creator !== undefined) frontmatter.author = source.creator
-  const summary = source.worldCore.split('\n').find((line) => line.trim().length > 0)?.trim() ?? ''
+  const summary =
+    source.worldCore
+      .split('\n')
+      .find((line) => line.trim().length > 0)
+      ?.trim() ?? ''
   if (summary.length > 0) frontmatter.summary = summary.slice(0, 60)
   if (source.persona.length > 0) frontmatter.persona = source.persona
 
-  const cardMd = '---\n' + stringifyYaml(frontmatter).trimEnd() + '\n---\n\n' + (source.worldCore.length > 0 ? source.worldCore + '\n' : '')
+  const cardMd =
+    '---\n' +
+    stringifyYaml(frontmatter).trimEnd() +
+    '\n---\n\n' +
+    (source.worldCore.length > 0 ? source.worldCore + '\n' : '')
   writeFileSync(join(dir, 'card.md'), cardMd, 'utf8')
   if (source.firstMessage.length > 0) {
     writeFileSync(join(dir, 'openings', 'default.md'), source.firstMessage + '\n', 'utf8')

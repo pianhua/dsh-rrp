@@ -29,12 +29,19 @@ const STATE: WorldState = {
   trust: createDynamicField('number', 5),
 }
 
-const def = (id: string, excerpt: string, condition: WhenCondition): TriggerDef => ({ id, name: id, condition, excerpt })
+const def = (id: string, excerpt: string, condition: WhenCondition): TriggerDef => ({
+  id,
+  name: id,
+  condition,
+  excerpt,
+})
 
 describe('parseWhen', () => {
   it('parses character paths with every operator and numeric literals', () => {
     expect(cond('characters.米娅.affinity >= 80')).toEqual({
-      path: { kind: 'characters', name: '米娅', field: 'affinity' }, op: '>=', value: 80,
+      path: { kind: 'characters', name: '米娅', field: 'affinity' },
+      op: '>=',
+      value: 80,
     })
     expect(cond('characters.米娅.affinity > 79')).toMatchObject({ op: '>', value: 79 })
     expect(cond('characters.米娅.affinity < 90')).toMatchObject({ op: '<', value: 90 })
@@ -50,21 +57,29 @@ describe('parseWhen', () => {
 
   it('parses boolean literals for flag and boolean comparisons', () => {
     expect(cond('flags.身份已暴露 == true')).toEqual({
-      path: { kind: 'flags', name: '身份已暴露' }, op: '==', value: true,
+      path: { kind: 'flags', name: '身份已暴露' },
+      op: '==',
+      value: true,
     })
     expect(cond('flags.身份已暴露 != false')).toMatchObject({ op: '!=', value: false })
   })
 
   it('parses inventory, scene, and dynamic-field paths', () => {
     expect(cond('inventory.金币.quantity < 10')).toEqual({
-      path: { kind: 'inventory', name: '金币', field: 'quantity' }, op: '<', value: 10,
+      path: { kind: 'inventory', name: '金币', field: 'quantity' },
+      op: '<',
+      value: 10,
     })
     expect(cond('scene.location == true').path).toEqual({ kind: 'scene', field: 'location' })
     expect(cond('trust >= 5').path).toEqual({ kind: 'dynamic', id: 'trust' })
   })
 
   it('rejects string literals with the v1 migration hint', () => {
-    for (const src of ['characters.米娅.affinity >= 亲密', 'scene.location == "公寓"', 'scene.location == 门口']) {
+    for (const src of [
+      'characters.米娅.affinity >= 亲密',
+      'scene.location == "公寓"',
+      'scene.location == 门口',
+    ]) {
       const parsed = parseWhen(src, LOC)
       expect(parsed).toBeInstanceOf(Error)
       expect((parsed as Error).message).toContain(LOC)
@@ -73,7 +88,14 @@ describe('parseWhen', () => {
   })
 
   it('rejects malformed conditions with the locator', () => {
-    for (const src of ['', 'characters.米娅.affinity', '>= 80', 'characters..affinity >= 1', 'unknown.path.x >= 1', 'characters.米娅 >= 1']) {
+    for (const src of [
+      '',
+      'characters.米娅.affinity',
+      '>= 80',
+      'characters..affinity >= 1',
+      'unknown.path.x >= 1',
+      'characters.米娅 >= 1',
+    ]) {
       const parsed = parseWhen(src, LOC)
       expect(parsed).toBeInstanceOf(Error)
       expect((parsed as Error).message).toContain(LOC)
@@ -120,7 +142,8 @@ describe('hitSet', () => {
   })
 
   it('truncates to the total budget in order (单条 800 / 总量 2000)', () => {
-    const big = (id: string) => def(id, id.repeat(TRIGGER_EXCERPT_CHARS), cond('characters.米娅.affinity >= 10'))
+    const big = (id: string) =>
+      def(id, id.repeat(TRIGGER_EXCERPT_CHARS), cond('characters.米娅.affinity >= 10'))
     const hits = hitSet([big('c'), big('a'), big('b')], STATE)
     expect(hits.map((hit) => hit.id)).toEqual(['a', 'b', 'c'])
     expect(hits[0]?.excerpt).toHaveLength(TRIGGER_EXCERPT_CHARS)
@@ -130,7 +153,10 @@ describe('hitSet', () => {
   })
 
   it('defensively re-caps overlong excerpts', () => {
-    const hits = hitSet([def('a', 'x'.repeat(TRIGGER_EXCERPT_CHARS + 500), cond('characters.米娅.affinity >= 10'))], STATE)
+    const hits = hitSet(
+      [def('a', 'x'.repeat(TRIGGER_EXCERPT_CHARS + 500), cond('characters.米娅.affinity >= 10'))],
+      STATE,
+    )
     expect(hits[0]?.excerpt).toHaveLength(TRIGGER_EXCERPT_CHARS)
   })
 })

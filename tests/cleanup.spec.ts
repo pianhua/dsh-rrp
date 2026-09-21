@@ -43,7 +43,11 @@ describe('cleanupSession (P0-4 memory leak cleanup)', () => {
 
     // 3. Populate summarizer lastSummarized
     const host = {
-      llm: { async *stream() { yield { type: 'text-delta', text: '{}' } } },
+      llm: {
+        async *stream() {
+          yield { type: 'text-delta', text: '{}' }
+        },
+      },
       jobs: { start: () => 'job-1' },
       agents: { get: () => ({ options: { provider: 'p', model: 'm' } }) },
       sessionProjections: {
@@ -65,7 +69,10 @@ describe('cleanupSession (P0-4 memory leak cleanup)', () => {
       },
     }
     registerSummarizer(ctx as never, 'rp')
-    listeners.get('session/event')?.({ id: sessionId }, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    listeners.get('session/event')?.(
+      { id: sessionId },
+      { type: 'turn/end', data: { reason: { kind: 'completed' } } },
+    )
     expect(getLastSummarizedTurn(sessionId)).toBe(8)
 
     // Run cleanupSession

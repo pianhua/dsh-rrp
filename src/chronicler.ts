@@ -15,7 +15,11 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
-import { CHRONICLER_SYSTEM_PROMPT, buildChroniclerPrompt, parseChroniclerReply } from './agents/chronicler.ts'
+import {
+  CHRONICLER_SYSTEM_PROMPT,
+  buildChroniclerPrompt,
+  parseChroniclerReply,
+} from './agents/chronicler.ts'
 import {
   type AgentsService,
   type ControllableJobsService,
@@ -35,7 +39,14 @@ import {
 import { matchesPreset } from './preset-id.ts'
 import { publishState } from './state-publisher.ts'
 import { pendingTranscriptOf, proseHeadSeqOf } from './transcript-reader.ts'
-import { NO_WORLD_STATE_CHANGE, WORLD_STATE_KEY, diffWorldState, emptyWorldState, worldStatesEqual, type WorldState } from './world-state.ts'
+import {
+  NO_WORLD_STATE_CHANGE,
+  WORLD_STATE_KEY,
+  diffWorldState,
+  emptyWorldState,
+  worldStatesEqual,
+  type WorldState,
+} from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'chronicler'
@@ -59,7 +70,12 @@ export function registerChronicler(ctx: Context, presetId: string): void {
   const jobs = face<ControllableJobsService>(runtime, 'jobs')
   const agents = face<AgentsService>(runtime, 'agents')
   const projections = face<ProjectionsService>(runtime, 'sessionProjections')
-  if (llm === undefined || jobs === undefined || agents === undefined || projections === undefined) {
+  if (
+    llm === undefined ||
+    jobs === undefined ||
+    agents === undefined ||
+    projections === undefined
+  ) {
     console.warn(TAG + ' Chronicler idle (missing llm/jobs/agents/sessionProjections)')
     return
   }
@@ -72,10 +88,17 @@ export function registerChronicler(ctx: Context, presetId: string): void {
       // listener throw would escape into the host event bus, so never let one.
       try {
         const session = args[0] as SessionLike | undefined
-        const event = args[1] as { type?: string; data?: { reason?: { kind?: string } } } | undefined
+        const event = args[1] as
+          { type?: string; data?: { reason?: { kind?: string } } } | undefined
         if (session === undefined || event?.type !== 'turn/end') return
         if (event.data?.reason?.kind !== 'completed') return
-        if (!matchesPreset(projections.stateOf(session, 'agentPreset') as string | undefined, presetId)) return
+        if (
+          !matchesPreset(
+            projections.stateOf(session, 'agentPreset') as string | undefined,
+            presetId,
+          )
+        )
+          return
         scheduleInference(faces, session)
       } catch (error) {
         console.warn(TAG + ' Chronicler trigger failed:', error)
@@ -101,9 +124,18 @@ function scheduleInference(faces: HostFaces, session: SessionLike, throughSeq?: 
   // one's folds). Defer instead, and remember the newest boundary owed so the
   // covering pass folds every turn that piled up in the meantime.
   if (INFERENCE_IN_FLIGHT.has(session.id)) {
-    const owed = Math.max(throughSeq ?? proseHeadSeqOf(faces.projections, session), PENDING_UNTIL.get(session.id) ?? -1)
+    const owed = Math.max(
+      throughSeq ?? proseHeadSeqOf(faces.projections, session),
+      PENDING_UNTIL.get(session.id) ?? -1,
+    )
     PENDING_UNTIL.set(session.id, owed)
-    console.log(TAG + ' Chronicler busy for ' + session.id + '; queued a covering rerun through seq ' + String(owed))
+    console.log(
+      TAG +
+        ' Chronicler busy for ' +
+        session.id +
+        '; queued a covering rerun through seq ' +
+        String(owed),
+    )
     return
   }
   const owner = faces.agents.get(session.id)
@@ -112,7 +144,8 @@ function scheduleInference(faces: HostFaces, session: SessionLike, throughSeq?: 
     console.warn(TAG + ' Chronicler skipped ' + session.id + ': no provider/model route')
     return
   }
-  const target = throughSeq ?? PENDING_UNTIL.get(session.id) ?? proseHeadSeqOf(faces.projections, session)
+  const target =
+    throughSeq ?? PENDING_UNTIL.get(session.id) ?? proseHeadSeqOf(faces.projections, session)
   PENDING_UNTIL.delete(session.id)
   INFERENCE_IN_FLIGHT.add(session.id)
   try {
@@ -178,14 +211,20 @@ async function runInference(
 ): Promise<{ status: string }> {
   const activityId = randomUUID()
   try {
-    const prior = (faces.projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ?? emptyWorldState()
+    const prior =
+      (faces.projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ??
+      emptyWorldState()
     // Everything since the last committed fold, up to the boundary this pass
     // owes — no re-feeding of already-booked turns, no skipped ones.
     const transcript = pendingTranscriptOf(faces.projections, session, throughSeq)
     if (isEmptyReply(transcript)) return { status: 'completed' }
 
     recordActivity(session.id, {
-      id: activityId, at: nowIso(), actor: 'chronicler', target: 'world-state', phase: 'started',
+      id: activityId,
+      at: nowIso(),
+      actor: 'chronicler',
+      target: 'world-state',
+      phase: 'started',
     })
 
     const prompt = buildChroniclerPrompt({ prior, transcript })
@@ -193,19 +232,26 @@ async function runInference(
       provider: route.provider,
       model: route.model,
       system: CHRONICLER_SYSTEM_PROMPT,
-      messages: [{
-        id: randomUUID(),
-        role: 'user',
-        content: [{ type: 'text', text: prompt }],
-        source: { kind: 'plugin', plugin: 'dsh-rrp' },
-      }],
+      messages: [
+        {
+          id: randomUUID(),
+          role: 'user',
+          content: [{ type: 'text', text: prompt }],
+          source: { kind: 'plugin', plugin: 'dsh-rrp' },
+        },
+      ],
       sessionId: session.id,
       signal,
     })
     const text = await collectText(stream)
     if (isCancelled()) {
       recordActivity(session.id, {
-        id: activityId, at: nowIso(), actor: 'chronicler', target: 'world-state', phase: 'failed', detailKey: 'detail.cancelled',
+        id: activityId,
+        at: nowIso(),
+        actor: 'chronicler',
+        target: 'world-state',
+        phase: 'failed',
+        detailKey: 'detail.cancelled',
       })
       return { status: 'killed' }
     }
@@ -218,15 +264,23 @@ async function runInference(
       // Log a bounded preview so a format regression names its cause instead
       // of leaving "not a valid WorldState" as the whole story.
       const preview = text.replace(/\s+/g, ' ').slice(0, 160)
-      console.warn(TAG + ' Chronicler reply was not a valid WorldState (len ' + String(text.length) + '): ' + preview)
+      console.warn(
+        TAG +
+          ' Chronicler reply was not a valid WorldState (len ' +
+          String(text.length) +
+          '): ' +
+          preview,
+      )
       throw new Error('Chronicler reply was not a valid WorldState')
     }
-    
+
     // D6: the player's edit always wins, so a correction that landed while this
     // pass was running discards it. The discarded prose is not thereby
     // uncounted: queue the covering rerun so the next pass folds everything
     // since the last state write, not just the newest turn.
-    const currentPrior = (faces.projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ?? emptyWorldState()
+    const currentPrior =
+      (faces.projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ??
+      emptyWorldState()
     if (prior !== currentPrior && !worldStatesEqual(prior, currentPrior)) {
       // Bounded so continuous editing cannot livelock the queue; a committed
       // pass resets the budget. The next completed turn folds it regardless.
@@ -237,7 +291,12 @@ async function runInference(
         // so nothing is lost between the discard and the rerun.
         PENDING_UNTIL.set(session.id, throughSeq)
       } else {
-        console.warn(TAG + ' Chronicler discard retries exhausted for ' + session.id + '; the next completed turn folds it')
+        console.warn(
+          TAG +
+            ' Chronicler discard retries exhausted for ' +
+            session.id +
+            '; the next completed turn folds it',
+        )
       }
       recordActivity(session.id, {
         id: activityId,
@@ -247,13 +306,17 @@ async function runInference(
         phase: 'stale',
         detailKey: 'detail.staleDiscarded',
       })
-      console.log(TAG + ' Chronicler result discarded (player corrected); queued a covering rerun for session ' + session.id)
+      console.log(
+        TAG +
+          ' Chronicler result discarded (player corrected); queued a covering rerun for session ' +
+          session.id,
+      )
       return { status: 'stale' }
     }
 
     // D5: Log field creation if present
     if (reply.createFields && reply.createFields.length > 0) {
-      const fieldNames = reply.createFields.map(f => f.id).join(', ')
+      const fieldNames = reply.createFields.map((f) => f.id).join(', ')
       console.log(TAG + ' Chronicler created new fields: ' + fieldNames)
     }
 
@@ -275,11 +338,16 @@ async function runInference(
       console.log(TAG + ' Chronicler skipped publish (no state change) for session ' + session.id)
       return { status: 'completed' }
     }
-    
+
     // The cursor travels inside this same publish: it is the log that says
     // what has been booked, so a restart or a fork resumes from the right
     // piece of prose.
-    if (!publishState(session, faces.projections, { worldState: reply.state, stateFoldSeq: throughSeq })) {
+    if (
+      !publishState(session, faces.projections, {
+        worldState: reply.state,
+        stateFoldSeq: throughSeq,
+      })
+    ) {
       throw new Error('WorldState append failed')
     }
     DISCARD_RETRIES.delete(session.id)
@@ -296,7 +364,12 @@ async function runInference(
   } catch (error) {
     console.warn(TAG + ' Chronicler inference failed:', error)
     recordActivity(session.id, {
-      id: activityId, at: nowIso(), actor: 'chronicler', target: 'world-state', phase: 'failed', detail: messageOf(error),
+      id: activityId,
+      at: nowIso(),
+      actor: 'chronicler',
+      target: 'world-state',
+      phase: 'failed',
+      detail: messageOf(error),
     })
     return { status: isCancelled() ? 'killed' : 'failed' }
   } finally {

@@ -26,12 +26,16 @@ describe('external read contract', () => {
     const payload = rrpPayloadOf({ type: 'user/message', data: message })
     expect(payload?.worldState).toEqual(state)
     // A plain user message carries no payload: extensions can rely on this.
-    expect(rrpPayloadOf({ type: 'user/message', data: { id: 'x', role: 'user', content: [] } })).toBeUndefined()
+    expect(
+      rrpPayloadOf({ type: 'user/message', data: { id: 'x', role: 'user', content: [] } }),
+    ).toBeUndefined()
   })
 
   it('renders both baselines for external consumers', () => {
     expect(renderWorldState(emptyWorldState())).toContain('世界状态')
-    expect(renderMacroSummary({ goal: 'g', conflict: 'c', turningPoints: [], threads: [] })).toContain('剧情脉络')
+    expect(
+      renderMacroSummary({ goal: 'g', conflict: 'c', turningPoints: [], threads: [] }),
+    ).toContain('剧情脉络')
   })
 
   it('names the plugin identity extensions match on', () => {

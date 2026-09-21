@@ -99,16 +99,26 @@ export function registerCardWorkspaceRoute(ctx: Context): void {
         }
 
         try {
-          const prior = typeof registry.resolveByPath === 'function'
-            ? await registry.resolveByPath(dir)
-            : undefined
+          const prior =
+            typeof registry.resolveByPath === 'function'
+              ? await registry.resolveByPath(dir)
+              : undefined
           const workspace = await registry.create(dir, cardName)
           // The registry keeps the existing record (and its title) on reuse;
           // a renamed card must not leave its drawer under the old name.
-          if (prior !== undefined && workspace.title !== cardName && typeof workspace.setTitle === 'function') {
+          if (
+            prior !== undefined &&
+            workspace.title !== cardName &&
+            typeof workspace.setTitle === 'function'
+          ) {
             await workspace.setTitle(cardName)
           }
-          send(res, 200, { ok: true, workspaceId: workspace.id, path: workspace.path, created: prior === undefined })
+          send(res, 200, {
+            ok: true,
+            workspaceId: workspace.id,
+            path: workspace.path,
+            created: prior === undefined,
+          })
         } catch (error) {
           send(res, 500, { error: 'workspace ensure failed: ' + String(error) })
         }

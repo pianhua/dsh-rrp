@@ -40,21 +40,42 @@ describe('Summarizer reply contract', () => {
     const six = ['一', '二', '三', '四', '五', '六']
     expect(parseSummarizerReply(JSON.stringify({ ...VALID, turningPoints: six }))).toBeUndefined()
     expect(parseSummarizerReply(JSON.stringify({ ...VALID, threads: six }))).toBeUndefined()
-    expect(parseSummarizerReply(JSON.stringify({ ...VALID, turningPoints: six.slice(0, 5) }))).toBeDefined()
+    expect(
+      parseSummarizerReply(JSON.stringify({ ...VALID, turningPoints: six.slice(0, 5) })),
+    ).toBeDefined()
   })
 })
 
-function fakeHost(preset: string, turn: number, summaryEnabled = true, seed?: Array<{ type: string; data: unknown }>) {
+function fakeHost(
+  preset: string,
+  turn: number,
+  summaryEnabled = true,
+  seed?: Array<{ type: string; data: unknown }>,
+) {
   const listeners = new Map<string, (...args: unknown[]) => void>()
   const appended: Array<{ type: string; data: unknown }> = []
   let started = 0
-  const proseSeed = seed ?? [{ type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟。' }] } }]
+  const proseSeed = seed ?? [
+    { type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟。' }] } },
+  ]
   const session = {
     id: 's1',
-    append(type: string, data: unknown) { appended.push({ type, data }); return {} },
+    append(type: string, data: unknown) {
+      appended.push({ type, data })
+      return {}
+    },
   }
-  const llm = { async *stream() { yield { type: 'text-delta', text: JSON.stringify(VALID) } } }
-  const jobs = { start() { started += 1; return 'summarizer-1' } }
+  const llm = {
+    async *stream() {
+      yield { type: 'text-delta', text: JSON.stringify(VALID) }
+    },
+  }
+  const jobs = {
+    start() {
+      started += 1
+      return 'summarizer-1'
+    },
+  }
   const agents = { get: () => ({ options: { provider: 'deepseek', model: 'deepseek-chat' } }) }
   const projections = transcriptProjections(proseSeed, (_session: unknown, key: string) => {
     if (key === 'agentPreset') return preset
@@ -63,9 +84,15 @@ function fakeHost(preset: string, turn: number, summaryEnabled = true, seed?: Ar
     return undefined
   })
   const ctx = {
-    effect(fn: () => (() => void) | void) { return fn() },
-    get: (name: string) => ({ llm, jobs, agents, sessionProjections: projections } as Record<string, unknown>)[name],
-    on(name: string, listener: (...args: unknown[]) => void) { listeners.set(name, listener); return () => {} },
+    effect(fn: () => (() => void) | void) {
+      return fn()
+    },
+    get: (name: string) =>
+      (({ llm, jobs, agents, sessionProjections: projections }) as Record<string, unknown>)[name],
+    on(name: string, listener: (...args: unknown[]) => void) {
+      listeners.set(name, listener)
+      return () => {}
+    },
   }
   return { ctx, listeners, session, appended, started: () => started }
 }
@@ -74,26 +101,38 @@ describe('Summarizer trigger', () => {
   it('runs on a completed RP turn at the cadence boundary', () => {
     const host = fakeHost('rp', 8)
     registerSummarizer(host.ctx as never, 'rp')
-    host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    host.listeners.get('session/event')?.(host.session, {
+      type: 'turn/end',
+      data: { reason: { kind: 'completed' } },
+    })
     expect(host.started()).toBe(1)
   })
 
   it('does not run before the cadence boundary or for other presets', () => {
     const early = fakeHost('rp', 3)
     registerSummarizer(early.ctx as never, 'rp')
-    early.listeners.get('session/event')?.(early.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    early.listeners.get('session/event')?.(early.session, {
+      type: 'turn/end',
+      data: { reason: { kind: 'completed' } },
+    })
     expect(early.started()).toBe(0)
 
     const other = fakeHost('standard', 8)
     registerSummarizer(other.ctx as never, 'rp')
-    other.listeners.get('session/event')?.(other.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    other.listeners.get('session/event')?.(other.session, {
+      type: 'turn/end',
+      data: { reason: { kind: 'completed' } },
+    })
     expect(other.started()).toBe(0)
   })
 
   it('does not run while the player has it off', () => {
     const host = fakeHost('rp', 8, false)
     registerSummarizer(host.ctx as never, 'rp')
-    host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    host.listeners.get('session/event')?.(host.session, {
+      type: 'turn/end',
+      data: { reason: { kind: 'completed' } },
+    })
     expect(host.started()).toBe(0)
   })
 
@@ -101,15 +140,28 @@ describe('Summarizer trigger', () => {
     // The transcript slice durably folds the summary publish: a restart loses
     // the in-memory watermark but not the slice, so turn 8 is recognized.
     forgetAllSummary()
-    const host = fakeHost('rp', 8, true, [{
-      type: 'user/message',
-      data: {
-        content: [{ type: 'text', text: '【剧情脉络】更新' }],
-        source: { kind: 'plugin', plugin: 'dsh-rrp', rrp: { summary: VALID, summaryTurn: 8, settings: { summaryEnabled: true, summaryEveryTurns: 8 } } },
+    const host = fakeHost('rp', 8, true, [
+      {
+        type: 'user/message',
+        data: {
+          content: [{ type: 'text', text: '【剧情脉络】更新' }],
+          source: {
+            kind: 'plugin',
+            plugin: 'dsh-rrp',
+            rrp: {
+              summary: VALID,
+              summaryTurn: 8,
+              settings: { summaryEnabled: true, summaryEveryTurns: 8 },
+            },
+          },
+        },
       },
-    }])
+    ])
     registerSummarizer(host.ctx as never, 'rp')
-    host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    host.listeners.get('session/event')?.(host.session, {
+      type: 'turn/end',
+      data: { reason: { kind: 'completed' } },
+    })
     expect(host.started()).toBe(0)
   })
 })
@@ -119,7 +171,9 @@ describe('Summarizer concurrency (issue #20)', () => {
   type Deferred = { promise: Promise<void>; resolve: () => void }
   function deferred(): Deferred {
     let resolve!: () => void
-    const promise = new Promise<void>((r) => { resolve = r })
+    const promise = new Promise<void>((r) => {
+      resolve = r
+    })
     return { promise, resolve }
   }
 
@@ -141,7 +195,10 @@ describe('Summarizer concurrency (issue #20)', () => {
       // Fresh id per host: the publisher's RETAINED lanes dedup per session,
       // and a disposed/restarted test session must not inherit them.
       id: 'race-' + hostSeq,
-      append(type: string, data: unknown) { log.push({ type, data }); return {} },
+      append(type: string, data: unknown) {
+        log.push({ type, data })
+        return {}
+      },
     }
     const llm = {
       async *stream() {
@@ -166,22 +223,32 @@ describe('Summarizer concurrency (issue #20)', () => {
       return undefined
     })
     const ctx = {
-      effect(fn: () => (() => void) | void) { return fn() },
-      get: (name: string) => ({ llm, jobs, agents, sessionProjections: projections } as Record<string, unknown>)[name],
-      on(name: string, listener: (...args: unknown[]) => void) { listeners.set(name, listener); return () => {} },
+      effect(fn: () => (() => void) | void) {
+        return fn()
+      },
+      get: (name: string) =>
+        (({ llm, jobs, agents, sessionProjections: projections }) as Record<string, unknown>)[name],
+      on(name: string, listener: (...args: unknown[]) => void) {
+        listeners.set(name, listener)
+        return () => {}
+      },
     }
     registerSummarizer(ctx as never, 'rp')
     const fire = async (boundary: number) => {
       turn = boundary
-      listeners.get('session/event')?.(session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+      listeners.get('session/event')?.(session, {
+        type: 'turn/end',
+        data: { reason: { kind: 'completed' } },
+      })
       // Let the just-started pass reach its stream gate before returning.
       await Promise.resolve()
       await Promise.resolve()
     }
-    const committedTurns = (): number[] => log
-      .map((entry) => (entry.data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp)
-      .filter((p): p is RrpStatePayload => p !== undefined && typeof p.summaryTurn === 'number')
-      .map((p) => p.summaryTurn as number)
+    const committedTurns = (): number[] =>
+      log
+        .map((entry) => (entry.data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp)
+        .filter((p): p is RrpStatePayload => p !== undefined && typeof p.summaryTurn === 'number')
+        .map((p) => p.summaryTurn as number)
     return { fire, waiters, doneness, committedTurns, log }
   }
 
@@ -226,7 +293,15 @@ describe('Summarizer concurrency (issue #20)', () => {
         type: 'user/message',
         data: {
           content: [{ type: 'text', text: '【剧情脉络】更新' }],
-          source: { kind: 'plugin', plugin: 'dsh-rrp', rrp: { summary: VALID, summaryTurn: 16, settings: { summaryEnabled: true, summaryEveryTurns: 8 } } },
+          source: {
+            kind: 'plugin',
+            plugin: 'dsh-rrp',
+            rrp: {
+              summary: VALID,
+              summaryTurn: 16,
+              settings: { summaryEnabled: true, summaryEveryTurns: 8 },
+            },
+          },
         },
       },
     ])
@@ -261,7 +336,12 @@ describe('Summarizer toggle command', () => {
     }
     type Invocation = { rawInput: string; agent?: { session: Session } }
     let definition: { handler: (i: Invocation) => { kind: string; text?: string } } | undefined
-    const commands = { register: (d: typeof definition) => { definition = d; return () => {} } }
+    const commands = {
+      register: (d: typeof definition) => {
+        definition = d
+        return () => {}
+      },
+    }
     const writes = new Map<string, Array<{ type: string; data: unknown }>>()
     const session = (id: string): Session => ({
       id,
@@ -275,23 +355,34 @@ describe('Summarizer toggle command', () => {
     const first = session('first')
     const second = session('second')
     const projections = {
-      stateOf: (_session: unknown, key: string) => key === RRP_SETTINGS_KEY ? { summaryEnabled: true } : undefined,
+      stateOf: (_session: unknown, key: string) =>
+        key === RRP_SETTINGS_KEY ? { summaryEnabled: true } : undefined,
     }
     const ctx = {
-      effect(fn: () => (() => void) | void) { return fn() },
-      get: (name: string) => ({ commands, sessionProjections: projections } as Record<string, unknown>)[name],
+      effect(fn: () => (() => void) | void) {
+        return fn()
+      },
+      get: (name: string) =>
+        (({ commands, sessionProjections: projections }) as Record<string, unknown>)[name],
     }
     registerSummaryCommand(ctx as never)
-    expect(definition?.handler({ rawInput: ' off', agent: { session: first } }).kind).toBe('success')
+    expect(definition?.handler({ rawInput: ' off', agent: { session: first } }).kind).toBe(
+      'success',
+    )
     expect(writes.get(first.id)).toHaveLength(1)
     expect(writes.get(second.id)).toBeUndefined()
 
-    const payload = (writes.get(first.id)?.[0]?.data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp
+    const payload = (writes.get(first.id)?.[0]?.data as { source?: { rrp?: RrpStatePayload } })
+      ?.source?.rrp
     expect(payload?.settings).toEqual({ summaryEnabled: false, summaryEveryTurns: 8 })
 
-    expect(definition?.handler({ rawInput: 'on', agent: { session: second } }).text).toContain('开启')
+    expect(definition?.handler({ rawInput: 'on', agent: { session: second } }).text).toContain(
+      '开启',
+    )
     expect(writes.get(second.id)).toHaveLength(1)
-    const secondPayload = (writes.get(second.id)?.[0]?.data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp
+    const secondPayload = (
+      writes.get(second.id)?.[0]?.data as { source?: { rrp?: RrpStatePayload } }
+    )?.source?.rrp
     expect(secondPayload?.settings).toEqual({ summaryEnabled: true, summaryEveryTurns: 8 })
   })
 
@@ -302,18 +393,30 @@ describe('Summarizer toggle command', () => {
     }
     type Invocation = { rawInput: string; agent?: { session: Session } }
     let definition: { handler: (i: Invocation) => { kind: string; text?: string } } | undefined
-    const commands = { register: (d: typeof definition) => { definition = d; return () => {} } }
+    const commands = {
+      register: (d: typeof definition) => {
+        definition = d
+        return () => {}
+      },
+    }
     const writes: Array<{ type: string; data: unknown }> = []
     const session: Session = {
       id: 's1',
-      append(type, data) { writes.push({ type, data }); return { seq: writes.length } },
+      append(type, data) {
+        writes.push({ type, data })
+        return { seq: writes.length }
+      },
     }
     const projections = {
-      stateOf: (_session: unknown, key: string) => key === RRP_SETTINGS_KEY ? { summaryEnabled: true, summaryEveryTurns: 4 } : undefined,
+      stateOf: (_session: unknown, key: string) =>
+        key === RRP_SETTINGS_KEY ? { summaryEnabled: true, summaryEveryTurns: 4 } : undefined,
     }
     const ctx = {
-      effect(fn: () => (() => void) | void) { return fn() },
-      get: (name: string) => ({ commands, sessionProjections: projections } as Record<string, unknown>)[name],
+      effect(fn: () => (() => void) | void) {
+        return fn()
+      },
+      get: (name: string) =>
+        (({ commands, sessionProjections: projections }) as Record<string, unknown>)[name],
     }
     registerSummaryCommand(ctx as never)
 
@@ -327,7 +430,10 @@ describe('Summarizer toggle command', () => {
     // publisher dedups same-render writes within one session.)
     const other: Session = {
       id: 's2',
-      append(type, data) { writes.push({ type, data }); return { seq: writes.length } },
+      append(type, data) {
+        writes.push({ type, data })
+        return { seq: writes.length }
+      },
     }
     definition?.handler({ rawInput: 'every 999', agent: { session: other } })
     const clamped = (writes[1]?.data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp

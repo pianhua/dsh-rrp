@@ -10,7 +10,8 @@ describe('WorldState pruning', () => {
 
   it('caps flags, keeping the importance-ordered head', () => {
     const flags: Record<string, boolean> = {}
-    for (let index = 0; index < WORLD_STATE_LIMITS.flags + 5; index += 1) flags['事件' + index] = true
+    for (let index = 0; index < WORLD_STATE_LIMITS.flags + 5; index += 1)
+      flags['事件' + index] = true
     const pruned = pruneWorldState({ ...emptyWorldState(), flags })
     expect(Object.keys(pruned.flags)).toHaveLength(WORLD_STATE_LIMITS.flags)
     expect(Object.keys(pruned.flags)[0]).toBe('事件0')

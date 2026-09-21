@@ -205,17 +205,31 @@ export function registerStartRoute(ctx: Context): void {
         // Opening LAST: the live follow stream then ends on the opening line.
         let openingWritten: 'assistant' | 'notice' | 'none' = 'none'
         if (typeof request.opening === 'string' && request.opening.trim().length > 0) {
-          const boundary = projections.stateOf(session, 'turnBoundary') as { lastTurn?: number } | undefined
+          const boundary = projections.stateOf(session, 'turnBoundary') as
+            { lastTurn?: number } | undefined
           const lastTurn = boundary?.lastTurn ?? 0
           const opening = interpolateCardText(request.opening.trim(), card?.player)
           openingWritten = appendOpening(session, opening, routeOf(agents, session.id), lastTurn)
         }
 
         console.log(
-          TAG + ' card start ' + session.id
-          + ' (card=' + String(card !== undefined) + ', state=' + String(state !== undefined) + ', opening=' + openingWritten + ')',
+          TAG +
+            ' card start ' +
+            session.id +
+            ' (card=' +
+            String(card !== undefined) +
+            ', state=' +
+            String(state !== undefined) +
+            ', opening=' +
+            openingWritten +
+            ')',
         )
-        send(res, 200, { ok: true, cardWritten: card !== undefined, stateWritten: state !== undefined, openingWritten })
+        send(res, 200, {
+          ok: true,
+          cardWritten: card !== undefined,
+          stateWritten: state !== undefined,
+          openingWritten,
+        })
       },
     })
     console.log(TAG + ' card start route armed at ' + START_PATH)

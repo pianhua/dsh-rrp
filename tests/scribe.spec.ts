@@ -4,13 +4,21 @@ import { LORE_LIMITS } from '../src/lore-state.ts'
 
 describe('Scribe reply contract', () => {
   it('parses a bare JSON draft and tolerates surrounding prose', () => {
-    const draft = { name: 'qingqiu-fox-clan', description: '青丘狐族；涉及青丘时使用。', body: '# 青丘' }
+    const draft = {
+      name: 'qingqiu-fox-clan',
+      description: '青丘狐族；涉及青丘时使用。',
+      body: '# 青丘',
+    }
     expect(parseScribeReply(JSON.stringify(draft))).toEqual(draft)
     expect(parseScribeReply('好的：\n' + JSON.stringify(draft) + '\n以上。')).toEqual(draft)
   })
 
   it('tolerates Markdown fences and mid-stream truncation (issue #32 P0)', () => {
-    const draft = { name: 'qingqiu-fox-clan', description: '青丘狐族；涉及青丘时使用。', body: '# 青丘' }
+    const draft = {
+      name: 'qingqiu-fox-clan',
+      description: '青丘狐族；涉及青丘时使用。',
+      body: '# 青丘',
+    }
     // Fenced output — the old indexOf slicer choked on the fence text.
     expect(parseScribeReply('```json\n' + JSON.stringify(draft) + '\n```')).toEqual(draft)
     // Cut mid-body: the shared ladder salvages the last COMPLETE field prefix
@@ -30,7 +38,11 @@ describe('Scribe reply contract', () => {
   it('rejects an illegal name or missing fields', () => {
     expect(parseScribeReply('{"name":"Bad Name","description":"d","body":"b"}')).toBeUndefined()
     expect(parseScribeReply('{"name":"ok-name","description":"","body":"b"}')).toBeUndefined()
-    expect(parseScribeReply('{"name":"ok-name","description":"d","body":"b"}')).toEqual({ name: 'ok-name', description: 'd', body: 'b' })
+    expect(parseScribeReply('{"name":"ok-name","description":"d","body":"b"}')).toEqual({
+      name: 'ok-name',
+      description: 'd',
+      body: 'b',
+    })
   })
 
   it('builds a prompt carrying the topic, existing names, state and transcript', () => {
@@ -62,9 +74,19 @@ describe('Scribe reply contract', () => {
 describe('Scribe reply contract binds its declared schema', () => {
   it('rejects an oversized body instead of waving it through', () => {
     const long = '设'.repeat(LORE_LIMITS.bodyChars + 1)
-    expect(parseScribeReply(JSON.stringify({ name: 'qing-qiu-rule', description: '新设定出现时', body: long }))).toBeUndefined()
-    expect(parseScribeReply(JSON.stringify({ name: 'Qing Qiu', description: 'x', body: '正文' }))).toBeUndefined()
-    expect(parseScribeReply(JSON.stringify({ name: 'qing-qiu-rule', description: '新设定出现时', body: '青丘法则。' }))).toEqual({
+    expect(
+      parseScribeReply(
+        JSON.stringify({ name: 'qing-qiu-rule', description: '新设定出现时', body: long }),
+      ),
+    ).toBeUndefined()
+    expect(
+      parseScribeReply(JSON.stringify({ name: 'Qing Qiu', description: 'x', body: '正文' })),
+    ).toBeUndefined()
+    expect(
+      parseScribeReply(
+        JSON.stringify({ name: 'qing-qiu-rule', description: '新设定出现时', body: '青丘法则。' }),
+      ),
+    ).toEqual({
       name: 'qing-qiu-rule',
       description: '新设定出现时',
       body: '青丘法则。',

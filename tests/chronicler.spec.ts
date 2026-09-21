@@ -17,7 +17,9 @@ describe('Chronicler reply contract', () => {
   it('parses a bare JSON object and tolerates surrounding prose', () => {
     const expected = { state: { ...VALID, relations: [] } }
     expect(parseChroniclerReply(JSON.stringify(VALID))).toEqual(expected)
-    expect(parseChroniclerReply('好的，结果如下：\n' + JSON.stringify(VALID) + '\n以上。')).toEqual(expected)
+    expect(parseChroniclerReply('好的，结果如下：\n' + JSON.stringify(VALID) + '\n以上。')).toEqual(
+      expected,
+    )
   })
 
   it('rejects unusable replies', () => {
@@ -27,7 +29,10 @@ describe('Chronicler reply contract', () => {
   })
 
   it('includes the prior state and transcript in the prompt', () => {
-    const prompt = buildChroniclerPrompt({ prior: emptyWorldState(), transcript: '【玩家】\n我推门而入。' })
+    const prompt = buildChroniclerPrompt({
+      prior: emptyWorldState(),
+      transcript: '【玩家】\n我推门而入。',
+    })
     expect(prompt).toContain('characters')
     expect(prompt).toContain('我推门而入。')
   })
@@ -65,9 +70,7 @@ describe('Chronicler reply contract', () => {
     const reply = JSON.stringify({
       ...VALID,
       stamina: 80,
-      createFields: [
-        { id: 'stamina', type: 'number', value: 80, min: 0, max: 100 },
-      ],
+      createFields: [{ id: 'stamina', type: 'number', value: 80, min: 0, max: 100 }],
     })
     const parsed = parseChroniclerReply(reply)
     expect(parsed).toBeDefined()
@@ -105,20 +108,32 @@ describe('Chronicler reply contract', () => {
 })
 
 /** Minimal fake host: records the session feed listener and the started job. */
-function fakeHost(preset: string, options: {
-  failAppend?: boolean
-  stateOf?: (session: unknown, key: string) => unknown
-  events?: Array<{ type: string; data: unknown }>
-  llm?: unknown
-} = {}) {
+function fakeHost(
+  preset: string,
+  options: {
+    failAppend?: boolean
+    stateOf?: (session: unknown, key: string) => unknown
+    events?: Array<{ type: string; data: unknown }>
+    llm?: unknown
+  } = {},
+) {
   const listeners = new Map<string, (...args: unknown[]) => void>()
   const appended: Array<{ type: string; data: unknown }> = []
   let startCount = 0
-  let started: { kind: string; label: string; run(): { cancel(reason?: string): void; done: Promise<{ status: string }> } } | undefined
+  let started:
+    | {
+        kind: string
+        label: string
+        run(): { cancel(reason?: string): void; done: Promise<{ status: string }> }
+      }
+    | undefined
 
   const events = options.events ?? [
     { type: 'user/message', data: { content: [{ type: 'text', text: '我推门而入。' }] } },
-    { type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟，暖意扑面。' }] } },
+    {
+      type: 'assistant/message',
+      data: { content: [{ type: 'text', text: '门轴低吟，暖意扑面。' }] },
+    },
     { type: 'step/end', data: { turn: 1, step: 0 } },
   ]
 
@@ -157,7 +172,9 @@ function fakeHost(preset: string, options: {
       return fn()
     },
     get(name: string): unknown {
-      return ({ llm, jobs, agents, sessionProjections: projections } as Record<string, unknown>)[name]
+      return ({ llm, jobs, agents, sessionProjections: projections } as Record<string, unknown>)[
+        name
+      ]
     },
     on(name: string, listener: (...args: unknown[]) => void) {
       listeners.set(name, listener)
@@ -169,7 +186,8 @@ function fakeHost(preset: string, options: {
 
 describe('Chronicler trigger', () => {
   it('infers and publishes a complete WorldState on a completed RP turn', async () => {
-    forgetState('session-1'); forgetActivity('session-1')
+    forgetState('session-1')
+    forgetActivity('session-1')
     const host = fakeHost('rp')
     registerChronicler(host.ctx as never, 'rp')
 
@@ -186,7 +204,9 @@ describe('Chronicler trigger', () => {
     expect(outcome.status).toBe('completed')
     const stateWrites = host.appended.filter((entry) => entry.type === 'user/message')
     expect(stateWrites).toHaveLength(1)
-    expect((stateWrites[0]?.data as { source: { rrp: { worldState: unknown } } }).source.rrp.worldState).toEqual({ ...VALID, relations: [] })
+    expect(
+      (stateWrites[0]?.data as { source: { rrp: { worldState: unknown } } }).source.rrp.worldState,
+    ).toEqual({ ...VALID, relations: [] })
 
     // Attribution: the ledger must show the Chronicler started and what changed.
     const activity = readActivity('session-1').entries
@@ -198,21 +218,30 @@ describe('Chronicler trigger', () => {
   })
 
   it('serializes rapid turns: the deferred one becomes a covering rerun', async () => {
-    forgetState('session-1'); forgetActivity('session-1')
+    forgetState('session-1')
+    forgetActivity('session-1')
     const events = [
       { type: 'user/message', data: { content: [{ type: 'text', text: '我推门而入。' }] } },
-      { type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟，暖意扑面。' }] } },
+      {
+        type: 'assistant/message',
+        data: { content: [{ type: 'text', text: '门轴低吟，暖意扑面。' }] },
+      },
     ]
     const prompts: string[] = []
     let release!: () => void
-    const gate = new Promise<void>((resolve) => { release = resolve })
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
     let calls = 0
     const llm = {
-      async *stream(options: { messages: Array<{ content: Array<{ type: string; text: string }> }> }) {
+      async *stream(options: {
+        messages: Array<{ content: Array<{ type: string; text: string }> }>
+      }) {
         calls += 1
         prompts.push(options.messages[0]?.content[0]?.text ?? '')
         await gate
-        const reply = calls === 1 ? VALID : { ...VALID, flags: { 已知晓密道: true, 第二轮已处理: true } }
+        const reply =
+          calls === 1 ? VALID : { ...VALID, flags: { 已知晓密道: true, 第二轮已处理: true } }
         yield { type: 'text-delta', text: JSON.stringify(reply) }
       },
     }
@@ -239,7 +268,11 @@ describe('Chronicler trigger', () => {
     expect(second.status).toBe('completed')
     const stateWrites = host.appended.filter((entry) => entry.type === 'user/message')
     expect(stateWrites).toHaveLength(2)
-    const secondState = (stateWrites[1]?.data as { source: { rrp: { worldState: { flags: Record<string, unknown> } } } }).source.rrp.worldState
+    const secondState = (
+      stateWrites[1]?.data as {
+        source: { rrp: { worldState: { flags: Record<string, unknown> } } }
+      }
+    ).source.rrp.worldState
     expect(secondState.flags['第二轮已处理']).toBe(true)
     // The rerun's prompt covers the unprocessed turn 2 prose, not turn 1 again.
     expect(prompts[1]).toContain('我转身离开')
@@ -249,22 +282,34 @@ describe('Chronicler trigger', () => {
   it('ignores sessions on other presets', () => {
     const host = fakeHost('standard')
     registerChronicler(host.ctx as never, 'rp')
-    host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    host.listeners.get('session/event')?.(host.session, {
+      type: 'turn/end',
+      data: { reason: { kind: 'completed' } },
+    })
     expect(host.started()).toBeUndefined()
   })
 
   it('records a failed job instead of a committed update when append fails', async () => {
-    forgetState('session-1'); forgetActivity('session-1')
+    forgetState('session-1')
+    forgetActivity('session-1')
     const host = fakeHost('rp', { failAppend: true })
     registerChronicler(host.ctx as never, 'rp')
-    host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    host.listeners.get('session/event')?.(host.session, {
+      type: 'turn/end',
+      data: { reason: { kind: 'completed' } },
+    })
     const outcome = await host.started()!.run().done
     expect(outcome.status).toBe('failed')
-    expect(readActivity('session-1').entries.map((entry) => entry.phase)).toEqual(['started', 'failed'])
+    expect(readActivity('session-1').entries.map((entry) => entry.phase)).toEqual([
+      'started',
+      'failed',
+    ])
   })
 
   it('discards inference and marks as stale when player corrected world state during inference', async () => {
-    forgetState('session-1'); forgetActivity('session-1'); forgetInference('session-1')
+    forgetState('session-1')
+    forgetActivity('session-1')
+    forgetInference('session-1')
     let callCount = 0
     const host = fakeHost('rp', {
       stateOf: (_session, key) => {
@@ -282,7 +327,10 @@ describe('Chronicler trigger', () => {
       },
     })
     registerChronicler(host.ctx as never, 'rp')
-    host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    host.listeners.get('session/event')?.(host.session, {
+      type: 'turn/end',
+      data: { reason: { kind: 'completed' } },
+    })
     const outcome = await host.started()!.run().done
     expect(outcome.status).toBe('stale')
     expect(host.appended.filter((entry) => entry.type === 'user/message')).toHaveLength(0)
@@ -294,11 +342,16 @@ describe('Chronicler trigger', () => {
     expect(host.startCount()).toBe(2)
     const retry = await host.started()!.run().done
     expect(retry.status).toBe('completed')
-    expect(readActivity('session-1').entries.map((entry) => entry.phase).at(-1)).not.toBe('stale')
+    expect(
+      readActivity('session-1')
+        .entries.map((entry) => entry.phase)
+        .at(-1),
+    ).not.toBe('stale')
   })
 
   it('skips publish and marks ledger as no change when inferred state matches prior', async () => {
-    forgetState('session-1'); forgetActivity('session-1')
+    forgetState('session-1')
+    forgetActivity('session-1')
     const host = fakeHost('rp', {
       stateOf: (_session, key) => {
         if (key === 'agentPreset') return 'rp'
@@ -307,7 +360,10 @@ describe('Chronicler trigger', () => {
       },
     })
     registerChronicler(host.ctx as never, 'rp')
-    host.listeners.get('session/event')?.(host.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    host.listeners.get('session/event')?.(host.session, {
+      type: 'turn/end',
+      data: { reason: { kind: 'completed' } },
+    })
     const outcome = await host.started()!.run().done
     expect(outcome.status).toBe('completed')
     // No facts appended because state did not change
@@ -317,7 +373,6 @@ describe('Chronicler trigger', () => {
     expect(activity[1]?.detailKey).toBe('detail.noChange')
   })
 })
-
 
 describe('parseChroniclerReply salvage (testing-round hardening)', () => {
   it('drops a malformed dynamic key instead of failing the whole turn', () => {
@@ -338,8 +393,16 @@ describe('parseChroniclerReply salvage (testing-round hardening)', () => {
   })
 
   it('still rejects core-domain corruption', () => {
-    expect(parseChroniclerReply(JSON.stringify({
-      characters: [], inventory: {}, scene: {}, flags: {}, relations: [],
-    }))).toBeUndefined()
+    expect(
+      parseChroniclerReply(
+        JSON.stringify({
+          characters: [],
+          inventory: {},
+          scene: {},
+          flags: {},
+          relations: [],
+        }),
+      ),
+    ).toBeUndefined()
   })
 })

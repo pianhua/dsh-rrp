@@ -67,7 +67,8 @@ const OPERATORS: readonly WhenOperator[] = ['>=', '<=', '==', '!=', '>', '<']
 const SCENE_FIELDS = new Set(['location', 'time', 'weather'])
 
 /** Message appended to string-literal rejections: the v1 migration hint. */
-const STRING_LITERAL_HINT = 'v1 仅支持数值与布尔字面量；字符串条件请把该信息建模为布尔或数值字段（如 flags.身份已暴露 == true），字符串等值比较留待 v2 解锁'
+const STRING_LITERAL_HINT =
+  'v1 仅支持数值与布尔字面量；字符串条件请把该信息建模为布尔或数值字段（如 flags.身份已暴露 == true），字符串等值比较留待 v2 解锁'
 
 /**
  * Parse one `when` source.
@@ -123,7 +124,8 @@ export function parseWhenPath(src: string): WhenPath | Error {
     return { kind: head, name, field }
   }
   if (head === 'scene') {
-    if (segments.length !== 2) return new Error('when 场景路径仅支持 scene.location|time|weather：' + src)
+    if (segments.length !== 2)
+      return new Error('when 场景路径仅支持 scene.location|time|weather：' + src)
     return { kind: 'scene', field: segments[1] as string }
   }
   if (head === 'flags') {
@@ -131,7 +133,11 @@ export function parseWhenPath(src: string): WhenPath | Error {
     return { kind: 'flags', name: segments[1] as string }
   }
   if (segments.length === 1) return { kind: 'dynamic', id: head }
-  return new Error('无法识别的 when 路径：' + src + '（支持 characters.<名>.<字段> / inventory.<名>.<字段> / scene.<字段> / flags.<名> / 自定义字段顶层键）')
+  return new Error(
+    '无法识别的 when 路径：' +
+      src +
+      '（支持 characters.<名>.<字段> / inventory.<名>.<字段> / scene.<字段> / flags.<名> / 自定义字段顶层键）',
+  )
 }
 
 /** Resolve a condition path to a raw state value (undefined when absent). */
@@ -147,7 +153,10 @@ export function resolveWhenPath(path: WhenPath, state: WorldState): unknown {
       return state.flags?.[path.name]
     case 'dynamic': {
       const field = state[path.id]
-      return field !== null && typeof field === 'object' && !Array.isArray(field) && 'value' in field
+      return field !== null &&
+        typeof field === 'object' &&
+        !Array.isArray(field) &&
+        'value' in field
         ? (field as { value: unknown }).value
         : undefined
     }
@@ -170,12 +179,18 @@ export function evalCondition(cond: WhenCondition, state: WorldState): boolean {
   const a = left as number
   const b = cond.value as number
   switch (cond.op) {
-    case '>': return a > b
-    case '>=': return a >= b
-    case '<': return a < b
-    case '<=': return a <= b
-    case '==': return a === b
-    case '!=': return a !== b
+    case '>':
+      return a > b
+    case '>=':
+      return a >= b
+    case '<':
+      return a < b
+    case '<=':
+      return a <= b
+    case '==':
+      return a === b
+    case '!=':
+      return a !== b
   }
 }
 
@@ -187,7 +202,11 @@ export function evalCondition(cond: WhenCondition, state: WorldState): boolean {
 export function hitSet(triggers: readonly TriggerDef[], state: WorldState): TriggerHit[] {
   const hits = triggers
     .filter((def) => evalCondition(def.condition, state))
-    .map((def) => ({ id: def.id, name: def.name, excerpt: def.excerpt.slice(0, TRIGGER_EXCERPT_CHARS) }))
+    .map((def) => ({
+      id: def.id,
+      name: def.name,
+      excerpt: def.excerpt.slice(0, TRIGGER_EXCERPT_CHARS),
+    }))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   let total = 0
   const kept: TriggerHit[] = []
@@ -250,7 +269,11 @@ export function renderTriggerBlock(
   }
   lines.push('', '调用纪律：生效条目已直接注入，无需再行调取；同主题但未列入本块的条目请勿调用。')
   if (revoked.length > 0) {
-    lines.push('撤销：以下条目现已失效，立即停止使用其内容——' + revoked.map((hit) => hit.name).join('、') + '。')
+    lines.push(
+      '撤销：以下条目现已失效，立即停止使用其内容——' +
+        revoked.map((hit) => hit.name).join('、') +
+        '。',
+    )
   }
   if (revokeUnlisted && ordered.length === 0) {
     lines.push('撤销：此前注入过的条目现已全部失效，立即停止使用其内容。')
@@ -263,18 +286,32 @@ export function renderTriggerBlock(
  * R1 risk 3). Pure: returns the warning text, or undefined when sound.
  * A card without state.json skips the check entirely (caller passes null).
  */
-export function whenPathWarning(cond: WhenCondition, initial: WorldState | null, locator: string): string | undefined {
+export function whenPathWarning(
+  cond: WhenCondition,
+  initial: WorldState | null,
+  locator: string,
+): string | undefined {
   if (initial === null) return undefined
   const path = cond.path
   switch (path.kind) {
     case 'characters':
       if (initial.characters?.[path.name] === undefined) {
-        return locator + '：when 路径所指角色「' + path.name + '」不在卡包初始状态中，该条件将永远求值为 false'
+        return (
+          locator +
+          '：when 路径所指角色「' +
+          path.name +
+          '」不在卡包初始状态中，该条件将永远求值为 false'
+        )
       }
       return undefined
     case 'inventory':
       if (initial.inventory?.[path.name] === undefined) {
-        return locator + '：when 路径所指物品「' + path.name + '」不在卡包初始状态中，该条件将永远求值为 false'
+        return (
+          locator +
+          '：when 路径所指物品「' +
+          path.name +
+          '」不在卡包初始状态中，该条件将永远求值为 false'
+        )
       }
       return undefined
     case 'scene':
@@ -284,14 +321,31 @@ export function whenPathWarning(cond: WhenCondition, initial: WorldState | null,
       return undefined
     case 'flags':
       if (initial.flags?.[path.name] === undefined) {
-        return locator + '：when 路径所指事件「' + path.name + '」不在卡包初始状态中，该条件将永远求值为 false'
+        return (
+          locator +
+          '：when 路径所指事件「' +
+          path.name +
+          '」不在卡包初始状态中，该条件将永远求值为 false'
+        )
       }
       return undefined
     case 'dynamic': {
-      const { characters, inventory, scene, flags, relations, ...rest } = initial as Record<string, unknown>
-      void characters; void inventory; void scene; void flags; void relations
+      const { characters, inventory, scene, flags, relations, ...rest } = initial as Record<
+        string,
+        unknown
+      >
+      void characters
+      void inventory
+      void scene
+      void flags
+      void relations
       if (rest[path.id] === undefined) {
-        return locator + '：when 路径所指自定义字段「' + path.id + '」不在卡包初始状态中，该条件将永远求值为 false'
+        return (
+          locator +
+          '：when 路径所指自定义字段「' +
+          path.id +
+          '」不在卡包初始状态中，该条件将永远求值为 false'
+        )
       }
       return undefined
     }

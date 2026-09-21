@@ -18,7 +18,11 @@ function stateEvent(payload: Record<string, unknown>, seq: number) {
 
 /** Fold a projection unit from its init over a whole log (as the host does). */
 function fold(
-  definition: typeof worldStateProjection | typeof summaryProjection | typeof settingsProjection | typeof loreProjection,
+  definition:
+    | typeof worldStateProjection
+    | typeof summaryProjection
+    | typeof settingsProjection
+    | typeof loreProjection,
   events: ReturnType<typeof event>[],
 ) {
   let state = (definition as { init(): unknown }).init()
@@ -33,8 +37,14 @@ const prefix = [
   event('turn/start', { turn: 1 }, 0),
   stateEvent({ worldState: { ...emptyWorldState(), scene: { location: '归离客栈' } } }, 1),
   event('assistant/message', {}, 2),
-  stateEvent({ worldState: { ...emptyWorldState(), scene: { location: '枯河滩' }, flags: { 受伤: true } } }, 3),
-  stateEvent({ summary: { goal: '北行', conflict: '沙盗', turningPoints: ['离开客栈'], threads: [] } }, 4),
+  stateEvent(
+    { worldState: { ...emptyWorldState(), scene: { location: '枯河滩' }, flags: { 受伤: true } } },
+    3,
+  ),
+  stateEvent(
+    { summary: { goal: '北行', conflict: '沙盗', turningPoints: ['离开客栈'], threads: [] } },
+    4,
+  ),
 ]
 
 describe('worldline replay (fork) correctness', () => {
@@ -47,8 +57,20 @@ describe('worldline replay (fork) correctness', () => {
   })
 
   it('keeps sibling branches independent (no cross-branch leakage)', () => {
-    const branchA = [...prefix, stateEvent({ worldState: { ...emptyWorldState(), scene: { location: 'A 分支' } } }, prefix.length)]
-    const branchB = [...prefix, stateEvent({ worldState: { ...emptyWorldState(), scene: { location: 'B 分支' } } }, prefix.length)]
+    const branchA = [
+      ...prefix,
+      stateEvent(
+        { worldState: { ...emptyWorldState(), scene: { location: 'A 分支' } } },
+        prefix.length,
+      ),
+    ]
+    const branchB = [
+      ...prefix,
+      stateEvent(
+        { worldState: { ...emptyWorldState(), scene: { location: 'B 分支' } } },
+        prefix.length,
+      ),
+    ]
 
     expect(fold(worldStateProjection, branchA).scene.location).toBe('A 分支')
     expect(fold(worldStateProjection, branchB).scene.location).toBe('B 分支')
@@ -76,10 +98,18 @@ describe('worldline replay (fork) correctness', () => {
     const onlyA = { name: 'branch-a-lore', description: 'A', body: '# A' }
     const shared = [...prefix, stateEvent({ sediment: { kind: 'add', skill: inherited } }, 5)]
     const branchA = [...shared, stateEvent({ sediment: { kind: 'add', skill: onlyA } }, 6)]
-    const branchB = [...shared, stateEvent({ sediment: { kind: 'remove', name: inherited.name } }, 6)]
+    const branchB = [
+      ...shared,
+      stateEvent({ sediment: { kind: 'remove', name: inherited.name } }, 6),
+    ]
 
-    expect(fold(loreProjection, shared).map((entry: { name: string }) => entry.name)).toEqual(['shared-lore'])
-    expect(fold(loreProjection, branchA).map((entry: { name: string }) => entry.name)).toEqual(['shared-lore', 'branch-a-lore'])
+    expect(fold(loreProjection, shared).map((entry: { name: string }) => entry.name)).toEqual([
+      'shared-lore',
+    ])
+    expect(fold(loreProjection, branchA).map((entry: { name: string }) => entry.name)).toEqual([
+      'shared-lore',
+      'branch-a-lore',
+    ])
     expect(fold(loreProjection, branchB)).toEqual([])
   })
 })

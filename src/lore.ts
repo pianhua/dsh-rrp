@@ -50,7 +50,11 @@ export function renderLore(entry: LoreEntry): string {
 }
 
 /** Read one old `SKILL.md` into the canonical event vocabulary. */
-export function readLegacyLore(home: string, sessionId: string, name: string): LoreEntry | undefined {
+export function readLegacyLore(
+  home: string,
+  sessionId: string,
+  name: string,
+): LoreEntry | undefined {
   if (!isLoreName(name)) return undefined
   const file = join(legacySkillDir(home, sessionId, name), 'SKILL.md')
   if (!existsSync(file)) return undefined

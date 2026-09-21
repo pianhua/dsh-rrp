@@ -56,8 +56,8 @@ export type DynamicFieldType = 'number' | 'string' | 'boolean'
 export interface DynamicFieldValue {
   type: DynamicFieldType
   value: number | string | boolean
-  min?: number  // Only valid for type: 'number'
-  max?: number  // Only valid for type: 'number'
+  min?: number // Only valid for type: 'number'
+  max?: number // Only valid for type: 'number'
 }
 
 /**
@@ -87,12 +87,12 @@ export const CORE_DOMAIN_KEYS = ['characters', 'inventory', 'scene', 'flags', 'r
 
 /** Check if a key is a core domain. */
 export function isCoreKey(key: string): boolean {
-  return CORE_DOMAIN_KEYS.includes(key as typeof CORE_DOMAIN_KEYS[number])
+  return CORE_DOMAIN_KEYS.includes(key as (typeof CORE_DOMAIN_KEYS)[number])
 }
 
 /** Get all dynamic field keys from a WorldState. */
 export function getDynamicKeys(state: WorldState): string[] {
-  return Object.keys(state).filter(k => !isCoreKey(k))
+  return Object.keys(state).filter((k) => !isCoreKey(k))
 }
 
 /** The client-visible view. */
@@ -192,7 +192,9 @@ const BRACKET_MODIFIER = /（[^（）]*）|\([^()]*\)|【[^【】]*】|\[[^[\]]*
  * characters and other names pass through untouched.
  */
 export function normalizeRelationEndpoint(name: string): string {
-  const text = String(name ?? '').replace(BRACKET_MODIFIER, '').trim()
+  const text = String(name ?? '')
+    .replace(BRACKET_MODIFIER, '')
+    .trim()
   if (PLAYER_ENDPOINT_ALIASES.has(text.toLowerCase())) return '玩家'
   return text
 }
@@ -251,21 +253,27 @@ export function pruneWorldState(state: WorldState): WorldState {
   }
 
   // Relations: normalize endpoints/pairs on every write path, then cap.
-  const relations = capRelations(normalizeRelations(state.relations ?? []), WORLD_STATE_LIMITS.relations)
+  const relations = capRelations(
+    normalizeRelations(state.relations ?? []),
+    WORLD_STATE_LIMITS.relations,
+  )
 
   // Cap dynamic fields count and apply constraints
   const dynamicKeys = getDynamicKeys(state)
   const pruned: WorldState = { ...state, characters, inventory, flags, relations }
-  let changed = characters !== state.characters || inventory !== state.inventory || flags !== state.flags
-    || relations !== state.relations
-  
+  let changed =
+    characters !== state.characters ||
+    inventory !== state.inventory ||
+    flags !== state.flags ||
+    relations !== state.relations
+
   if (dynamicKeys.length > WORLD_STATE_LIMITS.dynamicFields) {
     changed = true
     for (const key of dynamicKeys.slice(WORLD_STATE_LIMITS.dynamicFields)) {
       delete pruned[key]
     }
   }
-  
+
   for (const key of dynamicKeys.slice(0, WORLD_STATE_LIMITS.dynamicFields)) {
     const field = state[key] as DynamicFieldValue
     const constrained = applyConstraints(field)
@@ -274,7 +282,7 @@ export function pruneWorldState(state: WorldState): WorldState {
       pruned[key] = constrained
     }
   }
-  
+
   return changed ? pruned : state
 }
 
@@ -318,7 +326,7 @@ export function renderWorldState(state: WorldState): string {
     'flags: ' + stableJson(state.flags),
     'relations: ' + stableJson(state.relations ?? []),
   ]
-  
+
   // D5: Render dynamic fields
   const dynamicKeys = getDynamicKeys(state).sort()
   if (dynamicKeys.length > 0) {
@@ -329,7 +337,7 @@ export function renderWorldState(state: WorldState): string {
       lines.push(key + ': ' + stableJson(field.value))
     }
   }
-  
+
   return lines.join('\n')
 }
 
@@ -364,7 +372,9 @@ export function diffWorldState(prior: WorldState, next: WorldState): string {
   ]
   for (const [field, label] of sceneFields) {
     if (prior.scene[field] !== next.scene[field]) {
-      clauses.push(label + ' ' + showField(prior.scene[field]) + ' → ' + showField(next.scene[field]))
+      clauses.push(
+        label + ' ' + showField(prior.scene[field]) + ' → ' + showField(next.scene[field]),
+      )
     }
   }
 
@@ -387,7 +397,16 @@ export function diffWorldState(prior: WorldState, next: WorldState): string {
     }
     for (const [field, label] of characterFields) {
       if (before[field] !== after[field]) {
-        clauses.push('角色「' + name + '」' + label + ' ' + showField(before[field]) + ' → ' + showField(after[field]))
+        clauses.push(
+          '角色「' +
+            name +
+            '」' +
+            label +
+            ' ' +
+            showField(before[field]) +
+            ' → ' +
+            showField(after[field]),
+        )
       }
     }
   }
@@ -409,7 +428,16 @@ export function diffWorldState(prior: WorldState, next: WorldState): string {
     }
     for (const [field, label] of itemFields) {
       if (before[field] !== after[field]) {
-        clauses.push('物品「' + name + '」' + label + ' ' + showField(before[field]) + ' → ' + showField(after[field]))
+        clauses.push(
+          '物品「' +
+            name +
+            '」' +
+            label +
+            ' ' +
+            showField(before[field]) +
+            ' → ' +
+            showField(after[field]),
+        )
       }
     }
   }
@@ -432,8 +460,12 @@ export function diffWorldState(prior: WorldState, next: WorldState): string {
 
   // Relations: undirected pairs keyed by sorted endpoints.
   const relationKey = (rel: WorldStateRelation): string => [rel.a, rel.b].sort().join(' ')
-  const priorRelations = new Map((prior.relations ?? []).map((rel) => [relationKey(rel), rel] as [string, WorldStateRelation]))
-  const nextRelations = new Map((next.relations ?? []).map((rel) => [relationKey(rel), rel] as [string, WorldStateRelation]))
+  const priorRelations = new Map(
+    (prior.relations ?? []).map((rel) => [relationKey(rel), rel] as [string, WorldStateRelation]),
+  )
+  const nextRelations = new Map(
+    (next.relations ?? []).map((rel) => [relationKey(rel), rel] as [string, WorldStateRelation]),
+  )
   const allRelationKeys = [...new Set([...priorRelations.keys(), ...nextRelations.keys()])]
   for (const key of allRelationKeys) {
     const before = priorRelations.get(key)
@@ -447,7 +479,16 @@ export function diffWorldState(prior: WorldState, next: WorldState): string {
       continue
     }
     if (before !== undefined && after !== undefined && before.label !== after.label) {
-      clauses.push('「' + after.a + ' × ' + after.b + '」关系 ' + showField(before.label) + ' → ' + showField(after.label))
+      clauses.push(
+        '「' +
+          after.a +
+          ' × ' +
+          after.b +
+          '」关系 ' +
+          showField(before.label) +
+          ' → ' +
+          showField(after.label),
+      )
     }
   }
 
@@ -455,7 +496,7 @@ export function diffWorldState(prior: WorldState, next: WorldState): string {
   const priorDynamic = getDynamicKeys(prior)
   const nextDynamic = getDynamicKeys(next)
   const allDynamic = [...new Set([...priorDynamic, ...nextDynamic])]
-  
+
   for (const key of allDynamic) {
     const before = prior[key] as DynamicFieldValue | undefined
     const after = next[key] as DynamicFieldValue | undefined
@@ -474,7 +515,18 @@ export function diffWorldState(prior: WorldState, next: WorldState): string {
     // Value unchanged but bounds retuned (e.g. via createFields min/max):
     // surfaced so a constraints-only change is not silently swallowed.
     if (before.min !== after.min || before.max !== after.max) {
-      clauses.push('字段「' + key + '」约束 ' + showField(before.min) + '~' + showField(before.max) + ' → ' + showField(after.min) + '~' + showField(after.max))
+      clauses.push(
+        '字段「' +
+          key +
+          '」约束 ' +
+          showField(before.min) +
+          '~' +
+          showField(before.max) +
+          ' → ' +
+          showField(after.min) +
+          '~' +
+          showField(after.max),
+      )
     }
   }
 
@@ -491,7 +543,7 @@ export function diffWorldState(prior: WorldState, next: WorldState): string {
 export function createDynamicField(
   type: DynamicFieldType,
   value: number | string | boolean,
-  constraints?: { min?: number; max?: number }
+  constraints?: { min?: number; max?: number },
 ): DynamicFieldValue {
   const field: DynamicFieldValue = { type, value }
   if (constraints?.min !== undefined) field.min = constraints.min

@@ -12,7 +12,14 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import { parseWhen, whenPathWarning } from './lore-condition.ts'
 import type { WorldState } from './world-state.ts'
-import { UI_ACTION_KINDS, UI_BUTTON_LIMIT, UI_COMPONENT_KINDS, UI_PANEL_LIMIT, type UiManifest, type UiPanelDecl } from './ui-schema.ts'
+import {
+  UI_ACTION_KINDS,
+  UI_BUTTON_LIMIT,
+  UI_COMPONENT_KINDS,
+  UI_PANEL_LIMIT,
+  type UiManifest,
+  type UiPanelDecl,
+} from './ui-schema.ts'
 
 /** The manifest's fixed filename inside a card's `ui/` directory. */
 export const UI_MANIFEST_FILE = 'manifest.json'
@@ -54,13 +61,17 @@ const manifestSchema = z
   .strict()
 
 /** Where one card's UI stands. `absent` is the normal case for a plain card. */
-export type UiLoadResult = { kind: 'absent' } | { kind: 'ok'; manifest: UiManifest } | { kind: 'error'; error: string }
+export type UiLoadResult =
+  { kind: 'absent' } | { kind: 'ok'; manifest: UiManifest } | { kind: 'error'; error: string }
 
 /**
  * Load and validate one card directory's UI declaration.
  * @param cardDir - the resolved card directory (user root first, shipped fallback).
  */
-export function loadUiManifest(cardDir: string, initialState: WorldState | null = null): UiLoadResult {
+export function loadUiManifest(
+  cardDir: string,
+  initialState: WorldState | null = null,
+): UiLoadResult {
   const file = join(cardDir, 'ui', UI_MANIFEST_FILE)
   if (!existsSync(file)) return { kind: 'absent' }
   let raw: unknown
@@ -74,36 +85,75 @@ export function loadUiManifest(cardDir: string, initialState: WorldState | null 
     const first = parsed.error.issues[0]
     const where = first === undefined ? '' : first.path.join('.') + '：'
     const reason = first === undefined ? '未知错误' : first.message
-    return { kind: 'error', error: 'ui/' + UI_MANIFEST_FILE + ' 校验失败（' + where + reason + '）' }
+    return {
+      kind: 'error',
+      error: 'ui/' + UI_MANIFEST_FILE + ' 校验失败（' + where + reason + '）',
+    }
   }
 
   const locator = '卡「' + cardDir.split(/[\\/]/).pop() + '」'
   const panels: UiPanelDecl[] = []
   const seen = new Set<string>()
   for (const panel of parsed.data.panels) {
-    if (seen.has(panel.id)) return { kind: 'error', error: 'ui/' + UI_MANIFEST_FILE + '：panel id 重复「' + panel.id + '」' }
+    if (seen.has(panel.id))
+      return {
+        kind: 'error',
+        error: 'ui/' + UI_MANIFEST_FILE + '：panel id 重复「' + panel.id + '」',
+      }
     seen.add(panel.id)
     if (panel.component === 'gauge' && panel.bind === undefined) {
-      return { kind: 'error', error: 'ui/' + UI_MANIFEST_FILE + '：gauge 面板「' + panel.id + '」缺少 bind 数值路径' }
+      return {
+        kind: 'error',
+        error: 'ui/' + UI_MANIFEST_FILE + '：gauge 面板「' + panel.id + '」缺少 bind 数值路径',
+      }
     }
-    if (panel.component === 'buttonRow' && (panel.buttons === undefined || panel.buttons.length === 0)) {
-      return { kind: 'error', error: 'ui/' + UI_MANIFEST_FILE + '：buttonRow 面板「' + panel.id + '」没有任何按钮' }
+    if (
+      panel.component === 'buttonRow' &&
+      (panel.buttons === undefined || panel.buttons.length === 0)
+    ) {
+      return {
+        kind: 'error',
+        error: 'ui/' + UI_MANIFEST_FILE + '：buttonRow 面板「' + panel.id + '」没有任何按钮',
+      }
     }
     if (panel.component === 'app') {
       if (panel.src === undefined || !isUiHtmlName(panel.src)) {
-        return { kind: 'error', error: 'ui/' + UI_MANIFEST_FILE + '：app 面板「' + panel.id + '」的 src 必须是 ui/ 下的裸 *.html 文件名' }
+        return {
+          kind: 'error',
+          error:
+            'ui/' +
+            UI_MANIFEST_FILE +
+            '：app 面板「' +
+            panel.id +
+            '」的 src 必须是 ui/ 下的裸 *.html 文件名',
+        }
       }
       if (!existsSync(join(cardDir, 'ui', panel.src))) {
-        return { kind: 'error', error: 'ui/' + UI_MANIFEST_FILE + '：app 面板「' + panel.id + '」指向的 ui/' + panel.src + ' 不存在' }
+        return {
+          kind: 'error',
+          error:
+            'ui/' +
+            UI_MANIFEST_FILE +
+            '：app 面板「' +
+            panel.id +
+            '」指向的 ui/' +
+            panel.src +
+            ' 不存在',
+        }
       }
     }
     const { when: whenRaw, ...rest } = panel
     const decl: UiPanelDecl = { ...rest }
     if (whenRaw !== undefined) {
       const condition = parseWhen(whenRaw, locator + ' ui 面板「' + panel.id + '」')
-      if (condition instanceof Error) return { kind: 'error', error: 'ui/' + UI_MANIFEST_FILE + '：' + condition.message }
+      if (condition instanceof Error)
+        return { kind: 'error', error: 'ui/' + UI_MANIFEST_FILE + '：' + condition.message }
       decl.when = condition
-      const warning = whenPathWarning(condition, initialState, locator + ' ui 面板「' + panel.id + '」')
+      const warning = whenPathWarning(
+        condition,
+        initialState,
+        locator + ' ui 面板「' + panel.id + '」',
+      )
       if (warning !== undefined) console.warn('[dsh-rrp] ' + warning)
     }
     panels.push(decl)

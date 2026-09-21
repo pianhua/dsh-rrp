@@ -66,7 +66,11 @@ export interface CopilotHistoryView {
 const turnActionSchema = z.union([
   z.object({ kind: z.literal('world-state'), digest: z.string() }),
   z.object({ kind: z.literal('lore'), name: z.string() }),
-  z.object({ kind: z.literal('proposal'), proposalKind: z.enum(['card-edit', 'doc-note']), subject: z.string() }),
+  z.object({
+    kind: z.literal('proposal'),
+    proposalKind: z.enum(['card-edit', 'doc-note']),
+    subject: z.string(),
+  }),
   z.object({ kind: z.literal('failed'), error: z.string() }),
 ])
 
@@ -147,12 +151,16 @@ function readWitness(): WriterWitness | undefined {
 
 function writeWitness(openedAt: number): void {
   try {
-    writeFileSync(witnessPath, JSON.stringify({
-      pid: process.pid,
-      hostname: hostname(),
-      openedAt,
-      heartbeatAt: witnessNow(),
-    }), 'utf8')
+    writeFileSync(
+      witnessPath,
+      JSON.stringify({
+        pid: process.pid,
+        hostname: hostname(),
+        openedAt,
+        heartbeatAt: witnessNow(),
+      }),
+      'utf8',
+    )
   } catch {
     /* best effort only — a witness we cannot write must never break the store */
   }
@@ -178,9 +186,12 @@ function guardAgainstSecondWriter(): void {
   if (existing === undefined || existing.pid === process.pid) return
   if (witnessNow() - existing.heartbeatAt < WITNESS_FRESH_MS && pidAlive(existing.pid)) {
     console.warn(
-      TAG + ' copilot history: ANOTHER LIVE HARNESS (pid ' + existing.pid + ') is writing '
-      + 'dsh_rrp_copilot on this DSH_HOME. The host backend is last-write-wins per process, '
-      + 'so copilot history records can silently vanish. Close one instance.',
+      TAG +
+        ' copilot history: ANOTHER LIVE HARNESS (pid ' +
+        existing.pid +
+        ') is writing ' +
+        'dsh_rrp_copilot on this DSH_HOME. The host backend is last-write-wins per process, ' +
+        'so copilot history records can silently vanish. Close one instance.',
     )
   }
 }
@@ -192,29 +203,60 @@ function legacyPath(sessionId: string): string {
 /** Parse one sidecar file; anything unusable reads as "no legacy history". */
 function readLegacy(sessionId: string): CopilotStore | undefined {
   try {
-    const parsed = JSON.parse(readFileSync(legacyPath(sessionId), 'utf8')) as Record<string, unknown>
+    const parsed = JSON.parse(readFileSync(legacyPath(sessionId), 'utf8')) as Record<
+      string,
+      unknown
+    >
     if (!Array.isArray(parsed.turns) || !Array.isArray(parsed.undo)) return undefined
     // Sidecars predate the action union: 'sediment' was renamed to 'lore', and
     // unknown shapes must not cost the whole transcript — degrade them to a
     // failed marker so the panel still renders the turn.
     const turns = (parsed.turns as Array<Record<string, unknown>>).flatMap((turn) => {
-      if ((turn.role !== 'player' && turn.role !== 'copilot') || typeof turn.text !== 'string' || typeof turn.at !== 'string') return []
+      if (
+        (turn.role !== 'player' && turn.role !== 'copilot') ||
+        typeof turn.text !== 'string' ||
+        typeof turn.at !== 'string'
+      )
+        return []
       const actions = Array.isArray(turn.actions)
         ? turn.actions.map((entry): CopilotTurnAction => {
             const action = entry as Record<string, unknown> | null
-            if (action?.kind === 'lore' || action?.kind === 'sediment') return { kind: 'lore', name: String(action.name ?? '') }
-            if (action?.kind === 'world-state' && typeof action.digest === 'string') return { kind: 'world-state', digest: action.digest }
-            if (action?.kind === 'failed' && typeof action.error === 'string') return { kind: 'failed', error: action.error }
+            if (action?.kind === 'lore' || action?.kind === 'sediment')
+              return { kind: 'lore', name: String(action.name ?? '') }
+            if (action?.kind === 'world-state' && typeof action.digest === 'string')
+              return { kind: 'world-state', digest: action.digest }
+            if (action?.kind === 'failed' && typeof action.error === 'string')
+              return { kind: 'failed', error: action.error }
             return { kind: 'failed', error: 'legacy action record' }
           })
         : undefined
-      return [{ role: turn.role as 'player' | 'copilot', text: turn.text, at: turn.at, ...(actions !== undefined ? { actions } : {}) }]
+      return [
+        {
+          role: turn.role as 'player' | 'copilot',
+          text: turn.text,
+          at: turn.at,
+          ...(actions !== undefined ? { actions } : {}),
+        },
+      ]
     })
     // One undo snapshot failing validation drops only itself, never the chat.
     const undo = (parsed.undo as Array<Record<string, unknown>>).flatMap((entry) => {
       const snapshot = worldStateSchema.safeParse(entry?.snapshot)
-      if (!snapshot.success || typeof entry.id !== 'string' || typeof entry.at !== 'string' || typeof entry.digest !== 'string') return []
-      return [{ id: entry.id, at: entry.at, digest: entry.digest, snapshot: snapshot.data as CopilotUndoEntry['snapshot'] }]
+      if (
+        !snapshot.success ||
+        typeof entry.id !== 'string' ||
+        typeof entry.at !== 'string' ||
+        typeof entry.digest !== 'string'
+      )
+        return []
+      return [
+        {
+          id: entry.id,
+          at: entry.at,
+          digest: entry.digest,
+          snapshot: snapshot.data as CopilotUndoEntry['snapshot'],
+        },
+      ]
     })
     return { version: 1, turns, undo }
   } catch {
@@ -285,7 +327,11 @@ export async function openCopilotStore(
       if (table.get(sessionId) === undefined) await table.put(sessionId, handle.load(sessionId))
       let result!: ReturnType<typeof fn>
       await table.update(sessionId, (current) => {
-        const draft: CopilotStore = { version: 1, turns: [...current.turns], undo: [...current.undo] }
+        const draft: CopilotStore = {
+          version: 1,
+          turns: [...current.turns],
+          undo: [...current.undo],
+        }
         result = fn(draft)
         return draft
       })

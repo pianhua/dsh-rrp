@@ -39,15 +39,23 @@ describe('lore event vocabulary and legacy adapter', () => {
     expect(isLoreName('a b')).toBe(false)
     expect(isLoreName('a--b')).toBe(false)
     expect(isLoreName('ok-name')).toBe(true)
-    expect(validateLoreEntry({ ...ENTRY, name: ' qingqiu-fox-clan ' })).toEqual({ ok: true, skill: ENTRY })
+    expect(validateLoreEntry({ ...ENTRY, name: ' qingqiu-fox-clan ' })).toEqual({
+      ok: true,
+      skill: ENTRY,
+    })
     expect(validateLoreEntry({ ...ENTRY, description: '' }).ok).toBe(false)
-    expect(validateLoreEntry({ ...ENTRY, body: 'x'.repeat(LORE_LIMITS.bodyChars + 1) }).ok).toBe(false)
+    expect(validateLoreEntry({ ...ENTRY, body: 'x'.repeat(LORE_LIMITS.bodyChars + 1) }).ok).toBe(
+      false,
+    )
   })
 
   it('refuses an existing, reserved, or overflowing entry', () => {
     expect(validateLoreEntry(ENTRY, [ENTRY.name]).ok).toBe(false)
     expect(validateLoreEntry(ENTRY, [], [ENTRY.name]).ok).toBe(false)
-    const full = Array.from({ length: LORE_LIMITS.skillsPerSession }, (_, index) => 'lore-' + String(index))
+    const full = Array.from(
+      { length: LORE_LIMITS.skillsPerSession },
+      (_, index) => 'lore-' + String(index),
+    )
     expect(validateLoreEntry(ENTRY, full).ok).toBe(false)
   })
 

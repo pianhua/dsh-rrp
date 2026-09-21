@@ -88,11 +88,16 @@ export function interpolateCardText(text: string, player: CardPlayer | undefined
 export function renderCardContext(card: CardContext): string {
   const lines = ['【当前卡包 · 设定基准】', '卡包：' + card.name]
   if (card.player !== undefined) {
-    lines.push('玩家角色：' + card.player.name + (card.player.description === undefined ? '' : ' — ' + card.player.description))
+    lines.push(
+      '玩家角色：' +
+        card.player.name +
+        (card.player.description === undefined ? '' : ' — ' + card.player.description),
+    )
   }
-  if (card.worldCore.length > 0) lines.push('', '—— 世界核心 ——', interpolateCardText(card.worldCore, card.player))
-  if (card.persona.length > 0) lines.push('', '—— 人设与规则 ——', interpolateCardText(card.persona, card.player))
+  if (card.worldCore.length > 0)
+    lines.push('', '—— 世界核心 ——', interpolateCardText(card.worldCore, card.player))
+  if (card.persona.length > 0)
+    lines.push('', '—— 人设与规则 ——', interpolateCardText(card.persona, card.player))
   lines.push('', '以上是本次游玩的既定设定，必须遵守；不要把它们当作正文输出。')
   return lines.join('\n')
 }
-

@@ -27,7 +27,14 @@ interface ReadHandleLike {
 interface PersistenceService {
   open(id: string, access: 'read'): Promise<ReadHandleLike>
 }
-import { type RequestLike, type ResponseLike, type RuntimeFaces, queryOf, face, send } from './host-faces.ts'
+import {
+  type RequestLike,
+  type ResponseLike,
+  type RuntimeFaces,
+  queryOf,
+  face,
+  send,
+} from './host-faces.ts'
 
 /**
  * Extract the story prose from one session's event log, in seq order: every
@@ -51,7 +58,11 @@ export function extractNovelProse(events: readonly SessionEventLike[]): string[]
 }
 
 /** Build the downloadable document; md and txt differ only in decoration. */
-export function buildNovelDocument(title: string, prose: readonly string[], format: 'md' | 'txt'): string {
+export function buildNovelDocument(
+  title: string,
+  prose: readonly string[],
+  format: 'md' | 'txt',
+): string {
   const heading = format === 'md' ? '# ' : ''
   const head = heading + (title.length > 0 ? title : '未命名故事')
   return head + '\n\n' + prose.join('\n\n') + '\n'
@@ -64,7 +75,13 @@ export function buildNovelDocument(title: string, prose: readonly string[], form
 export function registerExportRoute(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
   const webServer = runtime.get('webServer') as
-    | { register(route: { kind: 'exact'; path: string; handler: (req: RequestLike, res: ResponseLike) => void | Promise<void> }): () => void }
+    | {
+        register(route: {
+          kind: 'exact'
+          path: string
+          handler: (req: RequestLike, res: ResponseLike) => void | Promise<void>
+        }): () => void
+      }
     | undefined
   const persistence = face<PersistenceService>(runtime, 'sessionPersistence')
   if (webServer === undefined || persistence === undefined) {
@@ -89,7 +106,10 @@ export function registerExportRoute(ctx: Context): void {
         }
         const format = query?.get('format') === 'txt' ? 'txt' : 'md'
         // Title doubles as the download name; keep it filename-safe.
-        const title = (query?.get('title') ?? '').trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 80)
+        const title = (query?.get('title') ?? '')
+          .trim()
+          .replace(/[\\/:*?"<>|]/g, '_')
+          .slice(0, 80)
 
         let handle: ReadHandleLike
         try {
@@ -103,7 +123,10 @@ export function registerExportRoute(ctx: Context): void {
           const body = buildNovelDocument(title, extractNovelProse(events), format)
           const filename = encodeURIComponent((title.length > 0 ? title : 'novel') + '.' + format)
           res.statusCode = 200
-          res.setHeader?.('content-type', format === 'md' ? 'text/markdown; charset=utf-8' : 'text/plain; charset=utf-8')
+          res.setHeader?.(
+            'content-type',
+            format === 'md' ? 'text/markdown; charset=utf-8' : 'text/plain; charset=utf-8',
+          )
           res.setHeader?.('content-disposition', "attachment; filename*=UTF-8''" + filename)
           res.end(body)
         } catch (cause) {

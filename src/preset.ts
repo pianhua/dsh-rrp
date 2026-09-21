@@ -25,7 +25,15 @@
  * and only on uninstall, never on a reload/restart.
  */
 import { createHash } from 'node:crypto'
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { listCards, mountSkillsForCard } from './cards.ts'
@@ -99,7 +107,9 @@ function contentHashes(dir: string): Record<string, string> {
   if (!existsSync(dir)) return out
   for (const rel of walkFiles(dir)) {
     if (rel === MARKER_FILE) continue
-    out[rel] = createHash('sha256').update(readFileSync(join(dir, rel))).digest('hex')
+    out[rel] = createHash('sha256')
+      .update(readFileSync(join(dir, rel)))
+      .digest('hex')
   }
   return out
 }
@@ -134,7 +144,11 @@ function isOursUnmodified(dir: string): boolean {
  * with the copy's own skills path and, for a card preset, mounting only that
  * card's world-knowledge bundles.
  */
-function materializeOne(dir: string, cardId: string | undefined, home: string | undefined): MaterializeOutcome {
+function materializeOne(
+  dir: string,
+  cardId: string | undefined,
+  home: string | undefined,
+): MaterializeOutcome {
   const sourceComposition = join(SOURCE_DIR, COMPOSITION_FILE)
   if (!existsSync(sourceComposition)) {
     throw new Error(`dsh-rrp: shipped RP preset missing at ${SOURCE_DIR} — rebuild before linking`)
@@ -170,7 +184,10 @@ function materializeOne(dir: string, cardId: string | undefined, home: string | 
  * @returns the materialization action (`exists` when already materialized),
  *   or undefined for an illegal id.
  */
-export function ensureCardPreset(cardId: string, home?: string): MaterializeOutcome['action'] | 'exists' | undefined {
+export function ensureCardPreset(
+  cardId: string,
+  home?: string,
+): MaterializeOutcome['action'] | 'exists' | undefined {
   if (!isCardId(cardId)) return undefined
   const dir = presetDir(home, presetIdForCard(cardId))
   if (existsSync(dir)) {
@@ -202,7 +219,9 @@ export function materializePreset(home?: string): MaterializeOutcome {
  * @param home - harness home override; defaults to DSH_HOME or ~/.dsh.
  * @returns `kept-installed`, `removed`, `left-user`, or `absent`.
  */
-export function cleanupPreset(home?: string): 'kept-installed' | 'removed' | 'left-user' | 'absent' {
+export function cleanupPreset(
+  home?: string,
+): 'kept-installed' | 'removed' | 'left-user' | 'absent' {
   if (existsSync(PACKAGE_MANIFEST)) return 'kept-installed'
   return removeAllPresets(home)
 }

@@ -18,7 +18,15 @@ function fakeContext() {
       return fn()
     },
     slots: {
-      register(options: { name?: string; key?: string; id?: string; inject?: (...args: unknown[]) => Record<string, unknown> }, _component: unknown) {
+      register(
+        options: {
+          name?: string
+          key?: string
+          id?: string
+          inject?: (...args: unknown[]) => Record<string, unknown>
+        },
+        _component: unknown,
+      ) {
         bodies.push(options)
         return () => {}
       },
@@ -64,7 +72,17 @@ const CARD: CardPack = {
 
 describe('dsh-rrp client half', () => {
   it('declares the required client services', () => {
-    expect(client.inject).toEqual(expect.arrayContaining(['slots', 'sidebarRightTabs', 'locale', 'sessions', 'remote', 'remote.agentPresets', 'layout']))
+    expect(client.inject).toEqual(
+      expect.arrayContaining([
+        'slots',
+        'sidebarRightTabs',
+        'locale',
+        'sessions',
+        'remote',
+        'remote.agentPresets',
+        'layout',
+      ]),
+    )
   })
 
   it('does not override the host theme (native light/dark only)', () => {
@@ -103,16 +121,24 @@ describe('dsh-rrp client half', () => {
     Object.assign(ctx, {
       get: () => undefined,
       sessions: {
-        create: async (options: Record<string, unknown>) => { creates.push(options); return 'session-1' },
+        create: async (options: Record<string, unknown>) => {
+          creates.push(options)
+          return 'session-1'
+        },
         open() {},
         binding: () => ({ session: { async rename() {} } }),
       },
       remote: { agentPresets: { select: async () => ({ ok: true }) } },
       layout: { selectPanel() {} },
     })
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith(RRP_ROUTES.cardWorkspace)
-      ? { ok: true, json: async () => ({ workspaceId: 'ws-1', path: 'D:/rp', created: true }) }
-      : { ok: true, text: async () => '' }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.endsWith(RRP_ROUTES.cardWorkspace)
+          ? { ok: true, json: async () => ({ workspaceId: 'ws-1', path: 'D:/rp', created: true }) }
+          : { ok: true, text: async () => '' },
+      ),
+    )
     client.apply(ctx as never)
 
     const injected = bodies.find((entry) => entry.name === 'main')?.inject?.() as {
@@ -130,16 +156,24 @@ describe('dsh-rrp client half', () => {
     Object.assign(ctx, {
       get: () => undefined,
       sessions: {
-        create: async (options: Record<string, unknown>) => { creates.push(options); return 'session-2' },
+        create: async (options: Record<string, unknown>) => {
+          creates.push(options)
+          return 'session-2'
+        },
         open() {},
         binding: () => ({ session: { async rename() {} } }),
       },
       remote: { agentPresets: { select: async () => ({ ok: true }) } },
       layout: { selectPanel() {} },
     })
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith(RRP_ROUTES.cardWorkspace)
-      ? { ok: false, status: 503, text: async (): Promise<string> => '' }
-      : { ok: true, text: async (): Promise<string> => '' }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.endsWith(RRP_ROUTES.cardWorkspace)
+          ? { ok: false, status: 503, text: async (): Promise<string> => '' }
+          : { ok: true, text: async (): Promise<string> => '' },
+      ),
+    )
     client.apply(ctx as never)
 
     const injected = bodies.find((entry) => entry.name === 'main')?.inject?.() as {
@@ -159,6 +193,11 @@ describe('dsh-rrp client half', () => {
     const stage = views.find((entry) => entry.id === 'dsh-rrp/stage')
     expect(stage?.order).toBe(30)
     const injected = stage?.inject?.() as { api?: Record<string, unknown> }
-    expect(Object.keys(injected.api ?? {}).sort()).toEqual(['askCopilot', 'correctState', 'forget', 'loadManifest'])
+    expect(Object.keys(injected.api ?? {}).sort()).toEqual([
+      'askCopilot',
+      'correctState',
+      'forget',
+      'loadManifest',
+    ])
   })
 })

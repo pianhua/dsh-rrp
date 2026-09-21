@@ -30,7 +30,10 @@ export const summaryProjection = {
   stateSchema,
   stateVersion: 1,
   init: (): MacroSummary | null => null,
-  apply: (state: MacroSummary | null, event: { type: string; data?: unknown }): MacroSummary | null => {
+  apply: (
+    state: MacroSummary | null,
+    event: { type: string; data?: unknown },
+  ): MacroSummary | null => {
     const payload = rrpPayloadOf(event)
     return payload !== undefined && payload.summary !== undefined ? payload.summary : state
   },

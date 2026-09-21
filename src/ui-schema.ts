@@ -11,11 +11,17 @@
  * the client panel share this one module. Card UI never enters the model
  * context — it is player-facing presentation, not a world fact.
  */
-import { evalCondition, parseWhenPath, resolveWhenPath, type WhenCondition } from './lore-condition.ts'
+import {
+  evalCondition,
+  parseWhenPath,
+  resolveWhenPath,
+  type WhenCondition,
+} from './lore-condition.ts'
 import type { WorldState } from './world-state.ts'
 
 /** The closed interpreter set: five declarative panels, or one card-authored page. */
-export type UiComponentKind = 'gauge' | 'characterCard' | 'relationTable' | 'timeline' | 'buttonRow' | 'app'
+export type UiComponentKind =
+  'gauge' | 'characterCard' | 'relationTable' | 'timeline' | 'buttonRow' | 'app'
 
 /**
  * The only two things card UI may ever do. Every button resolves to one of
@@ -90,10 +96,15 @@ export const UI_BUTTON_LIMIT = 8
  * Pure and shared: the host uses it for previews, the client for live renders,
  * so a panel can never appear in one place and hide in the other.
  */
-export function visiblePanels(manifest: UiManifest | null | undefined, state: WorldState | null): UiPanelDecl[] {
+export function visiblePanels(
+  manifest: UiManifest | null | undefined,
+  state: WorldState | null,
+): UiPanelDecl[] {
   if (manifest === null || manifest === undefined) return []
   return manifest.panels
-    .filter((panel) => panel.when === undefined || (state !== null && evalCondition(panel.when, state)))
+    .filter(
+      (panel) => panel.when === undefined || (state !== null && evalCondition(panel.when, state)),
+    )
     .slice()
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id.localeCompare(b.id))
 }
@@ -111,7 +122,10 @@ export function readGaugeValue(bind: string | undefined, state: WorldState): num
 }
 
 /** The characters a `characterCard` panel shows (one by bind, or all). */
-export function readCharacters(bind: string | undefined, state: WorldState): Array<{ name: string; state: unknown }> {
+export function readCharacters(
+  bind: string | undefined,
+  state: WorldState,
+): Array<{ name: string; state: unknown }> {
   const characters = state.characters as Record<string, unknown> | undefined
   if (characters === undefined || characters === null) return []
   if (bind !== undefined && bind.length > 0) {
@@ -140,10 +154,16 @@ export function applyButtonPatch(state: WorldState, patch: Record<string, unknow
         next[key] = value
         continue
       }
-      const merged: Record<string, unknown> = { ...(typeof current === 'object' && current !== null ? current : {}) }
+      const merged: Record<string, unknown> = {
+        ...(typeof current === 'object' && current !== null ? current : {}),
+      }
       for (const [name, entry] of Object.entries(value as Record<string, unknown>)) {
         if (entry === null) delete merged[name]
-        else merged[name] = typeof entry === 'object' ? { ...(merged[name] as object | undefined), ...(entry as object) } : entry
+        else
+          merged[name] =
+            typeof entry === 'object'
+              ? { ...(merged[name] as object | undefined), ...(entry as object) }
+              : entry
       }
       next[key] = merged
       continue
@@ -153,4 +173,3 @@ export function applyButtonPatch(state: WorldState, patch: Record<string, unknow
   }
   return next as WorldState
 }
-

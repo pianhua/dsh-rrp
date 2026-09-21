@@ -12,10 +12,24 @@ describe('novel prose extraction (issue #31-C)', () => {
     const prose = extractNovelProse([
       message('user', '我把碗放下。'),
       // State facts ride plugin user messages with an rrp payload.
-      { type: 'user/message', seq: 2, data: { source: { kind: 'plugin', plugin: 'dsh-rrp', rrp: { worldState: { scene: {} } } }, content: [{ type: 'text', text: 'state write' }] } },
+      {
+        type: 'user/message',
+        seq: 2,
+        data: {
+          source: { kind: 'plugin', plugin: 'dsh-rrp', rrp: { worldState: { scene: {} } } },
+          content: [{ type: 'text', text: 'state write' }],
+        },
+      },
       message('assistant', '老者抬眼。'),
       // Plugin notices without a payload (the opening fallback) are bookkeeping.
-      { type: 'user/message', seq: 4, data: { source: { kind: 'plugin', plugin: 'dsh-rrp' }, content: [{ type: 'text', text: '开局提示' }] } },
+      {
+        type: 'user/message',
+        seq: 4,
+        data: {
+          source: { kind: 'plugin', plugin: 'dsh-rrp' },
+          content: [{ type: 'text', text: '开局提示' }],
+        },
+      },
       { type: 'session/title', seq: 5, data: {} },
       message('assistant', ''),
       message('user', '雪更大了。'),
@@ -39,20 +53,26 @@ describe('novel export route (issue #31-C)', () => {
         if (access !== 'read') throw new Error('read only')
         return {
           read: async () => ({ events: events as never[] }),
-          close: async () => { closes += 1 },
+          close: async () => {
+            closes += 1
+          },
         }
       },
     }
     const handlers = new Map<string, (req: unknown, res: unknown) => void | Promise<void>>()
     const webServer = {
-      register: (route: { path: string; handler: (req: unknown, res: unknown) => void | Promise<void> }) => {
+      register: (route: {
+        path: string
+        handler: (req: unknown, res: unknown) => void | Promise<void>
+      }) => {
         handlers.set(route.path, route.handler)
         return () => {}
       },
     }
     const ctx = {
       effect: (fn: () => (() => void) | void) => fn(),
-      get: (name: string) => ({ webServer, sessionPersistence: persistence } as Record<string, unknown>)[name],
+      get: (name: string) =>
+        (({ webServer, sessionPersistence: persistence }) as Record<string, unknown>)[name],
     }
     return { ctx, handlers, closes: () => closes }
   }
@@ -63,22 +83,30 @@ describe('novel export route (issue #31-C)', () => {
     let status = 0
     let body = ''
     const res = {
-      get statusCode() { return status },
-      set statusCode(value: number) { status = value },
-      setHeader: (name: string, value: string) => { headers[name] = value },
-      end: (chunk?: string) => { if (chunk !== undefined) body += chunk },
+      get statusCode() {
+        return status
+      },
+      set statusCode(value: number) {
+        status = value
+      },
+      setHeader: (name: string, value: string) => {
+        headers[name] = value
+      },
+      end: (chunk?: string) => {
+        if (chunk !== undefined) body += chunk
+      },
     }
     await host.handlers.get(RRP_ROUTES.novelExport)!(req, res)
     return { status, headers, body }
   }
 
   it('downloads the whole story as an attachment and closes the read handle', async () => {
-    const host = fakeHost([
-      message('user', '我放下碗。'),
-      message('assistant', '老者抬眼看我。'),
-    ])
+    const host = fakeHost([message('user', '我放下碗。'), message('assistant', '老者抬眼看我。')])
     registerExportRoute(host.ctx as never)
-    const res = await call(host, '/dsh-rrp/export/novel?sessionId=s1&title=' + encodeURIComponent('雪夜·主线') + '&format=md')
+    const res = await call(
+      host,
+      '/dsh-rrp/export/novel?sessionId=s1&title=' + encodeURIComponent('雪夜·主线') + '&format=md',
+    )
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toContain('text/markdown')
     expect(res.headers['content-disposition']).toContain("filename*=UTF-8''")
@@ -106,8 +134,16 @@ describe('novel export route (issue #31-C)', () => {
 
   it('stays silent when the host lacks sessionPersistence', () => {
     const handlers = new Map<string, unknown>()
-    const webServer = { register: (route: { path: string }) => { handlers.set(route.path, route); return () => {} } }
-    const ctx = { effect: (fn: () => void) => fn(), get: (name: string) => ({ webServer } as Record<string, unknown>)[name] }
+    const webServer = {
+      register: (route: { path: string }) => {
+        handlers.set(route.path, route)
+        return () => {}
+      },
+    }
+    const ctx = {
+      effect: (fn: () => void) => fn(),
+      get: (name: string) => (({ webServer }) as Record<string, unknown>)[name],
+    }
     registerExportRoute(ctx as never)
     expect(handlers.size).toBe(0)
   })

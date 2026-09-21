@@ -8,14 +8,22 @@ const STATE = { ...emptyWorldState(), scene: { location: '平民公寓 · 门口
 const OPENING = '周末的清晨……'
 
 /** Minimal fake host: records appended events and the registered route. */
-function fakeHost(options: { failAssistant?: boolean; failState?: boolean; preset?: string; headerPreset?: string } = {}) {
+function fakeHost(
+  options: {
+    failAssistant?: boolean
+    failState?: boolean
+    preset?: string
+    headerPreset?: string
+  } = {},
+) {
   const appended: Array<{ type: string; data: unknown; intent?: unknown }> = []
   const session = {
     id: 's1',
     header: options.headerPreset === undefined ? undefined : { agentPreset: options.headerPreset },
     append(type: string, data: unknown, intent?: unknown) {
       if (options.failState === true && type === 'user/message') throw new Error('state rejected')
-      if (options.failAssistant === true && type === 'assistant/message') throw new Error('rejected')
+      if (options.failAssistant === true && type === 'assistant/message')
+        throw new Error('rejected')
       appended.push({ type, data, intent })
       return {}
     },
@@ -30,10 +38,16 @@ function fakeHost(options: { failAssistant?: boolean; failState?: boolean; prese
     },
   }
   let route: { handler: (req: unknown, res: unknown) => unknown } | undefined
-  const webServer = { register: (definition: { handler: (req: unknown, res: unknown) => unknown }) => { route = definition; return () => {} } }
+  const webServer = {
+    register: (definition: { handler: (req: unknown, res: unknown) => unknown }) => {
+      route = definition
+      return () => {}
+    },
+  }
   const ctx = {
     effect: (fn: () => (() => void) | void) => fn(),
-    get: (name: string) => ({ webServer, sessions, agents, sessionProjections } as Record<string, unknown>)[name],
+    get: (name: string) =>
+      (({ webServer, sessions, agents, sessionProjections }) as Record<string, unknown>)[name],
   }
   return { ctx, appended, route: () => route }
 }
@@ -49,18 +63,22 @@ function exchange(body: unknown, method = 'POST') {
   const res = {
     statusCode: 0,
     header: {} as Record<string, string>,
-    setHeader(name: string, value: string) { this.header[name] = value },
+    setHeader(name: string, value: string) {
+      this.header[name] = value
+    },
     end(_payload?: string) {},
   }
   return { req, res }
 }
 
 /** Structured payload of an appended context message. */
-const payloadOf = (data: unknown) => (data as { source?: { rrp?: Record<string, unknown> } }).source?.rrp
+const payloadOf = (data: unknown) =>
+  (data as { source?: { rrp?: Record<string, unknown> } }).source?.rrp
 
 describe('card start route', () => {
   it('publishes the initial state and appends the opening as an assistant message', async () => {
-    forgetState('s1'); forgetActivity('s1')
+    forgetState('s1')
+    forgetActivity('s1')
     const host = fakeHost()
     registerStartRoute(host.ctx as never)
     const { req, res } = exchange({ sessionId: 's1', state: STATE, opening: OPENING })
@@ -76,14 +94,17 @@ describe('card start route', () => {
     expect(activity.entries.map((entry) => entry.phase)).toEqual(['committed'])
     expect(activity.entries[0]?.actor).toBe('card')
 
-    const data = host.appended[1]?.data as { message: { role: string; content: Array<{ text: string }> } }
+    const data = host.appended[1]?.data as {
+      message: { role: string; content: Array<{ text: string }> }
+    }
     expect(data.message.role).toBe('assistant')
     expect(data.message.content[0]?.text).toBe(OPENING)
     expect(host.appended[1]?.intent).toEqual({ surfaceOp: 'append' })
   })
 
   it('falls back to a plugin notice when the assistant shape is rejected', async () => {
-    forgetState('s1'); forgetActivity('s1')
+    forgetState('s1')
+    forgetActivity('s1')
     const host = fakeHost({ failAssistant: true })
     registerStartRoute(host.ctx as never)
     const { req, res } = exchange({ sessionId: 's1', opening: OPENING })
@@ -135,7 +156,8 @@ describe('card start route', () => {
   })
 
   it('publishes the active card setting first', async () => {
-    forgetState('s1'); forgetActivity('s1')
+    forgetState('s1')
+    forgetActivity('s1')
     const host = fakeHost({ preset: 'rp-c1' })
     registerStartRoute(host.ctx as never)
     const { req, res } = exchange({
@@ -146,17 +168,26 @@ describe('card start route', () => {
     await host.route()!.handler(req, res)
     expect(res.statusCode).toBe(200)
     expect(host.appended[0]?.type).toBe('user/message')
-    expect(payloadOf(host.appended[0]?.data)?.card).toEqual({ id: 'c1', name: '测试卡', persona: 'P', worldCore: 'W' })
+    expect(payloadOf(host.appended[0]?.data)?.card).toEqual({
+      id: 'c1',
+      name: '测试卡',
+      persona: 'P',
+      worldCore: 'W',
+    })
   })
 
   it('interpolates the per-run player-name override into the opening before it is logged (issue #25)', async () => {
-    forgetState('s1'); forgetActivity('s1')
+    forgetState('s1')
+    forgetActivity('s1')
     const host = fakeHost({ preset: 'rp-c1' })
     registerStartRoute(host.ctx as never)
     const { req, res } = exchange({
       sessionId: 's1',
       card: {
-        id: 'c1', name: '测试卡', persona: 'P', worldCore: 'W',
+        id: 'c1',
+        name: '测试卡',
+        persona: 'P',
+        worldCore: 'W',
         player: { name: '林小满', description: '独行旅人' },
       },
       opening: '{{player.name}}推开阁楼的门，{{player.description}}般的沉默。',
@@ -165,7 +196,10 @@ describe('card start route', () => {
     expect(res.statusCode).toBe(200)
     // The durable card context carries the effective (overridden) player.
     expect(payloadOf(host.appended[0]?.data)?.card).toEqual({
-      id: 'c1', name: '测试卡', persona: 'P', worldCore: 'W',
+      id: 'c1',
+      name: '测试卡',
+      persona: 'P',
+      worldCore: 'W',
       player: { name: '林小满', description: '独行旅人' },
     })
     // The logged opening is final text — interpolation happened BEFORE the append.
@@ -195,7 +229,8 @@ describe('card start route', () => {
   })
 
   it('does not append the opening or report success when initial state fails', async () => {
-    forgetState('s1'); forgetActivity('s1')
+    forgetState('s1')
+    forgetActivity('s1')
     const host = fakeHost({ failState: true })
     registerStartRoute(host.ctx as never)
     const { req, res } = exchange({ sessionId: 's1', state: STATE, opening: OPENING })

@@ -12,13 +12,22 @@
 import { describe, expect, it } from 'vitest'
 import { authorAgent, AUTHOR_SYSTEM_PROMPT } from '../src/agents/author.ts'
 import { chroniclerAgent, CHRONICLER_SYSTEM_PROMPT } from '../src/agents/chronicler.ts'
-import { summarizerAgent, SUMMARIZER_SYSTEM_PROMPT, parseSummarizerReply } from '../src/agents/summarizer.ts'
+import {
+  summarizerAgent,
+  SUMMARIZER_SYSTEM_PROMPT,
+  parseSummarizerReply,
+} from '../src/agents/summarizer.ts'
 import { scribeAgent, SCRIBE_SYSTEM_PROMPT, scribeDraftSchema } from '../src/agents/scribe.ts'
 import { copilotAgent, COPILOT_SYSTEM_PROMPT } from '../src/agents/copilot.ts'
 import { macroSummarySchema } from '../src/projection/summary.ts'
 import { SUMMARY_LIMITS } from '../src/macro-summary.ts'
 import { LORE_LIMITS } from '../src/lore-state.ts'
-import { applyConstraints, emptyWorldState, WORLD_STATE_LIMITS, WORLD_STATE_TARGETS } from '../src/world-state.ts'
+import {
+  applyConstraints,
+  emptyWorldState,
+  WORLD_STATE_LIMITS,
+  WORLD_STATE_TARGETS,
+} from '../src/world-state.ts'
 
 const CONTRACTS = [
   authorAgent,
@@ -70,42 +79,67 @@ describe('unified AgentPromptContract (issue #32)', () => {
     expect(SUMMARIZER_SYSTEM_PROMPT).toContain('≤ ' + String(SUMMARY_LIMITS.entryChars) + ' 字')
     expect(SUMMARIZER_SYSTEM_PROMPT).toContain('≤ ' + String(SUMMARY_LIMITS.headlineChars) + ' 字')
     const shape = macroSummarySchema.shape
-    const tooMany = Array.from({ length: SUMMARY_LIMITS.entries + 1 }, (_, index) => '第' + String(index) + '条')
+    const tooMany = Array.from(
+      { length: SUMMARY_LIMITS.entries + 1 },
+      (_, index) => '第' + String(index) + '条',
+    )
     expect(shape.turningPoints.safeParse(tooMany).success).toBe(false)
     expect(shape.threads.safeParse(tooMany).success).toBe(false)
     // An over-long line is clamped, never a reason to lose the whole compass.
     const long = '一'.repeat(SUMMARY_LIMITS.headlineChars + 20)
-    const clamped = parseSummarizerReply(JSON.stringify({
-      goal: long,
-      conflict: long,
-      turningPoints: ['一'.repeat(SUMMARY_LIMITS.entryChars + 20)],
-      threads: [],
-    }))
+    const clamped = parseSummarizerReply(
+      JSON.stringify({
+        goal: long,
+        conflict: long,
+        turningPoints: ['一'.repeat(SUMMARY_LIMITS.entryChars + 20)],
+        threads: [],
+      }),
+    )
     expect(clamped?.goal.length).toBe(SUMMARY_LIMITS.headlineChars)
     expect(clamped?.turningPoints[0]?.length).toBe(SUMMARY_LIMITS.entryChars)
     // Count, in contrast, stays a hard reject.
-    expect(parseSummarizerReply(JSON.stringify({ goal: '目标', conflict: '矛盾', turningPoints: tooMany, threads: [] }))).toBeUndefined()
+    expect(
+      parseSummarizerReply(
+        JSON.stringify({ goal: '目标', conflict: '矛盾', turningPoints: tooMany, threads: [] }),
+      ),
+    ).toBeUndefined()
   })
 
   it('chronicler prompt states a lean target inside the hard cap it is pruned by', () => {
     expect(WORLD_STATE_TARGETS.flags).toBeLessThanOrEqual(WORLD_STATE_LIMITS.flags)
     expect(WORLD_STATE_TARGETS.relations).toBeLessThanOrEqual(WORLD_STATE_LIMITS.relations)
-    expect(CHRONICLER_SYSTEM_PROMPT).toContain('目标 ≤ ' + String(WORLD_STATE_TARGETS.flags) + ' 条，硬上限 ' + String(WORLD_STATE_LIMITS.flags) + ' 条')
-    expect(CHRONICLER_SYSTEM_PROMPT).toContain('目标 ≤ ' + String(WORLD_STATE_TARGETS.relations) + ' 条，硬上限 ' + String(WORLD_STATE_LIMITS.relations) + ' 条')
+    expect(CHRONICLER_SYSTEM_PROMPT).toContain(
+      '目标 ≤ ' +
+        String(WORLD_STATE_TARGETS.flags) +
+        ' 条，硬上限 ' +
+        String(WORLD_STATE_LIMITS.flags) +
+        ' 条',
+    )
+    expect(CHRONICLER_SYSTEM_PROMPT).toContain(
+      '目标 ≤ ' +
+        String(WORLD_STATE_TARGETS.relations) +
+        ' 条，硬上限 ' +
+        String(WORLD_STATE_LIMITS.relations) +
+        ' 条',
+    )
     // A dynamic string field is clamped to the declared ceiling on every write path.
     const long = '记'.repeat(WORLD_STATE_LIMITS.dynamicStringChars + 40)
     const capped = applyConstraints({ type: 'string', value: long })
-    expect(typeof capped.value === 'string' ? capped.value.length : -1).toBe(WORLD_STATE_LIMITS.dynamicStringChars)
+    expect(typeof capped.value === 'string' ? capped.value.length : -1).toBe(
+      WORLD_STATE_LIMITS.dynamicStringChars,
+    )
   })
 
   it('scribe prompt states the same limits its schema binds', () => {
     expect(SCRIBE_SYSTEM_PROMPT).toContain(String(LORE_LIMITS.descriptionChars) + ' 字')
     expect(SCRIBE_SYSTEM_PROMPT).toContain(String(LORE_LIMITS.bodyChars) + ' 字')
-    expect(scribeDraftSchema.safeParse({
-      name: 'valid-name',
-      description: 'x'.repeat(LORE_LIMITS.descriptionChars + 1),
-      body: '正文',
-    }).success).toBe(false)
+    expect(
+      scribeDraftSchema.safeParse({
+        name: 'valid-name',
+        description: 'x'.repeat(LORE_LIMITS.descriptionChars + 1),
+        body: '正文',
+      }).success,
+    ).toBe(false)
   })
 
   it('chronicler prompt carries the anti-hallucination red lines and self-check', () => {

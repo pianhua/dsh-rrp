@@ -72,7 +72,9 @@ export async function readBody(req: RequestLike): Promise<string> {
 export async function readJsonBody(req: RequestLike): Promise<Record<string, unknown> | undefined> {
   try {
     const parsed = JSON.parse(await readBody(req)) as unknown
-    return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : undefined
+    return typeof parsed === 'object' && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : undefined
   } catch {
     return undefined
   }
@@ -90,7 +92,10 @@ export function queryOf(req: RequestLike): URLSearchParams | undefined {
 }
 
 /** One `sessionId` from query or body, '' when neither carries one. */
-export function sessionIdOf(query: URLSearchParams | undefined, body: Record<string, unknown> | undefined): string {
+export function sessionIdOf(
+  query: URLSearchParams | undefined,
+  body: Record<string, unknown> | undefined,
+): string {
   const fromBody = body?.sessionId
   if (typeof fromBody === 'string' && fromBody.length > 0) return fromBody
   return query?.get('sessionId') ?? ''
@@ -210,7 +215,10 @@ export function routeOf(
  * while a session with no preset yet — or no projection face at all — stays
  * allowed, matching the legacy seats.
  */
-export function acceptsRrpWrites(projections: ProjectionsService | undefined, session: unknown): boolean {
+export function acceptsRrpWrites(
+  projections: ProjectionsService | undefined,
+  session: unknown,
+): boolean {
   const preset = projections?.stateOf(session, 'agentPreset')
   return typeof preset !== 'string' || belongsToRpPreset(preset)
 }

@@ -41,7 +41,8 @@ export function renderMacroSummary(summary: MacroSummary): string {
     '【剧情脉络 · 宏观罗盘】',
     '主线总目标：' + summary.goal,
     '当前核心矛盾：' + summary.conflict,
-    '重大转折：' + (summary.turningPoints.length > 0 ? summary.turningPoints.join('；') : '（暂无）'),
+    '重大转折：' +
+      (summary.turningPoints.length > 0 ? summary.turningPoints.join('；') : '（暂无）'),
     '伏笔与危机：' + (summary.threads.length > 0 ? summary.threads.join('；') : '（暂无）'),
   ].join('\n')
 }

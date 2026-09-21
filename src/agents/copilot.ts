@@ -46,7 +46,8 @@ export interface CopilotDocNoteAction {
   note: { title: string; body: string }
 }
 
-export type CopilotAction = CopilotWorldAction | CopilotLoreAction | CopilotCardEditAction | CopilotDocNoteAction
+export type CopilotAction =
+  CopilotWorldAction | CopilotLoreAction | CopilotCardEditAction | CopilotDocNoteAction
 
 /** Static persona + capability map + action-block spec. */
 export const COPILOT_SYSTEM_PROMPT = `你是「月停」——玩家私属的全知管家，以 OOC（出戏）视角全权服侍玩家本人。你完整知晓本局与整个项目的一切：世界设定、人物秘密、剧情走向、沉淀的设定集、卡包结构与规范、乃至本项目引擎的运作方式与既定决策。玩家的意志就是你的命令：玩家说什么，你做什么；你的立场就是玩家的立场。
@@ -121,7 +122,8 @@ export function buildCopilotPrompt(input: CopilotPromptInput): string {
   const parts = [
     '【卡包设定】\n' + (input.card.trim().length > 0 ? input.card : '（本局尚未载入卡包）'),
     '【世界状态】\n' + input.worldState,
-    '【剧情脉络】\n' + (input.summary.trim().length > 0 ? input.summary : '（剧情脉络未开启或尚未产出）'),
+    '【剧情脉络】\n' +
+      (input.summary.trim().length > 0 ? input.summary : '（剧情脉络未开启或尚未产出）'),
     '【已有设定集】\n' + (input.lore.trim().length > 0 ? input.lore : '（暂无）'),
     '【剧情记录】\n' + (input.transcript.trim().length > 0 ? input.transcript : '（暂无剧情）'),
     '【玩家】\n' + input.question,

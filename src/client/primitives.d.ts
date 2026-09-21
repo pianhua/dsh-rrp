@@ -12,12 +12,7 @@
  * and the runtime export list of the installed web bundle.
  */
 declare module '@deepseek-ai/dsh-client-ui-primitives' {
-  import type {
-    ButtonHTMLAttributes,
-    InputHTMLAttributes,
-    ReactElement,
-    ReactNode,
-  } from 'react'
+  import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactElement, ReactNode } from 'react'
 
   /** Shared props for every \`ic_ds_*\` icon component. */
   export interface IconProps {
@@ -58,26 +53,32 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export type ButtonVariant = 'primary' | 'ghost' | 'outline' | 'toolbar'
 
   /** Token-styled capsule button atom. */
-  export function Button(props: {
-    variant?: ButtonVariant
-    size?: 'md' | 'sm'
-    icon?: ReactNode
-    className?: string
-    children?: ReactNode
-  } & ButtonHTMLAttributes<HTMLButtonElement>): ReactElement
+  export function Button(
+    props: {
+      variant?: ButtonVariant
+      size?: 'md' | 'sm'
+      icon?: ReactNode
+      className?: string
+      children?: ReactNode
+    } & ButtonHTMLAttributes<HTMLButtonElement>,
+  ): ReactElement
 
   /** Small rounded label chip; interactive when onClick is supplied. */
-  export function Pill(props: {
-    active?: boolean
-    className?: string
-    children?: ReactNode
-  } & ButtonHTMLAttributes<HTMLButtonElement>): ReactElement
+  export function Pill(
+    props: {
+      active?: boolean
+      className?: string
+      children?: ReactNode
+    } & ButtonHTMLAttributes<HTMLButtonElement>,
+  ): ReactElement
 
   /** Single-line text input with an optional leading icon. */
-  export function Input(props: {
-    icon?: ReactNode
-    className?: string
-  } & InputHTMLAttributes<HTMLInputElement>): ReactElement
+  export function Input(
+    props: {
+      icon?: ReactNode
+      className?: string
+    } & InputHTMLAttributes<HTMLInputElement>,
+  ): ReactElement
 
   /** Four-color state indicator (done / warning / ongoing / error). */
   export function StateDot(props: {

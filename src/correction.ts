@@ -15,8 +15,23 @@ import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 import { publishState } from './state-publisher.ts'
-import { WORLD_STATE_KEY, diffWorldState, NO_WORLD_STATE_CHANGE, pruneWorldState, type WorldState } from './world-state.ts'
-import { type ProjectionsService, type RuntimeFaces, type SessionsService, type WebServerService, acceptsRrpWrites, face, readJsonBody, send } from './host-faces.ts'
+import {
+  WORLD_STATE_KEY,
+  diffWorldState,
+  NO_WORLD_STATE_CHANGE,
+  pruneWorldState,
+  type WorldState,
+} from './world-state.ts'
+import {
+  type ProjectionsService,
+  type RuntimeFaces,
+  type SessionsService,
+  type WebServerService,
+  acceptsRrpWrites,
+  face,
+  readJsonBody,
+  send,
+} from './host-faces.ts'
 
 const TAG = '[dsh-rrp]'
 /** Same-origin exact route the panel posts to. */

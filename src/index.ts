@@ -31,7 +31,12 @@ import { loreProjection } from './projection/lore.ts'
 import { transcriptProjection } from './projection/transcript.ts'
 import { worldStateProjection } from './projection/world-state.ts'
 import { registerStartRoute } from './start.ts'
-import { registerSummarizer, registerSummaryCommand, forgetAllSummary, forgetSummary } from './summarizer.ts'
+import {
+  registerSummarizer,
+  registerSummaryCommand,
+  forgetAllSummary,
+  forgetSummary,
+} from './summarizer.ts'
 import { forgetAllActivity, forgetActivity } from './activity.ts'
 import { forgetAllLore, forgetLore } from './lore-route.ts'
 import { forgetAllState, forgetState } from './state-publisher.ts'
@@ -111,7 +116,9 @@ export function apply(ctx: Context): void {
     projectionDisposers.push(registry.register(transcriptProjection))
     console.log(`${TAG} transcript projection registered (key '${transcriptProjection.key}')`)
     projectionDisposers.push(registry.register(worldlineDigestProjection))
-    console.log(`${TAG} worldline digest projection registered (key '${worldlineDigestProjection.key}')`)
+    console.log(
+      `${TAG} worldline digest projection registered (key '${worldlineDigestProjection.key}')`,
+    )
   })
   ctx.effect(() => {
     return () => {
@@ -163,9 +170,12 @@ export function apply(ctx: Context): void {
   ctx.inject(['agents', 'sessionProjections'], (scoped: Context) => {
     registerLoreRuntime(scoped)
   })
-  ctx.inject(['webServer', 'sessions', 'sessionProjections', 'agents', 'llm', 'jobs'], (scoped: Context) => {
-    registerLoreRoute(scoped)
-  })
+  ctx.inject(
+    ['webServer', 'sessions', 'sessionProjections', 'agents', 'llm', 'jobs'],
+    (scoped: Context) => {
+      registerLoreRoute(scoped)
+    },
+  )
   ctx.inject(['commands', 'llm', 'jobs', 'agents', 'sessionProjections'], (scoped: Context) => {
     registerLoreCommand(scoped)
   })
@@ -186,9 +196,12 @@ export function apply(ctx: Context): void {
   // tab. Conversation history lives on the host Storage domain (never the
   // session log, issue #21); its writes ride the same published lanes with
   // actor 'copilot'.
-  ctx.inject(['webServer', 'sessions', 'sessionProjections', 'llm', 'agents', 'storageDomain'], (scoped: Context) => {
-    registerCopilotRoute(scoped)
-  })
+  ctx.inject(
+    ['webServer', 'sessions', 'sessionProjections', 'llm', 'agents', 'storageDomain'],
+    (scoped: Context) => {
+      registerCopilotRoute(scoped)
+    },
+  )
 
   // Worldline map (issue #28): turn facts for the client-side tree fold and
   // the soft-hide ledger; lineage itself stays the host's own sessions data.
@@ -209,7 +222,9 @@ export function apply(ctx: Context): void {
   // Lifecycle cleanup (P0-4): clean up in-memory caches when sessions or agents are disposed.
   ctx.inject(['sessions'], (scoped: Context) => {
     scoped.effect(() => {
-      const runtime = scoped as unknown as { on(event: string, listener: (...args: unknown[]) => void): () => void }
+      const runtime = scoped as unknown as {
+        on(event: string, listener: (...args: unknown[]) => void): () => void
+      }
       return runtime.on('session/disposed', (...args: unknown[]) => {
         const sessionId = extractSessionId(args[0])
         if (sessionId !== undefined) cleanupSession(sessionId)
@@ -219,7 +234,9 @@ export function apply(ctx: Context): void {
 
   ctx.inject(['agents'], (scoped: Context) => {
     scoped.effect(() => {
-      const runtime = scoped as unknown as { on(event: string, listener: (...args: unknown[]) => void): () => void }
+      const runtime = scoped as unknown as {
+        on(event: string, listener: (...args: unknown[]) => void): () => void
+      }
       return runtime.on('agent/disposed', (...args: unknown[]) => {
         const sessionId = extractSessionId(args[0])
         if (sessionId !== undefined) cleanupSession(sessionId)
@@ -319,7 +336,9 @@ async function verifyPreset(ctx: Context): Promise<void> {
           }
           const cardScope = await presets.standingKeyFor(cardPresetId)
           const catalog = await skills.list({ scope: cardScope })
-          console.log(`${TAG} card preset '${cardPresetId}' skills (${catalog.length}): ${skillNames(catalog)}`)
+          console.log(
+            `${TAG} card preset '${cardPresetId}' skills (${catalog.length}): ${skillNames(catalog)}`,
+          )
         } catch (error) {
           console.warn(`${TAG} card preset '${cardPresetId}' verification failed:`, error)
         }

@@ -54,5 +54,11 @@ export interface TranscriptSlice {
 
 /** The empty slice: no events folded yet. */
 export function emptyTranscriptSlice(): TranscriptSlice {
-  return { entries: [], lastStateSeq: -1, lastFoldSeq: -1, sedimentSeen: false, lastSummaryTurn: -1 }
+  return {
+    entries: [],
+    lastStateSeq: -1,
+    lastFoldSeq: -1,
+    sedimentSeen: false,
+    lastSummaryTurn: -1,
+  }
 }

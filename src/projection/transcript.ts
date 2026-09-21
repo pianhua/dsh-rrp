@@ -13,7 +13,13 @@
  * Object.is gate do zero downstream work.
  */
 import { z } from 'zod'
-import { collectTextBlocks, isHostReminder, isPluginNotice, messageTextOf, rrpPayloadOf } from '../state-payload.ts'
+import {
+  collectTextBlocks,
+  isHostReminder,
+  isPluginNotice,
+  messageTextOf,
+  rrpPayloadOf,
+} from '../state-payload.ts'
 import { TRANSCRIPT_KEY, emptyTranscriptSlice, type TranscriptSlice } from '../transcript.ts'
 
 /** Tail caps: enough turns for any Chronicler/Summarizer prompt, bounded memory. */
@@ -48,7 +54,10 @@ export const transcriptProjection = {
   // entry they both fed host chatter to the agents and moved the turn boundary.
   stateVersion: 2,
   init: (): TranscriptSlice => emptyTranscriptSlice(),
-  apply: (state: TranscriptSlice, event: { type: string; data?: unknown; seq?: number }): TranscriptSlice => {
+  apply: (
+    state: TranscriptSlice,
+    event: { type: string; data?: unknown; seq?: number },
+  ): TranscriptSlice => {
     if (event.type !== 'user/message' && event.type !== 'assistant/message') return state
     // Defensive: without a usable seq the readers' seq comparisons are meaningless.
     const seq = event.seq
@@ -66,8 +75,12 @@ export const transcriptProjection = {
       if (payload.card !== undefined) {
         next.card = { fingerprint: messageTextOf(event) + '\u0000card=' + payload.card.id }
       }
-      if (payload.worldState !== undefined || payload.summary !== undefined
-        || payload.settings !== undefined || payload.sediment !== undefined) {
+      if (
+        payload.worldState !== undefined ||
+        payload.summary !== undefined ||
+        payload.settings !== undefined ||
+        payload.sediment !== undefined
+      ) {
         next.facts = { text: messageTextOf(event) }
       }
       if (payload.sediment !== undefined) next.sedimentSeen = true
@@ -90,7 +103,14 @@ export const transcriptProjection = {
     if (event.type === 'user/message' && isHostReminder(text)) return state
     // User messages always append — even empty text or a plugin notice, which
     // remain turn-boundary markers (renderers skip empty entries).
-    const entries = [...state.entries, { seq, role: event.type === 'user/message' ? 'user' as const : 'assistant' as const, text }]
+    const entries = [
+      ...state.entries,
+      {
+        seq,
+        role: event.type === 'user/message' ? ('user' as const) : ('assistant' as const),
+        text,
+      },
+    ]
     // Front-trim while over either cap. NOTE: very old boundary markers may be
     // dropped beyond this window (intentional; irrelevant for any live turn).
     let drop = 0

@@ -1,24 +1,26 @@
 /** dsh-rrp — pure Session projection for dynamic lore. */
 import { z } from 'zod'
-import {
-  RRP_LORE_KEY,
-  LORE_LIMITS,
-  applyLoreChange,
-  type LoreEntry,
-} from '../lore-state.ts'
+import { RRP_LORE_KEY, LORE_LIMITS, applyLoreChange, type LoreEntry } from '../lore-state.ts'
 import { rrpPayloadOf } from '../state-payload.ts'
 
-const nameSchema = z.string().min(1).max(LORE_LIMITS.nameChars).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+const nameSchema = z
+  .string()
+  .min(1)
+  .max(LORE_LIMITS.nameChars)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
 export const loreEntrySchema = z.object({
   name: nameSchema,
   description: z.string().min(1).max(LORE_LIMITS.descriptionChars),
   body: z.string().min(1).max(LORE_LIMITS.bodyChars),
 })
 
-const uniqueEntries = z.array(loreEntrySchema).max(LORE_LIMITS.skillsPerSession).refine(
-  (entries) => new Set(entries.map((entry) => entry.name)).size === entries.length,
-  'lore skill names must be unique',
-)
+const uniqueEntries = z
+  .array(loreEntrySchema)
+  .max(LORE_LIMITS.skillsPerSession)
+  .refine(
+    (entries) => new Set(entries.map((entry) => entry.name)).size === entries.length,
+    'lore skill names must be unique',
+  )
 
 export const loreChangeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('snapshot'), skills: uniqueEntries }),

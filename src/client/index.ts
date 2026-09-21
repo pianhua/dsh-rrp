@@ -157,7 +157,8 @@ const ZH: Record<string, string> = {
   'gallery.playerNameHint': '留空沿用卡声明，仅本局生效',
   'gallery.playerPersona': '玩家人设',
   'gallery.playerPersonaPlaceholder': '外貌、性格、身份背景……（可选，留空则用卡包默认）',
-  'gallery.playerPersonaHint': '作者每轮都会读到你写的人设；开局后也可在世界状态页签的自定义字段 player 里改',
+  'gallery.playerPersonaHint':
+    '作者每轮都会读到你写的人设；开局后也可在世界状态页签的自定义字段 player 里改',
   'worldline.view': '世界线',
   'worldline.title': '世界线存档图',
   'worldline.refresh': '刷新地图',
@@ -192,7 +193,8 @@ const ZH: Record<string, string> = {
   'gallery.unavailable': '会话服务不可用',
   'gallery.workspaceFallback': '已开始（卡分组暂不可用，会话落在未分组）',
   'copilot.title': '月停',
-  'copilot.guide': '月停（OOC 视角，全知本项目）：咨询设定、人物秘密与破局思路，或让它代劳——改世界状态、起草设定集、提案卡包与文档维护（确认后落盘）。',
+  'copilot.guide':
+    '月停（OOC 视角，全知本项目）：咨询设定、人物秘密与破局思路，或让它代劳——改世界状态、起草设定集、提案卡包与文档维护（确认后落盘）。',
   'copilot.placeholder': '问剧情、问设定，或直接下指令…',
   'copilot.send': '发送',
   'copilot.busy': '上一次咨询尚未完成',
@@ -271,10 +273,12 @@ const EN: Record<string, string> = {
   'dynamicFields.initial': 'Initial value',
   'dynamicFields.cancel': 'Cancel',
   'dynamicFields.idRequired': 'Field ID is required',
-  'dynamicFields.idReserved': 'Field ID cannot be a reserved name (characters, inventory, scene, flags)',
+  'dynamicFields.idReserved':
+    'Field ID cannot be a reserved name (characters, inventory, scene, flags)',
   'dynamicFields.idInvalid': 'Field ID may only contain letters, digits and underscores',
   'dynamicFields.idDuplicate': 'Field ID already exists',
-  'preset.hint': "This session's agent preset (rp-<card>); distinct from the global default in Settings",
+  'preset.hint':
+    "This session's agent preset (rp-<card>); distinct from the global default in Settings",
   'chronicler.running': 'Chronicler is working, please wait...',
   'chronicler.completed': 'Chronicler updated state',
   'unsaved.kept': 'your unsaved edits were kept and still win after saving',
@@ -306,7 +310,8 @@ const EN: Record<string, string> = {
   'actor.card': 'Card',
   'actor.scribe': 'Scribe',
   'lore.title': 'Lore',
-  'lore.guide': 'Capture newly established lore into this session only; add-only, reviewable, deletable.',
+  'lore.guide':
+    'Capture newly established lore into this session only; add-only, reviewable, deletable.',
   'lore.topicPlaceholder': 'What to capture? (optional)',
   'lore.draft': 'Capture recent lore',
   'lore.drafting': 'Drafting…',
@@ -322,7 +327,8 @@ const EN: Record<string, string> = {
   'lore.failed': 'Failed',
   'lore.noDraft': 'No draft awaiting review',
   'lore.triggers': 'Card conditional lore',
-  'lore.triggersEmpty': 'This card declares no conditional lore (skill frontmatter `when` shows up here)',
+  'lore.triggersEmpty':
+    'This card declares no conditional lore (skill frontmatter `when` shows up here)',
   'lore.triggerActive': 'Active',
   'lore.triggerInactive': 'Inactive',
   'gallery.title': 'Card Gallery',
@@ -340,13 +346,16 @@ const EN: Record<string, string> = {
   'gallery.playerName': 'Player name this run',
   'gallery.playerNameHint': 'Leave blank to keep the card-declared name; this run only',
   'gallery.playerPersona': 'Player persona',
-  'gallery.playerPersonaPlaceholder': 'Appearance, personality, background… (optional; blank keeps the card default)',
-  'gallery.playerPersonaHint': 'The Author reads this every turn; edit it later in the world-state tab under dynamic field player',
+  'gallery.playerPersonaPlaceholder':
+    'Appearance, personality, background… (optional; blank keeps the card default)',
+  'gallery.playerPersonaHint':
+    'The Author reads this every turn; edit it later in the world-state tab under dynamic field player',
   'worldline.view': 'Worldlines',
   'worldline.title': 'Worldline save map',
   'worldline.refresh': 'Refresh map',
   'worldline.empty': 'No worldlines yet — every turn becomes a save slot once a story starts.',
-  'worldline.stubHint': '(not loaded) Open this line from the session list on the left to bring it into the map.',
+  'worldline.stubHint':
+    '(not loaded) Open this line from the session list on the left to bring it into the map.',
   'worldline.export': 'Export novel',
   'worldline.exporting': 'Exporting…',
   'worldline.unavailable': 'Worldline service unavailable',
@@ -375,7 +384,8 @@ const EN: Record<string, string> = {
   'gallery.unavailable': 'Session service unavailable',
   'gallery.workspaceFallback': 'Started (card grouping unavailable — session landed ungrouped)',
   'copilot.title': 'Copilot',
-  'copilot.guide': 'Your own omniscient copilot (OOC, knows this whole project): ask about lore, secrets and strategy, or have it act — edit world state, stage lore drafts, propose card and doc maintenance (lands on your confirm).',
+  'copilot.guide':
+    'Your own omniscient copilot (OOC, knows this whole project): ask about lore, secrets and strategy, or have it act — edit world state, stage lore drafts, propose card and doc maintenance (lands on your confirm).',
   'copilot.placeholder': 'Ask about the story, lore, or give a command…',
   'copilot.send': 'Send',
   'copilot.busy': 'The previous turn is still running',
@@ -388,9 +398,11 @@ const EN: Record<string, string> = {
   'copilot.undoDone': 'Reverted the last state change',
   'copilot.undoEmpty': 'Nothing to undo',
   'copilot.cleared': 'Conversation cleared',
-  'copilot.noModel': 'This session has no model route yet — pick a model for the RP mode in the host settings first',
+  'copilot.noModel':
+    'This session has no model route yet — pick a model for the RP mode in the host settings first',
   'copilot.clearConfirm': 'Click again to confirm',
-  'copilot.clearConfirmTitle': 'Clears the copilot conversation (irreversible); click again to confirm',
+  'copilot.clearConfirmTitle':
+    'Clears the copilot conversation (irreversible); click again to confirm',
   'actor.copilot': 'Copilot',
   'detail.copilotUndone': 'Reverted the Copilot edit',
   'copilot.copyCode': 'Copy code',

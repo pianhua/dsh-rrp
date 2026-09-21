@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { CARD_KEY, renderCardContext, type CardContext } from '../src/card-types.ts'
 import { seedCardTriggersForTesting } from '../src/cards.ts'
-import { parseWhen, renderTriggerBlock, type TriggerDef, type WhenCondition } from '../src/lore-condition.ts'
+import {
+  parseWhen,
+  renderTriggerBlock,
+  type TriggerDef,
+  type WhenCondition,
+} from '../src/lore-condition.ts'
 import { rrpStateMessage, type RrpStatePayload } from '../src/state-payload.ts'
 import { publishState } from '../src/state-publisher.ts'
 import { RRP_SETTINGS_KEY } from '../src/settings.ts'
@@ -47,8 +52,18 @@ function mustCond(src: string): WhenCondition {
 }
 
 const TRIGGER_CARD: CardContext = { id: 'trig-card', name: '触发卡', persona: 'P', worldCore: 'W' }
-const WARM: TriggerDef = { id: 'mia-warm', name: '温热', condition: mustCond('characters.米娅.affinity >= 40'), excerpt: '温热片段' }
-const INTIMATE: TriggerDef = { id: 'mia-intimate', name: '亲密', condition: mustCond('characters.米娅.affinity >= 80'), excerpt: '亲密片段' }
+const WARM: TriggerDef = {
+  id: 'mia-warm',
+  name: '温热',
+  condition: mustCond('characters.米娅.affinity >= 40'),
+  excerpt: '温热片段',
+}
+const INTIMATE: TriggerDef = {
+  id: 'mia-intimate',
+  name: '亲密',
+  condition: mustCond('characters.米娅.affinity >= 80'),
+  excerpt: '亲密片段',
+}
 
 const withAffinity = (value: number): WorldState => ({
   ...emptyWorldState(),
@@ -82,7 +97,11 @@ describe('durable state publisher', () => {
   it('appends only changed facts and never duplicates the constant card', () => {
     const { session, appended } = fakeSession('sp-a3')
     publishState(session, { stateOf: () => undefined }, { card: CARD, worldState: STATE })
-    publishState(session, { stateOf: () => undefined }, { card: CARD, worldState: { ...STATE, flags: { 新事实: true } } })
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { card: CARD, worldState: { ...STATE, flags: { 新事实: true } } },
+    )
 
     expect(appended).toHaveLength(3)
     const cardAppends = appended.filter((entry) => payloadOf(entry.data)?.card !== undefined)
@@ -103,8 +122,16 @@ describe('durable state publisher', () => {
   it('NEVER emits a replace (cache continuity guard)', () => {
     const { session, appended } = fakeSession('sp-a4')
     publishState(session, { stateOf: () => undefined }, { worldState: STATE })
-    publishState(session, { stateOf: () => undefined }, { worldState: { ...STATE, flags: { 又一条: true } } })
-    publishState(session, { stateOf: () => undefined }, { worldState: { ...STATE, flags: { 再一条: true } } })
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { worldState: { ...STATE, flags: { 又一条: true } } },
+    )
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { worldState: { ...STATE, flags: { 再一条: true } } },
+    )
 
     for (const entry of appended) {
       expect((entry.intent as { surfaceOp: unknown }).surfaceOp).toBe('append')
@@ -133,7 +160,10 @@ describe('durable state publisher', () => {
       owned(2, renderWorldState(STATE), { worldState: STATE }),
     ]
     const { session, appended } = fakeSession('sp-a7')
-    publishState(session, transcriptProjections(seed), { card: CARD, worldState: { ...STATE, flags: { 新事实: true } } })
+    publishState(session, transcriptProjections(seed), {
+      card: CARD,
+      worldState: { ...STATE, flags: { 新事实: true } },
+    })
 
     expect(appended).toHaveLength(1)
     expect(payloadOf(appended[0]?.data)?.worldState).toEqual({ ...STATE, flags: { 新事实: true } })
@@ -148,7 +178,11 @@ describe('durable state publisher', () => {
 
   it('reads the unchanged lanes from the projections when a patch omits them', () => {
     const { session, appended } = fakeSession('sp-a9')
-    publishState(session, { stateOf: (_s, key) => (key === CARD_KEY ? CARD : undefined) }, { worldState: STATE })
+    publishState(
+      session,
+      { stateOf: (_s, key) => (key === CARD_KEY ? CARD : undefined) },
+      { worldState: STATE },
+    )
     // Card lane is not in the patch, so only the facts message is appended.
     expect(appended).toHaveLength(1)
     expect(payloadOf(appended[0]?.data)?.worldState).toEqual(STATE)
@@ -165,16 +199,25 @@ describe('durable state publisher', () => {
       },
     }
     publishState(session, projections, { worldState: STATE })
-    publishState(session, projections, { settings: { summaryEnabled: false, summaryEveryTurns: 8 } })
+    publishState(session, projections, {
+      settings: { summaryEnabled: false, summaryEveryTurns: 8 },
+    })
 
     expect(appended).toHaveLength(2)
-    expect(payloadOf(appended[1]?.data)?.settings).toEqual({ summaryEnabled: false, summaryEveryTurns: 8 })
-    expect((appended[1]?.data as { content: Array<{ text: string }> }).content[0]?.text).toBe(renderWorldState(STATE))
+    expect(payloadOf(appended[1]?.data)?.settings).toEqual({
+      summaryEnabled: false,
+      summaryEveryTurns: 8,
+    })
+    expect((appended[1]?.data as { content: Array<{ text: string }> }).content[0]?.text).toBe(
+      renderWorldState(STATE),
+    )
   })
 
   it('always appends a lore operation without exposing its body in content', () => {
     const { session, appended } = fakeSession('sp-lore')
-    const projections = { stateOf: (_session: unknown, key: string) => key === 'rrpWorldState' ? STATE : undefined }
+    const projections = {
+      stateOf: (_session: unknown, key: string) => (key === 'rrpWorldState' ? STATE : undefined),
+    }
     publishState(session, projections, { worldState: STATE })
     publishState(session, projections, {
       sediment: {
@@ -225,7 +268,11 @@ describe('conditional injection in the facts lane (issue #16)', () => {
   it('injects nothing while no trigger band is crossed', () => {
     seedCardTriggersForTesting(TRIGGER_CARD.id, [WARM, INTIMATE])
     const { session, appended } = fakeSession('sp-trig-below')
-    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(6) })
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { card: TRIGGER_CARD, worldState: withAffinity(6) },
+    )
     expect(appended).toHaveLength(2)
     expect(textOf(appended[1]?.data)).not.toContain(BLOCK_MARK)
   })
@@ -233,9 +280,21 @@ describe('conditional injection in the facts lane (issue #16)', () => {
   it('publishes the block once when the band is crossed (40), then stays byte-identical within the band', () => {
     seedCardTriggersForTesting(TRIGGER_CARD.id, [WARM, INTIMATE])
     const { session, appended } = fakeSession('sp-trig-band')
-    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(39) })
-    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(40) })
-    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(79) })
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { card: TRIGGER_CARD, worldState: withAffinity(39) },
+    )
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { card: TRIGGER_CARD, worldState: withAffinity(40) },
+    )
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { card: TRIGGER_CARD, worldState: withAffinity(79) },
+    )
     expect(appended).toHaveLength(4) // card + facts(39) + facts(40) + facts(79)
 
     const at40 = textOf(appended[2]?.data)
@@ -251,8 +310,16 @@ describe('conditional injection in the facts lane (issue #16)', () => {
   it('crossing into the 80 band publishes a new block listing both hits, with no revocation', () => {
     seedCardTriggersForTesting(TRIGGER_CARD.id, [WARM, INTIMATE])
     const { session, appended } = fakeSession('sp-trig-80')
-    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(40) })
-    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(81) })
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { card: TRIGGER_CARD, worldState: withAffinity(40) },
+    )
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { card: TRIGGER_CARD, worldState: withAffinity(81) },
+    )
     const block = blockOf(textOf(appended[2]?.data))
     expect(block).toContain('亲密片段')
     expect(block).toContain('温热片段')
@@ -263,8 +330,16 @@ describe('conditional injection in the facts lane (issue #16)', () => {
   it('dropping below the band publishes a block with the revocation sentence', () => {
     seedCardTriggersForTesting(TRIGGER_CARD.id, [WARM, INTIMATE])
     const { session, appended } = fakeSession('sp-trig-revoke')
-    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(81) })
-    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(20) })
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { card: TRIGGER_CARD, worldState: withAffinity(81) },
+    )
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { card: TRIGGER_CARD, worldState: withAffinity(20) },
+    )
     const block = blockOf(textOf(appended[2]?.data))
     expect(block).toContain('（无）')
     expect(block).toContain('以下条目现已失效，立即停止使用其内容——亲密、温热')
@@ -273,15 +348,27 @@ describe('conditional injection in the facts lane (issue #16)', () => {
   it('re-publishing the same state never duplicates the block', () => {
     seedCardTriggersForTesting(TRIGGER_CARD.id, [WARM, INTIMATE])
     const { session, appended } = fakeSession('sp-trig-dedup')
-    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(40) })
-    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(40) })
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { card: TRIGGER_CARD, worldState: withAffinity(40) },
+    )
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { card: TRIGGER_CARD, worldState: withAffinity(40) },
+    )
     expect(appended).toHaveLength(2)
   })
 
   it('hit entries are listed in skill-id lexicographic order', () => {
     seedCardTriggersForTesting(TRIGGER_CARD.id, [INTIMATE, WARM])
     const { session, appended } = fakeSession('sp-trig-order')
-    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(90) })
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { card: TRIGGER_CARD, worldState: withAffinity(90) },
+    )
     const block = blockOf(textOf(appended[1]?.data))
     expect(block.indexOf('1. 亲密')).not.toBe(-1)
     expect(block.indexOf('1. 亲密')).toBeLessThan(block.indexOf('2. 温热'))
@@ -290,7 +377,11 @@ describe('conditional injection in the facts lane (issue #16)', () => {
   it('the published block matches renderTriggerBlock byte for byte', () => {
     seedCardTriggersForTesting(TRIGGER_CARD.id, [WARM, INTIMATE])
     const { session, appended } = fakeSession('sp-trig-exact')
-    publishState(session, { stateOf: () => undefined }, { card: TRIGGER_CARD, worldState: withAffinity(81) })
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { card: TRIGGER_CARD, worldState: withAffinity(81) },
+    )
     const expected = renderTriggerBlock(
       [
         { id: 'mia-intimate', name: '亲密', excerpt: '亲密片段' },

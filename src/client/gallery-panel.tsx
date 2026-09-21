@@ -26,7 +26,13 @@ import {
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { interpolateCardText, type CardMeta, type CardOpening, type CardPack, type CardPlayer } from '../card-types.ts'
+import {
+  interpolateCardText,
+  type CardMeta,
+  type CardOpening,
+  type CardPack,
+  type CardPlayer,
+} from '../card-types.ts'
 import { presetIdForCard } from '../preset-id.ts'
 import { RRP_ROUTES, type CardImportResponse, type RrpErrorBody } from '../route-contract.ts'
 import { uniqueMainTitle } from '../save-naming.ts'
@@ -50,7 +56,12 @@ interface GalleryPanelProps {
   loadList?: () => Promise<CardMeta[]>
   loadCard?: (id: string) => Promise<CardPack | undefined>
   /** playerNameOverride: per-session player-name override (#25); empty/undefined = card-declared. */
-  start?: (card: CardPack, playerNameOverride?: string, openingId?: string, playerPersona?: string) => Promise<GalleryStartResult>
+  start?: (
+    card: CardPack,
+    playerNameOverride?: string,
+    openingId?: string,
+    playerPersona?: string,
+  ) => Promise<GalleryStartResult>
 }
 
 /** Small status line state. */
@@ -79,7 +90,13 @@ function coverGradient(seed: string): string {
     hash = (hash * 31 + seed.charCodeAt(index)) >>> 0
   }
   const hue = hash % 360
-  return 'linear-gradient(140deg, hsl(' + String(hue) + ' 42% 62%), hsl(' + String((hue + 40) % 360) + ' 40% 42%))'
+  return (
+    'linear-gradient(140deg, hsl(' +
+    String(hue) +
+    ' 42% 62%), hsl(' +
+    String((hue + 40) % 360) +
+    ' 40% 42%))'
+  )
 }
 
 /** One square/rounded card cover with the card's initial. */
@@ -121,9 +138,11 @@ function SkeletonRow(): ReactNode {
  * preview and the start request so what you read is what you get (#31-A).
  */
 function pickOpening(card: CardPack, openingId: string): CardOpening | undefined {
-  return card.openings.find((entry) => entry.id === openingId)
-    ?? card.openings.find((entry) => entry.id === card.meta.opening)
-    ?? card.openings[0]
+  return (
+    card.openings.find((entry) => entry.id === openingId) ??
+    card.openings.find((entry) => entry.id === card.meta.opening) ??
+    card.openings[0]
+  )
 }
 
 function GalleryPanel(props: GalleryPanelProps): ReactNode {
@@ -155,8 +174,12 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
     try {
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
-        reader.onload = () => { resolve(String(reader.result)) }
-        reader.onerror = () => { reject(new Error('read failed')) }
+        reader.onload = () => {
+          resolve(String(reader.result))
+        }
+        reader.onerror = () => {
+          reject(new Error('read failed'))
+        }
         reader.readAsDataURL(file)
       })
       const data = dataUrl.slice(dataUrl.indexOf(',') + 1)
@@ -166,7 +189,7 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ kind, data }),
       })
-      const body = await response.json() as CardImportResponse | RrpErrorBody
+      const body = (await response.json()) as CardImportResponse | RrpErrorBody
       if (!response.ok || !('id' in body)) {
         const reason = 'error' in body ? body.error : String(response.status)
         setStatus({ tone: 'error', text: t('gallery.importFailed') + ': ' + reason })
@@ -176,7 +199,13 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
       refresh()
       select(body.id, true)
     } catch (error: unknown) {
-      setStatus({ tone: 'error', text: t('gallery.importFailed') + ': ' + String((error as { message?: string })?.message ?? error) })
+      setStatus({
+        tone: 'error',
+        text:
+          t('gallery.importFailed') +
+          ': ' +
+          String((error as { message?: string })?.message ?? error),
+      })
     } finally {
       setBusy(false)
     }
@@ -202,11 +231,20 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
         setPlayerName('')
         setPlayerPersona('')
         setOpeningId('')
-        if (!quiet) setStatus(card === undefined ? { tone: 'error', text: t('gallery.failed') } : { tone: 'idle', text: '' })
+        if (!quiet)
+          setStatus(
+            card === undefined
+              ? { tone: 'error', text: t('gallery.failed') }
+              : { tone: 'idle', text: '' },
+          )
       })
       .catch((error: unknown) => {
         if (seq !== selectSeq.current) return
-        setStatus({ tone: 'error', text: t('gallery.failed') + ': ' + String((error as { message?: string })?.message ?? error) })
+        setStatus({
+          tone: 'error',
+          text:
+            t('gallery.failed') + ': ' + String((error as { message?: string })?.message ?? error),
+        })
       })
   }
 
@@ -216,7 +254,11 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
     void loadList()
       .then((list) => {
         setCards(list)
-        setStatus(list.length === 0 ? { tone: 'idle', text: t('gallery.empty') } : { tone: 'idle', text: '' })
+        setStatus(
+          list.length === 0
+            ? { tone: 'idle', text: t('gallery.empty') }
+            : { tone: 'idle', text: '' },
+        )
         if (list.length === 0) {
           setSelected(null)
           return
@@ -227,7 +269,11 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
         select(stillThere ? currentId! : list[0]!.id, true)
       })
       .catch((error: unknown) => {
-        setStatus({ tone: 'error', text: t('gallery.failed') + ': ' + String((error as { message?: string })?.message ?? error) })
+        setStatus({
+          tone: 'error',
+          text:
+            t('gallery.failed') + ': ' + String((error as { message?: string })?.message ?? error),
+        })
       })
   }
 
@@ -237,14 +283,26 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
     if (props.start === undefined) return
     setBusy(true)
     setStatus({ tone: 'busy', text: t('gallery.starting') })
-    void props.start(card, playerName.trim(), openingId, playerPersona)
+    void props
+      .start(card, playerName.trim(), openingId, playerPersona)
       .then((outcome) => {
-        setStatus(outcome.ok
-          ? { tone: 'ok', text: t('gallery.started') }
-          : { tone: 'error', text: t('gallery.failed') + (outcome.message === undefined ? '' : ': ' + outcome.message) })
+        setStatus(
+          outcome.ok
+            ? { tone: 'ok', text: t('gallery.started') }
+            : {
+                tone: 'error',
+                text:
+                  t('gallery.failed') +
+                  (outcome.message === undefined ? '' : ': ' + outcome.message),
+              },
+        )
       })
       .catch((error: unknown) => {
-        setStatus({ tone: 'error', text: t('gallery.failed') + ': ' + String((error as { message?: string })?.message ?? error) })
+        setStatus({
+          tone: 'error',
+          text:
+            t('gallery.failed') + ': ' + String((error as { message?: string })?.message ?? error),
+        })
       })
       .finally(() => setBusy(false))
   }
@@ -264,11 +322,17 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
   // #25: the effective player for previews and the start request — the
   // per-run override replaces only the name; the description stays as declared.
   const playerNameOverride = playerName.trim()
-  const effectivePlayer: CardPlayer | undefined = selected === null
-    ? undefined
-    : playerNameOverride.length === 0
-      ? selected.meta.player
-      : { name: playerNameOverride, ...(selected.meta.player?.description === undefined ? {} : { description: selected.meta.player.description }) }
+  const effectivePlayer: CardPlayer | undefined =
+    selected === null
+      ? undefined
+      : playerNameOverride.length === 0
+        ? selected.meta.player
+        : {
+            name: playerNameOverride,
+            ...(selected.meta.player?.description === undefined
+              ? {}
+              : { description: selected.meta.player.description }),
+          }
 
   const dot = DOT[status.tone]
 
@@ -276,7 +340,9 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
     <div style={S.root}>
       <header style={S.header}>
         <span style={S.brand}>
-          <span style={S.brandIcon}><IconArchiveOutline20 size={18} /></span>
+          <span style={S.brandIcon}>
+            <IconArchiveOutline20 size={18} />
+          </span>
           <span style={S.brandText}>{t('gallery.title')}</span>
         </span>
         {cards === null ? null : <Pill>{String(cards.length)}</Pill>}
@@ -286,11 +352,19 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
             icon={<IconSearchOutline16 size={16} />}
             placeholder={t('gallery.search')}
             value={query}
-            onChange={(event) => { setQuery(event.target.value) }}
+            onChange={(event) => {
+              setQuery(event.target.value)
+            }}
           />
         </span>
         <Tooltip label={t('gallery.reload')}>
-          <Button variant="ghost" size="sm" icon={<IconRefreshOutline16 size={16} />} onClick={refresh} aria-label={t('gallery.reload')} />
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<IconRefreshOutline16 size={16} />}
+            onClick={refresh}
+            aria-label={t('gallery.reload')}
+          />
         </Tooltip>
         <input
           ref={fileInputRef}
@@ -299,19 +373,36 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
           style={{ display: 'none' }}
           aria-hidden="true"
           tabIndex={-1}
-          onChange={(event) => { void importFile(event) }}
+          onChange={(event) => {
+            void importFile(event)
+          }}
         />
-        <Button variant="ghost" size="sm" disabled={busy} onClick={() => { fileInputRef.current?.click() }}>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={busy}
+          onClick={() => {
+            fileInputRef.current?.click()
+          }}
+        >
           {t('gallery.import')}
         </Button>
       </header>
 
       <div style={S.body}>
         <nav style={S.list} aria-label={t('gallery.title')}>
-          {cards === null ? <><SkeletonRow /><SkeletonRow /><SkeletonRow /></> : null}
-          {cards !== null && filtered.length === 0
-            ? <div style={S.listEmpty}>{cards.length === 0 ? t('gallery.empty') : t('gallery.nomatch')}</div>
-            : null}
+          {cards === null ? (
+            <>
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+            </>
+          ) : null}
+          {cards !== null && filtered.length === 0 ? (
+            <div style={S.listEmpty}>
+              {cards.length === 0 ? t('gallery.empty') : t('gallery.nomatch')}
+            </div>
+          ) : null}
           {filtered.map((card) => {
             const active = selected?.id === card.id
             return (
@@ -335,7 +426,9 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
         <section style={S.preview}>
           {selected === null ? (
             <div style={S.placeholder}>
-              <span style={S.placeholderIcon}><IconArchiveOutline20 size={30} /></span>
+              <span style={S.placeholderIcon}>
+                <IconArchiveOutline20 size={30} />
+              </span>
               <div style={S.placeholderText}>{t('gallery.pick')}</div>
             </div>
           ) : (
@@ -345,10 +438,14 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
                   <Cover seed={selected.id} label={selected.meta.name} size={76} />
                   <div style={S.heroText}>
                     <h2 style={S.heroTitle}>{selected.meta.name}</h2>
-                    {selected.meta.summary === undefined ? null : <p style={S.heroSummary}>{selected.meta.summary}</p>}
+                    {selected.meta.summary === undefined ? null : (
+                      <p style={S.heroSummary}>{selected.meta.summary}</p>
+                    )}
                     {selected.meta.tags.length === 0 ? null : (
                       <div style={S.tags}>
-                        {selected.meta.tags.map((tag) => <Pill key={tag}>{tag}</Pill>)}
+                        {selected.meta.tags.map((tag) => (
+                          <Pill key={tag}>{tag}</Pill>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -356,11 +453,15 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
 
                 {selected.meta.player === undefined ? null : (
                   <div style={S.fact}>
-                    <span style={S.factIcon}><IconUserOutline16 size={16} /></span>
+                    <span style={S.factIcon}>
+                      <IconUserOutline16 size={16} />
+                    </span>
                     <span style={S.factLabel}>{t('gallery.player')}</span>
                     <span style={S.factValue}>
                       {selected.meta.player.name}
-                      {selected.meta.player.description === undefined ? '' : ' · ' + selected.meta.player.description}
+                      {selected.meta.player.description === undefined
+                        ? ''
+                        : ' · ' + selected.meta.player.description}
                     </span>
                   </div>
                 )}
@@ -371,7 +472,9 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
                   <span style={S.overrideInput}>
                     <Input
                       value={playerName}
-                      onChange={(event) => { setPlayerName(event.target.value) }}
+                      onChange={(event) => {
+                        setPlayerName(event.target.value)
+                      }}
                       placeholder={selected.meta.player?.name ?? ''}
                       maxLength={24}
                       aria-label={t('gallery.playerName')}
@@ -388,7 +491,9 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
                   <span style={{ flex: 1, display: 'flex', minWidth: 0 }}>
                     <textarea
                       value={playerPersona}
-                      onChange={(event) => { setPlayerPersona(event.target.value) }}
+                      onChange={(event) => {
+                        setPlayerPersona(event.target.value)
+                      }}
                       placeholder={t('gallery.playerPersonaPlaceholder')}
                       maxLength={400}
                       rows={3}
@@ -400,7 +505,9 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
                 </div>
 
                 <div style={S.section}>
-                  <span style={S.sectionIcon}><IconSkillOutline16 size={16} /></span>
+                  <span style={S.sectionIcon}>
+                    <IconSkillOutline16 size={16} />
+                  </span>
                   <span style={S.sectionTitle}>{t('gallery.skills')}</span>
                   <Pill>{String(selected.skills.length)}</Pill>
                 </div>
@@ -408,7 +515,9 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
                   {selected.skills.map((skill) => (
                     <span key={skill.id} style={S.skillChip}>
                       <span style={S.skillName}>{skill.name ?? skill.id}</span>
-                      {skill.description === undefined ? null : <span style={S.skillDesc}>{skill.description}</span>}
+                      {skill.description === undefined ? null : (
+                        <span style={S.skillDesc}>{skill.description}</span>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -422,18 +531,24 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
                           aria-label={t('gallery.openingPick')}
                           value={opening.id}
                           disabled={busy}
-                          onChange={(event) => { setOpeningId(event.target.value) }}
+                          onChange={(event) => {
+                            setOpeningId(event.target.value)
+                          }}
                           style={S.openingPick}
                         >
                           {selected.openings.map((entry, index) => (
                             <option key={entry.id} value={entry.id}>
-                              {entry.id.length === 0 ? t('gallery.openingN').replace('{n}', String(index + 1)) : entry.id}
+                              {entry.id.length === 0
+                                ? t('gallery.openingN').replace('{n}', String(index + 1))
+                                : entry.id}
                             </option>
                           ))}
                         </select>
                       ) : null}
                     </div>
-                    <blockquote style={S.opening}>{interpolateCardText(opening.body, effectivePlayer)}</blockquote>
+                    <blockquote style={S.opening}>
+                      {interpolateCardText(opening.body, effectivePlayer)}
+                    </blockquote>
                   </>
                 )}
               </div>
@@ -461,10 +576,20 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
 }
 
 const S: Record<string, CSSProperties> = {
-  root: { height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--dsw-alias-bg-base)', color: 'var(--dsw-alias-label-primary)' },
+  root: {
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    background: 'var(--dsw-alias-bg-base)',
+    color: 'var(--dsw-alias-label-primary)',
+  },
   header: {
-    display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px',
-    borderBottom: '1px solid var(--dsw-alias-border-l1)', flex: '0 0 auto',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '12px 16px',
+    borderBottom: '1px solid var(--dsw-alias-border-l1)',
+    flex: '0 0 auto',
   },
   brand: { display: 'flex', alignItems: 'center', gap: 8 },
   brandIcon: { display: 'inline-flex', color: 'var(--dsw-alias-label-secondary)' },
@@ -473,33 +598,78 @@ const S: Record<string, CSSProperties> = {
   search: { width: 220, display: 'flex' },
   body: { flex: 1, minHeight: 0, display: 'flex' },
   list: {
-    flex: '0 0 272px', display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 10px 18px',
-    overflowY: 'auto', borderRight: '1px solid var(--dsw-alias-border-l1)',
+    flex: '0 0 272px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    padding: '10px 10px 18px',
+    overflowY: 'auto',
+    borderRight: '1px solid var(--dsw-alias-border-l1)',
   },
-  listEmpty: { fontSize: 12, color: 'var(--dsw-alias-label-tertiary)', padding: '16px 8px', textAlign: 'center' },
+  listEmpty: {
+    fontSize: 12,
+    color: 'var(--dsw-alias-label-tertiary)',
+    padding: '16px 8px',
+    textAlign: 'center',
+  },
   row: {
-    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8,
-    border: '1px solid transparent', background: 'transparent', cursor: 'pointer',
-    textAlign: 'left', font: 'inherit', color: 'inherit', width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '8px 10px',
+    borderRadius: 8,
+    border: '1px solid transparent',
+    background: 'transparent',
+    cursor: 'pointer',
+    textAlign: 'left',
+    font: 'inherit',
+    color: 'inherit',
+    width: '100%',
   },
   rowActive: {
     background: 'var(--dsw-alias-interactive-bg-hover)',
     borderColor: 'var(--dsw-alias-border-l2)',
   },
   cover: {
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    color: '#fff', fontWeight: 600, letterSpacing: 0, flex: '0 0 auto',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#fff',
+    fontWeight: 600,
+    letterSpacing: 0,
+    flex: '0 0 auto',
     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25)',
   },
   rowText: { display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 },
-  rowName: { fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  rowSummary: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  rowName: {
+    fontSize: 13,
+    fontWeight: 500,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  rowSummary: {
+    fontSize: 11,
+    color: 'var(--dsw-alias-label-tertiary)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
   skeletonRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px' },
-  skeleton: { background: 'var(--dsw-alias-bg-skeleton)', borderRadius: 6, display: 'inline-block' },
+  skeleton: {
+    background: 'var(--dsw-alias-bg-skeleton)',
+    borderRadius: 6,
+    display: 'inline-block',
+  },
   preview: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' },
   placeholder: {
-    flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-    gap: 12, color: 'var(--dsw-alias-label-tertiary)',
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    color: 'var(--dsw-alias-label-tertiary)',
   },
   placeholderIcon: { display: 'inline-flex', opacity: 0.5 },
   placeholderText: { fontSize: 13, maxWidth: 280, textAlign: 'center', lineHeight: 1.6 },
@@ -508,7 +678,13 @@ const S: Record<string, CSSProperties> = {
   hero: { display: 'flex', gap: 16, alignItems: 'flex-start' },
   heroText: { display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, paddingTop: 2 },
   heroTitle: { margin: 0, fontSize: 20, fontWeight: 600, lineHeight: 1.35 },
-  heroSummary: { margin: 0, fontSize: 13, color: 'var(--dsw-alias-label-secondary)', lineHeight: 1.6, maxWidth: 560 },
+  heroSummary: {
+    margin: 0,
+    fontSize: 13,
+    color: 'var(--dsw-alias-label-secondary)',
+    lineHeight: 1.6,
+    maxWidth: 560,
+  },
   tags: { display: 'flex', gap: 6, flexWrap: 'wrap' },
   fact: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 20, fontSize: 13 },
   factIcon: { display: 'inline-flex', color: 'var(--dsw-alias-label-tertiary)' },
@@ -518,9 +694,17 @@ const S: Record<string, CSSProperties> = {
   overrideLabel: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12, flex: '0 0 auto' },
   overrideInput: { width: 200, display: 'flex' },
   personaInput: {
-    width: '100%', resize: 'vertical', minHeight: 56, padding: '6px 9px', borderRadius: 6,
-    border: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-layer-1)',
-    color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12, lineHeight: 1.6,
+    width: '100%',
+    resize: 'vertical',
+    minHeight: 56,
+    padding: '6px 9px',
+    borderRadius: 6,
+    border: '1px solid var(--dsw-alias-border-l1)',
+    background: 'var(--dsw-alias-bg-layer-1)',
+    color: 'var(--dsw-alias-label-primary)',
+    font: 'inherit',
+    fontSize: 12,
+    lineHeight: 1.6,
   },
   overrideHint: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 11 },
   section: { display: 'flex', alignItems: 'center', gap: 8, margin: '22px 0 10px' },
@@ -528,31 +712,60 @@ const S: Record<string, CSSProperties> = {
   sectionTitle: { fontSize: 13, fontWeight: 600 },
   skillList: { display: 'flex', flexWrap: 'wrap', gap: 8 },
   skillChip: {
-    display: 'inline-flex', flexDirection: 'column', gap: 2, padding: '7px 11px', borderRadius: 8,
-    background: 'var(--dsw-alias-bg-layer-2)', border: '1px solid var(--dsw-alias-border-l1)',
+    display: 'inline-flex',
+    flexDirection: 'column',
+    gap: 2,
+    padding: '7px 11px',
+    borderRadius: 8,
+    background: 'var(--dsw-alias-bg-layer-2)',
+    border: '1px solid var(--dsw-alias-border-l1)',
     maxWidth: 240,
   },
   skillName: { fontSize: 12, fontWeight: 600 },
   skillDesc: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', lineHeight: 1.45 },
   opening: {
-    margin: 0, padding: '14px 16px', borderRadius: 8, fontSize: 13.5, lineHeight: 1.9,
-    whiteSpace: 'pre-wrap', background: 'var(--dsw-alias-bg-layer-1)',
+    margin: 0,
+    padding: '14px 16px',
+    borderRadius: 8,
+    fontSize: 13.5,
+    lineHeight: 1.9,
+    whiteSpace: 'pre-wrap',
+    background: 'var(--dsw-alias-bg-layer-1)',
     border: '1px solid var(--dsw-alias-border-l1)',
     borderLeft: '3px solid var(--dsw-alias-brand-primary)',
     color: 'var(--dsw-alias-label-secondary)',
   },
   actionBar: {
-    flex: '0 0 auto', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, padding: '12px 24px',
-    borderTop: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-base)',
+    flex: '0 0 auto',
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+    padding: '12px 24px',
+    borderTop: '1px solid var(--dsw-alias-border-l1)',
+    background: 'var(--dsw-alias-bg-base)',
   },
   status: {
-    flex: 1, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12,
-    color: 'var(--dsw-alias-label-tertiary)', minWidth: 120, overflow: 'hidden',
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    fontSize: 12,
+    color: 'var(--dsw-alias-label-tertiary)',
+    minWidth: 120,
+    overflow: 'hidden',
   },
   openingPick: {
-    minWidth: 0, maxWidth: 220, height: 26, padding: '0 24px 0 8px', borderRadius: 6,
-    border: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-layer-1)',
-    color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 12,
+    minWidth: 0,
+    maxWidth: 220,
+    height: 26,
+    padding: '0 24px 0 8px',
+    borderRadius: 6,
+    border: '1px solid var(--dsw-alias-border-l1)',
+    background: 'var(--dsw-alias-bg-layer-1)',
+    color: 'var(--dsw-alias-label-primary)',
+    font: 'inherit',
+    fontSize: 12,
   },
 }
 
@@ -560,7 +773,10 @@ const S: Record<string, CSSProperties> = {
 function GalleryGlyph(props: { size?: number; active?: boolean }): ReactNode {
   const size = props.size ?? 20
   return (
-    <span aria-hidden="true" style={{ display: 'inline-flex', opacity: props.active === false ? 0.7 : 1 }}>
+    <span
+      aria-hidden="true"
+      style={{ display: 'inline-flex', opacity: props.active === false ? 0.7 : 1 }}
+    >
       <IconArchiveOutline20 size={size} />
     </span>
   )
@@ -576,14 +792,14 @@ export function registerGallery(ctx: RrpClientContext): void {
   const loadList = async (): Promise<CardMeta[]> => {
     const response = await fetch(RRP_ROUTES.cards)
     if (!response.ok) throw new Error(String(response.status))
-    const body = await response.json() as { cards: CardMeta[] }
+    const body = (await response.json()) as { cards: CardMeta[] }
     return body.cards
   }
 
   const loadCard = async (id: string): Promise<CardPack | undefined> => {
     const response = await fetch(RRP_ROUTES.cardOne + '?id=' + encodeURIComponent(id))
     if (!response.ok) return undefined
-    const body = await response.json() as { card: CardPack }
+    const body = (await response.json()) as { card: CardPack }
     return body.card
   }
 
@@ -593,7 +809,9 @@ export function registerGallery(ctx: RrpClientContext): void {
    * A host without the workspace registry (or a failed ensure) degrades to
    * the old ungrouped flow — playing must never be blocked by grouping.
    */
-  const ensureCardWorkspace = async (card: CardPack): Promise<{ workspaceId?: string; degraded: boolean }> => {
+  const ensureCardWorkspace = async (
+    card: CardPack,
+  ): Promise<{ workspaceId?: string; degraded: boolean }> => {
     try {
       const response = await fetch(RRP_ROUTES.cardWorkspace, {
         method: 'POST',
@@ -601,7 +819,7 @@ export function registerGallery(ctx: RrpClientContext): void {
         body: JSON.stringify({ cardId: card.id, cardName: card.meta.name }),
       })
       if (!response.ok) return { degraded: true }
-      const body = await response.json() as { workspaceId?: string }
+      const body = (await response.json()) as { workspaceId?: string }
       return typeof body.workspaceId === 'string' && body.workspaceId.length > 0
         ? { workspaceId: body.workspaceId, degraded: false }
         : { degraded: true }
@@ -610,21 +828,29 @@ export function registerGallery(ctx: RrpClientContext): void {
     }
   }
 
-  const start = async (card: CardPack, playerNameOverride?: string, openingId?: string, playerPersona?: string): Promise<GalleryStartResult> => {
+  const start = async (
+    card: CardPack,
+    playerNameOverride?: string,
+    openingId?: string,
+    playerPersona?: string,
+  ): Promise<GalleryStartResult> => {
     const sessions = ctx.sessions
     const remote = ctx.remote
-    if (sessions === undefined || remote === undefined) return { ok: false, message: t('gallery.unavailable') }
+    if (sessions === undefined || remote === undefined)
+      return { ok: false, message: t('gallery.unavailable') }
     const cardWorkspace = await ensureCardWorkspace(card)
-    const sessionId = await sessions.create(cardWorkspace.workspaceId === undefined ? {} : { workspaceId: cardWorkspace.workspaceId })
+    const sessionId = await sessions.create(
+      cardWorkspace.workspaceId === undefined ? {} : { workspaceId: cardWorkspace.workspaceId },
+    )
     // Best-effort orphan cleanup: the session exists on the host now, so any
     // later failure must not leave a preset-bound empty session behind.
     const abortStart = async (reason: string): Promise<GalleryStartResult> => {
       let recovered = false
       try {
-        const destroy = (sessions as unknown as {
+        const destroy = sessions as unknown as {
           dispose?: (id: string) => unknown
           remove?: (id: string) => unknown
-        })
+        }
         const fn = destroy.dispose ?? destroy.remove
         if (typeof fn === 'function') {
           await fn.call(sessions, sessionId)
@@ -639,7 +865,8 @@ export function registerGallery(ctx: RrpClientContext): void {
     // Each card gets its own scoped preset (rp-<card-id>) so only this card's
     // world-knowledge skills are in the session's skill scope.
     const selected = await remote.agentPresets.select(sessionId, presetIdForCard(card.id))
-    if (selected.ok === false) return abortStart(selected.error?.message ?? t('gallery.selectFailed'))
+    if (selected.ok === false)
+      return abortStart(selected.error?.message ?? t('gallery.selectFailed'))
 
     const opening = pickOpening(card, (openingId ?? '').trim())?.body
     // P1-B: the self-authored persona rides the `player` dynamic field.
@@ -649,9 +876,13 @@ export function registerGallery(ctx: RrpClientContext): void {
     // facts fingerprint and the pre-log opening interpolation on the host side.
     const override = (playerNameOverride ?? '').trim()
     const declared = card.meta.player
-    const player: CardPlayer | undefined = override.length === 0
-      ? declared
-      : { name: override, ...(declared?.description === undefined ? {} : { description: declared.description }) }
+    const player: CardPlayer | undefined =
+      override.length === 0
+        ? declared
+        : {
+            name: override,
+            ...(declared?.description === undefined ? {} : { description: declared.description }),
+          }
     const response = await fetch(RRP_ROUTES.start, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -676,8 +907,7 @@ export function registerGallery(ctx: RrpClientContext): void {
     // through the host's workspace navigation (defensively probed — the
     // workspace package may mount after this plugin).
     const uiWorkspace = (ctx as unknown as { get?(name: string): unknown }).get?.('uiWorkspace') as
-      | { openSession?: (id: string) => void }
-      | undefined
+      { openSession?: (id: string) => void } | undefined
     if (typeof uiWorkspace?.openSession === 'function') {
       uiWorkspace.openSession(sessionId)
     }
@@ -695,7 +925,12 @@ export function registerGallery(ctx: RrpClientContext): void {
       if (binding !== undefined) {
         try {
           const roster = sessions.list?.getSnapshot()
-          const titles = roster === undefined ? [] : roster.ids.map((id) => roster.byId[id]?.title ?? roster.byId[id]?.displayTitle ?? '').filter((title) => title.length > 0)
+          const titles =
+            roster === undefined
+              ? []
+              : roster.ids
+                  .map((id) => roster.byId[id]?.title ?? roster.byId[id]?.displayTitle ?? '')
+                  .filter((title) => title.length > 0)
           await binding.session.rename?.(uniqueMainTitle(card.meta.name, titles))
         } catch {
           /* title only */
@@ -703,23 +938,35 @@ export function registerGallery(ctx: RrpClientContext): void {
         break
       }
     }
-    return { ok: true, message: cardWorkspace.degraded ? t('gallery.workspaceFallback') : undefined }
+    return {
+      ok: true,
+      message: cardWorkspace.degraded ? t('gallery.workspaceFallback') : undefined,
+    }
   }
 
   ctx.effect(() => {
-    const disposeMain = ctx.slots.inject('main', () => ctx.slots.register(
-      {
-        name: 'main',
-        key: GALLERY_PANEL_ID,
-        locale: 'rrp',
-        inject: () => ({ t, loadList, loadCard, start }),
-      },
-      GalleryPanel as never,
-    ))
-    const disposeNav = ctx.slots.inject('sidebar.panellist', () => ctx.slots.register(
-      { name: 'sidebar.panellist', id: GALLERY_PANEL_ID, order: 40, label: () => t('gallery.title') },
-      GalleryGlyph as never,
-    ))
+    const disposeMain = ctx.slots.inject('main', () =>
+      ctx.slots.register(
+        {
+          name: 'main',
+          key: GALLERY_PANEL_ID,
+          locale: 'rrp',
+          inject: () => ({ t, loadList, loadCard, start }),
+        },
+        GalleryPanel as never,
+      ),
+    )
+    const disposeNav = ctx.slots.inject('sidebar.panellist', () =>
+      ctx.slots.register(
+        {
+          name: 'sidebar.panellist',
+          id: GALLERY_PANEL_ID,
+          order: 40,
+          label: () => t('gallery.title'),
+        },
+        GalleryGlyph as never,
+      ),
+    )
     return () => {
       disposeMain()
       disposeNav()

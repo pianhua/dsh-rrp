@@ -67,7 +67,8 @@ export function parseUiCall(value: unknown): UiCall | undefined {
  * `onState`, and the two verbs — so no card ever reaches for `parent.*`
  * (which the sandbox forbids anyway) and the protocol stays in one place.
  */
-export const UI_BRIDGE_SHIM = `<script>(function(){
+export const UI_BRIDGE_SHIM =
+  `<script>(function(){
 var subs=[];
 function post(m){try{parent.postMessage(m,'*')}catch(e){}}
 window.rrp={
@@ -84,7 +85,7 @@ window.addEventListener('message',function(e){
 });
 post({t:'rrp:hello'});
 window.addEventListener('load',function(){setTimeout(function(){window.rrp.resize()},50)});
-})();</`+`script>`
+})();</` + `script>`
 
 /** The CSP every card page is wrapped in: inline only, no network, no frames. */
 export const UI_BRIDGE_CSP =

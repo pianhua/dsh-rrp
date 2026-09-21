@@ -29,7 +29,13 @@ function fakeRuntime() {
   }
   const ctx = {
     effect: (fn: () => (() => void) | void) => fn(),
-    get: (name: string) => ({ agents: { get: (id: string) => agents.get(id) }, sessionProjections: projections } as Record<string, unknown>)[name],
+    get: (name: string) =>
+      (
+        ({
+          agents: { get: (id: string) => agents.get(id) },
+          sessionProjections: projections,
+        }) as Record<string, unknown>
+      )[name],
     on: (event: string, listener: (...args: unknown[]) => void) => {
       listeners.set(event, listener)
       return () => {}
@@ -53,10 +59,14 @@ describe('lore runtime arming', () => {
     const { ctx, listeners, setPreset } = fakeRuntime()
     registerLoreRuntime(ctx as never)
 
-    let provider: ReturnType<typeof import('../src/lore-provider.ts')['createLoreProvider']> | undefined
+    let provider:
+      ReturnType<(typeof import('../src/lore-provider.ts'))['createLoreProvider']> | undefined
     const skillsService = {
       registerProvider(create: (control: { signal: AbortSignal; invalidate(): void }) => unknown) {
-        provider = create({ signal: new AbortController().signal, invalidate() {} }) as typeof provider
+        provider = create({
+          signal: new AbortController().signal,
+          invalidate() {},
+        }) as typeof provider
         return () => {}
       },
     }
@@ -64,8 +74,12 @@ describe('lore runtime arming', () => {
       id: 'session-x',
       session: { id: 'session-x' },
       ctx: {
-        get(name: string) { return name === 'skills' ? skillsService : undefined },
-        get skills(): never { throw new Error('cannot get property "skills" without inject') },
+        get(name: string) {
+          return name === 'skills' ? skillsService : undefined
+        },
+        get skills(): never {
+          throw new Error('cannot get property "skills" without inject')
+        },
       },
     }
 
@@ -82,7 +96,14 @@ describe('lore runtime arming', () => {
     const agent = {
       id: 'session-y',
       session: { id: 'session-y' },
-      ctx: { get: () => ({ registerProvider: () => { registered += 1; return () => {} } }) },
+      ctx: {
+        get: () => ({
+          registerProvider: () => {
+            registered += 1
+            return () => {}
+          },
+        }),
+      },
     }
     setPreset('session-y', 'standard')
     listeners.get('agent/created')?.({ agent })
@@ -98,8 +119,15 @@ describe('lore runtime arming', () => {
       session: { id: 'session-y' },
       ctx: {
         get: () => ({
-          registerProvider(create: (control: { signal: AbortSignal; invalidate(): void }) => unknown) {
-            create({ signal: new AbortController().signal, invalidate: () => { invalidations += 1 } })
+          registerProvider(
+            create: (control: { signal: AbortSignal; invalidate(): void }) => unknown,
+          ) {
+            create({
+              signal: new AbortController().signal,
+              invalidate: () => {
+                invalidations += 1
+              },
+            })
             return () => {}
           },
         }),
@@ -121,10 +149,14 @@ describe('lore runtime arming', () => {
       session: { id: 'session-selected' },
       ctx: {
         get: () => ({
-          registerProvider(create: (control: { signal: AbortSignal; invalidate(): void }) => unknown) {
+          registerProvider(
+            create: (control: { signal: AbortSignal; invalidate(): void }) => unknown,
+          ) {
             registered += 1
             create({ signal: new AbortController().signal, invalidate() {} })
-            return () => { disposed += 1 }
+            return () => {
+              disposed += 1
+            }
           },
         }),
       },
@@ -182,7 +214,8 @@ describe('legacy lore migration', () => {
       },
     }
     const projections = transcriptProjections(events, (_session: unknown, key: string) =>
-      key === 'rrpSediment' ? state : undefined)
+      key === 'rrpSediment' ? state : undefined,
+    )
     return { home, source, entry, session, projections, events, state: () => state }
   }
 
@@ -211,12 +244,18 @@ describe('legacy lore migration', () => {
       const name = 'legacy-' + String(index)
       const dir = join(value.source, name)
       mkdirSync(dir, { recursive: true })
-      writeFileSync(join(dir, 'SKILL.md'), renderLore({ name, description: name, body: '# ' + name }), 'utf8')
+      writeFileSync(
+        join(dir, 'SKILL.md'),
+        renderLore({ name, description: name, body: '# ' + name }),
+        'utf8',
+      )
     }
     expect(migrateLegacyLore(value.session, value.projections, value.home)).toBe(true)
     const snapshot = rrpPayloadOf(value.events[0])?.sediment
     expect(snapshot?.kind).toBe('snapshot')
-    expect(snapshot?.kind === 'snapshot' ? snapshot.skills : []).toHaveLength(LORE_LIMITS.skillsPerSession)
+    expect(snapshot?.kind === 'snapshot' ? snapshot.skills : []).toHaveLength(
+      LORE_LIMITS.skillsPerSession,
+    )
     expect(value.state()).toHaveLength(LORE_LIMITS.skillsPerSession)
   })
 })

@@ -42,9 +42,18 @@ function decode(path) {
   const buffer = readFileSync(path)
   if (path.endsWith('.gz')) return gunzipSync(buffer).toString('utf8')
   for (let i = 0; i + 4 <= buffer.length; i += 1) {
-    if (buffer[i] !== ZSTD_MAGIC[0] || buffer[i + 1] !== ZSTD_MAGIC[1]
-      || buffer[i + 2] !== ZSTD_MAGIC[2] || buffer[i + 3] !== ZSTD_MAGIC[3]) continue
-    try { return zstdDecompressSync(buffer.slice(i)).toString('utf8') } catch { /* not a frame start */ }
+    if (
+      buffer[i] !== ZSTD_MAGIC[0] ||
+      buffer[i + 1] !== ZSTD_MAGIC[1] ||
+      buffer[i + 2] !== ZSTD_MAGIC[2] ||
+      buffer[i + 3] !== ZSTD_MAGIC[3]
+    )
+      continue
+    try {
+      return zstdDecompressSync(buffer.slice(i)).toString('utf8')
+    } catch {
+      /* not a frame start */
+    }
   }
   return ''
 }
@@ -69,16 +78,28 @@ function encode(path, text) {
 function sessionFiles(root, onlyWorkspace) {
   const files = []
   let workspaces
-  try { workspaces = readdirSync(root) } catch { return files }
+  try {
+    workspaces = readdirSync(root)
+  } catch {
+    return files
+  }
   for (const workspace of workspaces) {
     if (onlyWorkspace !== undefined && workspace !== onlyWorkspace) continue
     const dir = join(root, workspace)
     let entries
-    try { entries = readdirSync(dir) } catch { continue }
+    try {
+      entries = readdirSync(dir)
+    } catch {
+      continue
+    }
     for (const entry of entries) {
       const sessionDir = join(dir, entry)
       let inner
-      try { inner = readdirSync(sessionDir) } catch { continue }
+      try {
+        inner = readdirSync(sessionDir)
+      } catch {
+        continue
+      }
       for (const name of inner) {
         if (!name.endsWith('.zstd') && !name.endsWith('.gz')) continue
         files.push(join(sessionDir, name))
@@ -105,7 +126,9 @@ let events = 0
 for (const file of sessionFiles(root, onlyWorkspace)) {
   scanned += 1
   let text
-  try { text = decode(file) } catch (error) {
+  try {
+    text = decode(file)
+  } catch (error) {
     console.warn('skip (decode failed) ' + file + ': ' + String(error?.message ?? error))
     continue
   }
@@ -114,7 +137,11 @@ for (const file of sessionFiles(root, onlyWorkspace)) {
   const next = lines.map((line) => {
     if (line.length === 0 || !line.includes('"rrp/')) return line
     let event
-    try { event = JSON.parse(line) } catch { return line }
+    try {
+      event = JSON.parse(line)
+    } catch {
+      return line
+    }
     if (event === null || typeof event !== 'object') return line
     if (typeof event.type !== 'string' || !event.type.startsWith('rrp/')) return line
     if (event.ignorable === true) return line
@@ -126,7 +153,9 @@ for (const file of sessionFiles(root, onlyWorkspace)) {
   repaired += 1
   events += touched
   const relative = file.slice(root.length + 1)
-  console.log((apply ? 'REPAIR ' : 'WOULD REPAIR ') + relative + ' (' + String(touched) + ' rrp event(s))')
+  console.log(
+    (apply ? 'REPAIR ' : 'WOULD REPAIR ') + relative + ' (' + String(touched) + ' rrp event(s))',
+  )
   if (apply) {
     const backup = file + '.pre-ignorable.bak'
     if (!existsSync(backup)) copyFileSync(file, backup)
@@ -135,6 +164,15 @@ for (const file of sessionFiles(root, onlyWorkspace)) {
 }
 
 console.log('')
-console.log((apply ? 'Applied' : 'Dry run') + ': ' + String(scanned) + ' log(s) scanned, '
-  + String(repaired) + ' need repair, ' + String(events) + ' rrp event(s) affected.')
-if (!apply && repaired > 0) console.log('Re-run with --apply to rewrite (originals kept as *.pre-ignorable.bak).')
+console.log(
+  (apply ? 'Applied' : 'Dry run') +
+    ': ' +
+    String(scanned) +
+    ' log(s) scanned, ' +
+    String(repaired) +
+    ' need repair, ' +
+    String(events) +
+    ' rrp event(s) affected.',
+)
+if (!apply && repaired > 0)
+  console.log('Re-run with --apply to rewrite (originals kept as *.pre-ignorable.bak).')

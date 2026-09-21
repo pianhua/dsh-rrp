@@ -293,7 +293,11 @@ export function isTerminalCopilotEvent(event: string): boolean {
  * way the host routes read them back (`host-faces.queryOf`). Seven panels used
  * to hand-stringify `'?sessionId=' + encodeURIComponent(...)`.
  */
-export function routeUrl(path: string, sessionId: string, params: Record<string, string> = {}): string {
+export function routeUrl(
+  path: string,
+  sessionId: string,
+  params: Record<string, string> = {},
+): string {
   return path + '?' + new URLSearchParams({ sessionId, ...params }).toString()
 }
 

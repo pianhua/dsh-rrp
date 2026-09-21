@@ -55,8 +55,12 @@ describe('dsh-rrp host half', () => {
       const betaDir = join(home, '.agent-presets', 'rp-beta')
 
       // Each card preset points at its own skills root...
-      expect(readFileSync(join(alphaDir, 'agent.cordis.yml'), 'utf8')).toContain(join(alphaDir, 'skills'))
-      expect(readFileSync(join(betaDir, 'agent.cordis.yml'), 'utf8')).toContain(join(betaDir, 'skills'))
+      expect(readFileSync(join(alphaDir, 'agent.cordis.yml'), 'utf8')).toContain(
+        join(alphaDir, 'skills'),
+      )
+      expect(readFileSync(join(betaDir, 'agent.cordis.yml'), 'utf8')).toContain(
+        join(betaDir, 'skills'),
+      )
 
       // ...holds only its own bundle...
       expect(existsSync(join(alphaDir, 'skills', 'alpha-lore', 'SKILL.md'))).toBe(true)

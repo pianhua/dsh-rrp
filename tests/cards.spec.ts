@@ -2,7 +2,14 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { listCards, mountSkillsForCard, parseCardMarkdown, parseFrontmatter, readCard, triggersOfCard } from '../src/cards.ts'
+import {
+  listCards,
+  mountSkillsForCard,
+  parseCardMarkdown,
+  parseFrontmatter,
+  readCard,
+  triggersOfCard,
+} from '../src/cards.ts'
 import { interpolateCardText } from '../src/card-types.ts'
 
 const SAMPLE = `---
@@ -27,8 +34,12 @@ persona: |
 describe('player variable interpolation', () => {
   it('resolves {{player.*}} and leaves unknown variables untouched', () => {
     const player = { name: '无名客', description: '独行者' }
-    expect(interpolateCardText('你好，{{player.name}}——{{player.description}}', player)).toBe('你好，无名客——独行者')
-    expect(interpolateCardText('{{player.name}}与{{unknown.var}}', player)).toBe('无名客与{{unknown.var}}')
+    expect(interpolateCardText('你好，{{player.name}}——{{player.description}}', player)).toBe(
+      '你好，无名客——独行者',
+    )
+    expect(interpolateCardText('{{player.name}}与{{unknown.var}}', player)).toBe(
+      '无名客与{{unknown.var}}',
+    )
     expect(interpolateCardText('没有变量', undefined)).toBe('没有变量')
     expect(interpolateCardText('{{player.name}}', undefined)).toBe('')
   })
@@ -53,7 +64,12 @@ describe('card frontmatter parser', () => {
 describe('card manifest', () => {
   it('maps the parsed fields onto card metadata', () => {
     const parsed = parseCardMarkdown(SAMPLE)
-    expect(parsed?.meta).toMatchObject({ id: 'demo', name: '示例卡', opening: 'default', tags: ['甲', '乙'] })
+    expect(parsed?.meta).toMatchObject({
+      id: 'demo',
+      name: '示例卡',
+      opening: 'default',
+      tags: ['甲', '乙'],
+    })
     expect(parsed?.meta.player).toEqual({ name: '顾青', description: '一个剑客。' })
     expect(parsed?.persona).toContain('第二行规则。')
     expect(parsed?.worldCore).toContain('世界核心')
@@ -95,7 +111,11 @@ describe('the shipped test card', () => {
     expect(pack?.worldCore).toContain('暴雪封山')
     expect(pack?.openings[0]?.body).toContain('{{player.name}}')
     expect(pack?.initialState?.scene?.location).toContain('孤灯客栈')
-    expect(pack?.skills.map((skill) => skill.id).sort()).toEqual(['inn', 'old-sword', 'world-setting'])
+    expect(pack?.skills.map((skill) => skill.id).sort()).toEqual([
+      'inn',
+      'old-sword',
+      'world-setting',
+    ])
   })
 
   it('parses the whole pack: opening, initial state, and skills', () => {
@@ -110,10 +130,23 @@ describe('the shipped test card', () => {
     expect(pack?.initialState?.characters['米娅']?.affinity).toBe(6)
     expect(pack?.initialState?.flags['米娅已成为你的贴身女仆']).toBe(true)
     expect(pack?.skills.map((skill) => skill.id).sort()).toEqual([
-      'apartment', 'cecilia', 'family', 'mia', 'mia-intimate', 'mia-warm', 'tone', 'world-setting',
+      'apartment',
+      'cecilia',
+      'family',
+      'mia',
+      'mia-intimate',
+      'mia-warm',
+      'tone',
+      'world-setting',
     ])
-    expect(pack?.skills.every((skill) => typeof skill.name === 'string' && skill.name.length > 0)).toBe(true)
-    expect(pack?.skills.every((skill) => typeof skill.description === 'string' && skill.description.length > 0)).toBe(true)
+    expect(
+      pack?.skills.every((skill) => typeof skill.name === 'string' && skill.name.length > 0),
+    ).toBe(true)
+    expect(
+      pack?.skills.every(
+        (skill) => typeof skill.description === 'string' && skill.description.length > 0,
+      ),
+    ).toBe(true)
   })
 
   it('prefers a user card over the shipped one of the same id', () => {
@@ -165,17 +198,32 @@ describe('conditional-injection trigger loading (issue #16, T5)', () => {
     mkdirSync(join(cardDir(), 'skills', 'good'), { recursive: true })
     mkdirSync(join(cardDir(), 'skills', 'badwhen'), { recursive: true })
     mkdirSync(join(cardDir(), 'skills', 'ghost'), { recursive: true })
-    writeFileSync(join(cardDir(), 'card.md'), '---\nid: trig-check\nname: 触发校验卡\n---\n\n核心。')
-    writeFileSync(join(cardDir(), 'state.json'), JSON.stringify({
-      characters: { 米娅: { affinity: 6 } },
-      inventory: {},
-      scene: {},
-      flags: {},
-      relations: [],
-    }))
-    writeFileSync(join(cardDir(), 'skills', 'good', 'SKILL.md'), '---\nname: 温热\ndescription: d\nwhen: characters.米娅.affinity >= 40\n---\n\n温热正文片段')
-    writeFileSync(join(cardDir(), 'skills', 'badwhen', 'SKILL.md'), '---\nname: 坏条件\ndescription: d\nwhen: characters.米娅.affinity >= 亲密\n---\n\n坏正文')
-    writeFileSync(join(cardDir(), 'skills', 'ghost', 'SKILL.md'), '---\nname: 幽灵\ndescription: d\nwhen: characters.幽灵.affinity >= 1\n---\n\n幽灵正文')
+    writeFileSync(
+      join(cardDir(), 'card.md'),
+      '---\nid: trig-check\nname: 触发校验卡\n---\n\n核心。',
+    )
+    writeFileSync(
+      join(cardDir(), 'state.json'),
+      JSON.stringify({
+        characters: { 米娅: { affinity: 6 } },
+        inventory: {},
+        scene: {},
+        flags: {},
+        relations: [],
+      }),
+    )
+    writeFileSync(
+      join(cardDir(), 'skills', 'good', 'SKILL.md'),
+      '---\nname: 温热\ndescription: d\nwhen: characters.米娅.affinity >= 40\n---\n\n温热正文片段',
+    )
+    writeFileSync(
+      join(cardDir(), 'skills', 'badwhen', 'SKILL.md'),
+      '---\nname: 坏条件\ndescription: d\nwhen: characters.米娅.affinity >= 亲密\n---\n\n坏正文',
+    )
+    writeFileSync(
+      join(cardDir(), 'skills', 'ghost', 'SKILL.md'),
+      '---\nname: 幽灵\ndescription: d\nwhen: characters.幽灵.affinity >= 1\n---\n\n幽灵正文',
+    )
   })
 
   afterEach(() => {
@@ -220,13 +268,18 @@ describe('conditional-injection trigger loading (issue #16, T5)', () => {
 
   it('skips the path check when the card has no state.json', () => {
     rmSync(join(cardDir(), 'state.json'))
-    writeFileSync(join(cardDir(), 'skills', 'ghost', 'SKILL.md'), '---\nname: 幽灵\ndescription: d\nwhen: characters.幽灵.affinity >= 1\n---\n\n幽灵正文')
+    writeFileSync(
+      join(cardDir(), 'skills', 'ghost', 'SKILL.md'),
+      '---\nname: 幽灵\ndescription: d\nwhen: characters.幽灵.affinity >= 1\n---\n\n幽灵正文',
+    )
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       readCard('trig-check')
       const ghost = triggersOfCard('trig-check').find((def) => def.id === 'ghost')
       expect(ghost).toBeDefined()
-      const pathWarnings = warnSpy.mock.calls.filter((call) => String(call[0]).includes('永远求值为 false'))
+      const pathWarnings = warnSpy.mock.calls.filter((call) =>
+        String(call[0]).includes('永远求值为 false'),
+      )
       expect(pathWarnings).toHaveLength(0)
     } finally {
       warnSpy.mockRestore()
@@ -238,9 +291,14 @@ describe('conditional-injection trigger loading (issue #16, T5)', () => {
     const triggers = triggersOfCard('maid-heiress')
     expect(triggers.map((def) => def.id).sort()).toEqual(['mia-intimate', 'mia-warm'])
     expect(triggers.find((def) => def.id === 'mia-warm')?.condition).toMatchObject({
-      path: { kind: 'characters', name: '米娅', field: 'affinity' }, op: '>=', value: 40,
+      path: { kind: 'characters', name: '米娅', field: 'affinity' },
+      op: '>=',
+      value: 40,
     })
-    expect(triggers.find((def) => def.id === 'mia-intimate')?.condition).toMatchObject({ op: '>=', value: 80 })
+    expect(triggers.find((def) => def.id === 'mia-intimate')?.condition).toMatchObject({
+      op: '>=',
+      value: 80,
+    })
     expect(triggers.every((def) => def.excerpt.length > 0)).toBe(true)
   })
 })

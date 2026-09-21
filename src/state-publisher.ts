@@ -17,7 +17,12 @@
  */
 import { randomUUID } from 'node:crypto'
 import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
-import { hitSet, renderTriggerBlock, TRIGGER_BLOCK_HEADER, type TriggerHit } from './lore-condition.ts'
+import {
+  hitSet,
+  renderTriggerBlock,
+  TRIGGER_BLOCK_HEADER,
+  type TriggerHit,
+} from './lore-condition.ts'
 import { triggersOfCard } from './cards.ts'
 import { SUMMARY_KEY, renderMacroSummary, type MacroSummary } from './macro-summary.ts'
 import { RRP_SETTINGS_KEY, rrpSettingsOf, type RrpSettings } from './settings.ts'
@@ -77,7 +82,9 @@ const RETAINED = new Map<string, Retained>()
 
 /** Append one lane message. Callers wrap; append validates before committing. */
 function appendLane(session: StateSession, text: string, payload: RrpStatePayload): void {
-  session.append('user/message', rrpStateMessage(randomUUID(), text, payload), { surfaceOp: 'append' })
+  session.append('user/message', rrpStateMessage(randomUUID(), text, payload), {
+    surfaceOp: 'append',
+  })
 }
 
 /**
@@ -86,7 +93,13 @@ function appendLane(session: StateSession, text: string, payload: RrpStatePayloa
  * log and is lost on restart.
  */
 function factsFingerprint(text: string, settings: RrpSettings): string {
-  return text + '\u0000summary=' + String(settings.summaryEnabled) + '\u0000every=' + String(settings.summaryEveryTurns)
+  return (
+    text +
+    '\u0000summary=' +
+    String(settings.summaryEnabled) +
+    '\u0000every=' +
+    String(settings.summaryEveryTurns)
+  )
 }
 
 /** Card-lane content key: the rendered text plus which card produced it. */
@@ -129,7 +142,11 @@ function adopt(session: StateSession, projections: StateProjections): Retained {
  * @param projections - the session-projection read face.
  * @param patch - the writer's change set (omitted fields read from projections).
  */
-export function publishState(session: StateSession, projections: StateProjections, patch: RrpStatePatch): boolean {
+export function publishState(
+  session: StateSession,
+  projections: StateProjections,
+  patch: RrpStatePatch,
+): boolean {
   try {
     let retained = RETAINED.get(session.id)
     if (retained === undefined) {
@@ -146,12 +163,20 @@ export function publishState(session: StateSession, projections: StateProjection
       }
     }
 
-    const state = patch.worldState ?? (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined)
-    if (state !== undefined || patch.summary !== undefined || patch.settings !== undefined || patch.sediment !== undefined) {
-      const summary = patch.summary !== undefined
-        ? patch.summary
-        : (projections.stateOf(session, SUMMARY_KEY) as MacroSummary | null | undefined)
-      const settings = patch.settings ?? rrpSettingsOf(projections.stateOf(session, RRP_SETTINGS_KEY))
+    const state =
+      patch.worldState ?? (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined)
+    if (
+      state !== undefined ||
+      patch.summary !== undefined ||
+      patch.settings !== undefined ||
+      patch.sediment !== undefined
+    ) {
+      const summary =
+        patch.summary !== undefined
+          ? patch.summary
+          : (projections.stateOf(session, SUMMARY_KEY) as MacroSummary | null | undefined)
+      const settings =
+        patch.settings ?? rrpSettingsOf(projections.stateOf(session, RRP_SETTINGS_KEY))
       const parts: string[] = []
       if (summary !== null && summary !== undefined) parts.push(renderMacroSummary(summary))
       if (state !== undefined) parts.push(renderWorldState(state))
@@ -161,7 +186,8 @@ export function publishState(session: StateSession, projections: StateProjection
       // fingerprint below suppresses the append; a set change (incl. shrinking
       // to empty) renders a new block with the revocation sentence.
       if (state !== undefined) {
-        const activeCard = card ?? (projections.stateOf(session, CARD_KEY) as CardContext | null | undefined) ?? null
+        const activeCard =
+          card ?? (projections.stateOf(session, CARD_KEY) as CardContext | null | undefined) ?? null
         if (activeCard !== null) {
           const triggers = triggersOfCard(activeCard.id)
           if (triggers.length > 0) {
@@ -183,18 +209,22 @@ export function publishState(session: StateSession, projections: StateProjection
       // The cursor always travels with its state: a fold that rendered
       // byte-identical facts still has to be booked, or the Chronicler would
       // re-read the same prose forever.
-      const foldMoved = patch.stateFoldSeq !== undefined && retained.factsFoldSeq !== patch.stateFoldSeq
+      const foldMoved =
+        patch.stateFoldSeq !== undefined && retained.factsFoldSeq !== patch.stateFoldSeq
       if (patch.sediment !== undefined || retained.factsFingerprint !== fingerprint || foldMoved) {
         // Metadata-only publish (e.g. a confirmed lore entry whose state text is
         // unchanged): keep the model-visible content to one breadcrumb line
         // instead of re-rendering the full state — the lore data itself
         // rides the hidden source.rrp payload and reaches the model via skills.
-        const text = patch.sediment !== undefined && retained.factsFingerprint === fingerprint
-          ? LORE_ONLY_NOTICE
-          : factsText
+        const text =
+          patch.sediment !== undefined && retained.factsFingerprint === fingerprint
+            ? LORE_ONLY_NOTICE
+            : factsText
         appendLane(session, text, {
           ...(state === undefined ? {} : { worldState: state }),
-          ...((state !== undefined || patch.summary !== undefined) ? { summary: summary ?? null } : {}),
+          ...(state !== undefined || patch.summary !== undefined
+            ? { summary: summary ?? null }
+            : {}),
           ...(patch.summaryTurn === undefined ? {} : { summaryTurn: patch.summaryTurn }),
           settings,
           ...(patch.sediment === undefined ? {} : { sediment: patch.sediment }),

@@ -24,10 +24,22 @@ export const SUMMARIZER_SYSTEM_PROMPT = [
   '【输入契约】你会收到【长程剧情】或【全程剧情】的正文记录；它可能很长，也可能包含水文与失败的回合。你的工作是去芜存菁，不是复述。',
   '',
   '提炼准则：',
-  '1. 主线总目标（goal）：玩家/主角当前追求的核心目标，一句话（≤ ' + String(SUMMARY_LIMITS.headlineChars) + ' 字）。',
-  '2. 当前核心矛盾（conflict）：此刻最关键的冲突或阻力，一句话（≤ ' + String(SUMMARY_LIMITS.headlineChars) + ' 字）。',
-  '3. 重大转折（turningPoints）：已经发生、且已改变故事走向的事件，按时间顺序，最多 ' + String(SUMMARY_LIMITS.entries) + ' 条（每条 ≤ ' + String(SUMMARY_LIMITS.entryChars) + ' 字）。',
-  '4. 伏笔与危机（threads）：尚未解决、后续需要留意的伏笔、承诺或威胁，最多 ' + String(SUMMARY_LIMITS.entries) + ' 条（每条 ≤ ' + String(SUMMARY_LIMITS.entryChars) + ' 字）。',
+  '1. 主线总目标（goal）：玩家/主角当前追求的核心目标，一句话（≤ ' +
+    String(SUMMARY_LIMITS.headlineChars) +
+    ' 字）。',
+  '2. 当前核心矛盾（conflict）：此刻最关键的冲突或阻力，一句话（≤ ' +
+    String(SUMMARY_LIMITS.headlineChars) +
+    ' 字）。',
+  '3. 重大转折（turningPoints）：已经发生、且已改变故事走向的事件，按时间顺序，最多 ' +
+    String(SUMMARY_LIMITS.entries) +
+    ' 条（每条 ≤ ' +
+    String(SUMMARY_LIMITS.entryChars) +
+    ' 字）。',
+  '4. 伏笔与危机（threads）：尚未解决、后续需要留意的伏笔、承诺或威胁，最多 ' +
+    String(SUMMARY_LIMITS.entries) +
+    ' 条（每条 ≤ ' +
+    String(SUMMARY_LIMITS.entryChars) +
+    ' 字）。',
   '5. 判定法：事件已落定、改变了走向 → 进 turningPoints；仍未解决、后续会回收 → 进 threads。同一件事不要两边都写。',
   '6. 忠于已发生的剧情，不预测、不杜撰；某个维度信息不足就写「暂无」。',
   '',

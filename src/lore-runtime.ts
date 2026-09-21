@@ -70,7 +70,10 @@ function disarm(sessionId: string): void {
 /** Whether this Session has ever adopted the event-backed lore model. */
 function hasLoreEvent(projections: ProjectionsService, session: LoreSession): boolean {
   try {
-    return ((projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined)?.sedimentSeen) ?? false
+    return (
+      (projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined)?.sedimentSeen ??
+      false
+    )
   } catch {
     // Racing disposal etc.: treat as unseen, exactly like a missing snapshot before.
     return false
@@ -89,14 +92,21 @@ export function migrateLegacyLore(
   if (typeof session.append !== 'function') return false
   if (hasLoreEvent(projections, session)) return false
   const skills = loreEntriesOf(
-    listLegacyLore(home, session.id).map(({ name, description, body }) => ({ name, description, body })),
+    listLegacyLore(home, session.id).map(({ name, description, body }) => ({
+      name,
+      description,
+      body,
+    })),
   )
   if (skills.length === 0) return false
-  const published = publishState(session as StateSession, projections, { sediment: { kind: 'snapshot', skills } })
+  const published = publishState(session as StateSession, projections, {
+    sediment: { kind: 'snapshot', skills },
+  })
   if (!published) return false
   try {
     const backup = backupLegacyLore(home, session.id)
-    if (backup !== undefined) console.log(TAG + ' migrated legacy lore for ' + session.id + ' (backup: ' + backup + ')')
+    if (backup !== undefined)
+      console.log(TAG + ' migrated legacy lore for ' + session.id + ' (backup: ' + backup + ')')
   } catch (error) {
     console.warn(TAG + ' legacy lore was imported but its source could not be renamed:', error)
   }
@@ -173,7 +183,8 @@ export function registerLoreRuntime(ctx: Context): void {
         if (typeof sessionId !== 'string') return
         const agent = agents.get(sessionId)
         if (agent === undefined) {
-          if (!belongsToRpPreset(typeof args[1] === 'string' ? args[1] : undefined)) disarm(sessionId)
+          if (!belongsToRpPreset(typeof args[1] === 'string' ? args[1] : undefined))
+            disarm(sessionId)
           return
         }
         const preset = projections.stateOf(agent.session, 'agentPreset')

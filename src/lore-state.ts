@@ -42,7 +42,8 @@ export function validateLoreEntry(
   const name = String(candidate?.name ?? '').trim()
   const description = String(candidate?.description ?? '').trim()
   const body = String(candidate?.body ?? '').trim()
-  if (!isLoreName(name)) return { ok: false, error: '名称必须是 kebab-case（小写字母/数字/连字符）' }
+  if (!isLoreName(name))
+    return { ok: false, error: '名称必须是 kebab-case（小写字母/数字/连字符）' }
   if (description.length === 0) return { ok: false, error: '描述不能为空' }
   if (description.length > LORE_LIMITS.descriptionChars) {
     return { ok: false, error: '描述过长（上限 ' + String(LORE_LIMITS.descriptionChars) + ' 字）' }
@@ -54,7 +55,10 @@ export function validateLoreEntry(
   if (reserved.includes(name)) return { ok: false, error: '该名称已存在（只新增，不覆写）' }
   if (existing.includes(name)) return { ok: false, error: '该名称已沉淀过（只新增，不覆写）' }
   if (existing.length >= LORE_LIMITS.skillsPerSession) {
-    return { ok: false, error: '本会话的沉淀条目已达上限（' + String(LORE_LIMITS.skillsPerSession) + '）' }
+    return {
+      ok: false,
+      error: '本会话的沉淀条目已达上限（' + String(LORE_LIMITS.skillsPerSession) + '）',
+    }
   }
   return { ok: true, skill: { name, description, body } }
 }
@@ -82,6 +86,9 @@ export function applyLoreChange(state: LoreEntry[], change: LoreChange): LoreEnt
       ? state.filter((entry) => entry.name !== change.name)
       : state
   }
-  const parsed = validateLoreEntry(change.skill, state.map((entry) => entry.name))
+  const parsed = validateLoreEntry(
+    change.skill,
+    state.map((entry) => entry.name),
+  )
   return parsed.ok ? [...state, parsed.skill] : state
 }

@@ -60,7 +60,10 @@ export interface RrpLocaleService {
 export interface RrpSessionBindingFace {
   session: {
     /** Send a user prompt; 'queue' appends a turn. */
-    prompt(content: Array<{ type: 'text'; text: string }>, mode: 'queue' | 'steer'): Promise<unknown>
+    prompt(
+      content: Array<{ type: 'text'; text: string }>,
+      mode: 'queue' | 'steer',
+    ): Promise<unknown>
     /** Rename the session (the card name becomes the title). */
     rename?(title: string): Promise<unknown>
   }
@@ -97,7 +100,10 @@ export interface RrpSessionsService {
 export interface RrpRemoteService {
   /** Host-side preset roster commands. */
   agentPresets: {
-    select(sessionId: string, presetId: string): Promise<{ ok: boolean; error?: { message?: string } }>
+    select(
+      sessionId: string,
+      presetId: string,
+    ): Promise<{ ok: boolean; error?: { message?: string } }>
   }
 }
 

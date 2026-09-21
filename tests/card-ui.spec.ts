@@ -27,9 +27,20 @@ const GOOD = JSON.stringify({
   version: 1,
   title: '客栈仪表盘',
   panels: [
-    { id: 'warn', component: 'gauge', bind: 'characters.老周.affinity', title: '好感', min: 0, max: 100 },
+    {
+      id: 'warn',
+      component: 'gauge',
+      bind: 'characters.老周.affinity',
+      title: '好感',
+      min: 0,
+      max: 100,
+    },
     { id: 'when-rich', component: 'gauge', bind: '财富', when: '财富 >= 100' },
-    { id: 'buttons', component: 'buttonRow', buttons: [{ label: '问管家', action: 'ask_copilot', question: '现在该做什么' }] },
+    {
+      id: 'buttons',
+      component: 'buttonRow',
+      buttons: [{ label: '问管家', action: 'ask_copilot', question: '现在该做什么' }],
+    },
   ],
 })
 
@@ -68,9 +79,18 @@ describe('card UI manifest loader', () => {
   it('rejects malformed JSON, unknown keys and an empty panel list with a located message', () => {
     const cases: Array<[string, string]> = [
       ['{ not json', '不是合法 JSON'],
-      [JSON.stringify({ version: 1, panels: [{ id: 'a', component: 'gauge', bind: 'x', extra: 1 }] }), 'extra'],
+      [
+        JSON.stringify({
+          version: 1,
+          panels: [{ id: 'a', component: 'gauge', bind: 'x', extra: 1 }],
+        }),
+        'extra',
+      ],
       [JSON.stringify({ version: 1, panels: [] }), '校验失败'],
-      [JSON.stringify({ version: 2, panels: [{ id: 'a', component: 'gauge', bind: 'x' }] }), 'version'],
+      [
+        JSON.stringify({ version: 2, panels: [{ id: 'a', component: 'gauge', bind: 'x' }] }),
+        'version',
+      ],
     ]
     for (const [text, needle] of cases) {
       const card = cardDirWith(text)
@@ -86,10 +106,22 @@ describe('card UI manifest loader', () => {
 
   it('fails closed on semantic problems zod cannot express', () => {
     const cases: Array<[unknown, string]> = [
-      [{ version: 1, panels: [{ id: 'a', component: 'gauge', bind: 'x' }, { id: 'a', component: 'timeline' }] }, '重复'],
+      [
+        {
+          version: 1,
+          panels: [
+            { id: 'a', component: 'gauge', bind: 'x' },
+            { id: 'a', component: 'timeline' },
+          ],
+        },
+        '重复',
+      ],
       [{ version: 1, panels: [{ id: 'a', component: 'gauge' }] }, '缺少 bind'],
       [{ version: 1, panels: [{ id: 'a', component: 'buttonRow' }] }, '没有任何按钮'],
-      [{ version: 1, panels: [{ id: 'a', component: 'gauge', bind: 'x', when: 'affinity ~ 3' }] }, '运算符'],
+      [
+        { version: 1, panels: [{ id: 'a', component: 'gauge', bind: 'x', when: 'affinity ~ 3' }] },
+        '运算符',
+      ],
     ]
     for (const [manifest, needle] of cases) {
       const card = cardDirWith(JSON.stringify(manifest))
@@ -120,7 +152,9 @@ describe('card UI manifest loader', () => {
       }
     }
 
-    const good = cardDirWith(JSON.stringify({ version: 1, panels: [{ id: 'a', component: 'app', src: 'panel.html' }] }))
+    const good = cardDirWith(
+      JSON.stringify({ version: 1, panels: [{ id: 'a', component: 'app', src: 'panel.html' }] }),
+    )
     try {
       mkdirSync(join(good, 'ui'), { recursive: true })
       writeFileSync(join(good, 'ui', 'panel.html'), '<b>x</b>')
@@ -131,7 +165,10 @@ describe('card UI manifest loader', () => {
   })
 
   it('caps the panel count so a HUD stays a glance', () => {
-    const panels = Array.from({ length: 13 }, (_, i) => ({ id: 'p' + String(i), component: 'timeline' }))
+    const panels = Array.from({ length: 13 }, (_, i) => ({
+      id: 'p' + String(i),
+      component: 'timeline',
+    }))
     const card = cardDirWith(JSON.stringify({ version: 1, panels }))
     try {
       const loaded = loadUiManifest(card)
@@ -146,7 +183,16 @@ describe('card UI manifest loader', () => {
 describe('card UI file guard', () => {
   it('accepts bare html names and rejects anything addressable outside ui/', () => {
     for (const ok of ['panel.html', 'a-b_1.2.html', 'X.html']) expect(isUiHtmlName(ok)).toBe(true)
-    for (const bad of ['../card.md', 'a/b.html', '/abs.html', '.hidden.html', 'x.htm', '', 'x.html.json', 'x.HTML']) {
+    for (const bad of [
+      '../card.md',
+      'a/b.html',
+      '/abs.html',
+      '.hidden.html',
+      'x.htm',
+      '',
+      'x.html.json',
+      'x.HTML',
+    ]) {
       expect(isUiHtmlName(bad)).toBe(false)
     }
   })
@@ -158,7 +204,12 @@ describe('UI panel resolution (shared by host preview and the client)', () => {
     layout: 'grid',
     panels: [
       { id: 'late', component: 'timeline', order: 2 },
-      { id: 'rich', component: 'gauge', bind: '财富', when: { path: { kind: 'dynamic', id: '财富' }, op: '>=', value: 100 } },
+      {
+        id: 'rich',
+        component: 'gauge',
+        bind: '财富',
+        when: { path: { kind: 'dynamic', id: '财富' }, op: '>=', value: 100 },
+      },
       { id: 'first', component: 'relationTable', order: 1 },
     ],
   }
@@ -178,8 +229,18 @@ describe('UI panel resolution (shared by host preview and the client)', () => {
   it('reads gauge numbers through the same path grammar as when:', () => {
     const state = { ...emptyWorldState(), 财富: { type: 'number', value: 12 } }
     expect(readGaugeValue('财富', state)).toBe(12)
-    expect(readGaugeValue('characters.米娅.affinity', { ...emptyWorldState(), characters: { 米娅: { affinity: 80 } } })).toBe(80)
-    expect(readGaugeValue('characters.米娅.mood', { ...emptyWorldState(), characters: { 米娅: { mood: '羞涩' } } })).toBeUndefined()
+    expect(
+      readGaugeValue('characters.米娅.affinity', {
+        ...emptyWorldState(),
+        characters: { 米娅: { affinity: 80 } },
+      }),
+    ).toBe(80)
+    expect(
+      readGaugeValue('characters.米娅.mood', {
+        ...emptyWorldState(),
+        characters: { 米娅: { mood: '羞涩' } },
+      }),
+    ).toBeUndefined()
     expect(readGaugeValue('scene', state)).toBeUndefined()
     expect(readGaugeValue(undefined, state)).toBeUndefined()
   })
@@ -196,7 +257,10 @@ describe('shipped card packs ship a valid UI', () => {
       const dir = join(shippedCardRoot(), cardId)
       expect(existsSync(join(dir, 'ui', UI_MANIFEST_FILE))).toBe(true)
       const loaded = loadUiManifest(dir, readCard(cardId, undefined)?.initialState ?? null)
-      if (loaded.kind !== 'ok') throw new Error('shipped card UI broke: ' + (loaded.kind === 'error' ? loaded.error : 'absent'))
+      if (loaded.kind !== 'ok')
+        throw new Error(
+          'shipped card UI broke: ' + (loaded.kind === 'error' ? loaded.error : 'absent'),
+        )
       const ids = loaded.manifest.panels.map((panel) => panel.id)
       expect(new Set(ids).size).toBe(ids.length)
       expect(loaded.manifest.panels.length).toBeGreaterThan(2)
@@ -219,7 +283,12 @@ describe('shipped card packs ship a valid UI', () => {
 
 describe('card UI never enters the model context (prefix-cache sentinel)', () => {
   it('renders the card setting byte-for-byte without any UI vocabulary', () => {
-    const rendered = renderCardContext({ id: 'demo', name: '示例卡', persona: '基调：冷。', worldCore: '# 世界核心\n正文。' })
+    const rendered = renderCardContext({
+      id: 'demo',
+      name: '示例卡',
+      persona: '基调：冷。',
+      worldCore: '# 世界核心\n正文。',
+    })
     expect(rendered).toBe(
       [
         '【当前卡包 · 设定基准】',
@@ -270,7 +339,12 @@ describe('/dsh-rrp/card-ui route', () => {
     end(body?: string): void
   }
 
-  function call(url: string): { status: number; contentType?: string; text?: string; body: CardUiResponse } {
+  function call(url: string): {
+    status: number
+    contentType?: string
+    text?: string
+    body: CardUiResponse
+  } {
     const res: FakeResponse = {
       statusCode: 0,
       contentType: undefined,
@@ -320,9 +394,13 @@ describe('/dsh-rrp/card-ui route', () => {
   })
 
   it('refuses unknown cards and every path outside ui/', () => {
-    expect((call(RRP_ROUTES.cardUi + '?card=nope').body as { error?: string }).error).toBe('unknown card')
+    expect((call(RRP_ROUTES.cardUi + '?card=nope').body as { error?: string }).error).toBe(
+      'unknown card',
+    )
     expect(call(RRP_ROUTES.cardUi + '?card=demo&file=..%2Fcard.md').status).toBe(400)
-    expect(call(RRP_ROUTES.cardUi + '?card=demo&file=' + encodeURIComponent('ui/panel.html')).status).toBe(400)
+    expect(
+      call(RRP_ROUTES.cardUi + '?card=demo&file=' + encodeURIComponent('ui/panel.html')).status,
+    ).toBe(400)
     expect(call(RRP_ROUTES.cardUi + '?card=demo&file=missing.html').status).toBe(404)
   })
 

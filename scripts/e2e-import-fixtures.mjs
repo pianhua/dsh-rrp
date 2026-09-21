@@ -5,7 +5,10 @@ import { writeFileSync } from 'node:fs'
 function pngWith(...texts) {
   const chunks = []
   for (const [keyword, value] of texts) {
-    const data = Buffer.concat([Buffer.from(keyword + '\0', 'latin1'), Buffer.from(value, 'latin1')])
+    const data = Buffer.concat([
+      Buffer.from(keyword + '\0', 'latin1'),
+      Buffer.from(value, 'latin1'),
+    ])
     const head = Buffer.alloc(8)
     head.writeUInt32BE(data.length, 0)
     head.write('tEXt', 4, 'ascii')
@@ -31,7 +34,29 @@ const v3data = {
   tags: ['武侠'],
 }
 
-writeFileSync('/tmp/import-v2.json', JSON.stringify({ kind: 'png', data: pngWith(['chara', Buffer.from(JSON.stringify(v2), 'utf8').toString('base64')]).toString('base64') }))
-writeFileSync('/tmp/import-v3.json', JSON.stringify({ kind: 'png', data: pngWith(['ccv3', gzipSync(Buffer.from(JSON.stringify({ spec: 'chara_card_v3', data: v3data }), 'utf8')).toString('base64')]).toString('base64') }))
-writeFileSync('/tmp/import-bad.json', JSON.stringify({ kind: 'png', data: pngWith(['Software', 'paint']).toString('base64') }))
+writeFileSync(
+  '/tmp/import-v2.json',
+  JSON.stringify({
+    kind: 'png',
+    data: pngWith(['chara', Buffer.from(JSON.stringify(v2), 'utf8').toString('base64')]).toString(
+      'base64',
+    ),
+  }),
+)
+writeFileSync(
+  '/tmp/import-v3.json',
+  JSON.stringify({
+    kind: 'png',
+    data: pngWith([
+      'ccv3',
+      gzipSync(
+        Buffer.from(JSON.stringify({ spec: 'chara_card_v3', data: v3data }), 'utf8'),
+      ).toString('base64'),
+    ]).toString('base64'),
+  }),
+)
+writeFileSync(
+  '/tmp/import-bad.json',
+  JSON.stringify({ kind: 'png', data: pngWith(['Software', 'paint']).toString('base64') }),
+)
 console.log('fixtures written')

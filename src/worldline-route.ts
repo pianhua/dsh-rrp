@@ -31,7 +31,11 @@ import {
 import { cardIdFromPreset } from './preset-id.ts'
 import { RRP_ROUTES, type WorldlineTreeResponse } from './route-contract.ts'
 import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from './worldline-digest.ts'
-import { foldWorldlineTrees, type WorldlineSessionFact, type WorldlineTree } from './worldline-tree.ts'
+import {
+  foldWorldlineTrees,
+  type WorldlineSessionFact,
+  type WorldlineTree,
+} from './worldline-tree.ts'
 import { openWorldlineStore, type WorldlineStoreHandle } from './worldline-store.ts'
 
 const TAG = '[dsh-rrp]'
@@ -60,7 +64,9 @@ interface WorldlineSessions extends SessionsService {
  */
 interface SessionQueryService {
   listSessions(): Promise<Array<{ header: SessionQueryHeader }>>
-  readTitleSnapshots(ids: string[]): Promise<Array<{ status: string; value?: { title?: { title?: string } } }>>
+  readTitleSnapshots(
+    ids: string[],
+  ): Promise<Array<{ status: string; value?: { title?: { title?: string } } }>>
 }
 interface SessionQueryHeader {
   readonly id?: string
@@ -70,13 +76,17 @@ interface SessionQueryHeader {
 }
 
 /** Fold every live, card-owned session into the worldline forest. */
-function collectFacts(sessions: WorldlineSessions, projections: ProjectionsService): WorldlineSessionFact[] {
+function collectFacts(
+  sessions: WorldlineSessions,
+  projections: ProjectionsService,
+): WorldlineSessionFact[] {
   const facts: WorldlineSessionFact[] = []
   for (const session of sessions.list?.() ?? []) {
     if (session.header?.origin === 'subagent') continue
     const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
     if (card === null || card === undefined || card.id.length === 0) continue
-    const digest = (projections.stateOf(session, WORLDLINE_DIGEST_KEY) as WorldlineDigest | undefined) ?? { turns: [] }
+    const digest = (projections.stateOf(session, WORLDLINE_DIGEST_KEY) as
+      WorldlineDigest | undefined) ?? { turns: [] }
     // The fork cut is stamped in EVENTS; the digest carries each turn's seq,
     // so seed turns are simply the folded turns before the cut.
     const inherited = Number(session.inheritedEventCount ?? 0)
@@ -109,7 +119,10 @@ function collectFacts(sessions: WorldlineSessions, projections: ProjectionsServi
  * Unknown cards fall back to their id as the display name (the pack may have
  * been deleted; the line itself is still real).
  */
-async function collectSkeletonFacts(query: SessionQueryService, live: readonly WorldlineSessionFact[]): Promise<WorldlineSessionFact[]> {
+async function collectSkeletonFacts(
+  query: SessionQueryService,
+  live: readonly WorldlineSessionFact[],
+): Promise<WorldlineSessionFact[]> {
   const liveIds = new Set(live.map((fact) => fact.id))
   const records = await query.listSessions()
   const cold = records.filter((record) => {
@@ -199,7 +212,7 @@ export function registerWorldlineRoute(ctx: Context): void {
         let facts = liveFacts
         if (query !== undefined) {
           try {
-            facts = [...liveFacts, ...await collectSkeletonFacts(query, liveFacts)]
+            facts = [...liveFacts, ...(await collectSkeletonFacts(query, liveFacts))]
           } catch (cause) {
             console.warn(TAG + ' worldline cold skeletons unavailable: ' + String(cause))
           }
@@ -232,7 +245,11 @@ export function registerWorldlineRoute(ctx: Context): void {
           send(res, 400, { error: 'invalid JSON body' })
           return
         }
-        if (typeof request.sessionId !== 'string' || request.sessionId.length === 0 || typeof request.hidden !== 'boolean') {
+        if (
+          typeof request.sessionId !== 'string' ||
+          request.sessionId.length === 0 ||
+          typeof request.hidden !== 'boolean'
+        ) {
           send(res, 400, { error: 'missing sessionId/hidden' })
           return
         }

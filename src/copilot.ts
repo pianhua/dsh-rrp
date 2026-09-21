@@ -52,9 +52,30 @@ import { SUMMARY_KEY, renderMacroSummary } from './macro-summary.ts'
 import { stageLoreDraft, reservedNames } from './lore-route.ts'
 import { RRP_LORE_KEY, loreEntriesOf, validateLoreEntry } from './lore-state.ts'
 import { publishState } from './state-publisher.ts'
-import { confirmProposal, discardProposal, listProposals, stageProposal } from './steward-proposals.ts'
-import { COPILOT_NO_MODEL_ROUTE, COPILOT_SSE, RRP_ROUTES, encodeSseFrame } from './route-contract.ts'
-import { NO_WORLD_STATE_CHANGE, WORLD_STATE_KEY, applyConstraints, diffWorldState, emptyWorldState, pruneWorldState, renderWorldState, type DynamicFieldValue, type WorldState, type WorldStateRelation } from './world-state.ts'
+import {
+  confirmProposal,
+  discardProposal,
+  listProposals,
+  stageProposal,
+} from './steward-proposals.ts'
+import {
+  COPILOT_NO_MODEL_ROUTE,
+  COPILOT_SSE,
+  RRP_ROUTES,
+  encodeSseFrame,
+} from './route-contract.ts'
+import {
+  NO_WORLD_STATE_CHANGE,
+  WORLD_STATE_KEY,
+  applyConstraints,
+  diffWorldState,
+  emptyWorldState,
+  pruneWorldState,
+  renderWorldState,
+  type DynamicFieldValue,
+  type WorldState,
+  type WorldStateRelation,
+} from './world-state.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 
 const TAG = '[dsh-rrp]'
@@ -126,7 +147,10 @@ function writeSse(res: ResponseLike, event: string, data: unknown): void {
  * for relations and dynamic fields (with constraint clamping); null deletes
  * a dynamic-field key.
  */
-export function mergeWorldStatePatch(prior: WorldState, patch: Record<string, unknown>): WorldState {
+export function mergeWorldStatePatch(
+  prior: WorldState,
+  patch: Record<string, unknown>,
+): WorldState {
   const next: WorldState = structuredClone(prior)
   for (const [key, value] of Object.entries(patch)) {
     if (key === 'characters' || key === 'inventory' || key === 'flags') {
@@ -138,7 +162,11 @@ export function mergeWorldStatePatch(prior: WorldState, patch: Record<string, un
         if (entry === null) {
           delete bucket[name]
         } else if (key === 'flags') {
-          if (typeof entry !== 'string' && typeof entry !== 'number' && typeof entry !== 'boolean') {
+          if (
+            typeof entry !== 'string' &&
+            typeof entry !== 'number' &&
+            typeof entry !== 'boolean'
+          ) {
             throw new Error('patch.flags.' + name + ' 必须是标量')
           }
           bucket[name] = entry
@@ -146,7 +174,10 @@ export function mergeWorldStatePatch(prior: WorldState, patch: Record<string, un
           if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
             throw new Error('patch.' + key + '.' + name + ' 必须是对象')
           }
-          bucket[name] = { ...(bucket[name] as Record<string, unknown> ?? {}), ...(entry as Record<string, unknown>) }
+          bucket[name] = {
+            ...((bucket[name] as Record<string, unknown>) ?? {}),
+            ...(entry as Record<string, unknown>),
+          }
         }
       }
       continue
@@ -175,7 +206,10 @@ export function mergeWorldStatePatch(prior: WorldState, patch: Record<string, un
       throw new Error('patch.' + key + ' 必须是动态字段对象或 null')
     }
     const field = value as Partial<DynamicFieldValue>
-    if (field.value === undefined || (field.type !== 'number' && field.type !== 'string' && field.type !== 'boolean')) {
+    if (
+      field.value === undefined ||
+      (field.type !== 'number' && field.type !== 'string' && field.type !== 'boolean')
+    ) {
       throw new Error('patch.' + key + ' 需要完整的 {type, value}')
     }
     ;(next as Record<string, unknown>)[key] = applyConstraints({
@@ -199,8 +233,16 @@ export function registerCopilotRoute(ctx: Context): void {
   const projections = face<ProjectionsService>(runtime, 'sessionProjections')
   const llm = face<LlmService>(runtime, 'llm')
   const agents = face<AgentsService>(runtime, 'agents')
-  if (webServer === undefined || sessions === undefined || projections === undefined || llm === undefined || agents === undefined) {
-    console.warn(TAG + ' copilot route idle (missing webServer/sessions/sessionProjections/llm/agents)')
+  if (
+    webServer === undefined ||
+    sessions === undefined ||
+    projections === undefined ||
+    llm === undefined ||
+    agents === undefined
+  ) {
+    console.warn(
+      TAG + ' copilot route idle (missing webServer/sessions/sessionProjections/llm/agents)',
+    )
     return
   }
 
@@ -274,16 +316,26 @@ export function registerCopilotRoute(ctx: Context): void {
         // The revert is itself one new published state (append-only honesty):
         // the values roll back, the ledger keeps both records.
         if (!publishState(session, projections, { worldState: entry.snapshot })) {
-          await store.mutate(sessionId, (draft) => { draft.undo.push(entry) })
+          await store.mutate(sessionId, (draft) => {
+            draft.undo.push(entry)
+          })
           send(res, 500, { error: 'WorldState write failed' })
           return
         }
         recordActivity(sessionId, {
-          id: randomUUID(), at: nowIso(), actor: 'copilot', target: 'world-state', phase: 'corrected',
+          id: randomUUID(),
+          at: nowIso(),
+          actor: 'copilot',
+          target: 'world-state',
+          phase: 'corrected',
           detailKey: 'detail.copilotUndone',
         })
         console.log(TAG + ' copilot undo restored pre-turn state for ' + sessionId)
-        send(res, 200, { ok: true, digest: entry.digest, undoCount: store.load(sessionId).undo.length })
+        send(res, 200, {
+          ok: true,
+          digest: entry.digest,
+          undoCount: store.load(sessionId).undo.length,
+        })
       },
     })
 
@@ -308,7 +360,11 @@ export function registerCopilotRoute(ctx: Context): void {
           return
         }
         if (resolveSession(sessionId, res) === undefined) return
-        if ((action !== 'confirm' && action !== 'discard') || typeof id !== 'string' || id.length === 0) {
+        if (
+          (action !== 'confirm' && action !== 'discard') ||
+          typeof id !== 'string' ||
+          id.length === 0
+        ) {
           send(res, 400, { error: 'unknown action' })
           return
         }
@@ -327,8 +383,11 @@ export function registerCopilotRoute(ctx: Context): void {
           return
         }
         recordActivity(sessionId, {
-          id: randomUUID(), at: nowIso(), actor: 'copilot',
-          target: proposal?.kind === 'doc-note' ? 'doc-note' : 'card', phase: 'corrected',
+          id: randomUUID(),
+          at: nowIso(),
+          actor: 'copilot',
+          target: proposal?.kind === 'doc-note' ? 'doc-note' : 'card',
+          phase: 'corrected',
           detail: result.summary,
         })
         console.log(TAG + ' copilot proposal confirmed for ' + sessionId + ': ' + result.summary)
@@ -355,7 +414,10 @@ export function registerCopilotRoute(ctx: Context): void {
             return
           }
           if (resolveSession(sessionId, res) === undefined) return
-          send(res, 200, { ...readCopilotHistory(store, sessionId), proposals: listProposals(sessionId) })
+          send(res, 200, {
+            ...readCopilotHistory(store, sessionId),
+            proposals: listProposals(sessionId),
+          })
           return
         }
         if (req.method === 'DELETE') {
@@ -368,8 +430,15 @@ export function registerCopilotRoute(ctx: Context): void {
           // Issue #27: this is the ONLY history-erasing path in the whole
           // plugin. Audit it loudly so a vanished record can be diagnosed
           // from the host log instead of archaeology.
-          console.warn(TAG + ' copilot history DELETED for ' + sessionId
-            + ' (' + String(store.load(sessionId).turns.length) + ' turns) at ' + nowIso())
+          console.warn(
+            TAG +
+              ' copilot history DELETED for ' +
+              sessionId +
+              ' (' +
+              String(store.load(sessionId).turns.length) +
+              ' turns) at ' +
+              nowIso(),
+          )
           await store.remove(sessionId)
           send(res, 200, { ok: true })
           return
@@ -421,9 +490,13 @@ export function registerCopilotRoute(ctx: Context): void {
           ;(res as { writeHead?: (status: number) => void }).writeHead?.(200)
 
           const controller = new AbortController()
-          req.on?.('close', () => { controller.abort() })
+          req.on?.('close', () => {
+            controller.abort()
+          })
 
-          const state = (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ?? emptyWorldState()
+          const state =
+            (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ??
+            emptyWorldState()
           const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
           const summaryValue = projections.stateOf(session, SUMMARY_KEY)
           const lore = loreEntriesOf(projections.stateOf(session, RRP_LORE_KEY))
@@ -431,7 +504,10 @@ export function registerCopilotRoute(ctx: Context): void {
             question: message,
             card: card === null || card === undefined ? '' : liveCardContextText(card),
             worldState: renderWorldState(state),
-            summary: summaryValue === null || summaryValue === undefined ? '' : renderMacroSummary(summaryValue as Parameters<typeof renderMacroSummary>[0]),
+            summary:
+              summaryValue === null || summaryValue === undefined
+                ? ''
+                : renderMacroSummary(summaryValue as Parameters<typeof renderMacroSummary>[0]),
             lore: lore.map((skill) => '- ' + skill.name + '：' + skill.description).join('\n'),
             transcript: transcriptOf(projections, session),
           })
@@ -481,7 +557,12 @@ export function registerCopilotRoute(ctx: Context): void {
           // player a silent answer and feed an empty assistant message back
           // as history context. Surface the error instead; nothing is stored.
           if (reply.trim().length === 0) {
-            console.warn(TAG + ' copilot EMPTY reply for ' + sessionId + ' (treated as failure, not persisted)')
+            console.warn(
+              TAG +
+                ' copilot EMPTY reply for ' +
+                sessionId +
+                ' (treated as failure, not persisted)',
+            )
             writeSse(res, COPILOT_SSE.error, { error: 'empty reply' })
             res.end()
             return
@@ -494,12 +575,16 @@ export function registerCopilotRoute(ctx: Context): void {
           const worldActions = actions.filter((action) => action.type === 'update_world_state')
           let priorForUndo: WorldState | undefined
           if (worldActions.length > 0) {
-            priorForUndo = (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ?? emptyWorldState()
+            priorForUndo =
+              (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ??
+              emptyWorldState()
           }
           for (const action of actions) {
             try {
               if (action.type === 'update_world_state') {
-                const prior = (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ?? emptyWorldState()
+                const prior =
+                  (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ??
+                  emptyWorldState()
                 const next = mergeWorldStatePatch(prior, action.patch)
                 const digest = diffWorldState(prior, next)
                 if (digest === NO_WORLD_STATE_CHANGE) {
@@ -510,7 +595,11 @@ export function registerCopilotRoute(ctx: Context): void {
                   throw new Error('WorldState write failed')
                 }
                 recordActivity(sessionId, {
-                  id: randomUUID(), at: nowIso(), actor: 'copilot', target: 'world-state', phase: 'corrected',
+                  id: randomUUID(),
+                  at: nowIso(),
+                  actor: 'copilot',
+                  target: 'world-state',
+                  phase: 'corrected',
                   detail: (action.reason !== undefined ? action.reason + '：' : '') + digest,
                 })
                 applied.push({ kind: 'world-state', digest })
@@ -524,36 +613,74 @@ export function registerCopilotRoute(ctx: Context): void {
                   card: action.proposal.card,
                   file: action.proposal.file,
                   content: action.proposal.content,
-                  ...(action.proposal.reason !== undefined ? { reason: action.proposal.reason } : {}),
+                  ...(action.proposal.reason !== undefined
+                    ? { reason: action.proposal.reason }
+                    : {}),
                 })
                 recordActivity(sessionId, {
-                  id: randomUUID(), at: nowIso(), actor: 'copilot', target: 'card', phase: 'corrected',
-                  detailKey: 'detail.stagedCardEdit', detailName: action.proposal.card + '/' + action.proposal.file,
+                  id: randomUUID(),
+                  at: nowIso(),
+                  actor: 'copilot',
+                  target: 'card',
+                  phase: 'corrected',
+                  detailKey: 'detail.stagedCardEdit',
+                  detailName: action.proposal.card + '/' + action.proposal.file,
                 })
-                applied.push({ kind: 'proposal', proposalKind: 'card-edit', subject: action.proposal.card + '/' + action.proposal.file })
+                applied.push({
+                  kind: 'proposal',
+                  proposalKind: 'card-edit',
+                  subject: action.proposal.card + '/' + action.proposal.file,
+                })
                 continue
               }
               if (action.type === 'propose_doc_note') {
-                stageProposal(sessionId, { kind: 'doc-note', title: action.note.title, body: action.note.body })
-                recordActivity(sessionId, {
-                  id: randomUUID(), at: nowIso(), actor: 'copilot', target: 'doc-note', phase: 'corrected',
-                  detailKey: 'detail.stagedDocNote', detailName: action.note.title,
+                stageProposal(sessionId, {
+                  kind: 'doc-note',
+                  title: action.note.title,
+                  body: action.note.body,
                 })
-                applied.push({ kind: 'proposal', proposalKind: 'doc-note', subject: action.note.title })
+                recordActivity(sessionId, {
+                  id: randomUUID(),
+                  at: nowIso(),
+                  actor: 'copilot',
+                  target: 'doc-note',
+                  phase: 'corrected',
+                  detailKey: 'detail.stagedDocNote',
+                  detailName: action.note.title,
+                })
+                applied.push({
+                  kind: 'proposal',
+                  proposalKind: 'doc-note',
+                  subject: action.note.title,
+                })
                 continue
               }
               // draft_lore: validate then stage for player confirmation.
-              const existing = loreEntriesOf(projections.stateOf(session, RRP_LORE_KEY)).map((skill) => skill.name)
-              const result = validateLoreEntry(action.draft, existing, reservedNames(projections, session))
+              const existing = loreEntriesOf(projections.stateOf(session, RRP_LORE_KEY)).map(
+                (skill) => skill.name,
+              )
+              const result = validateLoreEntry(
+                action.draft,
+                existing,
+                reservedNames(projections, session),
+              )
               if (!result.ok) throw new Error(result.error)
               stageLoreDraft(sessionId, result.skill)
               recordActivity(sessionId, {
-                id: randomUUID(), at: nowIso(), actor: 'copilot', target: 'lore', phase: 'corrected',
-                detailKey: 'detail.stagedDraft', detailName: result.skill.name,
+                id: randomUUID(),
+                at: nowIso(),
+                actor: 'copilot',
+                target: 'lore',
+                phase: 'corrected',
+                detailKey: 'detail.stagedDraft',
+                detailName: result.skill.name,
               })
               applied.push({ kind: 'lore', name: result.skill.name })
             } catch (error) {
-              applied.push({ kind: 'failed', error: String((error as { message?: string })?.message ?? error) })
+              applied.push({
+                kind: 'failed',
+                error: String((error as { message?: string })?.message ?? error),
+              })
             }
           }
           const copilotTurn: CopilotTurn = {
@@ -563,11 +690,20 @@ export function registerCopilotRoute(ctx: Context): void {
             ...(applied.length > 0 ? { actions: applied } : {}),
           }
           const undoCount = await store.mutate(sessionId, (draft) => {
-            if (priorForUndo !== undefined && applied.some((entry) => entry.kind === 'world-state')) {
+            if (
+              priorForUndo !== undefined &&
+              applied.some((entry) => entry.kind === 'world-state')
+            ) {
               draft.undo.push({
                 id: randomUUID(),
                 at: nowIso(),
-                digest: applied.filter((entry): entry is { kind: 'world-state'; digest: string } => entry.kind === 'world-state').map((entry) => entry.digest).join('；'),
+                digest: applied
+                  .filter(
+                    (entry): entry is { kind: 'world-state'; digest: string } =>
+                      entry.kind === 'world-state',
+                  )
+                  .map((entry) => entry.digest)
+                  .join('；'),
                 snapshot: priorForUndo,
               })
               draft.undo = draft.undo.slice(-UNDO_LIMIT)
@@ -580,11 +716,18 @@ export function registerCopilotRoute(ctx: Context): void {
           writeSse(res, COPILOT_SSE.action, { applied })
           writeSse(res, COPILOT_SSE.done, { turn: copilotTurn, undoCount })
           res.end()
-          console.log(TAG + ' copilot turn completed for ' + sessionId + (applied.length > 0 ? ' (' + String(applied.length) + ' action(s))' : ''))
+          console.log(
+            TAG +
+              ' copilot turn completed for ' +
+              sessionId +
+              (applied.length > 0 ? ' (' + String(applied.length) + ' action(s))' : ''),
+          )
         } catch (error) {
           console.warn(TAG + ' copilot turn failed:', error)
           try {
-            writeSse(res, COPILOT_SSE.error, { error: String((error as { message?: string })?.message ?? error) })
+            writeSse(res, COPILOT_SSE.error, {
+              error: String((error as { message?: string })?.message ?? error),
+            })
             res.end()
           } catch {
             /* the socket may already be gone */

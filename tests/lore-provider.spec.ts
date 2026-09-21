@@ -5,7 +5,11 @@ import type { LoreEntry } from '../src/lore-state.ts'
 describe('per-session lore skill provider', () => {
   it('exposes exactly the owning session skills', async () => {
     const firstState: LoreEntry[] = [
-      { name: 'qingqiu-lore', description: '青丘狐族；涉及青丘时使用。', body: '# 青丘\n\n九尾为尊。' },
+      {
+        name: 'qingqiu-lore',
+        description: '青丘狐族；涉及青丘时使用。',
+        body: '# 青丘\n\n九尾为尊。',
+      },
     ]
     const secondState: LoreEntry[] = [
       { name: 'other-lore', description: '别的会话；不应串味。', body: '# 别的' },

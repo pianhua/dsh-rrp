@@ -34,7 +34,12 @@ describe('WorldState projection unit', () => {
   it('returns the same reference for unrelated events (Object.is gate)', () => {
     const state = emptyWorldState()
     expect(worldStateProjection.apply(state, { type: 'user/message', data: {} })).toBe(state)
-    expect(worldStateProjection.apply(state, stateEvent({ card: { id: 'c', name: 'n', persona: '', worldCore: '' } }))).toBe(state)
+    expect(
+      worldStateProjection.apply(
+        state,
+        stateEvent({ card: { id: 'c', name: 'n', persona: '', worldCore: '' } }),
+      ),
+    ).toBe(state)
   })
 
   it('initializes a fresh empty state per session', () => {
@@ -97,10 +102,12 @@ describe('Relation normalization', () => {
   })
 
   it('normalizeRelations drops blank entries and keeps the input reference when unchanged', () => {
-    expect(normalizeRelations([
-      { a: ' ', b: 'x', label: 'y' },
-      { a: 'a', b: 'b', label: ' ' },
-    ])).toEqual([])
+    expect(
+      normalizeRelations([
+        { a: ' ', b: 'x', label: 'y' },
+        { a: 'a', b: 'b', label: ' ' },
+      ]),
+    ).toEqual([])
     const intact = [{ a: 'a', b: 'b', label: 'x' }]
     expect(normalizeRelations(intact)).toBe(intact)
   })
@@ -114,7 +121,9 @@ describe('Relation normalization', () => {
     const pruned = pruneWorldState({ ...emptyWorldState(), relations })
     expect(pruned.relations).toHaveLength(WORLD_STATE_LIMITS.relations)
     expect(pruned.relations[0]?.a).toBe('甲0')
-    expect(pruned.relations[WORLD_STATE_LIMITS.relations - 1]?.a).toBe('甲' + String(WORLD_STATE_LIMITS.relations - 1))
+    expect(pruned.relations[WORLD_STATE_LIMITS.relations - 1]?.a).toBe(
+      '甲' + String(WORLD_STATE_LIMITS.relations - 1),
+    )
   })
 
   it('pruneWorldState normalizes relations on the write path', () => {

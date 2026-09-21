@@ -42,12 +42,7 @@ import {
   sessionIdOf,
 } from './host-faces.ts'
 import { ensureLoreArmed, invalidateLore } from './lore-runtime.ts'
-import {
-  RRP_LORE_KEY,
-  loreEntriesOf,
-  validateLoreEntry,
-  type LoreEntry,
-} from './lore-state.ts'
+import { RRP_LORE_KEY, loreEntriesOf, validateLoreEntry, type LoreEntry } from './lore-state.ts'
 import { RRP_ROUTES, type LoreEntryView } from './route-contract.ts'
 import { SCRIBE_SYSTEM_PROMPT, buildScribePrompt, parseScribeReply } from './agents/scribe.ts'
 import { evalCondition, hitSet } from './lore-condition.ts'
@@ -96,7 +91,10 @@ export function stageLoreDraft(sessionId: string, entry: LoreEntry): void {
 }
 
 /** The active card's bundled skill names, so lore cannot take their names. */
-export function reservedNames(projections: ProjectionsService | undefined, session: SessionLike): string[] {
+export function reservedNames(
+  projections: ProjectionsService | undefined,
+  session: SessionLike,
+): string[] {
   if (projections === undefined) return []
   const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
   if (card === null || card === undefined) return []
@@ -135,7 +133,10 @@ function triggerView(
   }
   const triggers = triggersOfCard(card.id)
   return {
-    triggers: triggers.map((def) => ({ name: def.name, active: evalCondition(def.condition, state) })),
+    triggers: triggers.map((def) => ({
+      name: def.name,
+      active: evalCondition(def.condition, state),
+    })),
     injectedChars: hitSet(triggers, state).reduce((sum, hit) => sum + hit.excerpt.length, 0),
   }
 }
@@ -159,7 +160,11 @@ function scheduleDraft(faces: ScribeFaces, session: SessionLike, topic: string):
   DRAFTING.add(session.id)
   const activityId = randomUUID()
   recordActivity(session.id, {
-    id: activityId, at: nowIso(), actor: 'scribe', target: 'lore', phase: 'started',
+    id: activityId,
+    at: nowIso(),
+    actor: 'scribe',
+    target: 'lore',
+    phase: 'started',
   })
   const owner = faces.agents.get(session.id)
   try {
@@ -170,7 +175,15 @@ function scheduleDraft(faces: ScribeFaces, session: SessionLike, topic: string):
       run: () => {
         const controller = new AbortController()
         let cancelled = false
-        const done = runDraft(faces, session, route, topic, activityId, controller.signal, () => cancelled)
+        const done = runDraft(
+          faces,
+          session,
+          route,
+          topic,
+          activityId,
+          controller.signal,
+          () => cancelled,
+        )
         return {
           cancel: () => {
             cancelled = true
@@ -207,7 +220,14 @@ async function runDraft(
     ]
     const transcript = transcriptOf(faces.projections, session)
     if (isEmptyReply(transcript)) {
-      recordActivity(session.id, { id: activityId, at: nowIso(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.noTranscript' })
+      recordActivity(session.id, {
+        id: activityId,
+        at: nowIso(),
+        actor: 'scribe',
+        target: 'lore',
+        phase: 'failed',
+        detailKey: 'detail.noTranscript',
+      })
       return { status: 'completed' }
     }
 
@@ -215,48 +235,86 @@ async function runDraft(
       provider: route.provider,
       model: route.model,
       system: SCRIBE_SYSTEM_PROMPT,
-      messages: [{
-        id: randomUUID(),
-        role: 'user',
-        content: [{ type: 'text', text: buildScribePrompt({ topic, transcript, worldState, cardBaseline, existing }) }],
-        source: { kind: 'plugin', plugin: 'dsh-rrp' },
-      }],
+      messages: [
+        {
+          id: randomUUID(),
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: buildScribePrompt({ topic, transcript, worldState, cardBaseline, existing }),
+            },
+          ],
+          source: { kind: 'plugin', plugin: 'dsh-rrp' },
+        },
+      ],
       sessionId: session.id,
       signal,
     })
     const text = await collectText(stream)
     if (isCancelled()) {
-      recordActivity(session.id, { id: activityId, at: nowIso(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.cancelled' })
+      recordActivity(session.id, {
+        id: activityId,
+        at: nowIso(),
+        actor: 'scribe',
+        target: 'lore',
+        phase: 'failed',
+        detailKey: 'detail.cancelled',
+      })
       return { status: 'killed' }
     }
     // An empty stream is an infrastructure failure, NOT a "nothing to lore"
     // verdict — conflating them hid a silent-empty epidemic behind the
     // 「目前没有待确认草稿」message (same pathology the copilot route had).
     if (isEmptyReply(text)) {
-      console.warn(TAG + ' Scribe EMPTY reply for ' + session.id + ' (treated as failure, not nothing-to-lore)')
-      recordActivity(session.id, { id: activityId, at: nowIso(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.emptyReply' })
+      console.warn(
+        TAG +
+          ' Scribe EMPTY reply for ' +
+          session.id +
+          ' (treated as failure, not nothing-to-lore)',
+      )
+      recordActivity(session.id, {
+        id: activityId,
+        at: nowIso(),
+        actor: 'scribe',
+        target: 'lore',
+        phase: 'failed',
+        detailKey: 'detail.emptyReply',
+      })
       return { status: 'failed' }
     }
     const draft = parseScribeReply(text)
     if (draft === undefined) {
       recordActivity(session.id, {
-        id: activityId, at: nowIso(), actor: 'scribe', target: 'lore', phase: 'failed', detailKey: 'detail.nothingToLore',
+        id: activityId,
+        at: nowIso(),
+        actor: 'scribe',
+        target: 'lore',
+        phase: 'failed',
+        detailKey: 'detail.nothingToLore',
       })
       return { status: 'completed' }
     }
     PENDING.set(session.id, draft)
     recordActivity(session.id, {
-      id: activityId, at: nowIso(), actor: 'scribe', target: 'lore', phase: 'committed',
-      detailKey: 'detail.stagedDraft', detailName: draft.name,
+      id: activityId,
+      at: nowIso(),
+      actor: 'scribe',
+      target: 'lore',
+      phase: 'committed',
+      detailKey: 'detail.stagedDraft',
+      detailName: draft.name,
     })
     console.log(TAG + ' Scribe staged a draft for ' + session.id + ': ' + draft.name)
     return { status: 'completed' }
   } catch (error) {
     recordActivity(session.id, {
-      id: activityId, at: nowIso(), actor: 'scribe', target: 'lore', phase: 'failed',
-      ...(isCancelled()
-        ? { detailKey: 'detail.cancelled' }
-        : { detail: messageOf(error) }),
+      id: activityId,
+      at: nowIso(),
+      actor: 'scribe',
+      target: 'lore',
+      phase: 'failed',
+      ...(isCancelled() ? { detailKey: 'detail.cancelled' } : { detail: messageOf(error) }),
     })
     return { status: isCancelled() ? 'killed' : 'failed' }
   } finally {
@@ -280,9 +338,10 @@ export function registerLoreRoute(ctx: Context): void {
   const agents = face<AgentsService>(runtime, 'agents')
   const llm = face<LlmService>(runtime, 'llm')
   const jobs = face<JobsService>(runtime, 'jobs')
-  const faces: ScribeFaces | undefined = llm === undefined || jobs === undefined || agents === undefined
-    ? undefined
-    : { llm, jobs, agents, projections }
+  const faces: ScribeFaces | undefined =
+    llm === undefined || jobs === undefined || agents === undefined
+      ? undefined
+      : { llm, jobs, agents, projections }
 
   ctx.effect(() => {
     const dispose = webServer.register({
@@ -329,7 +388,9 @@ export function registerLoreRoute(ctx: Context): void {
               send(res, 404, { ok: false, removed: false })
               return
             }
-            const published = publishState(session, projections, { sediment: { kind: 'remove', name } })
+            const published = publishState(session, projections, {
+              sediment: { kind: 'remove', name },
+            })
             if (!published) {
               send(res, 500, { error: '设定集事件写入失败' })
               return
@@ -365,7 +426,8 @@ export function registerLoreRoute(ctx: Context): void {
           }
 
           if (action === 'confirm' || action === 'manual') {
-            const candidate = (request.draft ?? PENDING.get(sessionId)) as Partial<LoreEntry> | undefined
+            const candidate = (request.draft ?? PENDING.get(sessionId)) as
+              Partial<LoreEntry> | undefined
             if (candidate === undefined || candidate === null) {
               send(res, 400, { error: '没有待确认的草稿' })
               return
@@ -381,7 +443,9 @@ export function registerLoreRoute(ctx: Context): void {
               return
             }
             const draft = result.skill
-            const published = publishState(session, projections, { sediment: { kind: 'add', skill: draft } })
+            const published = publishState(session, projections, {
+              sediment: { kind: 'add', skill: draft },
+            })
             if (!published) {
               send(res, 500, { error: '设定集事件写入失败' })
               return
@@ -389,8 +453,13 @@ export function registerLoreRoute(ctx: Context): void {
             PENDING.delete(sessionId)
             invalidateLore(sessionId)
             recordActivity(sessionId, {
-              id: randomUUID(), at: nowIso(), actor: 'player', target: 'lore', phase: 'corrected',
-              detailKey: 'detail.loreWritten', detailName: draft.name,
+              id: randomUUID(),
+              at: nowIso(),
+              actor: 'player',
+              target: 'lore',
+              phase: 'corrected',
+              detailKey: 'detail.loreWritten',
+              detailName: draft.name,
             })
             console.log(TAG + ' lore committed for ' + sessionId + ': ' + draft.name)
             send(res, 200, { ok: true, skill: loreView(draft) })
@@ -426,9 +495,10 @@ export function registerLoreCommand(ctx: Context): void {
   const agents = face<AgentsService>(runtime, 'agents')
   const llm = face<LlmService>(runtime, 'llm')
   const jobs = face<JobsService>(runtime, 'jobs')
-  const faces: ScribeFaces | undefined = llm === undefined || jobs === undefined || agents === undefined || projections === undefined
-    ? undefined
-    : { llm, jobs, agents, projections }
+  const faces: ScribeFaces | undefined =
+    llm === undefined || jobs === undefined || agents === undefined || projections === undefined
+      ? undefined
+      : { llm, jobs, agents, projections }
 
   ctx.effect(() => {
     const dispose = commands.register({
@@ -436,7 +506,8 @@ export function registerLoreCommand(ctx: Context): void {
       description: '把最近确立的新设定沉淀为技能（/lore [主题]）',
       handler: (invocation) => {
         const session = invocation.agent?.session
-        if (session === undefined || faces === undefined) return { kind: 'error', text: '设定集编纂不可用' }
+        if (session === undefined || faces === undefined)
+          return { kind: 'error', text: '设定集编纂不可用' }
         // Same guard as the HTTP write paths: a draft on a non-RP session would
         // burn an LLM pass and stage a draft nobody can confirm.
         if (!acceptsRrpWrites(projections, session)) {

@@ -36,12 +36,21 @@ function fakeHost(options: { reply: () => unknown } = { reply: () => BASE }) {
   const listeners = new Map<string, (...args: unknown[]) => void>()
   let folded: WorldState = emptyWorldState()
   const appended: Array<{ type: string; data: unknown }> = []
-  let started: { kind: string; label: string; run(): { cancel(reason?: string): void; done: Promise<{ status: string }> } } | undefined
+  let started:
+    | {
+        kind: string
+        label: string
+        run(): { cancel(reason?: string): void; done: Promise<{ status: string }> }
+      }
+    | undefined
 
   // The fixed prose tail the Chronicler reads through the transcript slice.
   const proseSeed = [
     { type: 'user/message', data: { content: [{ type: 'text', text: '我推门而入。' }] } },
-    { type: 'assistant/message', data: { content: [{ type: 'text', text: '门轴低吟，暖意扑面。' }] } },
+    {
+      type: 'assistant/message',
+      data: { content: [{ type: 'text', text: '门轴低吟，暖意扑面。' }] },
+    },
     { type: 'step/end', data: { turn: 1, step: 0 } },
   ]
 
@@ -69,11 +78,16 @@ function fakeHost(options: { reply: () => unknown } = { reply: () => BASE }) {
   }
   const agents = { get: () => ({ options: { provider: 'deepseek', model: 'deepseek-chat' } }) }
   const projections = transcriptProjections(proseSeed, (_session: unknown, key: string) =>
-    key === 'agentPreset' ? 'rp' : key === WORLD_STATE_KEY ? folded : undefined)
+    key === 'agentPreset' ? 'rp' : key === WORLD_STATE_KEY ? folded : undefined,
+  )
   const ctx = {
-    effect(fn: () => (() => void) | void) { return fn() },
+    effect(fn: () => (() => void) | void) {
+      return fn()
+    },
     get(name: string): unknown {
-      return ({ llm, jobs, agents, sessionProjections: projections } as Record<string, unknown>)[name]
+      return ({ llm, jobs, agents, sessionProjections: projections } as Record<string, unknown>)[
+        name
+      ]
     },
     on(name: string, listener: (...args: unknown[]) => void) {
       listeners.set(name, listener)
@@ -81,12 +95,18 @@ function fakeHost(options: { reply: () => unknown } = { reply: () => BASE }) {
     },
   }
   return {
-    ctx, session, listeners, appended,
+    ctx,
+    session,
+    listeners,
+    appended,
     started: () => started,
     /** The projection state after folding everything the job appended. */
     folded: () => folded,
     runTurn: async (): Promise<{ status: string }> => {
-      listeners.get('session/event')?.(session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+      listeners.get('session/event')?.(session, {
+        type: 'turn/end',
+        data: { reason: { kind: 'completed' } },
+      })
       const spec = started
       if (spec === undefined) throw new Error('no chronicler job started')
       return spec.run().done
@@ -96,7 +116,8 @@ function fakeHost(options: { reply: () => unknown } = { reply: () => BASE }) {
 
 describe('D5 dynamic-field lifecycle (end to end)', () => {
   it('creates a field: Chronicler reply -> publish -> fold -> view', async () => {
-    forgetState('dyn-session'); forgetActivity('dyn-session')
+    forgetState('dyn-session')
+    forgetActivity('dyn-session')
     const host = fakeHost({
       reply: () => ({
         ...BASE,
@@ -111,7 +132,8 @@ describe('D5 dynamic-field lifecycle (end to end)', () => {
 
     // The durable write carries the normalized DynamicFieldValue shape.
     const written = host.appended.find((entry) => entry.type === 'user/message')
-    const state = (written?.data as { source: { rrp: { worldState: WorldState } } }).source.rrp.worldState
+    const state = (written?.data as { source: { rrp: { worldState: WorldState } } }).source.rrp
+      .worldState
     expect(state.stamina).toEqual({ type: 'number', value: 80, min: 0, max: 100 })
 
     // The folded projection exposes it as a dynamic field...
@@ -122,7 +144,8 @@ describe('D5 dynamic-field lifecycle (end to end)', () => {
   })
 
   it('updates a field and clamps to its constraints', async () => {
-    forgetState('dyn-session'); forgetActivity('dyn-session')
+    forgetState('dyn-session')
+    forgetActivity('dyn-session')
     const prior: WorldState = {
       ...emptyWorldState(),
       ...BASE,
@@ -146,7 +169,8 @@ describe('D5 dynamic-field lifecycle (end to end)', () => {
   })
 
   it('deletes a field when the Chronicler omits it from the new state', async () => {
-    forgetState('dyn-session'); forgetActivity('dyn-session')
+    forgetState('dyn-session')
+    forgetActivity('dyn-session')
     const prior: WorldState = {
       ...emptyWorldState(),
       ...BASE,
@@ -180,14 +204,27 @@ describe('D5 dynamic fields through player correction', () => {
       },
     }
     const sessions = { get: (id: string) => (id === session.id ? session : undefined) }
-    const projections = { stateOf: (_s: unknown, key: string) => (key === WORLD_STATE_KEY ? folded : undefined) }
-    const webServer = { register: (definition: { handler: (req: unknown, res: unknown) => unknown }) => { route = definition; return () => {} } }
+    const projections = {
+      stateOf: (_s: unknown, key: string) => (key === WORLD_STATE_KEY ? folded : undefined),
+    }
+    const webServer = {
+      register: (definition: { handler: (req: unknown, res: unknown) => unknown }) => {
+        route = definition
+        return () => {}
+      },
+    }
     const ctx = {
       effect: (fn: () => (() => void) | void) => fn(),
-      get: (name: string) => ({ webServer, sessions, sessionProjections: projections } as Record<string, unknown>)[name],
+      get: (name: string) =>
+        (({ webServer, sessions, sessionProjections: projections }) as Record<string, unknown>)[
+          name
+        ],
     }
     return {
-      ctx, route: () => route, appended, folded: () => folded,
+      ctx,
+      route: () => route,
+      appended,
+      folded: () => folded,
     }
   }
 
@@ -203,13 +240,16 @@ describe('D5 dynamic fields through player correction', () => {
       statusCode: 0,
       payload: undefined as unknown,
       setHeader() {},
-      end(text?: string) { this.payload = text === undefined ? undefined : JSON.parse(text) as unknown },
+      end(text?: string) {
+        this.payload = text === undefined ? undefined : (JSON.parse(text) as unknown)
+      },
     }
     return { req, res }
   }
 
   it('writes a corrected field and clamps it through pruneWorldState', async () => {
-    forgetState('dyn-session'); forgetActivity('dyn-session')
+    forgetState('dyn-session')
+    forgetActivity('dyn-session')
     const host = correctionHost()
     registerCorrectionRoute(host.ctx as never)
 
@@ -226,7 +266,8 @@ describe('D5 dynamic fields through player correction', () => {
   })
 
   it('rejects a malformed dynamic field instead of writing it', async () => {
-    forgetState('dyn-session'); forgetActivity('dyn-session')
+    forgetState('dyn-session')
+    forgetActivity('dyn-session')
     const host = correctionHost()
     registerCorrectionRoute(host.ctx as never)
 

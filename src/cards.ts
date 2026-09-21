@@ -104,7 +104,6 @@ function asObject(value: FrontmatterValue | undefined): Record<string, string> |
   return typeof value === 'object' && !Array.isArray(value) ? value : undefined
 }
 
-
 /**
  * Split a Markdown document into YAML-ish frontmatter and body.
  * @param raw - the file text.
@@ -122,15 +121,16 @@ export function parseFrontmatter(raw: string): { data: Frontmatter; body: string
     }
   }
   if (close === -1) return undefined
-  
+
   const yamlText = lines.slice(1, close).join('\n')
   try {
     // An empty/whitespace document parses to null: normalize any non-object
     // result so callers never dereference `data.name` on null.
     const parsed = parseYAML(yamlText) as unknown
-    const data: Frontmatter = (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed))
-      ? parsed as Frontmatter
-      : {}
+    const data: Frontmatter =
+      parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as Frontmatter)
+        : {}
     return { data, body: lines.slice(close + 1).join('\n') }
   } catch {
     return undefined
@@ -142,7 +142,9 @@ export function parseFrontmatter(raw: string): { data: Frontmatter; body: string
  * @param raw - the file text.
  * @returns metadata + persona + world core, or undefined when invalid.
  */
-export function parseCardMarkdown(raw: string): { meta: CardMeta; persona: string; worldCore: string } | undefined {
+export function parseCardMarkdown(
+  raw: string,
+): { meta: CardMeta; persona: string; worldCore: string } | undefined {
   const parsed = parseFrontmatter(raw)
   if (parsed === undefined) return undefined
   const id = asString(parsed.data.id)
@@ -162,7 +164,10 @@ export function parseCardMarkdown(raw: string): { meta: CardMeta; persona: strin
   const author = asString(parsed.data.author)
   if (author !== undefined) meta.author = author
   if (player !== undefined) {
-    meta.player = { name: player.name ?? '你', ...(player.description === undefined ? {} : { description: player.description }) }
+    meta.player = {
+      name: player.name ?? '你',
+      ...(player.description === undefined ? {} : { description: player.description }),
+    }
   }
   return { meta, persona: asString(parsed.data.persona) ?? '', worldCore: parsed.body.trim() }
 }
@@ -178,7 +183,9 @@ function readOpenings(dir: string): CardOpening[] {
     if (body.length === 0) continue
     out.push({ id: entry.name.replace(/\.md$/, ''), body })
   }
-  return out.sort((a, b) => (a.id === 'default' ? -1 : b.id === 'default' ? 1 : a.id.localeCompare(b.id)))
+  return out.sort((a, b) =>
+    a.id === 'default' ? -1 : b.id === 'default' ? 1 : a.id.localeCompare(b.id),
+  )
 }
 
 /** Read and validate the optional initial WorldState. */
@@ -189,7 +196,7 @@ function readInitialState(dir: string): WorldState | null {
     const parsed = worldStateSchema.safeParse(JSON.parse(readFileSync(file, 'utf8')))
     // Relations are optional in the schema (legacy card packs predate them);
     // pruneWorldState backfills the key on the write path.
-    return parsed.success ? parsed.data as WorldState : null
+    return parsed.success ? (parsed.data as WorldState) : null
   } catch {
     return null
   }
@@ -226,7 +233,9 @@ function readSkills(dir: string, cardName: string, initialState: WorldState | nu
         const locator = '卡「' + cardName + '」skill「' + entry.name + '」'
         const condition = parseWhen(whenRaw, locator)
         if (condition instanceof Error) {
-          console.error(TAG + ' 条件注入 when 语法错误：' + condition.message + '（原文：' + whenRaw + '）')
+          console.error(
+            TAG + ' 条件注入 when 语法错误：' + condition.message + '（原文：' + whenRaw + '）',
+          )
         } else {
           const warning = whenPathWarning(condition, initialState, locator)
           if (warning !== undefined) console.warn(TAG + ' ' + warning)
@@ -266,7 +275,8 @@ export function listCards(home: string = harnessHome()): CardMeta[] {
       if (!existsSync(file)) continue
       try {
         const parsed = parseCardMarkdown(readFileSync(file, 'utf8'))
-        if (parsed === undefined || parsed.meta.id !== entry.name || seen.has(parsed.meta.id)) continue
+        if (parsed === undefined || parsed.meta.id !== entry.name || seen.has(parsed.meta.id))
+          continue
         seen.add(parsed.meta.id)
         out.push(parsed.meta)
       } catch {

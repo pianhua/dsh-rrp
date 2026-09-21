@@ -66,12 +66,15 @@ export function registerCardUiRoute(ctx: Context): void {
           if (file === UI_MANIFEST_FILE) {
             const loaded = loadUiManifest(dir)
             if (loaded.kind === 'absent') send(res, 200, { absent: true } satisfies CardUiResponse)
-            else if (loaded.kind === 'error') send(res, 422, { error: loaded.error } satisfies CardUiResponse)
+            else if (loaded.kind === 'error')
+              send(res, 422, { error: loaded.error } satisfies CardUiResponse)
             else send(res, 200, { manifest: loaded.manifest } satisfies CardUiResponse)
             return
           }
           if (!isUiHtmlName(file)) {
-            send(res, 400, { error: '只接受 manifest.json 或 ui/ 下的 *.html' } satisfies CardUiResponse)
+            send(res, 400, {
+              error: '只接受 manifest.json 或 ui/ 下的 *.html',
+            } satisfies CardUiResponse)
             return
           }
           const page = join(dir, 'ui', file)

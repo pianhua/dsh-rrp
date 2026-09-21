@@ -132,14 +132,28 @@ function Timeline(props: { panel: UiPanelDecl; state: WorldState; t: Translate }
 }
 
 /** Buttons — the only place card UI can act. */
-function ButtonRow(props: { panel: UiPanelDecl; state: WorldState; sessionId?: string; api: StageApi; t: Translate }): ReactNode {
+function ButtonRow(props: {
+  panel: UiPanelDecl
+  state: WorldState
+  sessionId?: string
+  api: StageApi
+  t: Translate
+}): ReactNode {
   const [busy, setBusy] = useState('')
   const run = useCallback(
     async (label: string, action: string, payload: unknown): Promise<void> => {
       setBusy(label)
       try {
-        if (action === 'correct_state' && props.sessionId !== undefined && payload !== null && typeof payload === 'object') {
-          await props.api.correctState(props.sessionId, applyButtonPatch(props.state, payload as Record<string, unknown>))
+        if (
+          action === 'correct_state' &&
+          props.sessionId !== undefined &&
+          payload !== null &&
+          typeof payload === 'object'
+        ) {
+          await props.api.correctState(
+            props.sessionId,
+            applyButtonPatch(props.state, payload as Record<string, unknown>),
+          )
         } else if (action === 'ask_copilot' && typeof payload === 'string') {
           props.api.askCopilot(payload)
         }
@@ -155,10 +169,14 @@ function ButtonRow(props: { panel: UiPanelDecl; state: WorldState; sessionId?: s
         <Button
           key={button.label}
           size="sm"
-          variant={busy === button.label ? "ghost" : "outline"}
+          variant={busy === button.label ? 'ghost' : 'outline'}
           disabled={busy.length > 0}
           onClick={() => {
-            void run(button.label, button.action, button.action === 'correct_state' ? button.patch : button.question)
+            void run(
+              button.label,
+              button.action,
+              button.action === 'correct_state' ? button.patch : button.question,
+            )
           }}
         >
           {busy === button.label ? props.t('stage.working') : button.label}
@@ -248,7 +266,12 @@ export function StagePanel(props: StagePanelProps): ReactNode {
     }
   }, [api, card?.id, nonce])
 
-  if (card === null || card === undefined) return <div style={S.wrap}><div style={S.muted}>{t('stage.noCard')}</div></div>
+  if (card === null || card === undefined)
+    return (
+      <div style={S.wrap}>
+        <div style={S.muted}>{t('stage.noCard')}</div>
+      </div>
+    )
   const panels = visiblePanels(manifest, state)
   // The tail of the latest turn, so a card app can react to what just happened
   // without re-reading the transcript itself.
@@ -273,7 +296,9 @@ export function StagePanel(props: StagePanelProps): ReactNode {
         </Button>
       </div>
       {error.length === 0 ? null : <div style={S.error}>{error}</div>}
-      {error.length === 0 && panels.length === 0 ? <div style={S.muted}>{t(manifest === null ? 'stage.noUi' : 'stage.noPanels')}</div> : null}
+      {error.length === 0 && panels.length === 0 ? (
+        <div style={S.muted}>{t(manifest === null ? 'stage.noUi' : 'stage.noPanels')}</div>
+      ) : null}
       <div style={S.grid}>
         {panels.map((panel) => (
           <div key={panel.id} style={panel.span === 2 ? S.span2 : S.span1}>
@@ -339,17 +364,19 @@ export function registerStageTab(ctx: RrpClientContext): void {
   }
 
   ctx.effect(() => {
-    const dispose = ctx.slots.inject('conversation.view', () => ctx.slots.register(
-      {
-        name: 'conversation.view',
-        id: 'dsh-rrp/stage',
-        order: 30,
-        locale: 'rrp',
-        label: () => t('stage.view'),
-        inject: (sessionId: unknown) => ({ t, sessionId, api }),
-      },
-      StagePanel as never,
-    ))
+    const dispose = ctx.slots.inject('conversation.view', () =>
+      ctx.slots.register(
+        {
+          name: 'conversation.view',
+          id: 'dsh-rrp/stage',
+          order: 30,
+          locale: 'rrp',
+          label: () => t('stage.view'),
+          inject: (sessionId: unknown) => ({ t, sessionId, api }),
+        },
+        StagePanel as never,
+      ),
+    )
     return dispose
   }, 'dsh-rrp: stage tab')
 }
@@ -358,7 +385,12 @@ const S: Record<string, CSSProperties> = {
   wrap: { padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '14px' },
   head: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' },
   headTitle: { fontSize: '14px', fontWeight: 650, letterSpacing: '0.02em' },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px', alignContent: 'start' },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: '12px',
+    alignContent: 'start',
+  },
   span1: { minWidth: 0 },
   span2: { gridColumn: 'span 2', minWidth: 0 },
   panel: {
@@ -380,16 +412,37 @@ const S: Record<string, CSSProperties> = {
     opacity: 0.6,
   },
   field: { display: 'flex', flexDirection: 'column', gap: '6px' },
-  fieldHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '12px' },
-  gaugeValue: { fontVariantNumeric: 'tabular-nums', fontSize: '16px', fontWeight: 700, lineHeight: 1 },
-  gaugeTrack: { height: '8px', borderRadius: '4px', background: 'rgba(128,128,128,0.20)', overflow: 'hidden' },
+  fieldHead: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    fontSize: '12px',
+  },
+  gaugeValue: {
+    fontVariantNumeric: 'tabular-nums',
+    fontSize: '16px',
+    fontWeight: 700,
+    lineHeight: 1,
+  },
+  gaugeTrack: {
+    height: '8px',
+    borderRadius: '4px',
+    background: 'rgba(128,128,128,0.20)',
+    overflow: 'hidden',
+  },
   gaugeFill: {
     height: '100%',
     borderRadius: '4px',
     background: 'linear-gradient(90deg, rgba(128,150,220,0.75), rgba(150,190,235,0.95))',
     transition: 'width 260ms ease',
   },
-  gaugeBounds: { display: 'flex', justifyContent: 'space-between', fontSize: '10px', opacity: 0.45, fontVariantNumeric: 'tabular-nums' },
+  gaugeBounds: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontSize: '10px',
+    opacity: 0.45,
+    fontVariantNumeric: 'tabular-nums',
+  },
   charList: { display: 'flex', flexDirection: 'column', gap: '10px' },
   char: { display: 'flex', flexDirection: 'column', gap: '3px' },
   charHead: { display: 'flex', alignItems: 'center', gap: '8px' },
@@ -402,5 +455,11 @@ const S: Record<string, CSSProperties> = {
   sceneLine: { fontSize: '13px', lineHeight: 1.65 },
   buttons: { display: 'flex', flexWrap: 'wrap', gap: '8px' },
   muted: { fontSize: '12px', opacity: 0.55, lineHeight: 1.6 },
-  error: { fontSize: '12px', lineHeight: 1.6, padding: '8px 10px', borderRadius: '8px', background: 'rgba(200,80,80,0.12)' },
+  error: {
+    fontSize: '12px',
+    lineHeight: 1.6,
+    padding: '8px 10px',
+    borderRadius: '8px',
+    background: 'rgba(200,80,80,0.12)',
+  },
 }

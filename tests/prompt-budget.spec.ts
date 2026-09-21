@@ -3,7 +3,11 @@ import type { CardContext } from '../src/card-types.ts'
 import { renderCardContext } from '../src/card-types.ts'
 import type { MacroSummary } from '../src/macro-summary.ts'
 import { renderMacroSummary } from '../src/macro-summary.ts'
-import { PROMPT_BUDGET_WINDOW_TOKENS, estimateTokens, promptBudgetReport } from '../src/prompt-budget.ts'
+import {
+  PROMPT_BUDGET_WINDOW_TOKENS,
+  estimateTokens,
+  promptBudgetReport,
+} from '../src/prompt-budget.ts'
 import { emptyWorldState, renderWorldState, type WorldState } from '../src/world-state.ts'
 
 const CARD: CardContext = { id: 'c', name: '测试卡', persona: '人设', worldCore: '世界核心' }
@@ -43,7 +47,11 @@ describe('promptBudgetReport', () => {
   })
 
   it('omits sections for absent channels', () => {
-    const withState = promptBudgetReport({ card: null, summary: undefined, state: emptyWorldState() })
+    const withState = promptBudgetReport({
+      card: null,
+      summary: undefined,
+      state: emptyWorldState(),
+    })
     expect(withState.sections.map((section) => section.id)).toEqual(['state'])
 
     const empty = promptBudgetReport({ card: null, summary: undefined, state: undefined })
@@ -62,10 +70,20 @@ describe('promptBudgetReport', () => {
     const absent = promptBudgetReport({ card: null, summary: undefined, state: undefined })
     expect(absent.sections).toEqual([])
 
-    const zero = promptBudgetReport({ card: null, summary: undefined, state: undefined, injectedChars: 0 })
+    const zero = promptBudgetReport({
+      card: null,
+      summary: undefined,
+      state: undefined,
+      injectedChars: 0,
+    })
     expect(zero.sections).toEqual([])
 
-    const sized = promptBudgetReport({ card: null, summary: undefined, state: undefined, injectedChars: 320 })
+    const sized = promptBudgetReport({
+      card: null,
+      summary: undefined,
+      state: undefined,
+      injectedChars: 320,
+    })
     expect(sized.sections).toEqual([{ id: 'triggers', chars: 320, tokens: 100 }])
     expect(sized.totalTokens).toBe(100)
   })
@@ -87,7 +105,11 @@ describe('promptBudgetReport', () => {
 
   it('reports the exact share with one decimal (floor)', () => {
     const tokens59 = Math.floor(PROMPT_BUDGET_WINDOW_TOKENS * 0.6) - 1
-    const report = promptBudgetReport({ card: null, summary: undefined, state: stateWithTokens(tokens59) })
+    const report = promptBudgetReport({
+      card: null,
+      summary: undefined,
+      state: stateWithTokens(tokens59),
+    })
     expect(report.totalTokens).toBe(tokens59)
     expect(report.pct).toBe(59.9)
     expect(report.level).toBe('ok')

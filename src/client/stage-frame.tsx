@@ -15,7 +15,13 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { RRP_ROUTES } from '../route-contract.ts'
 import type { WorldState } from '../world-state.ts'
-import { UI_BRIDGE_CSP, UI_BRIDGE_PROTOCOL, UI_BRIDGE_SHIM, parseUiCall, type UiPush } from '../ui-bridge.ts'
+import {
+  UI_BRIDGE_CSP,
+  UI_BRIDGE_PROTOCOL,
+  UI_BRIDGE_SHIM,
+  parseUiCall,
+  type UiPush,
+} from '../ui-bridge.ts'
 import { applyButtonPatch } from '../ui-schema.ts'
 import type { StageApi } from './stage-tab.tsx'
 
@@ -36,7 +42,8 @@ interface StageFrameProps {
 
 /** Put the CSP and the shim ahead of anything the card authored. */
 export function assembleSandboxDoc(html: string): string {
-  const head = '<meta http-equiv="Content-Security-Policy" content="' + UI_BRIDGE_CSP + '">' + UI_BRIDGE_SHIM
+  const head =
+    '<meta http-equiv="Content-Security-Policy" content="' + UI_BRIDGE_CSP + '">' + UI_BRIDGE_SHIM
   const at = html.search(/<head[^>]*>/i)
   if (at === -1) return head + html
   const cut = html.indexOf('>', at) + 1
@@ -56,7 +63,13 @@ export function StageFrame(props: StageFrameProps): ReactNode {
     let alive = true
     setHtml(undefined)
     setFailed('')
-    void fetch(RRP_ROUTES.cardUi + '?card=' + encodeURIComponent(props.cardId) + '&file=' + encodeURIComponent(props.src))
+    void fetch(
+      RRP_ROUTES.cardUi +
+        '?card=' +
+        encodeURIComponent(props.cardId) +
+        '&file=' +
+        encodeURIComponent(props.src),
+    )
       .then(async (response) => {
         if (!response.ok) setFailed(await response.text())
         return response.text()
@@ -137,7 +150,19 @@ export function StageFrame(props: StageFrameProps): ReactNode {
 }
 
 const S: Record<string, CSSProperties> = {
-  frame: { width: '100%', border: 'none', display: 'block', background: 'transparent', borderRadius: '8px' },
+  frame: {
+    width: '100%',
+    border: 'none',
+    display: 'block',
+    background: 'transparent',
+    borderRadius: '8px',
+  },
   pending: { fontSize: '12px', opacity: 0.55, padding: '16px 0', textAlign: 'center' },
-  error: { fontSize: '12px', lineHeight: 1.6, padding: '8px 10px', borderRadius: '8px', background: 'rgba(200,80,80,0.12)' },
+  error: {
+    fontSize: '12px',
+    lineHeight: 1.6,
+    padding: '8px 10px',
+    borderRadius: '8px',
+    background: 'rgba(200,80,80,0.12)',
+  },
 }

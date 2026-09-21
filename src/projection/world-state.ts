@@ -53,14 +53,16 @@ const dynamicFieldValueSchema = z.object({
 })
 
 /** Runtime state/view validator. */
-export const worldStateSchema = z.object({
-  characters: z.record(z.string(), characterSchema),
-  inventory: z.record(z.string(), itemSchema),
-  scene: sceneSchema,
-  flags: z.record(z.string(), flagSchema),
-  // Optional for legacy sessions written before relations existed.
-  relations: z.array(relationSchema).optional(),
-}).catchall(dynamicFieldValueSchema)
+export const worldStateSchema = z
+  .object({
+    characters: z.record(z.string(), characterSchema),
+    inventory: z.record(z.string(), itemSchema),
+    scene: sceneSchema,
+    flags: z.record(z.string(), flagSchema),
+    // Optional for legacy sessions written before relations existed.
+    relations: z.array(relationSchema).optional(),
+  })
+  .catchall(dynamicFieldValueSchema)
 
 /**
  * The projection definition registered into `ctx.sessionProjections`.

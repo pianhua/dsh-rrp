@@ -23,7 +23,7 @@ function fakeHost(opts?: { agentPreset?: string; card?: CardContext; worldState?
       return { seq: appended.length }
     },
   }
-  const sessions = { get: (id: string) => id === session.id ? session : undefined }
+  const sessions = { get: (id: string) => (id === session.id ? session : undefined) }
   const projections = transcriptProjections(appended, (_session: unknown, key: string) => {
     if (key === RRP_LORE_KEY) return lore
     if (key === 'agentPreset') return opts?.agentPreset
@@ -32,22 +32,32 @@ function fakeHost(opts?: { agentPreset?: string; card?: CardContext; worldState?
     return undefined
   })
   let route: { handler: (req: unknown, res: unknown) => unknown } | undefined
-  const webServer = { register: (definition: { handler: (req: unknown, res: unknown) => unknown }) => { route = definition; return () => {} } }
+  const webServer = {
+    register: (definition: { handler: (req: unknown, res: unknown) => unknown }) => {
+      route = definition
+      return () => {}
+    },
+  }
   const ctx = {
     effect: (fn: () => (() => void) | void) => fn(),
-    get: (name: string) => ({
-      webServer,
-      sessions,
-      sessionProjections: projections,
-      agents: { get: () => undefined },
-    } as Record<string, unknown>)[name],
+    get: (name: string) =>
+      (
+        ({
+          webServer,
+          sessions,
+          sessionProjections: projections,
+          agents: { get: () => undefined },
+        }) as Record<string, unknown>
+      )[name],
   }
   return {
     ctx,
     route: () => route,
     appended,
     lore: () => lore,
-    failNextAppend: () => { failAppend = true },
+    failNextAppend: () => {
+      failAppend = true
+    },
   }
 }
 
@@ -64,7 +74,9 @@ function exchange(method: string, url: string, body?: unknown) {
     statusCode: 0,
     payload: undefined as unknown,
     setHeader() {},
-    end(text?: string) { this.payload = text === undefined ? undefined : JSON.parse(text) as unknown },
+    end(text?: string) {
+      this.payload = text === undefined ? undefined : (JSON.parse(text) as unknown)
+    },
   }
   return { req, res }
 }
@@ -76,7 +88,11 @@ describe('lore route (D8)', () => {
     const host = fakeHost()
     registerLoreRoute(host.ctx as never)
 
-    const manual = exchange('POST', '/dsh-rrp/lore', { sessionId: 's1', action: 'manual', draft: DRAFT })
+    const manual = exchange('POST', '/dsh-rrp/lore', {
+      sessionId: 's1',
+      action: 'manual',
+      draft: DRAFT,
+    })
     await host.route()!.handler(manual.req, manual.res)
     expect(manual.res.statusCode).toBe(200)
     expect(host.lore().map((skill) => skill.name)).toEqual(['qingqiu-lore'])
@@ -92,15 +108,26 @@ describe('lore route (D8)', () => {
     await host.route()!.handler(removed.req, removed.res)
     expect(removed.res.statusCode).toBe(200)
     expect(host.lore()).toEqual([])
-    expect(rrpPayloadOf(host.appended[1])?.sediment).toEqual({ kind: 'remove', name: 'qingqiu-lore' })
+    expect(rrpPayloadOf(host.appended[1])?.sediment).toEqual({
+      kind: 'remove',
+      name: 'qingqiu-lore',
+    })
   })
 
   it('is add-only: the same projected name twice is refused', async () => {
     const host = fakeHost()
     registerLoreRoute(host.ctx as never)
-    const first = exchange('POST', '/dsh-rrp/lore', { sessionId: 's1', action: 'manual', draft: DRAFT })
+    const first = exchange('POST', '/dsh-rrp/lore', {
+      sessionId: 's1',
+      action: 'manual',
+      draft: DRAFT,
+    })
     await host.route()!.handler(first.req, first.res)
-    const second = exchange('POST', '/dsh-rrp/lore', { sessionId: 's1', action: 'manual', draft: DRAFT })
+    const second = exchange('POST', '/dsh-rrp/lore', {
+      sessionId: 's1',
+      action: 'manual',
+      draft: DRAFT,
+    })
     await host.route()!.handler(second.req, second.res)
     expect(second.res.statusCode).toBe(400)
     expect(host.lore()).toHaveLength(1)
@@ -111,7 +138,11 @@ describe('lore route (D8)', () => {
     const host = fakeHost()
     registerLoreRoute(host.ctx as never)
     host.failNextAppend()
-    const manual = exchange('POST', '/dsh-rrp/lore', { sessionId: 's1', action: 'manual', draft: DRAFT })
+    const manual = exchange('POST', '/dsh-rrp/lore', {
+      sessionId: 's1',
+      action: 'manual',
+      draft: DRAFT,
+    })
     await host.route()!.handler(manual.req, manual.res)
     expect(manual.res.statusCode).toBe(500)
     expect(host.lore()).toEqual([])
@@ -134,7 +165,11 @@ describe('lore route (D8)', () => {
     const host = fakeHost()
     registerLoreRoute(host.ctx as never)
 
-    const draft = exchange('POST', '/dsh-rrp/lore', { sessionId: 's1', action: 'draft', topic: 'x' })
+    const draft = exchange('POST', '/dsh-rrp/lore', {
+      sessionId: 's1',
+      action: 'draft',
+      topic: 'x',
+    })
     await host.route()!.handler(draft.req, draft.res)
     expect(draft.res.statusCode).toBe(503)
 
@@ -156,7 +191,11 @@ describe('lore route (D8)', () => {
     expect(listed.res.statusCode).toBe(403)
     expect(listed.res.payload).toEqual({ error: 'not an RP session' })
 
-    const manual = exchange('POST', '/dsh-rrp/lore', { sessionId: 's1', action: 'manual', draft: DRAFT })
+    const manual = exchange('POST', '/dsh-rrp/lore', {
+      sessionId: 's1',
+      action: 'manual',
+      draft: DRAFT,
+    })
     await host.route()!.handler(manual.req, manual.res)
     expect(manual.res.statusCode).toBe(403)
 
@@ -177,12 +216,14 @@ describe('lore route (D8)', () => {
       return parsed
     }
     const warm: TriggerDef = {
-      id: 'mia-warm', name: '温热',
+      id: 'mia-warm',
+      name: '温热',
       condition: mustCond('characters.米娅.affinity >= 40'),
       excerpt: 'abc',
     }
     const intimate: TriggerDef = {
-      id: 'mia-intimate', name: '亲密',
+      id: 'mia-intimate',
+      name: '亲密',
       condition: mustCond('characters.米娅.affinity >= 80'),
       excerpt: 'defgh',
     }

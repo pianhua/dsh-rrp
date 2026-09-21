@@ -20,11 +20,22 @@ import { harnessHome } from './home.ts'
 
 /** One staged Steward proposal, discriminated by kind. */
 export type StewardProposal =
-  | { id: string; kind: 'card-edit'; card: string; file: string; content: string; reason?: string; at: number }
+  | {
+      id: string
+      kind: 'card-edit'
+      card: string
+      file: string
+      content: string
+      reason?: string
+      at: number
+    }
   | { id: string; kind: 'doc-note'; title: string; body: string; at: number }
 
 /** Staged proposals per session; the newest PROPOSALS_LIMIT survive. */
-const PROPOSALS = new Map<string, StewardProposal[]>()/** Pre-write content archives per session (audit only, keyed by proposal id). */
+const PROPOSALS = new Map<
+  string,
+  StewardProposal[]
+>() /** Pre-write content archives per session (audit only, keyed by proposal id). */
 const ARCHIVE = new Map<string, Map<string, string>>()
 
 /** Staged proposals kept per session; beyond this the oldest are dropped. */
@@ -37,7 +48,10 @@ const ALLOWED_EXTS = new Set(['.md', '.json', '.txt'])
 type DistributiveOmit<T, K extends string> = T extends unknown ? Omit<T, K> : never
 
 /** Stage one proposal; drops the oldest when the session hits the cap. */
-export function stageProposal(sessionId: string, input: DistributiveOmit<StewardProposal, 'id' | 'at'>): StewardProposal {
+export function stageProposal(
+  sessionId: string,
+  input: DistributiveOmit<StewardProposal, 'id' | 'at'>,
+): StewardProposal {
   const proposal = { ...input, id: randomUUID(), at: Date.now() } as StewardProposal
   const list = [...(PROPOSALS.get(sessionId) ?? []), proposal]
   PROPOSALS.set(sessionId, list.slice(-PROPOSALS_LIMIT))
@@ -131,8 +145,17 @@ export function confirmProposal(
     const parsed = parseFrontmatter(proposal.content)
     const id = parsed?.data.id
     const name = parsed?.data.name
-    if (typeof id !== 'string' || id.trim().length === 0 || typeof name !== 'string' || name.trim().length === 0) {
-      return { ok: false, error: '落盘校验失败：card.md 的 frontmatter 必须包含非空 id 与 name（kebab-case，同目录名）。请让管家按原文小改后重新提案。' }
+    if (
+      typeof id !== 'string' ||
+      id.trim().length === 0 ||
+      typeof name !== 'string' ||
+      name.trim().length === 0
+    ) {
+      return {
+        ok: false,
+        error:
+          '落盘校验失败：card.md 的 frontmatter 必须包含非空 id 与 name（kebab-case，同目录名）。请让管家按原文小改后重新提案。',
+      }
     }
   }
 
@@ -150,7 +173,15 @@ export function confirmProposal(
   )
   return {
     ok: true,
-    summary: '已写入 ' + proposal.card + '/' + proposal.file +
-      '（' + String(proposal.content.length) + ' 字符，原内容 ' + String(oldContent.length) + ' 字符已存档）',
+    summary:
+      '已写入 ' +
+      proposal.card +
+      '/' +
+      proposal.file +
+      '（' +
+      String(proposal.content.length) +
+      ' 字符，原内容 ' +
+      String(oldContent.length) +
+      ' 字符已存档）',
   }
 }

@@ -55,7 +55,11 @@ export interface RrpStatePayload {
  * @param payload - the structured state hidden in `source.rrp`.
  * @returns a serializable UserMessage value.
  */
-export function rrpStateMessage(id: string, text: string, payload: RrpStatePayload): Record<string, unknown> {
+export function rrpStateMessage(
+  id: string,
+  text: string,
+  payload: RrpStatePayload,
+): Record<string, unknown> {
   return {
     id,
     role: 'user',
@@ -78,9 +82,11 @@ export interface PayloadEventLike {
  */
 export function rrpPayloadOf(event: PayloadEventLike | undefined): RrpStatePayload | undefined {
   if (event?.type !== 'user/message') return undefined
-  const data = event.data as { source?: { kind?: unknown; plugin?: unknown; rrp?: unknown } } | undefined
+  const data = event.data as
+    { source?: { kind?: unknown; plugin?: unknown; rrp?: unknown } } | undefined
   const source = data?.source
-  if (source === undefined || source.kind !== 'plugin' || source.plugin !== RRP_PLUGIN) return undefined
+  if (source === undefined || source.kind !== 'plugin' || source.plugin !== RRP_PLUGIN)
+    return undefined
   const payload = source.rrp
   if (payload === null || typeof payload !== 'object') return undefined
   return payload as RrpStatePayload

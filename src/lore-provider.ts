@@ -41,7 +41,10 @@ export interface LoreDefinition extends LoreCandidate {
 export interface LoreProvider {
   name: string
   list(options: { cwd?: string; signal?: AbortSignal }): Promise<readonly LoreCandidate[]>
-  get(candidate: LoreCandidate, options: { cwd?: string; signal?: AbortSignal }): Promise<LoreDefinition | undefined>
+  get(
+    candidate: LoreCandidate,
+    options: { cwd?: string; signal?: AbortSignal },
+  ): Promise<LoreDefinition | undefined>
 }
 
 /** The per-registration lifecycle control the host hands us. */
@@ -56,7 +59,10 @@ export interface LoreProviderControl {
  * @param options.read - live read of the owning Session projection.
  * @returns a read-only provider over that Session's dynamic lore.
  */
-export function createLoreProvider(options: { sessionId: string; read: () => readonly LoreEntry[] }): LoreProvider {
+export function createLoreProvider(options: {
+  sessionId: string
+  read: () => readonly LoreEntry[]
+}): LoreProvider {
   return {
     name: LORE_PROVIDER,
     async list(): Promise<readonly LoreCandidate[]> {

@@ -29,14 +29,25 @@ function fakeHost(sessions: Record<string, FakeSession>, sessionQuery?: unknown)
   }
   const handlers = new Map<string, (req: unknown, res: unknown) => void | Promise<void>>()
   const webServer = {
-    register: (route: { path: string; handler: (req: unknown, res: unknown) => void | Promise<void> }) => {
+    register: (route: {
+      path: string
+      handler: (req: unknown, res: unknown) => void | Promise<void>
+    }) => {
       handlers.set(route.path, route.handler)
       return () => {}
     },
   }
   const ctx = {
     effect: (fn: () => (() => void) | void) => fn(),
-    get: (name: string) => ({ webServer, sessions: sessionsValue, sessionProjections: projections, sessionQuery } as Record<string, unknown>)[name],
+    get: (name: string) =>
+      (
+        ({
+          webServer,
+          sessions: sessionsValue,
+          sessionProjections: projections,
+          sessionQuery,
+        }) as Record<string, unknown>
+      )[name],
   }
   return { ctx, handlers }
 }
@@ -45,18 +56,34 @@ function turnOf(turn: number, seq: number) {
   return { turn, seq, player: 'P' + String(turn), prose: '' }
 }
 
-async function call(host: ReturnType<typeof fakeHost>, path: string, init: { method?: string; body?: unknown; url?: string } = {}) {
-  const req = init.body !== undefined
-    ? { method: init.method ?? 'GET', url: init.url, async *[Symbol.asyncIterator]() { yield JSON.stringify(init.body) } }
-    : { method: init.method ?? 'GET', url: init.url }
+async function call(
+  host: ReturnType<typeof fakeHost>,
+  path: string,
+  init: { method?: string; body?: unknown; url?: string } = {},
+) {
+  const req =
+    init.body !== undefined
+      ? {
+          method: init.method ?? 'GET',
+          url: init.url,
+          async *[Symbol.asyncIterator]() {
+            yield JSON.stringify(init.body)
+          },
+        }
+      : { method: init.method ?? 'GET', url: init.url }
   const chunks: string[] = []
   const res = {
     statusCode: 0,
     setHeader: () => {},
-    end: (s?: string) => { if (s !== undefined) chunks.push(s) },
+    end: (s?: string) => {
+      if (s !== undefined) chunks.push(s)
+    },
   }
   await host.handlers.get(path)!(req, res)
-  return { status: res.statusCode, body: JSON.parse(chunks.join('') || '{}') as Record<string, unknown> }
+  return {
+    status: res.statusCode,
+    body: JSON.parse(chunks.join('') || '{}') as Record<string, unknown>,
+  }
 }
 
 const MAIN: FakeSession = {
@@ -83,7 +110,11 @@ const LEGACY_FICTION: FakeSession = {
 
 describe('worldline routes (issue #28)', () => {
   it('the tree endpoint folds live card-owned sessions server-side', async () => {
-    const host = fakeHost({ m: MAIN, b: BRANCH, free: { id: 'free', header: {}, digest: emptyWorldlineDigest() } })
+    const host = fakeHost({
+      m: MAIN,
+      b: BRANCH,
+      free: { id: 'free', header: {}, digest: emptyWorldlineDigest() },
+    })
     registerWorldlineRoute(host.ctx as never)
     const res = await call(host, RRP_ROUTES.worldlineTree)
     expect(res.status).toBe(200)
@@ -95,7 +126,10 @@ describe('worldline routes (issue #28)', () => {
     expect(root?.sessionId).toBe('m')
     const cut = root?.children[0]
     expect(cut?.turn).toBe(1)
-    expect(cut?.children.map((child) => child.sessionId + ':' + String(child.turn))).toEqual(['m:2', 'b:2'])
+    expect(cut?.children.map((child) => child.sessionId + ':' + String(child.turn))).toEqual([
+      'm:2',
+      'b:2',
+    ])
   })
 
   it('the legacy fictional shape must NOT attach (issue #36 regression guard)', async () => {
@@ -122,7 +156,7 @@ describe('worldline routes (issue #28)', () => {
     registerWorldlineRoute(host.ctx as never)
     const res = await call(host, RRP_ROUTES.worldlineTree)
     const trees = (res.body as unknown as WorldlineTreeResponse).trees
-    const flat = (nodes: typeof trees[0]['roots']): string[] =>
+    const flat = (nodes: (typeof trees)[0]['roots']): string[] =>
       nodes.flatMap((node) => [node.sessionId, ...flat(node.children)])
     expect(flat(trees[0]?.roots ?? [])).not.toContain('agent-child')
     // b 仍是合法 fork，挂在 m 的切点下；唯一的 root 是 m。
@@ -130,9 +164,13 @@ describe('worldline routes (issue #28)', () => {
     expect(trees[0]?.roots.map((root) => root.sessionId)).toEqual(['m'])
   })
 
-  it('hiding a line prunes it from the served tree and persists across calls', async () => {    const host = fakeHost({ m: MAIN, b: BRANCH })
+  it('hiding a line prunes it from the served tree and persists across calls', async () => {
+    const host = fakeHost({ m: MAIN, b: BRANCH })
     registerWorldlineRoute(host.ctx as never)
-    const set = await call(host, RRP_ROUTES.worldlineHidden, { method: 'POST', body: { sessionId: 'b', hidden: true } })
+    const set = await call(host, RRP_ROUTES.worldlineHidden, {
+      method: 'POST',
+      body: { sessionId: 'b', hidden: true },
+    })
     expect(set.status).toBe(200)
     const after = await call(host, RRP_ROUTES.worldlineTree)
     const trees = (after.body as unknown as WorldlineTreeResponse).trees
@@ -140,7 +178,10 @@ describe('worldline routes (issue #28)', () => {
     expect(cut?.children.map((child) => child.sessionId)).toEqual(['m'])
     const ledger = await call(host, RRP_ROUTES.worldlineHidden)
     expect((ledger.body as { hidden: string[] }).hidden).toEqual(['b'])
-    await call(host, RRP_ROUTES.worldlineHidden, { method: 'POST', body: { sessionId: 'b', hidden: false } })
+    await call(host, RRP_ROUTES.worldlineHidden, {
+      method: 'POST',
+      body: { sessionId: 'b', hidden: false },
+    })
     const back = await call(host, RRP_ROUTES.worldlineTree)
     const restored = (back.body as unknown as WorldlineTreeResponse).trees[0]?.roots[0]?.children[0]
     expect(restored?.children).toHaveLength(2)
@@ -149,7 +190,10 @@ describe('worldline routes (issue #28)', () => {
   it('the hidden ledger rejects malformed bodies and non-GET trees reject methods', async () => {
     const host = fakeHost({})
     registerWorldlineRoute(host.ctx as never)
-    const bad = await call(host, RRP_ROUTES.worldlineHidden, { method: 'POST', body: { sessionId: '' } })
+    const bad = await call(host, RRP_ROUTES.worldlineHidden, {
+      method: 'POST',
+      body: { sessionId: '' },
+    })
     expect(bad.status).toBe(400)
     expect(typeof bad.body.error).toBe('string')
     const method = await call(host, RRP_ROUTES.worldlineTree, { method: 'POST', body: {} })
@@ -161,13 +205,18 @@ describe('cold skeleton facts (issue #29)', () => {
   /** Host session-query face: cold persisted records + cold title reads. */
   function fakeSessionQuery(cold: Array<{ header: Record<string, unknown>; title?: string }>) {
     return {
-      listSessions: async () => cold.map((record) => ({ header: record.header, live: false, persisted: true })),
-      readTitleSnapshots: async (ids: string[]) => cold
-        .filter((record) => ids.includes(String(record.header.id)))
-        .map((record) => ({
-          status: 'fulfilled',
-          value: { session: { id: record.header.id }, title: record.title === undefined ? undefined : { title: record.title } },
-        })),
+      listSessions: async () =>
+        cold.map((record) => ({ header: record.header, live: false, persisted: true })),
+      readTitleSnapshots: async (ids: string[]) =>
+        cold
+          .filter((record) => ids.includes(String(record.header.id)))
+          .map((record) => ({
+            status: 'fulfilled',
+            value: {
+              session: { id: record.header.id },
+              title: record.title === undefined ? undefined : { title: record.title },
+            },
+          })),
     }
   }
 
@@ -180,8 +229,13 @@ describe('cold skeleton facts (issue #29)', () => {
     const res = await call(host, RRP_ROUTES.worldlineTree)
     expect(res.status).toBe(200)
     const trees = (res.body as unknown as WorldlineTreeResponse).trees
-    const flat = (nodes: typeof trees[0]['roots']): Array<{ id: string; loaded?: boolean; title: string }> =>
-      nodes.flatMap((node) => [{ id: node.sessionId, loaded: node.loaded, title: node.sessionTitle }, ...flat(node.children)])
+    const flat = (
+      nodes: (typeof trees)[0]['roots'],
+    ): Array<{ id: string; loaded?: boolean; title: string }> =>
+      nodes.flatMap((node) => [
+        { id: node.sessionId, loaded: node.loaded, title: node.sessionTitle },
+        ...flat(node.children),
+      ])
     const stub = flat(trees[0]?.roots ?? []).find((node) => node.id === 'cold1')
     expect(stub).toBeDefined()
     expect(stub?.loaded).toBe(false)
@@ -201,7 +255,7 @@ describe('cold skeleton facts (issue #29)', () => {
     registerWorldlineRoute(host.ctx as never)
     const res = await call(host, RRP_ROUTES.worldlineTree)
     const trees = (res.body as unknown as WorldlineTreeResponse).trees
-    const flat = (nodes: typeof trees[0]['roots']): string[] =>
+    const flat = (nodes: (typeof trees)[0]['roots']): string[] =>
       nodes.flatMap((node) => [node.sessionId, ...flat(node.children)])
     expect(flat(trees[0]?.roots ?? [])).toEqual(['m', 'm', 'm', 'b'])
 
@@ -213,7 +267,11 @@ describe('cold skeleton facts (issue #29)', () => {
   })
 
   it('a failing session-query degrades to the live-only map, never a 503', async () => {
-    const query = { listSessions: async () => { throw new Error('sqlite gone') } }
+    const query = {
+      listSessions: async () => {
+        throw new Error('sqlite gone')
+      },
+    }
     const host = fakeHost({ m: MAIN, b: BRANCH }, query)
     registerWorldlineRoute(host.ctx as never)
     const res = await call(host, RRP_ROUTES.worldlineTree)

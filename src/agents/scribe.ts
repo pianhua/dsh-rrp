@@ -65,13 +65,17 @@ export function buildScribePrompt(input: {
 }): string {
   return [
     '【本次要沉淀的主题】',
-    input.topic.trim().length > 0 ? input.topic.trim() : '（未指定；从最近剧情中挑一条最值得长期记住的新设定）',
+    input.topic.trim().length > 0
+      ? input.topic.trim()
+      : '（未指定；从最近剧情中挑一条最值得长期记住的新设定）',
     '',
     '【已有技能名（不得重名）】',
     input.existing.length > 0 ? input.existing.join(', ') : '（无）',
     '',
     '【卡包设定基准（世界观与人设不得违背）】',
-    input.cardBaseline !== undefined && input.cardBaseline.trim().length > 0 ? input.cardBaseline : '（无）',
+    input.cardBaseline !== undefined && input.cardBaseline.trim().length > 0
+      ? input.cardBaseline
+      : '（无）',
     '',
     '【当前世界状态】',
     input.worldState,
@@ -103,18 +107,26 @@ export function parseScribeReply(text: string): LoreDraft | undefined {
   const record = parsed as Record<string, unknown>
   const candidate = {
     name: typeof record.name === 'string' ? record.name.trim() : record.name,
-    description: typeof record.description === 'string' ? record.description.trim() : record.description,
+    description:
+      typeof record.description === 'string' ? record.description.trim() : record.description,
     body: typeof record.body === 'string' ? record.body.trim() : record.body,
   }
   // An empty candidate is the Scribe's sanctioned "nothing to lore" answer.
-  if (candidate.name === '' && candidate.description === '' && candidate.body === '') return undefined
+  if (candidate.name === '' && candidate.description === '' && candidate.body === '')
+    return undefined
   const result = scribeDraftSchema.safeParse(candidate)
   return result.success ? result.data : undefined
 }
 
 /** The Scribe's unified prompt contract (issue #32). */
 export const scribeAgent: AgentPromptContract<
-  { topic: string; transcript: string; worldState: string; cardBaseline?: string; existing: readonly string[] },
+  {
+    topic: string
+    transcript: string
+    worldState: string
+    cardBaseline?: string
+    existing: readonly string[]
+  },
   LoreDraft
 > = {
   id: 'scribe',

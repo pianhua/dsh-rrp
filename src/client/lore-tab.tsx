@@ -27,8 +27,18 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { RRP_LORE_KEY, type LoreEntry } from '../lore-state.ts'
-import { RRP_ROUTES, routeUrl, type LoreEntryView, type LoreGetResponse } from '../route-contract.ts'
-import type { RrpClientContext, RrpJobView, RrpUseProjection, RrpUseSessions } from './context-types.ts'
+import {
+  RRP_ROUTES,
+  routeUrl,
+  type LoreEntryView,
+  type LoreGetResponse,
+} from '../route-contract.ts'
+import type {
+  RrpClientContext,
+  RrpJobView,
+  RrpUseProjection,
+  RrpUseSessions,
+} from './context-types.ts'
 
 /** Implementation identity; also the key the body registers under. */
 const TAB_ID = 'dsh-rrp/lore'
@@ -68,55 +78,104 @@ function skillRows(entries: readonly LoreEntry[]): LoreEntryView[] {
 }
 
 const S: Record<string, CSSProperties> = {
-  root: { height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--dsw-alias-bg-base)', color: 'var(--dsw-alias-label-primary)' },
-  header: { flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px 10px', borderBottom: '1px solid var(--dsw-alias-border-l1)' },
+  root: {
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    background: 'var(--dsw-alias-bg-base)',
+    color: 'var(--dsw-alias-label-primary)',
+  },
+  header: {
+    flex: '0 0 auto',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '12px 14px 10px',
+    borderBottom: '1px solid var(--dsw-alias-border-l1)',
+  },
   title: { fontSize: 14, fontWeight: 600 },
   spacer: { flex: 1 },
   scroll: { flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 14px 20px' },
-  hint: { margin: '0 0 10px', fontSize: 11.5, lineHeight: 1.6, color: 'var(--dsw-alias-label-tertiary)' },
+  hint: {
+    margin: '0 0 10px',
+    fontSize: 11.5,
+    lineHeight: 1.6,
+    color: 'var(--dsw-alias-label-tertiary)',
+  },
   drain: { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14 },
   drainInput: { flex: 1, minWidth: 0, display: 'flex' },
   section: { display: 'flex', alignItems: 'center', gap: 8, margin: '14px 0 8px' },
   sectionTitle: { fontSize: 12.5, fontWeight: 600 },
   draft: {
-    display: 'flex', flexDirection: 'column', gap: 8, padding: '11px', marginBottom: 10,
-    borderRadius: 10, background: 'var(--dsw-alias-bg-layer-1)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    padding: '11px',
+    marginBottom: 10,
+    borderRadius: 10,
+    background: 'var(--dsw-alias-bg-layer-1)',
     border: '1px solid var(--dsw-alias-brand-primary)',
   },
   draftHead: { display: 'flex', alignItems: 'center', gap: 8 },
   draftName: { fontSize: 13, fontWeight: 600 },
   draftDesc: { fontSize: 12, color: 'var(--dsw-alias-label-secondary)', lineHeight: 1.55 },
   draftBody: {
-    fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap', maxHeight: 220, overflowY: 'auto',
-    padding: '8px 10px', borderRadius: 8, background: 'var(--dsw-alias-bg-base)',
-    border: '1px solid var(--dsw-alias-border-l1)', color: 'var(--dsw-alias-label-secondary)',
+    fontSize: 12,
+    lineHeight: 1.7,
+    whiteSpace: 'pre-wrap',
+    maxHeight: 220,
+    overflowY: 'auto',
+    padding: '8px 10px',
+    borderRadius: 8,
+    background: 'var(--dsw-alias-bg-base)',
+    border: '1px solid var(--dsw-alias-border-l1)',
+    color: 'var(--dsw-alias-label-secondary)',
   },
   draftActions: { display: 'flex', gap: 8, alignItems: 'center' },
   card: {
-    display: 'flex', flexDirection: 'column', gap: 4, padding: '9px 11px', marginBottom: 8,
-    borderRadius: 10, background: 'var(--dsw-alias-bg-layer-1)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    padding: '9px 11px',
+    marginBottom: 8,
+    borderRadius: 10,
+    background: 'var(--dsw-alias-bg-layer-1)',
     border: '1px solid var(--dsw-alias-border-l1)',
   },
   cardHead: { display: 'flex', alignItems: 'center', gap: 8 },
   cardName: { fontSize: 12.5, fontWeight: 600, flex: 1, minWidth: 0 },
   cardDesc: { fontSize: 11.5, color: 'var(--dsw-alias-label-tertiary)', lineHeight: 1.5 },
   cardMeta: { fontSize: 11, color: 'var(--dsw-alias-label-dimmed)' },
-  empty: { fontSize: 12, color: 'var(--dsw-alias-label-tertiary)', padding: '12px 4px', textAlign: 'center' },
-  status: { fontSize: 11.5, color: 'var(--dsw-alias-label-tertiary)', minWidth: 0, lineHeight: 1.4 },
+  empty: {
+    fontSize: 12,
+    color: 'var(--dsw-alias-label-tertiary)',
+    padding: '12px 4px',
+    textAlign: 'center',
+  },
+  status: {
+    fontSize: 11.5,
+    color: 'var(--dsw-alias-label-tertiary)',
+    minWidth: 0,
+    lineHeight: 1.4,
+  },
 }
 
 function LorePanel(props: LorePanelProps): ReactNode {
   const t: Translate = typeof props.t === 'function' ? props.t : (key) => key
   const sessionId = props.sessionId
   // Push-first data sources (absent on hosts that do not inject them into this seat).
-  const projected = typeof props.useProjection === 'function'
-    ? props.useProjection(RRP_LORE_KEY) as LoreEntry[] | undefined
-    : undefined
-  const scribeJobs = typeof props.useSessions === 'function' && sessionId !== undefined
-    ? props.useSessions((state) => state.jobsBySession[sessionId]) as readonly RrpJobView[] | undefined
-    : undefined
-  const scribeRunning = scribeJobs?.some((job) =>
-    job.kind === 'scribe' && (job.status === 'running' || job.status === 'stopping'))
+  const projected =
+    typeof props.useProjection === 'function'
+      ? (props.useProjection(RRP_LORE_KEY) as LoreEntry[] | undefined)
+      : undefined
+  const scribeJobs =
+    typeof props.useSessions === 'function' && sessionId !== undefined
+      ? (props.useSessions((state) => state.jobsBySession[sessionId]) as
+          readonly RrpJobView[] | undefined)
+      : undefined
+  const scribeRunning = scribeJobs?.some(
+    (job) => job.kind === 'scribe' && (job.status === 'running' || job.status === 'stopping'),
+  )
 
   // The staged draft is host-side bookkeeping (never eventized), so it still
   // travels over the route — but only as one-shot fetches, not a timer.
@@ -124,7 +183,7 @@ function LorePanel(props: LorePanelProps): ReactNode {
   const [topic, setTopic] = useState('')
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
-  const skills = projected !== undefined ? skillRows(projected) : fetched?.skills ?? []
+  const skills = projected !== undefined ? skillRows(projected) : (fetched?.skills ?? [])
   const pending = fetched?.pending ?? null
   const drafting = scribeRunning ?? fetched?.drafting ?? false
   const triggers = fetched?.triggers ?? []
@@ -132,9 +191,13 @@ function LorePanel(props: LorePanelProps): ReactNode {
   const refresh = (): void => {
     if (sessionId === undefined) return
     void fetch(routeUrl(LORE_PATH, sessionId))
-      .then((response) => (response.ok ? response.json() as Promise<SedList> : undefined))
-      .then((body) => { if (body !== undefined) setFetched(body) })
-      .catch(() => { /* best-effort */ })
+      .then((response) => (response.ok ? (response.json() as Promise<SedList>) : undefined))
+      .then((body) => {
+        if (body !== undefined) setFetched(body)
+      })
+      .catch(() => {
+        /* best-effort */
+      })
   }
 
   // Initial load; the fallback timer runs only without the jobs mirror.
@@ -146,7 +209,9 @@ function LorePanel(props: LorePanelProps): ReactNode {
     refresh()
     if (typeof props.useSessions === 'function') return
     const timer = setInterval(refresh, POLL_MS)
-    return () => { clearInterval(timer) }
+    return () => {
+      clearInterval(timer)
+    }
   }, [sessionId, props.useSessions])
 
   // Scribe settled → one one-shot fetch picks up the staged draft.
@@ -171,12 +236,22 @@ function LorePanel(props: LorePanelProps): ReactNode {
       body: JSON.stringify({ sessionId, ...body }),
     })
       .then(async (response) => {
-        const payload = await response.json().catch(() => ({})) as { error?: string; drafting?: boolean }
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string
+          drafting?: boolean
+        }
         if (!response.ok) throw new Error(payload.error ?? String(response.status))
-        if (payload.drafting === true) setFetched((current) => current === undefined ? current : { ...current, drafting: true })
+        if (payload.drafting === true)
+          setFetched((current) =>
+            current === undefined ? current : { ...current, drafting: true },
+          )
         else setStatus(done)
       })
-      .catch((error: unknown) => setStatus(t('lore.failed') + ': ' + String((error as { message?: string })?.message ?? error)))
+      .catch((error: unknown) =>
+        setStatus(
+          t('lore.failed') + ': ' + String((error as { message?: string })?.message ?? error),
+        ),
+      )
       .finally(() => setBusy(false))
   }
 
@@ -189,7 +264,11 @@ function LorePanel(props: LorePanelProps): ReactNode {
         refresh()
         setStatus(t('lore.removed'))
       })
-      .catch((error: unknown) => setStatus(t('lore.failed') + ': ' + String((error as { message?: string })?.message ?? error)))
+      .catch((error: unknown) =>
+        setStatus(
+          t('lore.failed') + ': ' + String((error as { message?: string })?.message ?? error),
+        ),
+      )
       .finally(() => setBusy(false))
   }
 
@@ -215,7 +294,10 @@ function LorePanel(props: LorePanelProps): ReactNode {
             variant="primary"
             icon={drafting ? <IconLoadingOutline16 size={16} /> : <IconSparkle16 size={16} />}
             disabled={busy || drafting}
-            onClick={() => { setStatus(''); post({ action: 'draft', topic }, t('lore.staged')) }}
+            onClick={() => {
+              setStatus('')
+              post({ action: 'draft', topic }, t('lore.staged'))
+            }}
           >
             {drafting ? t('lore.drafting') : t('lore.draft')}
           </Button>
@@ -236,7 +318,10 @@ function LorePanel(props: LorePanelProps): ReactNode {
                 size="sm"
                 icon={<IconCheckOutline16 size={16} />}
                 disabled={busy}
-                onClick={() => { setStatus(''); post({ action: 'confirm' }, t('lore.written')) }}
+                onClick={() => {
+                  setStatus('')
+                  post({ action: 'confirm' }, t('lore.written'))
+                }}
               >
                 {t('lore.confirm')}
               </Button>
@@ -244,7 +329,10 @@ function LorePanel(props: LorePanelProps): ReactNode {
                 variant="ghost"
                 size="sm"
                 disabled={busy}
-                onClick={() => { setStatus(''); post({ action: 'discard' }, t('lore.discarded')) }}
+                onClick={() => {
+                  setStatus('')
+                  post({ action: 'discard' }, t('lore.discarded'))
+                }}
               >
                 {t('lore.discard')}
               </Button>
@@ -262,7 +350,11 @@ function LorePanel(props: LorePanelProps): ReactNode {
           <div key={skill.name} style={S.card}>
             <div style={S.cardHead}>
               <span style={S.cardName}>{skill.name}</span>
-              <Pill>{skill.bytes >= 1024 ? String(Math.round(skill.bytes / 1024)) + ' KB' : String(skill.bytes) + ' B'}</Pill>
+              <Pill>
+                {skill.bytes >= 1024
+                  ? String(Math.round(skill.bytes / 1024)) + ' KB'
+                  : String(skill.bytes) + ' B'}
+              </Pill>
               <Tooltip label={t('lore.delete')}>
                 <Button
                   variant="ghost"
@@ -274,11 +366,20 @@ function LorePanel(props: LorePanelProps): ReactNode {
                 />
               </Tooltip>
             </div>
-            {skill.description.length === 0 ? null : <div style={S.cardDesc}>{skill.description}</div>}
+            {skill.description.length === 0 ? null : (
+              <div style={S.cardDesc}>{skill.description}</div>
+            )}
           </div>
         ))}
 
-        <div style={{ ...S.section, marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--dsw-alias-border-l1)' }}>
+        <div
+          style={{
+            ...S.section,
+            marginTop: 20,
+            paddingTop: 14,
+            borderTop: '1px solid var(--dsw-alias-border-l1)',
+          }}
+        >
           <span style={S.sectionTitle}>{t('lore.triggers')}</span>
           <Pill>{String(triggers.length)}</Pill>
         </div>
@@ -288,7 +389,9 @@ function LorePanel(props: LorePanelProps): ReactNode {
             <div style={S.cardHead}>
               <StateDot state={trigger.active ? 'done' : 'warning'} />
               <span style={S.cardName}>{trigger.name}</span>
-              <Pill active={trigger.active}>{trigger.active ? t('lore.triggerActive') : t('lore.triggerInactive')}</Pill>
+              <Pill active={trigger.active}>
+                {trigger.active ? t('lore.triggerActive') : t('lore.triggerInactive')}
+              </Pill>
             </div>
           </div>
         ))}
@@ -313,7 +416,12 @@ export function registerLoreTab(ctx: RrpClientContext): void {
       guide: [{ order: 60, title: () => t('lore.title'), description: () => t('lore.guide') }],
     })
     const disposeBody = ctx.slots.register(
-      { name: 'sidebar.right.pane.tab', key: TAB_ID, locale: 'rrp', inject: (sessionId: unknown) => ({ t, sessionId }) },
+      {
+        name: 'sidebar.right.pane.tab',
+        key: TAB_ID,
+        locale: 'rrp',
+        inject: (sessionId: unknown) => ({ t, sessionId }),
+      },
       LorePanel as never,
     )
     return () => {

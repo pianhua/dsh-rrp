@@ -101,7 +101,11 @@ export function foldWorldlineTrees(
   while (grew) {
     grew = false
     for (const session of byId.values()) {
-      if (session.parentId !== undefined && pruned.has(session.parentId) && !pruned.has(session.id)) {
+      if (
+        session.parentId !== undefined &&
+        pruned.has(session.parentId) &&
+        !pruned.has(session.id)
+      ) {
         pruned.add(session.id)
         grew = true
       }
@@ -175,9 +179,10 @@ export function foldWorldlineTrees(
       // The fork grows from the parent's turn seedTurns - 1 (0-based).
       const seed = session.seedTurns ?? 0
       const parent = session.parentId !== undefined ? byId.get(session.parentId) : undefined
-      const cut = parent !== undefined && !pruned.has(parent.id) && seed > 0
-        ? findNode(chains.get(parent.id), seed - 1)
-        : undefined
+      const cut =
+        parent !== undefined && !pruned.has(parent.id) && seed > 0
+          ? findNode(chains.get(parent.id), seed - 1)
+          : undefined
       if (cut !== undefined) {
         cut.children.push(chain.head)
         continue
@@ -210,7 +215,10 @@ export function foldWorldlineTrees(
   return [...trees.values()]
 }
 
-function findNode(chain: { head: WorldlineNode; tail: WorldlineNode } | undefined, turn: number): WorldlineNode | undefined {
+function findNode(
+  chain: { head: WorldlineNode; tail: WorldlineNode } | undefined,
+  turn: number,
+): WorldlineNode | undefined {
   if (chain === undefined) return undefined
   let current: WorldlineNode | undefined = chain.head
   while (current !== undefined) {

@@ -19,7 +19,14 @@ const LIST_PATH = RRP_ROUTES.cards
 const ONE_PATH = RRP_ROUTES.cardOne
 const IMPORT_PATH = RRP_ROUTES.cardImport
 
-import { type RuntimeFaces, type WebServerService, queryOf, readJsonBody, face, send } from './host-faces.ts'
+import {
+  type RuntimeFaces,
+  type WebServerService,
+  queryOf,
+  readJsonBody,
+  face,
+  send,
+} from './host-faces.ts'
 
 /**
  * Register the read-only card-pack routes.
@@ -100,11 +107,14 @@ export function registerCardsRoute(ctx: Context): void {
             send(res, 400, { error: 'missing data' })
             return
           }
-          const source = body.kind === 'png'
-            ? importCardFromPng(Buffer.from(body.data, 'base64'))
-            : importCardFromJson(Buffer.from(body.data, 'base64').toString('utf8'))
+          const source =
+            body.kind === 'png'
+              ? importCardFromPng(Buffer.from(body.data, 'base64'))
+              : importCardFromJson(Buffer.from(body.data, 'base64').toString('utf8'))
           if (source === undefined) {
-            send(res, 422, { error: 'not a recognizable character card (tavern PNG / v2 / v3 JSON)' })
+            send(res, 422, {
+              error: 'not a recognizable character card (tavern PNG / v2 / v3 JSON)',
+            })
             return
           }
           const written = writeImportedCard(source)

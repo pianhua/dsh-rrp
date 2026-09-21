@@ -6,7 +6,8 @@ import { emptyWorldState, renderWorldState } from '../src/world-state.ts'
 import { transcriptProjections } from './stubs/transcript-projections.ts'
 
 /** Projections face folding the given fake event log through the transcript unit. */
-const fakeProjections = (events: Array<{ type: string; data?: unknown }>) => transcriptProjections(events)
+const fakeProjections = (events: Array<{ type: string; data?: unknown }>) =>
+  transcriptProjections(events)
 
 const SESSION = { id: 's1' }
 
@@ -35,15 +36,16 @@ describe('Chronicler transcript selection', () => {
   })
 
   it('falls back to the whole tail when there is no user message', () => {
-    const only = latestTurnTranscriptOf(fakeProjections([{ type: 'assistant/message', data: text('只有叙述。') }]), SESSION)
+    const only = latestTurnTranscriptOf(
+      fakeProjections([{ type: 'assistant/message', data: text('只有叙述。') }]),
+      SESSION,
+    )
     expect(only).toContain('只有叙述')
   })
 
   it('supports up to 16000 characters by default and respects custom limit without 8000 cap', () => {
     const longText = 'A'.repeat(10000)
-    const projections = fakeProjections([
-      { type: 'user/message', data: text(longText) },
-    ])
+    const projections = fakeProjections([{ type: 'user/message', data: text(longText) }])
     // latestTurnTranscriptOf caps at 8000
     const latest = latestTurnTranscriptOf(projections, SESSION)
     expect(latest.length).toBeLessThanOrEqual(8000)
@@ -77,10 +79,17 @@ describe('Chronicler transcript selection', () => {
     // T8: the injection block rides the facts lane; Chronicler/Summarizer
     // transcripts must stay physically free of it (feedback-loop isolation).
     const state = { ...emptyWorldState(), characters: { 米娅: { affinity: 90 } } }
-    const block = renderTriggerBlock([{ id: 'mia-warm', name: '温热', excerpt: 'UNIQUE-INJECTION-EXCERPT' }])
+    const block = renderTriggerBlock([
+      { id: 'mia-warm', name: '温热', excerpt: 'UNIQUE-INJECTION-EXCERPT' },
+    ])
     const projections = fakeProjections([
       { type: 'user/message', data: text('玩家行动') },
-      { type: 'user/message', data: rrpStateMessage('m1', renderWorldState(state) + '\n\n' + block, { worldState: state }) },
+      {
+        type: 'user/message',
+        data: rrpStateMessage('m1', renderWorldState(state) + '\n\n' + block, {
+          worldState: state,
+        }),
+      },
       { type: 'assistant/message', data: text('叙述回复') },
     ])
     const broad = transcriptOf(projections, SESSION)

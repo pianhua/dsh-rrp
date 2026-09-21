@@ -17,16 +17,16 @@ import { readCard } from '../src/cards.ts'
 function pngWith(...texts: Array<[string, string]>): Buffer {
   const chunks: Buffer[] = []
   for (const [keyword, value] of texts) {
-    const data = Buffer.concat([Buffer.from(keyword + '\0', 'latin1'), Buffer.from(value, 'latin1')])
+    const data = Buffer.concat([
+      Buffer.from(keyword + '\0', 'latin1'),
+      Buffer.from(value, 'latin1'),
+    ])
     const head = Buffer.alloc(8)
     head.writeUInt32BE(data.length, 0)
     head.write('tEXt', 4, 'ascii')
     chunks.push(Buffer.concat([head, data, Buffer.alloc(4)]))
   }
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    ...chunks,
-  ])
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), ...chunks])
 }
 
 const V2 = {
@@ -56,7 +56,10 @@ describe('character card normalization (issue #31 P1-D)', () => {
   })
 
   it('reads v3 { spec, data } cards', () => {
-    const source = normalizeCharacterCard({ spec: 'chara_card_v3', data: { name: '剑客', description: '独臂。', first_mes: '……' } })
+    const source = normalizeCharacterCard({
+      spec: 'chara_card_v3',
+      data: { name: '剑客', description: '独臂。', first_mes: '……' },
+    })
     expect(source?.name).toBe('剑客')
     expect(source?.worldCore).toBe('独臂。')
   })
@@ -78,7 +81,9 @@ describe('tavern PNG parsing', () => {
     expect(chunks?.has('ccv3')).toBe(true)
     const source = importCardFromPng(png)
     expect(source?.name).toBe('Mia the Maid')
-    expect(gunzipSync(Buffer.from(chunks!.get('ccv3')!, 'base64')).toString('utf8')).toContain('chara_card_v3')
+    expect(gunzipSync(Buffer.from(chunks!.get('ccv3')!, 'base64')).toString('utf8')).toContain(
+      'chara_card_v3',
+    )
   })
 
   it('decodes a legacy chara (plain base64) card and ignores non-PNG bytes', () => {

@@ -9,14 +9,17 @@ const VALID = { ...emptyWorldState(), scene: { location: '归离客栈' } }
 function fakeHost(failAppend = false) {
   const appended: Array<{ type: string; data: unknown }> = []
   const sessions = {
-    get: (id: string) => (id === 's1' ? {
-      id: 's1',
-      append: (type: string, data: unknown) => {
-        if (failAppend) throw new Error('append failed')
-        appended.push({ type, data })
-        return {}
-      },
-    } : undefined),
+    get: (id: string) =>
+      id === 's1'
+        ? {
+            id: 's1',
+            append: (type: string, data: unknown) => {
+              if (failAppend) throw new Error('append failed')
+              appended.push({ type, data })
+              return {}
+            },
+          }
+        : undefined,
   }
   let route: { handler: (req: unknown, res: unknown) => unknown } | undefined
   const webServer = {
@@ -30,7 +33,8 @@ function fakeHost(failAppend = false) {
     effect(fn: () => (() => void) | void) {
       return fn()
     },
-    get: (name: string) => ({ webServer, sessions, sessionProjections } as Record<string, unknown>)[name],
+    get: (name: string) =>
+      (({ webServer, sessions, sessionProjections }) as Record<string, unknown>)[name],
   }
   return { ctx, appended, route: () => route }
 }
@@ -39,10 +43,18 @@ it('keeps the correction route idle until the projection registry is available',
   let registered = false
   const ctx = {
     effect: (fn: () => unknown) => fn(),
-    get: (name: string) => ({
-      webServer: { register: () => { registered = true; return () => {} } },
-      sessions: { get: () => undefined },
-    } as Record<string, unknown>)[name],
+    get: (name: string) =>
+      (
+        ({
+          webServer: {
+            register: () => {
+              registered = true
+              return () => {}
+            },
+          },
+          sessions: { get: () => undefined },
+        }) as Record<string, unknown>
+      )[name],
   }
   registerCorrectionRoute(ctx as never)
   expect(registered).toBe(false)
@@ -58,7 +70,9 @@ function fakeExchange(body: unknown, method = 'POST') {
   const res = {
     statusCode: 0,
     header: {} as Record<string, string>,
-    setHeader(name: string, value: string) { this.header[name] = value },
+    setHeader(name: string, value: string) {
+      this.header[name] = value
+    },
     end(_payload?: string) {},
   }
   return { req, res }
@@ -66,7 +80,8 @@ function fakeExchange(body: unknown, method = 'POST') {
 
 describe('player correction route', () => {
   it('validates and publishes the whole corrected state', async () => {
-    forgetState('s1'); forgetActivity('s1')
+    forgetState('s1')
+    forgetActivity('s1')
     const host = fakeHost()
     registerCorrectionRoute(host.ctx as never)
     const { req, res } = fakeExchange({ sessionId: 's1', state: VALID })
@@ -75,7 +90,9 @@ describe('player correction route', () => {
     expect(res.statusCode).toBe(200)
     const writes = host.appended.filter((entry) => entry.type === 'user/message')
     expect(writes).toHaveLength(1)
-    expect((writes[0]?.data as { source: { rrp: { worldState: unknown } } }).source.rrp.worldState).toEqual(VALID)
+    expect(
+      (writes[0]?.data as { source: { rrp: { worldState: unknown } } }).source.rrp.worldState,
+    ).toEqual(VALID)
 
     // Attribution: a player correction is recorded as such in the ledger.
     const activity = readActivity('s1')
@@ -85,15 +102,22 @@ describe('player correction route', () => {
   })
 
   it('returns 200 without appending when the correction changes nothing (issue #12)', async () => {
-    forgetState('s1'); forgetActivity('s1')
+    forgetState('s1')
+    forgetActivity('s1')
     // The projection already holds the identical state: a stray save must not
     // append a facts message nor touch the ledger.
     const appended: Array<{ type: string; data: unknown }> = []
     const sessions = {
-      get: (id: string) => (id === 's1' ? {
-        id: 's1',
-        append: (type: string, data: unknown) => { appended.push({ type, data }); return {} },
-      } : undefined),
+      get: (id: string) =>
+        id === 's1'
+          ? {
+              id: 's1',
+              append: (type: string, data: unknown) => {
+                appended.push({ type, data })
+                return {}
+              },
+            }
+          : undefined,
     }
     let route: { handler: (req: unknown, res: unknown) => unknown } | undefined
     const webServer = {
@@ -102,10 +126,15 @@ describe('player correction route', () => {
         return () => {}
       },
     }
-    const sessionProjections = { stateOf: (_s: unknown, key: string) => key === 'rrpWorldState' ? VALID : undefined }
+    const sessionProjections = {
+      stateOf: (_s: unknown, key: string) => (key === 'rrpWorldState' ? VALID : undefined),
+    }
     const ctx = {
-      effect(fn: () => (() => void) | void) { return fn() },
-      get: (name: string) => ({ webServer, sessions, sessionProjections } as Record<string, unknown>)[name],
+      effect(fn: () => (() => void) | void) {
+        return fn()
+      },
+      get: (name: string) =>
+        (({ webServer, sessions, sessionProjections }) as Record<string, unknown>)[name],
     }
     registerCorrectionRoute(ctx as never)
     const { req, res } = fakeExchange({ sessionId: 's1', state: VALID })
@@ -135,7 +164,8 @@ describe('player correction route', () => {
   })
 
   it('reports a failed append and does not record a correction', async () => {
-    forgetState('s1'); forgetActivity('s1')
+    forgetState('s1')
+    forgetActivity('s1')
     const host = fakeHost(true)
     registerCorrectionRoute(host.ctx as never)
     const { req, res } = fakeExchange({ sessionId: 's1', state: VALID })
@@ -146,7 +176,8 @@ describe('player correction route', () => {
   })
 
   it('prunes over-limit entries and clamps constrained dynamic fields before publishing', async () => {
-    forgetState('s1'); forgetActivity('s1')
+    forgetState('s1')
+    forgetActivity('s1')
     const host = fakeHost()
     registerCorrectionRoute(host.ctx as never)
     const overLimitFlags: Record<string, boolean> = {}
@@ -162,11 +193,11 @@ describe('player correction route', () => {
     expect(res.statusCode).toBe(200)
     const writes = host.appended.filter((entry) => entry.type === 'user/message')
     expect(writes).toHaveLength(1)
-    const writtenState = (writes[0]?.data as { source: { rrp: { worldState: any } } }).source.rrp.worldState
+    const writtenState = (writes[0]?.data as { source: { rrp: { worldState: any } } }).source.rrp
+      .worldState
     // Flags must be capped to 16
     expect(Object.keys(writtenState.flags)).toHaveLength(16)
     // Value must be clamped to max 100
     expect(writtenState.mana).toEqual({ type: 'number', value: 100, min: 0, max: 100 })
   })
 })
-

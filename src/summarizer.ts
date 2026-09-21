@@ -13,7 +13,11 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
-import { SUMMARIZER_SYSTEM_PROMPT, buildSummarizerPrompt, parseSummarizerReply } from './agents/summarizer.ts'
+import {
+  SUMMARIZER_SYSTEM_PROMPT,
+  buildSummarizerPrompt,
+  parseSummarizerReply,
+} from './agents/summarizer.ts'
 import {
   type AgentsService,
   type CommandsService,
@@ -31,7 +35,12 @@ import {
   nowIso,
   routeOf,
 } from './host-faces.ts'
-import { SUMMARY_KEY, diffMacroSummary, NO_SUMMARY_CHANGE, type MacroSummary } from './macro-summary.ts'
+import {
+  SUMMARY_KEY,
+  diffMacroSummary,
+  NO_SUMMARY_CHANGE,
+  type MacroSummary,
+} from './macro-summary.ts'
 import { matchesPreset } from './preset-id.ts'
 import { RRP_SETTINGS_KEY, clampSummaryEveryTurns, rrpSettingsOf } from './settings.ts'
 import { publishState } from './state-publisher.ts'
@@ -84,7 +93,12 @@ export function registerSummarizer(ctx: Context, presetId: string): void {
   const jobs = face<JobsService>(runtime, 'jobs')
   const agents = face<AgentsService>(runtime, 'agents')
   const projections = face<ProjectionsService>(runtime, 'sessionProjections')
-  if (llm === undefined || jobs === undefined || agents === undefined || projections === undefined) {
+  if (
+    llm === undefined ||
+    jobs === undefined ||
+    agents === undefined ||
+    projections === undefined
+  ) {
     console.warn(TAG + ' Summarizer idle (missing llm/jobs/agents/sessionProjections)')
     return
   }
@@ -96,13 +110,21 @@ export function registerSummarizer(ctx: Context, presetId: string): void {
       // listener throw would escape into the host event bus, so never let one.
       try {
         const session = args[0] as SessionLike | undefined
-        const event = args[1] as { type?: string; data?: { reason?: { kind?: string } } } | undefined
+        const event = args[1] as
+          { type?: string; data?: { reason?: { kind?: string } } } | undefined
         if (session === undefined || event?.type !== 'turn/end') return
         if (event.data?.reason?.kind !== 'completed') return
-        if (!matchesPreset(projections.stateOf(session, 'agentPreset') as string | undefined, presetId)) return
+        if (
+          !matchesPreset(
+            projections.stateOf(session, 'agentPreset') as string | undefined,
+            presetId,
+          )
+        )
+          return
         const settings = rrpSettingsOf(projections.stateOf(session, RRP_SETTINGS_KEY))
         if (!settings.summaryEnabled) return
-        const boundary = projections.stateOf(session, 'turnBoundary') as { lastTurn?: number } | undefined
+        const boundary = projections.stateOf(session, 'turnBoundary') as
+          { lastTurn?: number } | undefined
         const turn = boundary?.lastTurn ?? 0
         if (turn === 0 || turn % settings.summaryEveryTurns !== 0) return
         if (LAST_SUMMARIZED.get(session.id) === turn) return
@@ -118,7 +140,12 @@ export function registerSummarizer(ctx: Context, presetId: string): void {
         console.warn(TAG + ' Summarizer trigger failed:', error)
       }
     })
-    console.log(TAG + ' Summarizer armed for preset ' + presetId + ' (cadence configurable via /summary every N)')
+    console.log(
+      TAG +
+        ' Summarizer armed for preset ' +
+        presetId +
+        ' (cadence configurable via /summary every N)',
+    )
     return dispose
   }, 'dsh-rrp: Summarizer trigger')
 }
@@ -153,8 +180,14 @@ function scheduleSummary(faces: HostFaces, session: SessionLike, turn: number): 
       run: () => {
         const controller = new AbortController()
         let cancelled = false
-        const done = runSummary(faces, session, turn, route, controller.signal, () => cancelled)
-          .finally(() => drainDeferred(faces, session))
+        const done = runSummary(
+          faces,
+          session,
+          turn,
+          route,
+          controller.signal,
+          () => cancelled,
+        ).finally(() => drainDeferred(faces, session))
         return {
           cancel: () => {
             cancelled = true
@@ -206,26 +239,37 @@ async function runSummary(
     if (isEmptyReply(transcript)) return { status: 'completed' }
 
     recordActivity(session.id, {
-      id: activityId, at: nowIso(), actor: 'summarizer', target: 'summary', phase: 'started',
+      id: activityId,
+      at: nowIso(),
+      actor: 'summarizer',
+      target: 'summary',
+      phase: 'started',
     })
 
     const stream = faces.llm.stream({
       provider: route.provider,
       model: route.model,
       system: SUMMARIZER_SYSTEM_PROMPT,
-      messages: [{
-        id: randomUUID(),
-        role: 'user',
-        content: [{ type: 'text', text: buildSummarizerPrompt(transcript) }],
-        source: { kind: 'plugin', plugin: 'dsh-rrp' },
-      }],
+      messages: [
+        {
+          id: randomUUID(),
+          role: 'user',
+          content: [{ type: 'text', text: buildSummarizerPrompt(transcript) }],
+          source: { kind: 'plugin', plugin: 'dsh-rrp' },
+        },
+      ],
       sessionId: session.id,
       signal,
     })
     const text = await collectText(stream)
     if (isCancelled()) {
       recordActivity(session.id, {
-        id: activityId, at: nowIso(), actor: 'summarizer', target: 'summary', phase: 'failed', detailKey: 'detail.cancelled',
+        id: activityId,
+        at: nowIso(),
+        actor: 'summarizer',
+        target: 'summary',
+        phase: 'failed',
+        detailKey: 'detail.cancelled',
       })
       return { status: 'killed' }
     }
@@ -241,21 +285,40 @@ async function runSummary(
     const slice = faces.projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined
     if ((slice?.lastSummaryTurn ?? -1) >= turn) {
       recordActivity(session.id, {
-        id: activityId, at: nowIso(), actor: 'summarizer', target: 'summary', phase: 'stale', detailKey: 'detail.staleSuperseded',
+        id: activityId,
+        at: nowIso(),
+        actor: 'summarizer',
+        target: 'summary',
+        phase: 'stale',
+        detailKey: 'detail.staleSuperseded',
       })
-      console.log(TAG + ' Summarizer result for turn ' + turn + ' is stale (newer summary committed), discarding for session ' + session.id)
+      console.log(
+        TAG +
+          ' Summarizer result for turn ' +
+          turn +
+          ' is stale (newer summary committed), discarding for session ' +
+          session.id,
+      )
       return { status: 'stale' }
     }
     // Short-circuit like the Chronicler: a reworded-but-identical summary must
     // not trigger a facts republish (wasted tokens and log noise).
-    const priorSummary = faces.projections.stateOf(session, SUMMARY_KEY) as MacroSummary | null | undefined
+    const priorSummary = faces.projections.stateOf(session, SUMMARY_KEY) as
+      MacroSummary | null | undefined
     if (priorSummary !== null && priorSummary !== undefined) {
       const diff = diffMacroSummary(priorSummary, summary)
       if (diff === NO_SUMMARY_CHANGE) {
         recordActivity(session.id, {
-          id: activityId, at: nowIso(), actor: 'summarizer', target: 'summary', phase: 'committed', detailKey: 'detail.noChange',
+          id: activityId,
+          at: nowIso(),
+          actor: 'summarizer',
+          target: 'summary',
+          phase: 'committed',
+          detailKey: 'detail.noChange',
         })
-        console.log(TAG + ' Summarizer skipped publish (no summary change) for session ' + session.id)
+        console.log(
+          TAG + ' Summarizer skipped publish (no summary change) for session ' + session.id,
+        )
         return { status: 'completed' }
       }
     }
@@ -276,7 +339,12 @@ async function runSummary(
   } catch (error) {
     console.warn(TAG + ' Summarizer failed:', error)
     recordActivity(session.id, {
-      id: activityId, at: nowIso(), actor: 'summarizer', target: 'summary', phase: 'failed', detail: messageOf(error),
+      id: activityId,
+      at: nowIso(),
+      actor: 'summarizer',
+      target: 'summary',
+      phase: 'failed',
+      detail: messageOf(error),
     })
     return { status: isCancelled() ? 'killed' : 'failed' }
   }
@@ -304,15 +372,21 @@ export function registerSummaryCommand(ctx: Context): void {
         const current = rrpSettingsOf(projections.stateOf(session, RRP_SETTINGS_KEY))
         const argument = rawInput.trim().toLowerCase()
         const everyMatch = /^every\s+(\d{1,3})$/.exec(argument)
-        const next = everyMatch !== null
-          ? { ...current, summaryEveryTurns: clampSummaryEveryTurns(Number(everyMatch[1])) }
-          : { ...current, summaryEnabled: argument === 'on' ? true : argument === 'off' ? false : !current.summaryEnabled }
+        const next =
+          everyMatch !== null
+            ? { ...current, summaryEveryTurns: clampSummaryEveryTurns(Number(everyMatch[1])) }
+            : {
+                ...current,
+                summaryEnabled:
+                  argument === 'on' ? true : argument === 'off' ? false : !current.summaryEnabled,
+              }
         if (!publishState(session, projections, { settings: next })) {
           return { kind: 'error', text: '剧情脉络设置写入失败' }
         }
-        const text = everyMatch !== null
-          ? '剧情脉络：每 ' + next.summaryEveryTurns + ' 轮提炼一次'
-          : '剧情脉络已' + (next.summaryEnabled ? '开启' : '关闭')
+        const text =
+          everyMatch !== null
+            ? '剧情脉络：每 ' + next.summaryEveryTurns + ' 轮提炼一次'
+            : '剧情脉络已' + (next.summaryEnabled ? '开启' : '关闭')
         return { kind: 'success', text }
       },
     })

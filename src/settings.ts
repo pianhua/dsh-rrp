@@ -29,11 +29,13 @@ export function clampSummaryEveryTurns(value: unknown): number {
 
 /** Coerce an unknown projection value to the stable settings shape. */
 export function rrpSettingsOf(value: unknown): RrpSettings {
-  const record = (value as { summaryEnabled?: unknown; summaryEveryTurns?: unknown } | null | undefined)
+  const record = value as
+    { summaryEnabled?: unknown; summaryEveryTurns?: unknown } | null | undefined
   return {
-    summaryEnabled: typeof record?.summaryEnabled === 'boolean'
-      ? record.summaryEnabled
-      : DEFAULT_RRP_SETTINGS.summaryEnabled,
+    summaryEnabled:
+      typeof record?.summaryEnabled === 'boolean'
+        ? record.summaryEnabled
+        : DEFAULT_RRP_SETTINGS.summaryEnabled,
     summaryEveryTurns: clampSummaryEveryTurns(record?.summaryEveryTurns),
   }
 }
