@@ -25,7 +25,7 @@
  * cannot load these legacy logs at all. Run once per affected machine, verify
  * the sessions load, then retire this script — do not build on it.
  */
-import { copyFileSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { gunzipSync, gzipSync, zstdCompressSync, zstdDecompressSync } from 'node:zlib'
@@ -68,16 +68,16 @@ function encode(path, text) {
 /** Every candidate session log under the sessions root. */
 function sessionFiles(root, onlyWorkspace) {
   const files = []
-  let workspaces = []
+  let workspaces
   try { workspaces = readdirSync(root) } catch { return files }
   for (const workspace of workspaces) {
     if (onlyWorkspace !== undefined && workspace !== onlyWorkspace) continue
     const dir = join(root, workspace)
-    let entries = []
+    let entries
     try { entries = readdirSync(dir) } catch { continue }
     for (const entry of entries) {
       const sessionDir = join(dir, entry)
-      let inner = []
+      let inner
       try { inner = readdirSync(sessionDir) } catch { continue }
       for (const name of inner) {
         if (!name.endsWith('.zstd') && !name.endsWith('.gz')) continue

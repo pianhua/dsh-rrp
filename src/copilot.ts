@@ -27,7 +27,6 @@ import {
   type AgentsService,
   type LlmService,
   type ProjectionsService,
-  type RequestLike,
   type ResponseLike,
   type RuntimeFaces,
   type SessionLike,
@@ -42,14 +41,11 @@ import {
   send,
 } from './host-faces.ts'
 import {
-  emptyCopilotStore,
   openCopilotStore,
   type CopilotHistoryView,
-  type CopilotStore,
   type CopilotStoreHandle,
   type CopilotTurn,
   type CopilotTurnAction,
-  type CopilotUndoEntry,
 } from './copilot-store.ts'
 import { transcriptOf } from './transcript-reader.ts'
 import { SUMMARY_KEY, renderMacroSummary } from './macro-summary.ts'

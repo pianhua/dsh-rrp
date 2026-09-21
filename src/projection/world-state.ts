@@ -13,10 +13,8 @@ import { rrpPayloadOf } from '../state-payload.ts'
 import {
   WORLD_STATE_KEY,
   emptyWorldState,
-  isCoreKey,
   type WorldState,
   type WorldStateView,
-  type DynamicFieldValue,
 } from '../world-state.ts'
 
 const characterSchema = z.object({

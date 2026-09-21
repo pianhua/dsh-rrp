@@ -19,7 +19,7 @@ const LIST_PATH = RRP_ROUTES.cards
 const ONE_PATH = RRP_ROUTES.cardOne
 const IMPORT_PATH = RRP_ROUTES.cardImport
 
-import { type RequestLike, type ResponseLike, type RuntimeFaces, type WebServerService, queryOf, readJsonBody, face, send } from './host-faces.ts'
+import { type RuntimeFaces, type WebServerService, queryOf, readJsonBody, face, send } from './host-faces.ts'
 
 /**
  * Register the read-only card-pack routes.

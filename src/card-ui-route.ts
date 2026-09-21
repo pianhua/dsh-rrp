@@ -17,7 +17,7 @@ import { cardDirOf, shippedCardRoot } from './cards.ts'
 import { isUiHtmlName, loadUiManifest, UI_MANIFEST_FILE } from './card-ui.ts'
 import { isCardId } from './preset-id.ts'
 import { RRP_ROUTES, type CardUiResponse } from './route-contract.ts'
-import { type RequestLike, type ResponseLike, type RuntimeFaces, type WebServerService, queryOf, face, send } from './host-faces.ts'
+import { type RuntimeFaces, type WebServerService, queryOf, face, send } from './host-faces.ts'
 
 const TAG = '[dsh-rrp]'
 const UI_PATH = RRP_ROUTES.cardUi

@@ -39,7 +39,7 @@ function newestSessionFile() {
   const candidates = []
   for (const workspace of readdirSync(root)) {
     const dir = join(root, workspace)
-    let entries = []
+    let entries
     try { entries = readdirSync(dir) } catch { continue }
     for (const entry of entries) {
       const file = join(dir, entry, 'session.v3.jsonl.zstd')

@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { cleanupSession, extractSessionId } from '../src/index.ts'
 import { readActivity, recordActivity } from '../src/activity.ts'
-import { forgetState, publishState } from '../src/state-publisher.ts'
 import { hasLoreDraft, stageLoreDraftForTesting } from '../src/lore-route.ts'
 import { getLastSummarizedTurn, registerSummarizer } from '../src/summarizer.ts'
-import { emptyWorldState } from '../src/world-state.ts'
 import * as rrp from '../src/index.ts'
 
 describe('extractSessionId', () => {

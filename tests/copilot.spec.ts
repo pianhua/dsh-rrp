@@ -486,7 +486,7 @@ describe('copilot writer lock (issue #27)', () => {
   })
 
   it('warns when another LIVE process holds a fresh heartbeat', async () => {
-    let now = 5_000_000
+    const now = 5_000_000
     setCopilotWitnessForTesting(lockFile(), () => now)
     // A real child process, so pidAlive() has something true to observe.
     const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { stdio: 'ignore' })
@@ -508,7 +508,7 @@ describe('copilot writer lock (issue #27)', () => {
   })
 
   it('silently overwrites a stale heartbeat (crashed remnant)', async () => {
-    let now = 9_000_000
+    const now = 9_000_000
     setCopilotWitnessForTesting(lockFile(), () => now)
     writeFileSync(lockFile(), JSON.stringify({
       pid: process.pid + 9999, hostname: 'ghost', openedAt: now - 3_600_000, heartbeatAt: now - 3_600_000,
@@ -523,7 +523,7 @@ describe('copilot writer lock (issue #27)', () => {
   })
 
   it('silently overwrites a fresh heartbeat from a DEAD pid (quick restart)', async () => {
-    let now = 12_000_000
+    const now = 12_000_000
     setCopilotWitnessForTesting(lockFile(), () => now)
     writeFileSync(lockFile(), JSON.stringify({
       pid: 999_999_999, hostname: 'ghost', openedAt: now - 1_000, heartbeatAt: now - 1_000,

@@ -18,7 +18,6 @@ import {
   Button,
   IconCheckOutline16,
   IconLoadingOutline16,
-  IconPlusOutline16,
   IconSparkle16,
   IconTrashOutline16,
   Input,

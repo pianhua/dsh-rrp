@@ -20,8 +20,6 @@ import { CARD_KEY, type CardContext } from './card-types.ts'
 import { listCards } from './cards.ts'
 import {
   type ProjectionsService,
-  type RequestLike,
-  type ResponseLike,
   type RuntimeFaces,
   type SessionLike,
   type SessionsService,

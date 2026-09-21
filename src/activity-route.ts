@@ -7,7 +7,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { readActivity } from './activity.ts'
-import { type RequestLike, type ResponseLike, type RuntimeFaces, type WebServerService, queryOf, face, send } from './host-faces.ts'
+import { type RuntimeFaces, type WebServerService, queryOf, face, send } from './host-faces.ts'
 
 const TAG = '[dsh-rrp]'
 import { RRP_ROUTES } from './route-contract.ts'

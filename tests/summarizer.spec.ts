@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { buildSummarizerPrompt, parseSummarizerReply } from '../src/agents/summarizer.ts'
 import { registerSummarizer, registerSummaryCommand, forgetAllSummary } from '../src/summarizer.ts'
 import { RRP_SETTINGS_KEY } from '../src/settings.ts'

@@ -1,0 +1,9 @@
+# Prose and shipped content are deliberately unformatted: prettier re-pads
+# Markdown tables and would churn card packages for no reader benefit.
+lib
+node_modules
+pnpm-lock.yaml
+*.md
+docs
+cards
+dist

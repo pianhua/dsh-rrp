@@ -29,8 +29,6 @@ const START_PATH = RRP_ROUTES.start
 import {
   type AgentsService,
   type ProjectionsService,
-  type RequestLike,
-  type ResponseLike,
   type RuntimeFaces,
   type SessionLike,
   type SessionsService,

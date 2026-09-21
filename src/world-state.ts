@@ -184,7 +184,7 @@ function capString(value: string, limit: number): string {
 const PLAYER_ENDPOINT_ALIASES = new Set(['我', '你', '玩家', '主角', 'user', 'player'])
 
 /** Bracketed modifiers stripped from a relation endpoint: （…）(…) […]【…】. */
-const BRACKET_MODIFIER = /（[^（）]*）|\([^()]*\)|【[^【】]*】|\[[^\[\]]*\]/g
+const BRACKET_MODIFIER = /（[^（）]*）|\([^()]*\)|【[^【】]*】|\[[^[\]]*\]/g
 
 /**
  * Normalize one relation endpoint: trim → drop bracket modifiers (titles,
@@ -255,7 +255,7 @@ export function pruneWorldState(state: WorldState): WorldState {
 
   // Cap dynamic fields count and apply constraints
   const dynamicKeys = getDynamicKeys(state)
-  let pruned: WorldState = { ...state, characters, inventory, flags, relations }
+  const pruned: WorldState = { ...state, characters, inventory, flags, relations }
   let changed = characters !== state.characters || inventory !== state.inventory || flags !== state.flags
     || relations !== state.relations
   

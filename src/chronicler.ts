@@ -35,7 +35,6 @@ import {
 import { matchesPreset } from './preset-id.ts'
 import { publishState } from './state-publisher.ts'
 import { pendingTranscriptOf, proseHeadSeqOf } from './transcript-reader.ts'
-import { TRANSCRIPT_KEY, type TranscriptSlice } from './transcript.ts'
 import { NO_WORLD_STATE_CHANGE, WORLD_STATE_KEY, diffWorldState, emptyWorldState, worldStatesEqual, type WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
