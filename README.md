@@ -35,6 +35,8 @@ dsh --profile <你的profile名>
 pnpm install
 pnpm run build        # 产物 lib/（host ESM + client bundle）
 pnpm run typecheck
+pnpm run lint         # eslint 扁平配置，零告警为准
+pnpm run format:check # prettier 排版（改排版用 pnpm run format）
 pnpm test
 ```
 
