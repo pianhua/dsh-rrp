@@ -139,6 +139,14 @@ export type RrpUseSessions = <T>(selector: (state: RrpSessionListState) => T) =>
 /** The host's pushed per-session projection hook (`useProjection`). */
 export type RrpUseProjection = (key: string) => unknown
 
+/** Workspace UI capability (subset of dsh-client-ui-workspace). */
+export interface RrpUiWorkspaceService {
+  /** Select a Session and show its Conversation as one UI navigation action. */
+  openSession(target: string): void
+  startSession?(workspaceId?: string): void
+  forkSession?(sessionId: string): Promise<void>
+}
+
 /** The Context the client half sees. */
 export type RrpClientContext = CordisContext & {
   slots: RrpSlotsService
@@ -150,4 +158,6 @@ export type RrpClientContext = CordisContext & {
   remote?: RrpRemoteService
   /** Present whenever the layout shell is loaded. */
   layout?: RrpLayoutService
+  /** Present whenever the workspace navigation shell is loaded. */
+  uiWorkspace?: RrpUiWorkspaceService
 }

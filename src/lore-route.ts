@@ -53,32 +53,16 @@ import { WORLD_STATE_KEY, renderWorldState, type WorldState } from './world-stat
 const TAG = '[dsh-rrp]'
 const LORE_PATH = RRP_ROUTES.lore
 
-/** Staged drafts, one per session; never durable — the player confirms or drops. */
-const PENDING = new Map<string, LoreEntry>()
-/** Sessions with a Scribe pass in flight (one at a time). */
-const DRAFTING = new Set<string>()
+import {
+  PENDING,
+  DRAFTING,
+  forgetLore,
+  forgetAllLore,
+  hasLoreDraft,
+  stageLoreDraftForTesting,
+} from './lore-drafts.ts'
 
-/** Forget staged drafts and in-flight drafting state when a session is disposed. */
-export function forgetLore(sessionId: string): void {
-  PENDING.delete(sessionId)
-  DRAFTING.delete(sessionId)
-}
-
-/** Drop every staged draft (plugin unload must not leave stale sessions behind). */
-export function forgetAllLore(): void {
-  PENDING.clear()
-  DRAFTING.clear()
-}
-
-/** Check whether a session has pending or drafting state (for testing / inspection). */
-export function hasLoreDraft(sessionId: string): boolean {
-  return PENDING.has(sessionId) || DRAFTING.has(sessionId)
-}
-
-/** Set staged draft for testing. */
-export function stageLoreDraftForTesting(sessionId: string, entry: LoreEntry): void {
-  PENDING.set(sessionId, entry)
-}
+export { forgetLore, forgetAllLore, hasLoreDraft, stageLoreDraftForTesting }
 
 /**
  * Stage an externally composed draft (the Copilot's draft_lore action).

@@ -23,7 +23,7 @@ import {
   type UiPush,
 } from '../ui-bridge.ts'
 import { applyButtonPatch } from '../ui-schema.ts'
-import type { StageApi } from './stage-tab.tsx'
+import type { StageApi } from './stage-types.ts'
 
 /** Calls a card app may raise per second; a runaway page must not flood the ledger. */
 const CALLS_PER_SECOND = 20

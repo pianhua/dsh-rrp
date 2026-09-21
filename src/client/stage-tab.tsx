@@ -25,20 +25,9 @@ import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from '../worldline-digest.
 import { StageFrame } from './stage-frame.tsx'
 import { askCopilot } from './copilot-prefill.ts'
 import type { RrpClientContext, RrpUseProjection } from './context-types.ts'
+import type { StageApi, Translate } from './stage-types.ts'
 
-type Translate = (key: string) => string
-
-/** Everything the panel needs from the host wiring, built once at registration. */
-export interface StageApi {
-  /** Load one card's validated UI declaration (cached; null = the card declares none). */
-  loadManifest(cardId: string): Promise<UiManifest | null>
-  /** Post a whole corrected slice through the player-correction channel. */
-  correctState(sessionId: string, state: WorldState): Promise<void>
-  /** Reveal 月停 and pre-fill one question (never auto-sent). */
-  askCopilot(question: string): void
-  /** Drop one card's cached declaration so the next load re-reads the disk. */
-  forget(cardId: string): void
-}
+export type { StageApi, Translate }
 
 interface StagePanelProps {
   t?: Translate
