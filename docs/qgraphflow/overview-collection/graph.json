@@ -1,0 +1,3131 @@
+{
+  "diagrams": [
+    {
+      "meta": {
+        "title": "dsh-rrp 全貌：DSH 宿主面 · 插件两半 · 文件面",
+        "subtitle": "以仓库源码为准（docs/ 存在漂移，仅作参考）；所有能力经 ctx 注入，零自建基建",
+        "sourceRef": "dsh-rrp@c392d07",
+        "scope": "dsh-rrp 插件全仓（src/ + presets/ + cards/）",
+        "diagramType": "architecture",
+        "locale": "zh-CN"
+      },
+      "groups": [
+        {
+          "id": "g-host",
+          "label": "DSH 宿主面（与插件同进程）",
+          "kind": "runtime",
+          "position": {
+            "x": 2188,
+            "y": 1633
+          },
+          "size": {
+            "width": 1632,
+            "height": 276
+          }
+        },
+        {
+          "id": "g-plugin",
+          "label": "dsh-rrp 宿主半边（注册均为可逆 Effect）",
+          "kind": "ownership",
+          "position": {
+            "x": 1057,
+            "y": 92
+          },
+          "size": {
+            "width": 3225,
+            "height": 1191
+          }
+        },
+        {
+          "id": "g-client",
+          "label": "浏览器 · dsh-rrp 客户端半边",
+          "kind": "runtime",
+          "position": {
+            "x": 4346,
+            "y": 1003
+          },
+          "size": {
+            "width": 544,
+            "height": 280
+          }
+        }
+      ],
+      "nodes": [
+        {
+          "id": "host-core",
+          "label": "会话日志 + 投影注册表",
+          "kind": "framework",
+          "groupId": "g-host",
+          "module": "host",
+          "subtitle": "ctx.sessions / ctx.sessionProjections：唯一写入口 append + 切面读取 stateOf",
+          "facts": [
+            "绝不发明会话事件类型：全部结构化状态寄存在已知 user/message 的 source.rrp（src/state-payload.ts）",
+            "7 个投影单元由本插件注册，宿主逐事件折叠；无关事件返回同引用，Object.is 门控零下游工作",
+            "session/disposed 与 agent/disposed 事件驱动本插件的缓存清理"
+          ],
+          "position": {
+            "x": 2764,
+            "y": 1691
+          },
+          "size": {
+            "width": 480,
+            "height": 139
+          }
+        },
+        {
+          "id": "host-ai",
+          "label": "后台队列与智体面",
+          "kind": "framework",
+          "groupId": "g-host",
+          "module": "host",
+          "subtitle": "ctx.jobs / ctx.llm / ctx.agents / ctx.commands / ctx.agentPresets / ctx.skills",
+          "facts": [
+            "jobs.start 调度后台推演；attachController('dsh-rrp') 提供取消（RP 预置组合无 tool-jobs 行）",
+            "llm.stream 用会话自身 provider/model 路由（routeOf(agents,…)），system 恒定、易变数据走 user 消息",
+            "agentPresets 扫描 <dshHome>/.agent-presets 组成模式族；skills 按 agent 作用域分层"
+          ],
+          "position": {
+            "x": 2220,
+            "y": 1691
+          },
+          "size": {
+            "width": 480,
+            "height": 139
+          }
+        },
+        {
+          "id": "host-io",
+          "label": "路由与持久化面",
+          "kind": "framework",
+          "groupId": "g-host",
+          "module": "host",
+          "subtitle": "ctx.webServer / ctx.storageDomain / ctx.sessionQuery / ctx.sessionPersistence",
+          "facts": [
+            "零 node:http createServer：15 条 /dsh-rrp/* 精确路径全部注册进宿主 webServer",
+            "storageDomain 两个记录域：dsh_rrp_copilot（月停历史）与 dsh_rrp_worldlines（软归档）",
+            "sessionQuery 提供冷会话骨架；sessionPersistence 只读句柄支撑全量小说导出（冷会话也可读）"
+          ],
+          "position": {
+            "x": 3308,
+            "y": 1691
+          },
+          "size": {
+            "width": 480,
+            "height": 139
+          }
+        },
+        {
+          "id": "plugin-entry",
+          "label": "apply() 注册编排",
+          "kind": "service",
+          "groupId": "g-plugin",
+          "module": "plugin",
+          "subtitle": "src/index.ts：物化预置 + 按能力门控注册各子系统 + 生命周期清理",
+          "facts": [
+            "每个子系统都用 ctx.inject([...faces]) 门控：缺哪个宿主能力就静默闲置，不崩启动",
+            "卸载路径显式清空全部模块级缓存（cleanupAllSessions），不依赖不会触发的 disposed 事件"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/index.ts",
+            "lineStart": 84,
+            "lineEnd": 254,
+            "symbol": "apply"
+          },
+          "position": {
+            "x": 2197,
+            "y": 150
+          },
+          "size": {
+            "width": 480,
+            "height": 139
+          }
+        },
+        {
+          "id": "preset-sys",
+          "label": "模式与卡包体系",
+          "kind": "component",
+          "groupId": "g-plugin",
+          "module": "preset",
+          "subtitle": "preset / preset-id / cards / card-import / card-ui / ui-schema / card-workspace",
+          "facts": [
+            "一卡一预置：rp（基座，无卡包知识）+ rp-<card-id>（仅本卡技能根），杜绝设定串味",
+            "物化带 .dsh-rrp.json 所有权标记：只刷新自己未改过的副本，用户改过永不覆盖，卸载才删",
+            "卡包 = 纯文本目录（card.md / state.json / openings/ / skills/），酒馆 v2/v3 与 PNG 卡可导入",
+            "卡包界面声明（ui/manifest.json）关闭式组件集 + 仅两种动作：correct_state / ask_copilot"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/preset.ts",
+            "lineStart": 205,
+            "lineEnd": 212,
+            "symbol": "materializePreset"
+          },
+          "position": {
+            "x": 1089,
+            "y": 647
+          },
+          "size": {
+            "width": 480,
+            "height": 139
+          }
+        },
+        {
+          "id": "state-sys",
+          "label": "状态发布与投影折叠",
+          "kind": "business",
+          "groupId": "g-plugin",
+          "module": "state",
+          "subtitle": "state-payload / state-publisher / projection/* + correction · start · activity · export 路由",
+          "facts": [
+            "只追加不替换：前缀缓存命中率从 27% 回到约 90%（state-publisher.ts 头注）",
+            "两条车道各只保留一条动态消息：card（会话常量）与 facts（状态/脉络/设置/设定沉淀），内容指纹去重",
+            "stateFoldSeq 随状态同一事件落日志：重启、恢复、分叉都从正确位置续折",
+            "玩家矫正是普通最后一次写入（无锁）：整片状态校验 → 剪枝 → 发布；无变化直接短路返回"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/state-publisher.ts",
+            "lineStart": 145,
+            "lineEnd": 242,
+            "symbol": "publishState"
+          },
+          "position": {
+            "x": 3227,
+            "y": 1112
+          },
+          "size": {
+            "width": 480,
+            "height": 139
+          }
+        },
+        {
+          "id": "agent-sys",
+          "label": "后台智体",
+          "kind": "component",
+          "groupId": "g-plugin",
+          "module": "agents",
+          "subtitle": "chronicler / summarizer / scribe + agents/*（统一 AgentPromptContract，issue #32）",
+          "facts": [
+            "Chronicler：turn/end(completed) 触发 → 折叠未记账正文（≤8000 字）→ 整片 WorldState；玩家已矫正则作废并排队覆盖重跑（≤3 次）",
+            "Summarizer：每 N 轮（/summary every N）产出四维罗盘，提交前做单调性检查，绝不回退",
+            "Scribe 只起草一条设定草稿，玩家在设定集页签确认才写入",
+            "空流一律判为设施故障（不是模型结论），与格式错误分开归因"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/agents/contract.ts",
+            "lineStart": 35,
+            "lineEnd": 48,
+            "symbol": "AgentPromptContract"
+          },
+          "position": {
+            "x": 1618,
+            "y": 655
+          },
+          "size": {
+            "width": 480,
+            "height": 139
+          }
+        },
+        {
+          "id": "lore-sys",
+          "label": "设定集与条件注入",
+          "kind": "component",
+          "groupId": "g-plugin",
+          "module": "lore",
+          "subtitle": "lore-route / lore-runtime / lore-provider / lore-state / lore-condition",
+          "facts": [
+            "确认的设定以 rrpSediment 事件折叠进投影，随原生分叉继承；技能按 agent 作用域注册，不跨世界线泄漏",
+            "条件注入（issue #16）：卡包 SKILL.md frontmatter 声明 when，发布时对状态求值，命中块整块替换并显式撤销",
+            "旧 sidecar 设定一次性迁移：先落事件再改名备份，失败不破坏用户文件"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/lore-route.ts",
+            "lineStart": 329,
+            "lineEnd": 480,
+            "symbol": "registerLoreRoute"
+          },
+          "position": {
+            "x": 2233,
+            "y": 651
+          },
+          "size": {
+            "width": 480,
+            "height": 139
+          }
+        },
+        {
+          "id": "copilot-sys",
+          "label": "月停（Copilot）",
+          "kind": "component",
+          "groupId": "g-plugin",
+          "module": "agents",
+          "subtitle": "copilot / copilot-store / steward-proposals：SSE 流 + 动作块 + 提案暂存",
+          "facts": [
+            "对话历史落在宿主存储域（dsh_rrp_copilot），永不进会话日志；分叉后从空对话开始",
+            "四种动作：update_world_state（立即生效可撤销）/ draft_lore / propose_card_edit / propose_doc_note（都要玩家确认）",
+            "撤销 = 把动作前快照作为一条新状态发布（append-only 诚实），保留最近 10 个快照"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/copilot.ts",
+            "lineStart": 229,
+            "lineEnd": 261,
+            "symbol": "registerCopilotRoute"
+          },
+          "position": {
+            "x": 2777,
+            "y": 655
+          },
+          "size": {
+            "width": 480,
+            "height": 139
+          }
+        },
+        {
+          "id": "worldline-sys",
+          "label": "世界线地图与软归档",
+          "kind": "component",
+          "groupId": "g-plugin",
+          "module": "worldline",
+          "subtitle": "worldline-route / worldline-tree / worldline-store / projection/worldline-digest / export",
+          "facts": [
+            "一次 GET 折叠整张图：活跃会话 + 投影回合摘要 + sessionQuery 冷骨架 + 宿主分叉谱系",
+            "隐藏是软归档：只剪地图子树，绝不删除宿主会话",
+            "读档 = 原生会话切换；重roll = Session.fork（宿主原生分叉），分支线名由 save-naming 生成"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/worldline-route.ts",
+            "lineStart": 168,
+            "lineEnd": 268,
+            "symbol": "registerWorldlineRoute"
+          },
+          "position": {
+            "x": 3745,
+            "y": 639
+          },
+          "size": {
+            "width": 480,
+            "height": 163
+          }
+        },
+        {
+          "id": "client-half",
+          "label": "客户端半边（6 面板）",
+          "kind": "service",
+          "groupId": "g-client",
+          "module": "client",
+          "subtitle": "src/client/*：右栏三页签 + 会话视图三入口；全部只经宿主 Slot / 侧栏 API 挂载",
+          "facts": [
+            "右栏页签：世界状态（就地矫正）/ 设定集 / 月停；会话视图：舞台（卡片界面）/ 世界线 / 展厅（开卡流）",
+            "投影读取走宿主客户端运行时；HTTP 只打 /dsh-rrp/* 契约路径；SSE 由 route-contract 的帧编解码共用",
+            "开卡流：ensureCardWorkspace → sessions.create → agentPresets.select → POST /start → uiWorkspace.open"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/client/index.ts",
+            "lineStart": 422,
+            "lineEnd": 445,
+            "symbol": "apply"
+          },
+          "position": {
+            "x": 4378,
+            "y": 1061
+          },
+          "size": {
+            "width": 480,
+            "height": 139
+          }
+        },
+        {
+          "id": "home-fs",
+          "label": "宿主文件面 <dshHome>",
+          "kind": "data",
+          "module": "store",
+          "subtitle": "卡包 / 预置 / 存档 / 存储域文件；随包 cards/ 与 presets/ 只读",
+          "facts": [
+            "根目录 = DSH_HOME 或 ~/.dsh（src/home.ts）",
+            "卡包：<dshHome>/.dsh-rrp/cards（用户根优先，随包 cards/ 兜底且只读）",
+            "预置：<dshHome>/.agent-presets/rp*（宿主 agentPresets 扫描）",
+            "存档：<dshHome>/.dsh-rrp/saves/<cardId>（一卡一区，issue #37）"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/home.ts",
+            "lineStart": 10,
+            "lineEnd": 12,
+            "symbol": "harnessHome"
+          },
+          "position": {
+            "x": 543,
+            "y": 1633
+          },
+          "size": {
+            "width": 480,
+            "height": 139
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "a1",
+          "source": "plugin-entry",
+          "target": "host-core",
+          "kind": "call",
+          "label": "注册 7 个会话投影单元",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 2341,
+                "y": 301
+              },
+              {
+                "x": 2341,
+                "y": 385
+              },
+              {
+                "x": 2122,
+                "y": 385
+              },
+              {
+                "x": 2122,
+                "y": 1525
+              },
+              {
+                "x": 2980,
+                "y": 1525
+              },
+              {
+                "x": 2980,
+                "y": 1679
+              }
+            ],
+            "labelAt": {
+              "x": 2122,
+              "y": 1450
+            }
+          }
+        },
+        {
+          "id": "a2",
+          "source": "plugin-entry",
+          "target": "host-ai",
+          "kind": "call",
+          "label": "inject jobs/llm/agents/skills：武装智体与技能提供者",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 2365,
+                "y": 301
+              },
+              {
+                "x": 2365,
+                "y": 313
+              },
+              {
+                "x": 1593,
+                "y": 313
+              },
+              {
+                "x": 1593,
+                "y": 1367
+              },
+              {
+                "x": 1486,
+                "y": 1367
+              },
+              {
+                "x": 1486,
+                "y": 1573
+              },
+              {
+                "x": 2460,
+                "y": 1573
+              },
+              {
+                "x": 2460,
+                "y": 1679
+              }
+            ],
+            "labelAt": {
+              "x": 1486,
+              "y": 1450
+            }
+          }
+        },
+        {
+          "id": "a3",
+          "source": "plugin-entry",
+          "target": "host-io",
+          "kind": "call",
+          "label": "webServer.register 15 条精确路由 + /lore /summary 命令",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 2389,
+                "y": 301
+              },
+              {
+                "x": 2389,
+                "y": 409
+              },
+              {
+                "x": 4249,
+                "y": 409
+              },
+              {
+                "x": 4249,
+                "y": 1549
+              },
+              {
+                "x": 3584,
+                "y": 1549
+              },
+              {
+                "x": 3584,
+                "y": 1679
+              }
+            ],
+            "labelAt": {
+              "x": 4249,
+              "y": 1450
+            }
+          }
+        },
+        {
+          "id": "a4",
+          "source": "plugin-entry",
+          "target": "preset-sys",
+          "kind": "call",
+          "label": "materializePreset()：物化 rp 与 rp-<card> 家族",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 2413,
+                "y": 301
+              },
+              {
+                "x": 2413,
+                "y": 337
+              },
+              {
+                "x": 1341,
+                "y": 337
+              },
+              {
+                "x": 1341,
+                "y": 635
+              }
+            ],
+            "labelAt": {
+              "x": 1341,
+              "y": 472
+            }
+          }
+        },
+        {
+          "id": "a5",
+          "source": "plugin-entry",
+          "target": "state-sys",
+          "kind": "call",
+          "label": "registerCorrectionRoute / Start / Export / Activity",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 2437,
+                "y": 301
+              },
+              {
+                "x": 2437,
+                "y": 385
+              },
+              {
+                "x": 3515,
+                "y": 385
+              },
+              {
+                "x": 3515,
+                "y": 1100
+              }
+            ],
+            "labelAt": {
+              "x": 3515,
+              "y": 720.5
+            }
+          }
+        },
+        {
+          "id": "a6",
+          "source": "plugin-entry",
+          "target": "agent-sys",
+          "kind": "call",
+          "label": "registerChronicler / registerSummarizer",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 2461,
+                "y": 301
+              },
+              {
+                "x": 2461,
+                "y": 361
+              },
+              {
+                "x": 1858,
+                "y": 361
+              },
+              {
+                "x": 1858,
+                "y": 643
+              }
+            ],
+            "labelAt": {
+              "x": 1858,
+              "y": 472
+            }
+          }
+        },
+        {
+          "id": "a7",
+          "source": "plugin-entry",
+          "target": "lore-sys",
+          "kind": "call",
+          "label": "registerLoreRuntime / registerLoreRoute / registerLoreCommand",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 2485,
+                "y": 301
+              },
+              {
+                "x": 2485,
+                "y": 639
+              }
+            ],
+            "labelAt": {
+              "x": 2485,
+              "y": 472
+            }
+          }
+        },
+        {
+          "id": "a8",
+          "source": "plugin-entry",
+          "target": "copilot-sys",
+          "kind": "call",
+          "label": "registerCopilotRoute",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 2509,
+                "y": 301
+              },
+              {
+                "x": 2509,
+                "y": 337
+              },
+              {
+                "x": 3017,
+                "y": 337
+              },
+              {
+                "x": 3017,
+                "y": 643
+              }
+            ],
+            "labelAt": {
+              "x": 3017,
+              "y": 472
+            }
+          }
+        },
+        {
+          "id": "a9",
+          "source": "plugin-entry",
+          "target": "worldline-sys",
+          "kind": "call",
+          "label": "registerWorldlineRoute",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 2533,
+                "y": 301
+              },
+              {
+                "x": 2533,
+                "y": 313
+              },
+              {
+                "x": 3985,
+                "y": 313
+              },
+              {
+                "x": 3985,
+                "y": 627
+              }
+            ],
+            "labelAt": {
+              "x": 3985,
+              "y": 472
+            }
+          }
+        },
+        {
+          "id": "a10",
+          "source": "home-fs",
+          "target": "preset-sys",
+          "kind": "data",
+          "label": "卡包源文件 card.md / state.json / openings / skills",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 771,
+                "y": 1784
+              },
+              {
+                "x": 771,
+                "y": 1945
+              },
+              {
+                "x": 434.5,
+                "y": 1945
+              },
+              {
+                "x": 434.5,
+                "y": 56
+              },
+              {
+                "x": 1163.5,
+                "y": 56
+              },
+              {
+                "x": 1163.5,
+                "y": 68
+              },
+              {
+                "x": 1427,
+                "y": 68
+              },
+              {
+                "x": 1427,
+                "y": 150
+              },
+              {
+                "x": 1163.5,
+                "y": 150
+              },
+              {
+                "x": 1163.5,
+                "y": 535
+              },
+              {
+                "x": 1317,
+                "y": 535
+              },
+              {
+                "x": 1317,
+                "y": 635
+              }
+            ],
+            "labelAt": {
+              "x": 434.5,
+              "y": 1450
+            }
+          }
+        },
+        {
+          "id": "a11",
+          "source": "preset-sys",
+          "target": "home-fs",
+          "kind": "data",
+          "label": "写物化预置与卡包技能副本；建卡专属存档区",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 1329,
+                "y": 798
+              },
+              {
+                "x": 1329,
+                "y": 1319
+              },
+              {
+                "x": 783,
+                "y": 1319
+              },
+              {
+                "x": 783,
+                "y": 1621
+              }
+            ],
+            "labelAt": {
+              "x": 783,
+              "y": 1450
+            }
+          }
+        },
+        {
+          "id": "a12",
+          "source": "state-sys",
+          "target": "host-core",
+          "kind": "data",
+          "label": "Session.append：user/message（source.rrp 结构化载荷）",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 3467,
+                "y": 1263
+              },
+              {
+                "x": 3467,
+                "y": 1319
+              },
+              {
+                "x": 2676.5,
+                "y": 1319
+              },
+              {
+                "x": 2676.5,
+                "y": 1501
+              },
+              {
+                "x": 3004,
+                "y": 1501
+              },
+              {
+                "x": 3004,
+                "y": 1679
+              }
+            ],
+            "labelAt": {
+              "x": 2676.5,
+              "y": 1450
+            }
+          }
+        },
+        {
+          "id": "a13",
+          "source": "host-core",
+          "target": "state-sys",
+          "kind": "framework",
+          "label": "事件逐条折叠为 7 个切面（注册的纯折叠单元）",
+          "evidence": "framework",
+          "route": {
+            "via": [
+              {
+                "x": 2992,
+                "y": 1842
+              },
+              {
+                "x": 2992,
+                "y": 1993
+              },
+              {
+                "x": 142,
+                "y": 1993
+              },
+              {
+                "x": 142,
+                "y": 32
+              },
+              {
+                "x": 2147,
+                "y": 32
+              },
+              {
+                "x": 2147,
+                "y": 1080
+              },
+              {
+                "x": 3419,
+                "y": 1080
+              },
+              {
+                "x": 3419,
+                "y": 1100
+              }
+            ],
+            "labelAt": {
+              "x": 142,
+              "y": 1450
+            }
+          }
+        },
+        {
+          "id": "a14",
+          "source": "host-core",
+          "target": "client-half",
+          "kind": "framework",
+          "label": "投影 view 推送（useProjection('rrpWorldState') 等）",
+          "evidence": "framework",
+          "route": {
+            "via": [
+              {
+                "x": 3016,
+                "y": 1842
+              },
+              {
+                "x": 3016,
+                "y": 1945
+              },
+              {
+                "x": 4914,
+                "y": 1945
+              },
+              {
+                "x": 4914,
+                "y": 56
+              },
+              {
+                "x": 4618,
+                "y": 56
+              },
+              {
+                "x": 4618,
+                "y": 1049
+              }
+            ],
+            "labelAt": {
+              "x": 4914,
+              "y": 1450
+            }
+          }
+        },
+        {
+          "id": "a15",
+          "source": "client-half",
+          "target": "host-io",
+          "kind": "request",
+          "label": "fetch / SSE：/dsh-rrp/* 读写与月停流",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 4606,
+                "y": 1212
+              },
+              {
+                "x": 4606,
+                "y": 1224
+              },
+              {
+                "x": 4654,
+                "y": 1224
+              },
+              {
+                "x": 4654,
+                "y": 1367
+              },
+              {
+                "x": 3335.5,
+                "y": 1367
+              },
+              {
+                "x": 3335.5,
+                "y": 1501
+              },
+              {
+                "x": 3512,
+                "y": 1501
+              },
+              {
+                "x": 3512,
+                "y": 1679
+              }
+            ],
+            "labelAt": {
+              "x": 3335.5,
+              "y": 1450
+            }
+          }
+        },
+        {
+          "id": "a16",
+          "source": "client-half",
+          "target": "host-core",
+          "kind": "call",
+          "label": "sessions.create / fork / rename + uiWorkspace.openSession",
+          "evidence": "framework",
+          "route": {
+            "via": [
+              {
+                "x": 4630,
+                "y": 1212
+              },
+              {
+                "x": 4630,
+                "y": 1343
+              },
+              {
+                "x": 3028,
+                "y": 1343
+              },
+              {
+                "x": 3028,
+                "y": 1679
+              }
+            ],
+            "labelAt": {
+              "x": 3028,
+              "y": 1450
+            }
+          }
+        },
+        {
+          "id": "a17",
+          "source": "agent-sys",
+          "target": "host-ai",
+          "kind": "call",
+          "label": "jobs.start / llm.stream（provider·model 路由）",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 1846,
+                "y": 806
+              },
+              {
+                "x": 1846,
+                "y": 826
+              },
+              {
+                "x": 1568,
+                "y": 826
+              },
+              {
+                "x": 1568,
+                "y": 1343
+              },
+              {
+                "x": 1135,
+                "y": 1343
+              },
+              {
+                "x": 1135,
+                "y": 1597
+              },
+              {
+                "x": 2436,
+                "y": 1597
+              },
+              {
+                "x": 2436,
+                "y": 1679
+              }
+            ],
+            "labelAt": {
+              "x": 1135,
+              "y": 1450
+            }
+          }
+        },
+        {
+          "id": "a18",
+          "source": "agent-sys",
+          "target": "state-sys",
+          "kind": "call",
+          "label": "publishState({worldState | summary | sediment})",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 1870,
+                "y": 806
+              },
+              {
+                "x": 1870,
+                "y": 874
+              },
+              {
+                "x": 2752,
+                "y": 874
+              },
+              {
+                "x": 2752,
+                "y": 1056
+              },
+              {
+                "x": 3443,
+                "y": 1056
+              },
+              {
+                "x": 3443,
+                "y": 1100
+              }
+            ],
+            "labelAt": {
+              "x": 2752,
+              "y": 957
+            }
+          }
+        },
+        {
+          "id": "a19",
+          "source": "copilot-sys",
+          "target": "host-io",
+          "kind": "data",
+          "label": "月停历史：storageDomain dsh_rrp_copilot 表",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 3005,
+                "y": 806
+              },
+              {
+                "x": 3005,
+                "y": 826
+              },
+              {
+                "x": 3731,
+                "y": 826
+              },
+              {
+                "x": 3731,
+                "y": 1391
+              },
+              {
+                "x": 3594,
+                "y": 1391
+              },
+              {
+                "x": 3594,
+                "y": 1501
+              },
+              {
+                "x": 3536,
+                "y": 1501
+              },
+              {
+                "x": 3536,
+                "y": 1679
+              }
+            ],
+            "labelAt": {
+              "x": 3594,
+              "y": 1450
+            }
+          }
+        },
+        {
+          "id": "a20",
+          "source": "copilot-sys",
+          "target": "state-sys",
+          "kind": "call",
+          "label": "publishState(动作补丁) + stageLoreDraft(草稿)",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 3029,
+                "y": 806
+              },
+              {
+                "x": 3029,
+                "y": 1032
+              },
+              {
+                "x": 3467,
+                "y": 1032
+              },
+              {
+                "x": 3467,
+                "y": 1100
+              }
+            ],
+            "labelAt": {
+              "x": 3029,
+              "y": 957
+            }
+          }
+        },
+        {
+          "id": "a21",
+          "source": "worldline-sys",
+          "target": "host-io",
+          "kind": "data",
+          "label": "sessions.list + sessionQuery 冷骨架 + 软归档表",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 3985,
+                "y": 814
+              },
+              {
+                "x": 3985,
+                "y": 1391
+              },
+              {
+                "x": 3896.5,
+                "y": 1391
+              },
+              {
+                "x": 3896.5,
+                "y": 1525
+              },
+              {
+                "x": 3560,
+                "y": 1525
+              },
+              {
+                "x": 3560,
+                "y": 1679
+              }
+            ],
+            "labelAt": {
+              "x": 3896.5,
+              "y": 1450
+            }
+          }
+        },
+        {
+          "id": "a22",
+          "source": "lore-sys",
+          "target": "host-ai",
+          "kind": "call",
+          "label": "skills.registerProvider（agent.ctx 作用域技能层）",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 2461,
+                "y": 802
+              },
+              {
+                "x": 2461,
+                "y": 826
+              },
+              {
+                "x": 2097,
+                "y": 826
+              },
+              {
+                "x": 2097,
+                "y": 1319
+              },
+              {
+                "x": 1840.5,
+                "y": 1319
+              },
+              {
+                "x": 1840.5,
+                "y": 1549
+              },
+              {
+                "x": 2484,
+                "y": 1549
+              },
+              {
+                "x": 2484,
+                "y": 1679
+              }
+            ],
+            "labelAt": {
+              "x": 1840.5,
+              "y": 1450
+            }
+          }
+        },
+        {
+          "id": "a23",
+          "source": "lore-sys",
+          "target": "state-sys",
+          "kind": "call",
+          "label": "publishState({sediment})：设定变更入日志",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 2485,
+                "y": 802
+              },
+              {
+                "x": 2485,
+                "y": 850
+              },
+              {
+                "x": 3330.5,
+                "y": 850
+              },
+              {
+                "x": 3330.5,
+                "y": 1008
+              },
+              {
+                "x": 3491,
+                "y": 1008
+              },
+              {
+                "x": 3491,
+                "y": 1100
+              }
+            ],
+            "labelAt": {
+              "x": 3330.5,
+              "y": 957
+            }
+          }
+        },
+        {
+          "id": "a24",
+          "source": "home-fs",
+          "target": "lore-sys",
+          "kind": "data",
+          "label": "旧 sidecar 设定一次性迁移（读后改名备份）",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 795,
+                "y": 1784
+              },
+              {
+                "x": 795,
+                "y": 1969
+              },
+              {
+                "x": 5224.5,
+                "y": 1969
+              },
+              {
+                "x": 5224.5,
+                "y": 32
+              },
+              {
+                "x": 2172,
+                "y": 32
+              },
+              {
+                "x": 2172,
+                "y": 535
+              },
+              {
+                "x": 2461,
+                "y": 535
+              },
+              {
+                "x": 2461,
+                "y": 639
+              }
+            ],
+            "labelAt": {
+              "x": 5224.5,
+              "y": 1450
+            }
+          }
+        }
+      ],
+      "layout": {
+        "version": "adaptive-v2-elkjs-0.11.0",
+        "strategy": "layered-2"
+      }
+    },
+    {
+      "meta": {
+        "title": "一轮流转：执笔 → 推演 → 投影 → 就地面板矫正 → 下一轮",
+        "subtitle": "D3 正文先行、状态后推；D6 玩家矫正永远赢（无锁，最后写入者胜）",
+        "sourceRef": "dsh-rrp@c392d07",
+        "scope": "单轮 turn 的完整数据与控制流（含月停前的四后台智体中的两个典型）",
+        "diagramType": "sequence",
+        "locale": "zh-CN"
+      },
+      "groups": [
+        {
+          "id": "f-fresh",
+          "label": "D6：推演提交时的矫正检查",
+          "kind": "alt",
+          "operands": [
+            {
+              "id": "fresh",
+              "guard": "prior == currentPrior（本轮无人就地矫正）",
+              "edgeIds": [
+                "m13",
+                "m14",
+                "m15"
+              ]
+            },
+            {
+              "id": "stale",
+              "guard": "else",
+              "edgeIds": [
+                "mstale"
+              ]
+            }
+          ],
+          "position": {
+            "x": 1535.5,
+            "y": 1210
+          },
+          "size": {
+            "width": 2324,
+            "height": 574
+          }
+        },
+        {
+          "id": "f-cadence",
+          "label": "剧情脉络节奏（/summary every N）",
+          "kind": "opt",
+          "operands": [
+            {
+              "id": "cadence",
+              "guard": "summaryEnabled 且 turn % summaryEveryTurns === 0",
+              "edgeIds": [
+                "m23",
+                "m24",
+                "m25",
+                "m26",
+                "m27",
+                "m28"
+              ]
+            }
+          ],
+          "position": {
+            "x": 915.5,
+            "y": 2438
+          },
+          "size": {
+            "width": 4758,
+            "height": 654
+          }
+        }
+      ],
+      "nodes": [
+        {
+          "id": "player",
+          "label": "玩家",
+          "kind": "actor",
+          "subtitle": "行动 / 对白、就地矫正、OOC 提问",
+          "size": {
+            "width": 336,
+            "height": 3100
+          },
+          "position": {
+            "x": 32,
+            "y": 48
+          }
+        },
+        {
+          "id": "rp",
+          "label": "RP 会话 · Author 执笔",
+          "kind": "service",
+          "module": "agents",
+          "subtitle": "rp-<card> 预置：只写第三人称正文，不替玩家代打、不写状态",
+          "source": {
+            "kind": "source",
+            "file": "src/agents/author.ts",
+            "lineStart": 137,
+            "lineEnd": 143,
+            "symbol": "authorAgent"
+          },
+          "size": {
+            "width": 556,
+            "height": 3100
+          },
+          "position": {
+            "x": 432,
+            "y": 48
+          }
+        },
+        {
+          "id": "llm",
+          "label": "ctx.llm（provider/model）",
+          "kind": "external",
+          "subtitle": "会话自身模型路由；system 恒定保前缀缓存",
+          "size": {
+            "width": 405,
+            "height": 3100
+          },
+          "position": {
+            "x": 1052,
+            "y": 48
+          }
+        },
+        {
+          "id": "log",
+          "label": "会话日志（Session）",
+          "kind": "database",
+          "module": "host",
+          "subtitle": "user/message（source.rrp 载荷）+ assistant/message 正文",
+          "source": {
+            "kind": "source",
+            "file": "src/state-payload.ts",
+            "lineStart": 28,
+            "lineEnd": 48,
+            "symbol": "RrpStatePayload"
+          },
+          "size": {
+            "width": 603,
+            "height": 3100
+          },
+          "position": {
+            "x": 1521,
+            "y": 48
+          }
+        },
+        {
+          "id": "chronicler",
+          "label": "Chronicler 触发器与推演",
+          "kind": "participant",
+          "module": "agents",
+          "subtitle": "turn/end(completed) 触发 → 折叠未记账正文 → 整片 WorldState",
+          "source": {
+            "kind": "source",
+            "file": "src/chronicler.ts",
+            "lineStart": 67,
+            "lineEnd": 113,
+            "symbol": "registerChronicler"
+          },
+          "size": {
+            "width": 653,
+            "height": 3100
+          },
+          "position": {
+            "x": 2188,
+            "y": 48
+          }
+        },
+        {
+          "id": "proj",
+          "label": "会话投影（7 单元折叠）",
+          "kind": "participant",
+          "module": "state",
+          "subtitle": "rrpTranscript 游标 + rrpWorldState 等纯折叠切面",
+          "source": {
+            "kind": "source",
+            "file": "src/projection/transcript.ts",
+            "lineStart": 49,
+            "lineEnd": 125,
+            "symbol": "transcriptProjection"
+          },
+          "size": {
+            "width": 516,
+            "height": 3100
+          },
+          "position": {
+            "x": 2905,
+            "y": 48
+          }
+        },
+        {
+          "id": "publisher",
+          "label": "状态发布 publishState",
+          "kind": "participant",
+          "module": "state",
+          "subtitle": "整片状态 → 模型可见事实文本 + source.rrp 载荷，指纹去重后追加",
+          "source": {
+            "kind": "source",
+            "file": "src/state-publisher.ts",
+            "lineStart": 145,
+            "lineEnd": 242,
+            "symbol": "publishState"
+          },
+          "size": {
+            "width": 620,
+            "height": 3100
+          },
+          "position": {
+            "x": 3485,
+            "y": 48
+          }
+        },
+        {
+          "id": "summarizer",
+          "label": "Summarizer（每 N 轮）",
+          "kind": "participant",
+          "module": "agents",
+          "subtitle": "四维宏观罗盘：goal / conflict / turningPoints / threads",
+          "source": {
+            "kind": "source",
+            "file": "src/summarizer.ts",
+            "lineStart": 90,
+            "lineEnd": 151,
+            "symbol": "registerSummarizer"
+          },
+          "size": {
+            "width": 590,
+            "height": 3100
+          },
+          "position": {
+            "x": 5314,
+            "y": 48
+          }
+        },
+        {
+          "id": "panel",
+          "label": "世界状态页签（浏览器）",
+          "kind": "participant",
+          "module": "client",
+          "subtitle": "就地编辑整片状态并保存；显示最近变更账本",
+          "source": {
+            "kind": "source",
+            "file": "src/client/world-state-tab.tsx",
+            "lineStart": 1162,
+            "lineEnd": 1180,
+            "symbol": "registerWorldStateTab"
+          },
+          "size": {
+            "width": 396,
+            "height": 3100
+          },
+          "position": {
+            "x": 4169,
+            "y": 48
+          }
+        },
+        {
+          "id": "correction",
+          "label": "矫正路由 POST /dsh-rrp/world-state",
+          "kind": "participant",
+          "module": "state",
+          "subtitle": "校验 WorldState → 剪枝 → 发布；非 RP 会话 403；无变化短路",
+          "source": {
+            "kind": "source",
+            "file": "src/correction.ts",
+            "lineStart": 45,
+            "lineEnd": 56,
+            "symbol": "registerCorrectionRoute"
+          },
+          "size": {
+            "width": 621,
+            "height": 3100
+          },
+          "position": {
+            "x": 4629,
+            "y": 48
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "m1",
+          "source": "player",
+          "target": "rp",
+          "kind": "sync",
+          "label": "本轮行动与对白",
+          "order": 1,
+          "evidence": "source",
+          "route": {
+            "messageY": 238
+          }
+        },
+        {
+          "id": "m2",
+          "source": "rp",
+          "target": "llm",
+          "kind": "sync",
+          "label": "llm.stream(AUTHOR_SYSTEM_PROMPT + 卡包/事实/罗盘区块)",
+          "order": 2,
+          "evidence": "source",
+          "route": {
+            "messageY": 328
+          }
+        },
+        {
+          "id": "m3",
+          "source": "llm",
+          "target": "rp",
+          "kind": "return",
+          "label": "正文流（逐字）",
+          "order": 3,
+          "replyTo": "m2",
+          "evidence": "source",
+          "route": {
+            "messageY": 394
+          }
+        },
+        {
+          "id": "m4",
+          "source": "rp",
+          "target": "log",
+          "kind": "async",
+          "label": "assistant/message：正文落日志（宿主会话控制器）",
+          "order": 4,
+          "evidence": "framework",
+          "route": {
+            "messageY": 484
+          }
+        },
+        {
+          "id": "m5",
+          "source": "rp",
+          "target": "player",
+          "kind": "return",
+          "label": "正文（流式呈现）",
+          "order": 5,
+          "replyTo": "m1",
+          "evidence": "source",
+          "route": {
+            "messageY": 550
+          }
+        },
+        {
+          "id": "m6",
+          "source": "log",
+          "target": "chronicler",
+          "kind": "async",
+          "label": "turn/end（reason.kind === 'completed'）",
+          "order": 6,
+          "evidence": "source",
+          "route": {
+            "messageY": 640
+          }
+        },
+        {
+          "id": "m7",
+          "source": "chronicler",
+          "target": "proj",
+          "kind": "sync",
+          "label": "stateOf(session, 'agentPreset') 判定 RP 族",
+          "order": 7,
+          "evidence": "source",
+          "route": {
+            "messageY": 730
+          }
+        },
+        {
+          "id": "m8",
+          "source": "proj",
+          "target": "chronicler",
+          "kind": "return",
+          "label": "preset 切面",
+          "order": 8,
+          "replyTo": "m7",
+          "evidence": "source",
+          "route": {
+            "messageY": 796
+          }
+        },
+        {
+          "id": "m9",
+          "source": "chronicler",
+          "target": "proj",
+          "kind": "sync",
+          "label": "pendingTranscriptOf(lastFoldSeq → throughSeq)",
+          "order": 9,
+          "evidence": "source",
+          "route": {
+            "messageY": 910
+          }
+        },
+        {
+          "id": "m10",
+          "source": "proj",
+          "target": "chronicler",
+          "kind": "return",
+          "label": "未折叠正文（≤8000 字，整条目截断）",
+          "order": 10,
+          "replyTo": "m9",
+          "evidence": "source",
+          "route": {
+            "messageY": 1000
+          }
+        },
+        {
+          "id": "m11",
+          "source": "chronicler",
+          "target": "llm",
+          "kind": "sync",
+          "label": "llm.stream(CHRONICLER_SYSTEM_PROMPT, {prior, transcript})",
+          "order": 11,
+          "evidence": "source",
+          "route": {
+            "messageY": 1114
+          }
+        },
+        {
+          "id": "m12",
+          "source": "llm",
+          "target": "chronicler",
+          "kind": "return",
+          "label": "完整 WorldState JSON",
+          "order": 12,
+          "replyTo": "m11",
+          "evidence": "source",
+          "route": {
+            "messageY": 1180
+          }
+        },
+        {
+          "id": "m13",
+          "source": "chronicler",
+          "target": "publisher",
+          "kind": "sync",
+          "label": "publishState({worldState, stateFoldSeq: throughSeq})",
+          "order": 13,
+          "evidence": "source",
+          "route": {
+            "messageY": 1392
+          }
+        },
+        {
+          "id": "m14",
+          "source": "publisher",
+          "target": "log",
+          "kind": "async",
+          "label": "user/message：source.rrp.{worldState, stateFoldSeq} + 模型可见事实文本",
+          "order": 14,
+          "evidence": "source",
+          "route": {
+            "messageY": 1506
+          }
+        },
+        {
+          "id": "m15",
+          "source": "publisher",
+          "target": "chronicler",
+          "kind": "return",
+          "label": "true（已发布）",
+          "order": 15,
+          "replyTo": "m13",
+          "evidence": "source",
+          "route": {
+            "messageY": 1572
+          }
+        },
+        {
+          "id": "m16",
+          "source": "log",
+          "target": "proj",
+          "kind": "async",
+          "label": "事件折叠：rrpWorldState / rrpTranscript / rrpWorldlineDigest",
+          "order": 17,
+          "evidence": "framework",
+          "route": {
+            "messageY": 1892
+          }
+        },
+        {
+          "id": "m17",
+          "source": "proj",
+          "target": "panel",
+          "kind": "async",
+          "label": "投影推送（useProjection('rrpWorldState')）",
+          "order": 18,
+          "evidence": "framework",
+          "route": {
+            "messageY": 1982
+          }
+        },
+        {
+          "id": "m18",
+          "source": "panel",
+          "target": "correction",
+          "kind": "sync",
+          "label": "POST {sessionId, state}（整片就地矫正）",
+          "order": 19,
+          "evidence": "source",
+          "route": {
+            "messageY": 2072
+          }
+        },
+        {
+          "id": "m19",
+          "source": "correction",
+          "target": "publisher",
+          "kind": "sync",
+          "label": "publishState(pruned)",
+          "order": 20,
+          "evidence": "source",
+          "route": {
+            "messageY": 2138
+          }
+        },
+        {
+          "id": "m20",
+          "source": "publisher",
+          "target": "log",
+          "kind": "async",
+          "label": "user/message：玩家就地矫正（账本 actor='player'）",
+          "order": 21,
+          "evidence": "source",
+          "route": {
+            "messageY": 2252
+          }
+        },
+        {
+          "id": "m21",
+          "source": "correction",
+          "target": "panel",
+          "kind": "return",
+          "label": "200 {ok:true}",
+          "order": 22,
+          "replyTo": "m18",
+          "evidence": "source",
+          "route": {
+            "messageY": 2318
+          }
+        },
+        {
+          "id": "m22",
+          "source": "log",
+          "target": "rp",
+          "kind": "async",
+          "label": "下一轮上下文：最新事实区块（前缀保持，缓存命中）",
+          "order": 23,
+          "evidence": "source",
+          "route": {
+            "messageY": 2408
+          }
+        },
+        {
+          "id": "m23",
+          "source": "log",
+          "target": "summarizer",
+          "kind": "async",
+          "label": "turn/end（第 N 轮，N % every === 0）",
+          "order": 24,
+          "evidence": "source",
+          "route": {
+            "messageY": 2620
+          }
+        },
+        {
+          "id": "m24",
+          "source": "summarizer",
+          "target": "llm",
+          "kind": "sync",
+          "label": "llm.stream(SUMMARIZER_SYSTEM_PROMPT, 全文转录 ≤16000)",
+          "order": 25,
+          "evidence": "source",
+          "route": {
+            "messageY": 2710
+          }
+        },
+        {
+          "id": "m25",
+          "source": "llm",
+          "target": "summarizer",
+          "kind": "return",
+          "label": "MacroSummary JSON",
+          "order": 26,
+          "replyTo": "m24",
+          "evidence": "source",
+          "route": {
+            "messageY": 2776
+          }
+        },
+        {
+          "id": "m26",
+          "source": "summarizer",
+          "target": "publisher",
+          "kind": "sync",
+          "label": "publishState({summary, summaryTurn: N})",
+          "order": 27,
+          "evidence": "source",
+          "route": {
+            "messageY": 2866
+          }
+        },
+        {
+          "id": "m27",
+          "source": "publisher",
+          "target": "log",
+          "kind": "async",
+          "label": "user/message：宏观罗盘区块（更旧者提交即作废）",
+          "order": 28,
+          "evidence": "source",
+          "route": {
+            "messageY": 2956
+          }
+        },
+        {
+          "id": "m28",
+          "source": "publisher",
+          "target": "summarizer",
+          "kind": "return",
+          "label": "true（已发布）",
+          "order": 29,
+          "replyTo": "m26",
+          "evidence": "source",
+          "route": {
+            "messageY": 3022
+          }
+        },
+        {
+          "id": "mstale",
+          "source": "chronicler",
+          "target": "chronicler",
+          "kind": "sync",
+          "label": "作废本次推演，排队覆盖重跑（≤3 次）",
+          "order": 16,
+          "evidence": "source",
+          "route": {
+            "messageY": 1678
+          }
+        }
+      ],
+      "executions": [
+        {
+          "id": "x-rp",
+          "participantId": "rp",
+          "start": {
+            "edgeId": "m1",
+            "at": "receive"
+          },
+          "end": {
+            "edgeId": "m5",
+            "at": "send"
+          }
+        },
+        {
+          "id": "x-author-llm",
+          "participantId": "llm",
+          "start": {
+            "edgeId": "m2",
+            "at": "receive"
+          },
+          "end": {
+            "edgeId": "m3",
+            "at": "send"
+          }
+        },
+        {
+          "id": "x-chr",
+          "participantId": "chronicler",
+          "start": {
+            "edgeId": "m6",
+            "at": "receive"
+          },
+          "end": {
+            "edgeId": "m12",
+            "at": "receive"
+          }
+        },
+        {
+          "id": "x-chr-llm",
+          "participantId": "llm",
+          "start": {
+            "edgeId": "m11",
+            "at": "receive"
+          },
+          "end": {
+            "edgeId": "m12",
+            "at": "send"
+          }
+        },
+        {
+          "id": "x-proj",
+          "participantId": "proj",
+          "start": {
+            "edgeId": "m7",
+            "at": "receive"
+          },
+          "end": {
+            "edgeId": "m10",
+            "at": "send"
+          }
+        },
+        {
+          "id": "x-pub-chr",
+          "participantId": "publisher",
+          "start": {
+            "edgeId": "m13",
+            "at": "receive"
+          },
+          "end": {
+            "edgeId": "m15",
+            "at": "send"
+          }
+        },
+        {
+          "id": "x-corr",
+          "participantId": "correction",
+          "start": {
+            "edgeId": "m18",
+            "at": "receive"
+          },
+          "end": {
+            "edgeId": "m21",
+            "at": "send"
+          }
+        },
+        {
+          "id": "x-pub-cor",
+          "participantId": "publisher",
+          "start": {
+            "edgeId": "m19",
+            "at": "receive"
+          },
+          "end": {
+            "edgeId": "m20",
+            "at": "send"
+          }
+        },
+        {
+          "id": "x-sum",
+          "participantId": "summarizer",
+          "start": {
+            "edgeId": "m23",
+            "at": "receive"
+          },
+          "end": {
+            "edgeId": "m28",
+            "at": "receive"
+          }
+        },
+        {
+          "id": "x-sum-llm",
+          "participantId": "llm",
+          "start": {
+            "edgeId": "m24",
+            "at": "receive"
+          },
+          "end": {
+            "edgeId": "m25",
+            "at": "send"
+          }
+        },
+        {
+          "id": "x-pub-sum",
+          "participantId": "publisher",
+          "start": {
+            "edgeId": "m26",
+            "at": "receive"
+          },
+          "end": {
+            "edgeId": "m28",
+            "at": "send"
+          }
+        }
+      ],
+      "layout": {
+        "version": "adaptive-v2-elkjs-0.11.0",
+        "strategy": "sequence-0"
+      }
+    },
+    {
+      "meta": {
+        "title": "数据流：状态载体、切面与外部存储",
+        "subtitle": "唯一持久真相 = 会话日志；其余都是可重建的折叠、缓存与索引",
+        "sourceRef": "dsh-rrp@c392d07",
+        "scope": "dsh-rrp 的数据载体全景（日志 / 投影 / 存储域 / 文件面）",
+        "diagramType": "dataflow",
+        "locale": "zh-CN"
+      },
+      "nodes": [
+        {
+          "id": "player",
+          "label": "玩家",
+          "kind": "external",
+          "subtitle": "行动 / 矫正 / 提问的源头",
+          "position": {
+            "x": 4282.5,
+            "y": 1012
+          },
+          "size": {
+            "width": 289,
+            "height": 100
+          }
+        },
+        {
+          "id": "log",
+          "label": "会话日志（Session）",
+          "kind": "dataStore",
+          "module": "host",
+          "subtitle": "唯一持久真相：已知事件类型，结构化状态藏在 source.rrp",
+          "facts": [
+            "user/message 同时承载模型可见文本与投影折叠用载荷；assistant/message 是正文",
+            "宿主提醒 <system-reminder> 不是玩家回合，所有正文读者一致跳过"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/state-payload.ts",
+            "lineStart": 58,
+            "lineEnd": 93,
+            "symbol": "rrpStateMessage"
+          },
+          "position": {
+            "x": 5156,
+            "y": 1030
+          },
+          "size": {
+            "width": 480,
+            "height": 112
+          }
+        },
+        {
+          "id": "publish",
+          "label": "状态发布与写路由",
+          "kind": "process",
+          "module": "state",
+          "tags": [
+            "core"
+          ],
+          "subtitle": "publishState + correction / start / lore 门面：所有写路径的唯一出口",
+          "facts": [
+            "渲染模型可见区块（卡包基准 / 状态 / 罗盘 / 条件注入块），结构化载荷同行落日志",
+            "内容指纹去重 + 车道保留（同一车道只保留一条动态消息）；折叠游标随状态同行"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/state-publisher.ts",
+            "lineStart": 145,
+            "lineEnd": 242,
+            "symbol": "publishState"
+          },
+          "position": {
+            "x": 4187,
+            "y": 595.5
+          },
+          "size": {
+            "width": 480,
+            "height": 160
+          }
+        },
+        {
+          "id": "proj",
+          "label": "投影折叠与正文渲染",
+          "kind": "process",
+          "module": "state",
+          "subtitle": "7 个纯折叠单元 + transcript-reader 正文渲染",
+          "facts": [
+            "投影键：rrpWorldState / rrpSummary / rrpSettings / rrpSediment / rrpCard / rrpTranscript / rrpWorldlineDigest",
+            "正文渲染按整条目截断，保证头部字节稳定以维持前缀缓存"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/projection/transcript.ts",
+            "lineStart": 49,
+            "lineEnd": 125,
+            "symbol": "transcriptProjection"
+          },
+          "position": {
+            "x": 5998,
+            "y": 1054
+          },
+          "size": {
+            "width": 480,
+            "height": 112
+          }
+        },
+        {
+          "id": "agents",
+          "label": "后台智体（推演 / 脉络 / 起草）",
+          "kind": "process",
+          "module": "agents",
+          "subtitle": "Chronicler · Summarizer · Scribe：prompt → JSON → 校验",
+          "facts": [
+            "统一 AgentPromptContract：静态 system + 易变 user；容错 JSON 解析梯（json-extract）",
+            "输出整片状态 / 四维罗盘 / 单条设定草稿，全部经 publishState 落日志"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/agents/contract.ts",
+            "lineStart": 35,
+            "lineEnd": 48,
+            "symbol": "AgentPromptContract"
+          },
+          "position": {
+            "x": 2092,
+            "y": 631
+          },
+          "size": {
+            "width": 480,
+            "height": 160
+          }
+        },
+        {
+          "id": "copilot",
+          "label": "月停（SSE 回合 + 动作块）",
+          "kind": "process",
+          "module": "agents",
+          "subtitle": "OOC 全知管家：答疑 + 代劳；动作块解析后分流四类动作",
+          "facts": [
+            "对话历史不进日志；每次提问把卡包（实时读盘）、状态、罗盘、设定集、剧情拼进 user 消息",
+            "update_world_state 立即发布可撤销；draft_lore / 提案交玩家确认后才落盘"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/copilot.ts",
+            "lineStart": 398,
+            "lineEnd": 536,
+            "symbol": "registerCopilotRoute"
+          },
+          "position": {
+            "x": 104,
+            "y": 894
+          },
+          "size": {
+            "width": 480,
+            "height": 256
+          }
+        },
+        {
+          "id": "llm",
+          "label": "模型（provider / model）",
+          "kind": "external",
+          "subtitle": "五个智体共用会话自身模型路由",
+          "position": {
+            "x": 3136,
+            "y": 368
+          },
+          "size": {
+            "width": 372,
+            "height": 112
+          }
+        },
+        {
+          "id": "panel",
+          "label": "浏览器面板",
+          "kind": "process",
+          "module": "client",
+          "subtitle": "右栏三页签（世界状态 / 设定集 / 月停）+ 舞台 / 世界线 / 展厅",
+          "facts": [
+            "读：投影切面 + 各只读路由；写：矫正、开卡、导入、提案确认",
+            "活动账本由右栏面板轮询（无 jobs 镜像时 2 秒回退）"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/client/index.ts",
+            "lineStart": 422,
+            "lineEnd": 445,
+            "symbol": "apply"
+          },
+          "position": {
+            "x": 3136,
+            "y": 886
+          },
+          "size": {
+            "width": 480,
+            "height": 256
+          }
+        },
+        {
+          "id": "domain",
+          "label": "宿主存储域（storageDomain）",
+          "kind": "dataStore",
+          "module": "store",
+          "subtitle": "dsh_rrp_copilot（月停历史 · 撤销快照）/ dsh_rrp_worldlines（软归档名单）",
+          "facts": [
+            "插件拥有记录、宿主拥有耐久性；域缺失时降级为进程内存，绝不另起文件孤岛",
+            "第二写手哨兵文件只报警不拦截（个人玩具：拒绝跨进程锁）"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/copilot-store.ts",
+            "lineStart": 99,
+            "lineEnd": 103,
+            "symbol": "copilotDomainSpec"
+          },
+          "position": {
+            "x": 4187,
+            "y": 208
+          },
+          "size": {
+            "width": 480,
+            "height": 112
+          }
+        },
+        {
+          "id": "home",
+          "label": "宿主文件面 <dshHome>",
+          "kind": "dataStore",
+          "module": "store",
+          "subtitle": "卡包 / 预置 / 存档 / 导出；随包资源只读",
+          "facts": [
+            "卡包：.dsh-rrp/cards（用户根可写）与随包 cards/（只读红线）",
+            "预置：.agent-presets/rp*（物化副本，带所有权标记）；存档：.dsh-rrp/saves/<cardId>",
+            "卡包改动提案只在用户卡目录落盘，写入前归档旧内容"
+          ],
+          "source": {
+            "kind": "source",
+            "file": "src/home.ts",
+            "lineStart": 10,
+            "lineEnd": 12,
+            "symbol": "harnessHome"
+          },
+          "position": {
+            "x": 1188,
+            "y": 982
+          },
+          "size": {
+            "width": 431,
+            "height": 112
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "d1",
+          "source": "player",
+          "target": "log",
+          "kind": "data",
+          "label": "行动 / 对白、就地矫正、提问",
+          "evidence": "framework",
+          "route": {
+            "via": [
+              {
+                "x": 4583.5,
+                "y": 1062
+              },
+              {
+                "x": 5144,
+                "y": 1062
+              }
+            ],
+            "labelAt": {
+              "x": 4911.5,
+              "y": 1061.5
+            }
+          }
+        },
+        {
+          "id": "d2",
+          "source": "panel",
+          "target": "publish",
+          "kind": "data",
+          "label": "整片 WorldState（矫正）、开局卡包上下文与初始状态",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 3628,
+                "y": 1014
+              },
+              {
+                "x": 3736,
+                "y": 1014
+              },
+              {
+                "x": 3736,
+                "y": 971
+              },
+              {
+                "x": 4163,
+                "y": 971
+              },
+              {
+                "x": 4163,
+                "y": 723.5
+              },
+              {
+                "x": 4175,
+                "y": 723.5
+              }
+            ],
+            "labelAt": {
+              "x": 3925.5,
+              "y": 970.5
+            }
+          }
+        },
+        {
+          "id": "d3",
+          "source": "home",
+          "target": "panel",
+          "kind": "data",
+          "label": "卡包列表 / 详情、界面清单、卡片自绘页面",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 1631,
+                "y": 1062
+              },
+              {
+                "x": 3124,
+                "y": 1062
+              }
+            ],
+            "labelAt": {
+              "x": 2332,
+              "y": 1061.5
+            }
+          }
+        },
+        {
+          "id": "d4",
+          "source": "publish",
+          "target": "log",
+          "kind": "data",
+          "label": "事实 / 卡包 / 条件注入区块 + source.rrp 载荷",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 4679,
+                "y": 675.5
+              },
+              {
+                "x": 5100,
+                "y": 675.5
+              },
+              {
+                "x": 5100,
+                "y": 1110
+              },
+              {
+                "x": 5144,
+                "y": 1110
+              }
+            ],
+            "labelAt": {
+              "x": 4911.5,
+              "y": 675
+            }
+          }
+        },
+        {
+          "id": "d5",
+          "source": "log",
+          "target": "proj",
+          "kind": "data",
+          "label": "已知事件（含 rrp 载荷）",
+          "evidence": "framework",
+          "route": {
+            "via": [
+              {
+                "x": 5648,
+                "y": 1110
+              },
+              {
+                "x": 5986,
+                "y": 1110
+              }
+            ],
+            "labelAt": {
+              "x": 5817,
+              "y": 1109.5
+            }
+          }
+        },
+        {
+          "id": "d6",
+          "source": "proj",
+          "target": "panel",
+          "kind": "data",
+          "label": "切面视图（状态 / 卡包 / 罗盘 / 设定 / 存档摘要）",
+          "evidence": "framework",
+          "route": {
+            "via": [
+              {
+                "x": 6490,
+                "y": 1086
+              },
+              {
+                "x": 6502,
+                "y": 1086
+              },
+              {
+                "x": 6502,
+                "y": 1258.5
+              },
+              {
+                "x": 3112,
+                "y": 1258.5
+              },
+              {
+                "x": 3112,
+                "y": 1110
+              },
+              {
+                "x": 3124,
+                "y": 1110
+              }
+            ],
+            "labelAt": {
+              "x": 4911.5,
+              "y": 1258
+            }
+          }
+        },
+        {
+          "id": "d7",
+          "source": "proj",
+          "target": "agents",
+          "kind": "data",
+          "label": "未折叠正文 / 全文转录（≤8000 / ≤16000 字）",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 6490,
+                "y": 1134
+              },
+              {
+                "x": 6550,
+                "y": 1134
+              },
+              {
+                "x": 6550,
+                "y": 504
+              },
+              {
+                "x": 2036,
+                "y": 504
+              },
+              {
+                "x": 2036,
+                "y": 711
+              },
+              {
+                "x": 2080,
+                "y": 711
+              }
+            ],
+            "labelAt": {
+              "x": 4427,
+              "y": 503.5
+            }
+          }
+        },
+        {
+          "id": "d8",
+          "source": "agents",
+          "target": "llm",
+          "kind": "data",
+          "label": "system prompt + 上下文区块 + 最近剧情",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 2584,
+                "y": 759
+              },
+              {
+                "x": 3016,
+                "y": 759
+              },
+              {
+                "x": 3016,
+                "y": 448
+              },
+              {
+                "x": 3124,
+                "y": 448
+              }
+            ],
+            "labelAt": {
+              "x": 2830,
+              "y": 758.5
+            }
+          }
+        },
+        {
+          "id": "d9",
+          "source": "llm",
+          "target": "agents",
+          "kind": "data",
+          "label": "完整 WorldState / MacroSummary / 单条设定草稿",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 3520,
+                "y": 448
+              },
+              {
+                "x": 3640,
+                "y": 448
+              },
+              {
+                "x": 3640,
+                "y": 862
+              },
+              {
+                "x": 2036,
+                "y": 862
+              },
+              {
+                "x": 2036,
+                "y": 759
+              },
+              {
+                "x": 2080,
+                "y": 759
+              }
+            ],
+            "labelAt": {
+              "x": 2830,
+              "y": 861.5
+            }
+          }
+        },
+        {
+          "id": "d10",
+          "source": "agents",
+          "target": "publish",
+          "kind": "data",
+          "label": "worldState / summary / sediment",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 2584,
+                "y": 663
+              },
+              {
+                "x": 2596,
+                "y": 663
+              },
+              {
+                "x": 2596,
+                "y": 627.5
+              },
+              {
+                "x": 4175,
+                "y": 627.5
+              }
+            ],
+            "labelAt": {
+              "x": 3376,
+              "y": 627
+            }
+          }
+        },
+        {
+          "id": "d11",
+          "source": "copilot",
+          "target": "llm",
+          "kind": "data",
+          "label": "月停 prompt（卡包实时读盘 + 状态 + 罗盘 + 设定集 + 剧情）",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 596,
+                "y": 926
+              },
+              {
+                "x": 608,
+                "y": 926
+              },
+              {
+                "x": 608,
+                "y": 187.5
+              },
+              {
+                "x": 3016,
+                "y": 187.5
+              },
+              {
+                "x": 3016,
+                "y": 400
+              },
+              {
+                "x": 3124,
+                "y": 400
+              }
+            ],
+            "labelAt": {
+              "x": 1855.5,
+              "y": 187
+            }
+          }
+        },
+        {
+          "id": "d12",
+          "source": "llm",
+          "target": "copilot",
+          "kind": "data",
+          "label": "回答流 + ```rrp-action 动作块",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 3520,
+                "y": 400
+              },
+              {
+                "x": 3640,
+                "y": 400
+              },
+              {
+                "x": 3640,
+                "y": 96.5
+              },
+              {
+                "x": 80,
+                "y": 96.5
+              },
+              {
+                "x": 80,
+                "y": 998
+              },
+              {
+                "x": 92,
+                "y": 998
+              }
+            ],
+            "labelAt": {
+              "x": 1855.5,
+              "y": 96
+            }
+          }
+        },
+        {
+          "id": "d13",
+          "source": "copilot",
+          "target": "domain",
+          "kind": "data",
+          "label": "对话回合与撤销快照（turns / undo，各上限 50 / 10）",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 596,
+                "y": 974
+              },
+              {
+                "x": 656,
+                "y": 974
+              },
+              {
+                "x": 656,
+                "y": 240
+              },
+              {
+                "x": 4175,
+                "y": 240
+              }
+            ],
+            "labelAt": {
+              "x": 2332,
+              "y": 239.5
+            }
+          }
+        },
+        {
+          "id": "d14",
+          "source": "domain",
+          "target": "copilot",
+          "kind": "data",
+          "label": "历史回灌（≤20 条）与撤销快照",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 4679,
+                "y": 264
+              },
+              {
+                "x": 4691,
+                "y": 264
+              },
+              {
+                "x": 4691,
+                "y": 47.5
+              },
+              {
+                "x": 32,
+                "y": 47.5
+              },
+              {
+                "x": 32,
+                "y": 1046
+              },
+              {
+                "x": 92,
+                "y": 1046
+              }
+            ],
+            "labelAt": {
+              "x": 2332,
+              "y": 47
+            }
+          }
+        },
+        {
+          "id": "d15",
+          "source": "copilot",
+          "target": "publish",
+          "kind": "data",
+          "label": "update_world_state 补丁 / draft_lore 草稿",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 596,
+                "y": 1022
+              },
+              {
+                "x": 704,
+                "y": 1022
+              },
+              {
+                "x": 704,
+                "y": 343
+              },
+              {
+                "x": 4163,
+                "y": 343
+              },
+              {
+                "x": 4163,
+                "y": 675.5
+              },
+              {
+                "x": 4175,
+                "y": 675.5
+              }
+            ],
+            "labelAt": {
+              "x": 2332,
+              "y": 342.5
+            }
+          }
+        },
+        {
+          "id": "d16",
+          "source": "copilot",
+          "target": "home",
+          "kind": "data",
+          "label": "卡包改动提案（玩家确认后写入用户卡目录）",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 596,
+                "y": 1070
+              },
+              {
+                "x": 752,
+                "y": 1070
+              },
+              {
+                "x": 752,
+                "y": 1038
+              },
+              {
+                "x": 1176,
+                "y": 1038
+              }
+            ],
+            "labelAt": {
+              "x": 942,
+              "y": 1037.5
+            }
+          }
+        },
+        {
+          "id": "d17",
+          "source": "copilot",
+          "target": "panel",
+          "kind": "data",
+          "label": "SSE 流、动作卡与待确认提案",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 596,
+                "y": 1118
+              },
+              {
+                "x": 3016,
+                "y": 1118
+              },
+              {
+                "x": 3016,
+                "y": 918
+              },
+              {
+                "x": 3124,
+                "y": 918
+              }
+            ],
+            "labelAt": {
+              "x": 1855.5,
+              "y": 1117.5
+            }
+          }
+        },
+        {
+          "id": "d18",
+          "source": "log",
+          "target": "panel",
+          "kind": "data",
+          "label": "全量正文（小说导出只读句柄）",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 5648,
+                "y": 1062
+              },
+              {
+                "x": 5660,
+                "y": 1062
+              },
+              {
+                "x": 5660,
+                "y": 1206
+              },
+              {
+                "x": 3064,
+                "y": 1206
+              },
+              {
+                "x": 3064,
+                "y": 966
+              },
+              {
+                "x": 3124,
+                "y": 966
+              }
+            ],
+            "labelAt": {
+              "x": 4427,
+              "y": 1205.5
+            }
+          }
+        },
+        {
+          "id": "d19",
+          "source": "panel",
+          "target": "domain",
+          "kind": "data",
+          "label": "世界线软归档名单（隐藏 / 恢复）",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 3628,
+                "y": 966
+              },
+              {
+                "x": 3688,
+                "y": 966
+              },
+              {
+                "x": 3688,
+                "y": 880
+              },
+              {
+                "x": 4115,
+                "y": 880
+              },
+              {
+                "x": 4115,
+                "y": 288
+              },
+              {
+                "x": 4175,
+                "y": 288
+              }
+            ],
+            "labelAt": {
+              "x": 3925.5,
+              "y": 879.5
+            }
+          }
+        },
+        {
+          "id": "d20",
+          "source": "agents",
+          "target": "panel",
+          "kind": "data",
+          "label": "活动账本（谁改了什么；面板轮询）",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 2584,
+                "y": 711
+              },
+              {
+                "x": 2644,
+                "y": 711
+              },
+              {
+                "x": 2644,
+                "y": 668
+              },
+              {
+                "x": 3112,
+                "y": 668
+              },
+              {
+                "x": 3112,
+                "y": 1014
+              },
+              {
+                "x": 3124,
+                "y": 1014
+              }
+            ],
+            "labelAt": {
+              "x": 2830,
+              "y": 667.5
+            }
+          }
+        },
+        {
+          "id": "d21",
+          "source": "home",
+          "target": "agents",
+          "kind": "data",
+          "label": "卡包 skills/ 目录（预置作用域技能，模型按需调取）",
+          "evidence": "source",
+          "route": {
+            "via": [
+              {
+                "x": 1631,
+                "y": 1014
+              },
+              {
+                "x": 1643,
+                "y": 1014
+              },
+              {
+                "x": 1643,
+                "y": 663
+              },
+              {
+                "x": 2080,
+                "y": 663
+              }
+            ],
+            "labelAt": {
+              "x": 1855.5,
+              "y": 662.5
+            }
+          }
+        },
+        {
+          "id": "d22",
+          "source": "panel",
+          "target": "player",
+          "kind": "data",
+          "label": "正文与状态视图（渲染呈现）",
+          "evidence": "framework",
+          "route": {
+            "via": [
+              {
+                "x": 3628,
+                "y": 1062
+              },
+              {
+                "x": 4270.5,
+                "y": 1062
+              }
+            ],
+            "labelAt": {
+              "x": 3925.5,
+              "y": 1061.5
+            }
+          }
+        }
+      ],
+      "layout": {
+        "version": "adaptive-v2-elkjs-0.11.0",
+        "strategy": "layered-3"
+      }
+    }
+  ]
+}

@@ -24,13 +24,10 @@ Thumbs.db
 .env.*
 !.env.example
 
-# Local-only working docs and test evidence (not distributed)
-docs/DEVELOPMENT.md
-docs/reference/
-docs/superpowers/
-docs/qgraphflow/
-dsh-rrp-test-report/
-.scratch/
+# Machine-local runtime state and scratch logs (never commit machine-local PID, tokens or logs)
+.scratch/dsh-host.json
+.scratch/logs/
+.yanagent/
 
 # VitePress
 docs/.vitepress/cache/
