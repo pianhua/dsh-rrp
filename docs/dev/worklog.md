@@ -3,6 +3,82 @@
 > 纪律（见 `docs/dev/workflow.md` 第 4 节）：已确认的内容必须落盘，上下文压缩后只认本文件。
 > 每条带日期；事项关闭时标注（关闭 + 日期），不删旧条。
 
+## 2026-09-22 · Agent 完整交接包（Round-6/7 全量闭环与纯净基线归零）
+
+### 目标：
+1. 彻底解决旧 Agent 频繁卡死、无法进入浏览器 Web 界面的启动痛点，建立稳定可复用的宿主自动化管理方案；
+2. 闭环 Round-6 舞台 Stage（issue #18）T42–T48 全量真机验收并归档；
+3. 将积攒的格式债务、协作契约与工具脚本按逻辑拆解并完成原子化提交，恢复纯净代码工作树；
+4. 闭环 Round-7 条件注入机制 v1（issue #16）T49–T53 全量真机抽查并归档；
+5. 输出标准化交接包与当前系统黄金基线，供后续 Agent 或维护者平滑接续。
+
+### 范围 / out-of-scope：
+- **范围（In-Scope）**：
+  - 本地 DSH 宿主服务启动器脚本 `scripts/host-runner.mjs`（端口强杀、代理剥离、直连 Node 派生、Token/Cookie 自动捕获）；
+  - Round-6 舞台（issue #18）T42–T48 Chrome 真机驱动测试、截图与报告归档；
+  - 格式债务清理提交（9 个既有 client/tests 文件，无逻辑变更）；
+  - Agent 协作契约规范（`docs/agents/` 与 `AGENTS.md`、`docs/dev/workflow.md`、`docs/dev/worklog.md`）提交；
+  - Round-7 条件注入 v1（issue #16）T49–T53 Chrome 真机驱动测试、截图与报告归档；
+  - 本地敏感凭据隔离（`.gitignore` 加入 `.scratch/`）。
+- **Out-of-Scope（未触碰/未做）**：
+  - 严格遵守开工门纪律，未在缺乏 Ready-to-code gate 下擅自修改 `src/` 业务逻辑；
+  - 未执行未授权的 `git push`（当前处于 ahead 9 纯净本地状态，等维护者指令推送）；
+  - 未擅自修改 `DECISIONS.md` D14 原文（留给所有者拍板定性）。
+
+### 已确认术语和决策：
+1. **产品定位**：个人单机 RP 玩具（D15），拒绝分布式锁、CAS 乐观锁防冲突矩阵、冷备加密等企业级过度工程。
+2. **宿主映射**：Host-First 铁律，绝不自建 HTTP 服务器（0 行 `node:http` `createServer`）、绝不自建前端单页、绝不上私有 SQLite 连接池。
+3. **权能分立与自然时序流**：
+   - Author Agent 专注第三人称正文创作，严禁代打发言，严禁直接写状态；
+   - Chronicler 异步推演物理与心理变化，按需扩展字段（D4/D5）；
+   - 玩家就地矫正（Player Correction）为自然时序流（D6，Last-Write-Wins），矫正即真理；
+   - 事实与走向分权（D22）：具体事实听 WorldState，剧情走向听剧情脉络 Summarizer。
+4. **正文区纯净规范（D21）**：聊天流保持纯宿主原生打字机流式呈现，绝不在每轮正文之间插入插件内容，界面一律走右侧栏与舞台（Stage）页签。
+5. **条件注入纪律（D17）**：仅允许数值/布尔路径比较（禁止自由字符串等值），单条 800 字/总量 2000 字封顶，按 skill id 字典序排序，外壳带穷尽声明与失效撤销句，档内波动去重。
+6. **月停（Copilot）定位（D19/D22）**：玩家私属幕僚，负责出戏推演、技能包建议与卡包/文档提案暂存。
+
+### 改动文件：
+- **已提交至 Git（HEAD `bf577b3`，ahead 9 commits）**：
+  - `scripts/host-runner.mjs`：自动化宿主管理脚本（直连派生 + 代理剔除 + 凭据换取）
+  - `.gitignore`：增加 `.scratch/` 隔离本地会话凭据与运行日志
+  - `docs/agents/domain.md`、`human-agent-contract.md`、`issue-tracker.md`、`triage-labels.md`：人与 Agent 协作真源
+  - `AGENTS.md`、`docs/dev/workflow.md`、`docs/dev/worklog.md`：开发流程、工作日志规范与记录刷新
+  - `docs/plans/conditional-injection-v1.md`：标记 issue #16 正式全量闭环
+  - `src/client/` 与 `tests/` 下 9 个文件的 Prettier 排版格式对齐
+- **本地只读测试归档（被 .gitignore 忽略，不污染分发仓库）**：
+  - `dsh-rrp-test-report/E2E_BRIEF_ROUND6.md`、`TEST_REPORT_R6.md`、`screenshots/r6-*.png`（Round-6 舞台全项 PASS 证据）
+  - `dsh-rrp-test-report/E2E_BRIEF_ROUND7.md`、`TEST_REPORT_R7.md`、`screenshots/r7-*.png`（Round-7 条件注入全项 PASS 证据）
+  - `.scratch/dsh-host.json`（本地运行中宿主端口与 Token 元数据）
+
+### 验证命令与结果：
+- `git status`：`nothing to commit, working tree clean`（工作树 100% 纯净）
+- `pnpm run format:check`：PASS（All matched files use Prettier code style）
+- `pnpm run typecheck`：PASS（0 错误）
+- `pnpm run lint`：PASS（0 错误，0 警告）
+- `pnpm run build`：PASS（ESM 274.34 kB，CJS 226.85 kB 成功生成）
+- `pnpm test -- --run`：PASS（**42 个测试文件、371 个测试用例 100% 全部通过**）
+- `node scripts/host-runner.mjs status`：3099 端口活跃，PID 24484，`/dsh-rrp/cards` 返回 200 OK
+- Round-6 真机抽查：T42–T48 全部 PASS（沙箱拦截、状态联动、输入保留、打字机 160 tok/s 无卡顿）
+- Round-7 真机抽查：T49–T53 全部 PASS（跨档激活、高阶激活、撤销句生成、档内去重、真实正文口吻融入且零协议泄漏）
+
+### 剩余风险或未决项：
+1. **决策与文档表述张力（待拍板定性）**：
+   - `src/card-import.ts` 包含酒馆卡（PNG/JSON）一次性转译导入功能，而 `HOST_ALIGNMENT.md` 与 `DECISIONS.md` D14 早期字面写着“核心引擎零酒馆代码”。
+   - **待办**：需所有者拍板定性（例如确认：“D14 意在禁止运行时 ST 模拟兼容层，允许一次性导入转译工具”，并将结论更新至 `DECISIONS.md`）。
+2. **远端代码同步**：
+   - 本地 `main` 分支领先 `origin/main` 9 个提交，待所有者决定何时执行 `git push`。
+
+### 阻塞及 Blocked by：
+- **无任何技术或功能阻塞（Blocked by: None）**。
+- 历史上的宿主启动卡死、舞台 Stage 真机缺口、条件注入真机缺口已**全部清除**。
+
+### 下一步建议：
+1. **选项 1（首推轻量收口）**：拍板 D14 文字张力，更新 `DECISIONS.md`，完成 `git push` 同步远端。
+2. **选项 2（开启新特性研发）**：
+   - 目标 A：**一卡一区（issue #37）**：卡包独立工作区隔离、存档独立归组与小说一键导出；
+   - 目标 B：**世界线读档与分支重卷优化**：读档后舞台切面回跳、深层分支折叠与标注；
+   - 执行前按规范在 `.scratch/<feature-slug>/spec.md` 建立规格，满足 Ready-to-code gate 后动笔。
+
 ## 2026-09-22 · Round-7 条件注入机制 v1 全量真机闭环（issue #16 PASS）
 
 ### 已确认与已完成
