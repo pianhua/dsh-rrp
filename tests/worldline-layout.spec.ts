@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { layoutWorldlineForest, NODE_WIDTH, NODE_HEIGHT, GAP_X, GAP_Y } from '../src/client/components/worldline-layout.ts'
+import {
+  layoutWorldlineForest,
+  NODE_WIDTH,
+  NODE_HEIGHT,
+  GAP_X,
+  GAP_Y,
+} from '../src/client/components/worldline-layout.ts'
 import type { WorldlineNode } from '../src/worldline-tree.ts'
 
 function node(sessionId: string, turn: number, children: WorldlineNode[] = []): WorldlineNode {

@@ -76,7 +76,11 @@ function WorldlinePanel(props: WorldlinePanelProps): ReactNode {
         setTrees(next)
         setError('')
         if (next.length > 0) {
-          setActiveCardId((prev) => (prev !== null && next.some((tr) => tr.cardId === prev) ? prev : next[0]?.cardId ?? null))
+          setActiveCardId((prev) =>
+            prev !== null && next.some((tr) => tr.cardId === prev)
+              ? prev
+              : (next[0]?.cardId ?? null),
+          )
         }
       })
       .catch((cause: unknown) => {

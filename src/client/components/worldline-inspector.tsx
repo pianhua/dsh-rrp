@@ -2,11 +2,7 @@
  * dsh-rrp — Galgame Timeline Inspector drawer (issue #28 & #37).
  * Displays rich turn details, state badges, and provides load / fork / hide actions.
  */
-import {
-  Button,
-  IconRefreshOutline16,
-  IconSparkle16,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconRefreshOutline16, IconSparkle16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { CSSProperties, ReactNode } from 'react'
 import type { WorldlineNode } from '../../worldline-tree.ts'
 
@@ -36,9 +32,9 @@ export function WorldlineInspector(props: WorldlineInspectorProps): ReactNode {
         <div style={S.titleGroup}>
           <span style={S.turnBadge}>
             {isStub
-              ? t('worldline.stubTitle') ?? '本地存档'
+              ? (t('worldline.stubTitle') ?? '本地存档')
               : isPending
-                ? t('worldline.pendingTitle') ?? '新分支起点'
+                ? (t('worldline.pendingTitle') ?? '新分支起点')
                 : `Turn ${String(node.turn).padStart(2, '0')}`}
           </span>
           {isCurrent ? (
@@ -47,9 +43,16 @@ export function WorldlineInspector(props: WorldlineInspectorProps): ReactNode {
               {t('worldline.currentPoint') ?? '当前对局位置'}
             </span>
           ) : null}
-          {node.fork ? <span style={S.forkBadge}>{t('worldline.forkPoint') ?? '◆ 分歧抉择点'}</span> : null}
+          {node.fork ? (
+            <span style={S.forkBadge}>{t('worldline.forkPoint') ?? '◆ 分歧抉择点'}</span>
+          ) : null}
         </div>
-        <button type="button" onClick={onClose} style={S.closeBtn} aria-label={t('worldline.close') ?? '关闭'}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={S.closeBtn}
+          aria-label={t('worldline.close') ?? '关闭'}
+        >
           ✕
         </button>
       </header>
@@ -68,7 +71,8 @@ export function WorldlineInspector(props: WorldlineInspectorProps): ReactNode {
           <div style={S.pendingNotice}>
             <IconSparkle16 size={18} />
             <p style={S.pendingNoticeText}>
-              {t('worldline.pendingHint') ?? '此分支刚刚开辟，正在等待您输入下一步行动开启全新篇章。'}
+              {t('worldline.pendingHint') ??
+                '此分支刚刚开辟，正在等待您输入下一步行动开启全新篇章。'}
             </p>
           </div>
         ) : (
@@ -114,7 +118,10 @@ export function WorldlineInspector(props: WorldlineInspectorProps): ReactNode {
                 </div>
                 {badge.summary !== undefined ? (
                   <div style={S.summaryLine}>
-                    <span style={S.summaryLabel}>{t('worldline.conflictSummary') ?? '剧情脉络'}:</span> {badge.summary}
+                    <span style={S.summaryLabel}>
+                      {t('worldline.conflictSummary') ?? '剧情脉络'}:
+                    </span>{' '}
+                    {badge.summary}
                   </div>
                 ) : null}
               </section>
@@ -133,8 +140,8 @@ export function WorldlineInspector(props: WorldlineInspectorProps): ReactNode {
             }}
           >
             {isCurrent
-              ? t('worldline.backToChat') ?? '切回对话正文'
-              : t('worldline.loadThisBranch') ?? '读档跳转至此线'}
+              ? (t('worldline.backToChat') ?? '切回对话正文')
+              : (t('worldline.loadThisBranch') ?? '读档跳转至此线')}
           </Button>
         ) : null}
 

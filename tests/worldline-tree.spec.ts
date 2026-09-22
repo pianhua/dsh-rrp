@@ -144,10 +144,7 @@ describe('worldline tree fold (issue #28)', () => {
     expect(trees[0]?.roots).toHaveLength(1)
     const cut = trees[0]?.roots[0]?.children[0]
     expect(cut?.turn).toBe(1)
-    expect(cut?.children.map((c) => c.sessionId + ':' + String(c.turn))).toEqual([
-      'm:2',
-      'f:2',
-    ])
+    expect(cut?.children.map((c) => c.sessionId + ':' + String(c.turn))).toEqual(['m:2', 'f:2'])
     const pending = cut?.children[1]
     expect(pending?.pending).toBe(true)
     expect(pending?.sessionId).toBe('f')

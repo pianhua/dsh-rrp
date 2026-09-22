@@ -283,11 +283,7 @@ function NodeCard(props: {
       {/* Header bar */}
       <div style={S.nodeHeader}>
         <span style={S.nodeTurnText}>
-          {isStub
-            ? '冷存档'
-            : isPending
-              ? '待执笔'
-              : `T${String(node.turn).padStart(2, '0')}`}
+          {isStub ? '冷存档' : isPending ? '待执笔' : `T${String(node.turn).padStart(2, '0')}`}
         </span>
         <span style={S.nodeBranchName}>{node.sessionTitle || '主线'}</span>
         {isCurrent ? (
@@ -338,7 +334,8 @@ const S: Record<string, CSSProperties> = {
     height: '100%',
     flex: 1,
     minHeight: 0,
-    background: 'radial-gradient(ellipse at 50% 20%, rgba(20, 24, 33, 0.98), var(--dsw-alias-bg-base, #0b0f17))',
+    background:
+      'radial-gradient(ellipse at 50% 20%, rgba(20, 24, 33, 0.98), var(--dsw-alias-bg-base, #0b0f17))',
     overflow: 'hidden',
     userSelect: 'none',
   },

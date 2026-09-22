@@ -258,9 +258,7 @@ export function DynamicFieldsSection(props: {
       )}
 
       {fields.length === 0 && !showAddField && (
-        <div
-          style={{ fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', padding: '8px 0' }}
-        >
+        <div style={{ fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', padding: '8px 0' }}>
           {t('dynamicFields.none')}
         </div>
       )}

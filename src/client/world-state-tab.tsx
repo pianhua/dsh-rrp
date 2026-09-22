@@ -12,7 +12,13 @@
  * (`@deepseek-ai/dsh-client-ui-primitives`) and `--dsw-alias-*` tokens so it
  * matches whatever light/dark theme the user runs.
  */
-import { Button, IconLoadingOutline16, Pill, StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  Button,
+  IconLoadingOutline16,
+  Pill,
+  StateDot,
+  Tooltip,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { pendingActivity, type RrpActivityLog } from '../activity.ts'
 import { CARD_KEY, type CardContext } from '../card-types.ts'
@@ -32,10 +38,7 @@ import {
   type WorldStateView,
 } from '../world-state.ts'
 import type { RrpClientContext, RrpJobView, RrpUseSessions } from './context-types.ts'
-import {
-  DynamicFieldsSection,
-  type DynamicFieldRow,
-} from './components/world-state-dynamic.tsx'
+import { DynamicFieldsSection, type DynamicFieldRow } from './components/world-state-dynamic.tsx'
 import {
   BudgetGauge,
   clockOf,

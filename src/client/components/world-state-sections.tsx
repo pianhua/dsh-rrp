@@ -4,13 +4,7 @@
 import { Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ReactNode } from 'react'
 import type { WorldStateRelation } from '../../world-state.ts'
-import {
-  Field,
-  RemoveButton,
-  S,
-  SectionHead,
-  type Translate,
-} from './world-state-primitives.tsx'
+import { Field, RemoveButton, S, SectionHead, type Translate } from './world-state-primitives.tsx'
 
 export interface CharacterRow {
   name: string
@@ -99,11 +93,7 @@ export function CharactersSection(props: {
         <div key={rowKeys[index] ?? 'char-' + String(index)} style={S.card}>
           <div style={S.cardHead}>
             <span style={S.cardLabel}>{t('section.characters') + ' ' + String(index + 1)}</span>
-            <RemoveButton
-              disabled={disabled}
-              label={t('remove')}
-              onClick={() => onRemove(index)}
-            />
+            <RemoveButton disabled={disabled} label={t('remove')} onClick={() => onRemove(index)} />
           </div>
           <Field
             disabled={disabled}
@@ -198,11 +188,7 @@ export function InventorySection(props: {
         <div key={rowKeys[index] ?? 'item-' + String(index)} style={S.card}>
           <div style={S.cardHead}>
             <span style={S.cardLabel}>{t('section.inventory') + ' ' + String(index + 1)}</span>
-            <RemoveButton
-              disabled={disabled}
-              label={t('remove')}
-              onClick={() => onRemove(index)}
-            />
+            <RemoveButton disabled={disabled} label={t('remove')} onClick={() => onRemove(index)} />
           </div>
           <div style={S.grid2}>
             <div style={{ ...S.half, flex: 2 }}>
@@ -258,11 +244,7 @@ export function FlagsSection(props: {
         <div key={rowKeys[index] ?? 'flag-' + String(index)} style={S.card}>
           <div style={S.cardHead}>
             <span style={S.cardLabel}>{t('section.flags') + ' ' + String(index + 1)}</span>
-            <RemoveButton
-              disabled={disabled}
-              label={t('remove')}
-              onClick={() => onRemove(index)}
-            />
+            <RemoveButton disabled={disabled} label={t('remove')} onClick={() => onRemove(index)} />
           </div>
           <Field
             disabled={disabled}

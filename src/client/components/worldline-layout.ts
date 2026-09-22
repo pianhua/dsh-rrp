@@ -135,13 +135,7 @@ function layoutSubtree(
   let totalSubtreeWidth = trunkWidth
 
   for (const branch of branches) {
-    const branchLayout = layoutSubtree(
-      branch,
-      branchOriginX,
-      childY,
-      depth + 1,
-      currentSessionId,
-    )
+    const branchLayout = layoutSubtree(branch, branchOriginX, childY, depth + 1, currentSessionId)
     nodes.push(...branchLayout.nodes)
     links.push(
       createLink(
