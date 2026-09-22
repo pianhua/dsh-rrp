@@ -44,8 +44,10 @@ dsh-rrp/
 │   ├── DESIGN.md                # 唯一产品目标规格
 │   ├── HOST_ALIGNMENT.md        # 宿主能力映射与反重复造轮子红线
 │   ├── DEVELOPMENT.md           # 开发环境与日常循环（维护者本地私有日志，不随仓库分发）
-│   └── reference/               # 为什么这么设计：决策/术语/经验/技能
-│       └── HOST_BASELINE.md     # 宿主版本基线、seam 清单与升级流程（升级宿主前必读）
+│   ├── reference/               # 为什么这么设计：决策/术语/经验/技能
+│   │   └── HOST_BASELINE.md     # 宿主版本基线、seam 清单与升级流程（升级宿主前必读）
+│   ├── agents/                  # Matt Skills 的票据与领域文档映射
+│   └── dev/                     # 协作流程、工作日志与开发记录
 ├── src/                         # 源码
 │   ├── index.ts                 # 插件后端入口 (Cordis 插件)：注册 + 会话清理接线
 │   ├── preset.ts / preset-id.ts # RP 模式物化（基础 rp + 每卡 rp-<id>）与 id 规则
@@ -125,3 +127,12 @@ dsh-rrp/
    - **不在陌生 context 上属性读取服务** —— 用 `ctx.get(name)`；agent 生命周期监听器整体 try/catch；
    - **注入上下文只追加、绝不 replace** —— 前缀缓存是性能命脉。
 6. **流程纪律**：需求类改动先走 [`docs/dev/workflow.md`](docs/dev/workflow.md)——术语先行对齐 → 拷问确认即落盘 → 编码前对照本文件与 `docs/reference/` 规则文档做冲突检查；工作区盘点与待决事项记入 [`docs/dev/worklog.md`](docs/dev/worklog.md)。
+7. **Agent 路由**：Matt Skills 是日常主流程，Superpowers 只在项目启动、隔离分支、系统性调试、TDD 与完成验证等明确场景介入；不要把两套完整流程叠加到同一项工作。路由与完成门见 [`docs/dev/workflow.md`](docs/dev/workflow.md)。
+
+## 4. Agent workflow integration
+
+- **交互契约**：人、primary Agent 与 delegated Agent 的权限、提问、控制词、汇报和交接以 [`docs/agents/human-agent-contract.md`](docs/agents/human-agent-contract.md) 为详细真源；本节只保留导航。
+- **领域真源**：Agent 先读 [`docs/agents/domain.md`](docs/agents/domain.md)，再按主题读取 `docs/reference/GLOSSARY.md`、`docs/DESIGN.md`、`docs/HOST_ALIGNMENT.md`、`docs/reference/DECISIONS.md` 与 `docs/dev/architecture.md`。
+- **票据真源**：需求确认、规格与任务票据按 [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md) 使用本地 Markdown；没有票据配置前，不调用会写外部 Issue 的流程。
+- **人和 Agent 的分工**：人决定产品目标、取舍、不可逆决策和最终集成；Agent 负责事实查找、冲突列举、选项草案、实现与验证。Agent 不把未确认的推测写成需求。
+- **开工门**：没有完成 [`docs/dev/workflow.md`](docs/dev/workflow.md) 的“Ready-to-code gate”，只做阅读、提问、文档和计划，不进入 `src/`、`tests/` 或构建配置。
