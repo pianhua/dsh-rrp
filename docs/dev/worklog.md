@@ -3,6 +3,32 @@
 > 纪律（见 `docs/dev/workflow.md` 第 4 节）：已确认的内容必须落盘，上下文压缩后只认本文件。
 > 每条带日期；事项关闭时标注（关闭 + 日期），不删旧条。
 
+## 2026-09-22 · Round-7 条件注入机制 v1 全量真机闭环（issue #16 PASS）
+
+### 已确认与已完成
+
+- **工作区基线原子化固化**：
+  - 经维护者明确指令，将既有工作区拆解并完成 3 个原子提交：
+    1. `6597d35 style: 清理既有 Prettier 格式债务`（覆盖 9 个客户端与单测文件）
+    2. `8fb1c11 docs: 建立人与 Agent 协作契约与开发工作流规范`（docs/agents/ 与 workflow 落地）
+    3. `fb2e190 tool(dev): 落地 host-runner 自动化启动方案并忽略本地暂存`
+  - 工作树彻底收敛恢复为纯净基线（clean working tree）。
+- **Round-7 条件注入机制 v1（issue #16）真机验收全项通过（PASS）**：
+  - **T49（初始未激活态）**：好感 10（<40）时，`GET /dsh-rrp/lore` 返回 `injectedChars: 0`，`triggers` 中 `maid-mia-warm` 与 `maid-mia-intimate` 均为 `active: false`（截图：`screenshots/r7-t49-inactive.png`）。
+  - **T50（跨档激活 ≥40）**：好感调至 42 时，`maid-mia-warm` 即刻翻转为绿色「生效中」徽章，`injectedChars: 388`；事实载荷中正确追加【条件注入 · 裁决块】，含穷尽声明与调用纪律（截图：`screenshots/r7-t50-warm-active.png`）。
+  - **T51（高阶跨档激活 ≥80）**：好感调至 85 时，两条设定全部显示「生效中」，`injectedChars: 763`；注入块按 skill id 字典序排序输出（截图：`screenshots/r7-t51-intimate-active.png`）。
+  - **T52（降档失效与撤销句）**：好感改回 20（<40）时，两条设定降档失效；事实通道精准生成撤销句（`撤销：以下条目现已失效，立即停止使用其内容——maid-mia-intimate、maid-mia-warm。`）；档内微调（20→25）不重复生成注入块（指纹去重生效）（截图：`screenshots/r7-t52-revoked.png`）。
+  - **T53（真实正文承接与协议隔离）**：在好感 42 温热阶段下推进剧情，Author 创作正文生动融入温热期特质（敢小声吐槽茶一般并察言观色、缩脚上沙发），正文全篇零协议元文本渗漏；Chronicler 异步推演平稳触发（截图：`screenshots/r7-t53-prose-response.png`）。
+- 编写任务书 `dsh-rrp-test-report/E2E_BRIEF_ROUND7.md` 与报告 `dsh-rrp-test-report/TEST_REPORT_R7.md`。
+- 更新 `docs/plans/conditional-injection-v1.md`，正式标记 issue #16 全量闭环。
+
+### 阻塞解除与未决项
+
+- **阻塞解除**：issue #16 条件注入机制 v1 彻底完成真机闭环，不再有未验功能悬挂。
+- **待决事项**：
+  1. `HOST_ALIGNMENT.md §3.1` 酒馆卡导入 vs D14 字面冲突待拍板定性。
+  2. 下一阶段玩法特性选型（如 issue #37 一卡一区，或新特性研发）。
+
 ## 2026-09-22 · Round-6 真机抽查全量闭环 + 宿主自动化启动方案落地
 
 ### 已确认与已完成
