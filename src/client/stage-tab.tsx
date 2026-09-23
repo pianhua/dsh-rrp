@@ -236,6 +236,7 @@ export function StagePanel(props: StagePanelProps): ReactNode {
   const [nonce, setNonce] = useState(0)
 
   const api = props.api
+  const digest = useProjection?.(WORLDLINE_DIGEST_KEY) as WorldlineDigest | undefined
   useEffect(() => {
     let alive = true
     if (card === null || card === undefined || api === undefined) {
@@ -262,9 +263,6 @@ export function StagePanel(props: StagePanelProps): ReactNode {
       </div>
     )
   const panels = visiblePanels(manifest, state)
-  // The tail of the latest turn, so a card app can react to what just happened
-  // without re-reading the transcript itself.
-  const digest = useProjection?.(WORLDLINE_DIGEST_KEY) as WorldlineDigest | undefined
   // The digest entry is already excerpt-bounded at the fold (PROSE_CHARS), so
   // the card app gets the latest turn's tail as-is.
   const transcript = digest?.turns[digest.turns.length - 1]?.prose ?? ''

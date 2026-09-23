@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { registerActivityRoute } from '../src/activity-route.ts'
+import { DEFAULT_JSON_BODY_LIMIT } from '../src/host-faces.ts'
 import { registerCardsRoute } from '../src/cards-route.ts'
 import { registerCopilotRoute } from '../src/copilot.ts'
 import { registerCorrectionRoute } from '../src/correction.ts'
@@ -137,6 +138,44 @@ describe('route contract (issue #22)', () => {
       const body = JSON.parse(res.text) as RrpErrorBody
       expect(typeof body.error, one.path).toBe('string')
     }
+  })
+
+  it('rejects an oversized correction body before any session lookup', async () => {
+    const host = fakeHost()
+    registerCorrectionRoute(host.ctx as never)
+    const body = '{"sessionId":"s1","state":"' + 'x'.repeat(DEFAULT_JSON_BODY_LIMIT) + '"}'
+    let lookedUp = false
+    const original = host.ctx.get
+    host.ctx.get = (name: string) => {
+      const face = original(name)
+      if (name === 'sessions') {
+        return {
+          get: () => {
+            lookedUp = true
+            return undefined
+          },
+        }
+      }
+      return face
+    }
+    const req = {
+      method: 'POST',
+      async *[Symbol.asyncIterator]() {
+        yield body
+      },
+    }
+    const chunks: string[] = []
+    const res = {
+      statusCode: 0,
+      setHeader: () => {},
+      end: (text?: string) => {
+        if (text !== undefined) chunks.push(text)
+      },
+    }
+    await host.handlers.get(RRP_ROUTES.worldState)!(req, res)
+    expect(res.statusCode).toBe(413)
+    expect(JSON.parse(chunks.join(''))).toEqual({ error: 'request body too large' })
+    expect(lookedUp).toBe(false)
   })
 
   it('404 on an unknown session is a contract error body too', async () => {

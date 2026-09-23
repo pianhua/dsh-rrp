@@ -56,27 +56,66 @@ export function send(res: ResponseLike, status: number, payload: unknown): void 
   res.end(JSON.stringify(payload))
 }
 
-/** Read the whole request body as UTF-8 text. */
-export async function readBody(req: RequestLike): Promise<string> {
-  let text = ''
-  for await (const chunk of req) {
-    text += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
+/** Default bound for JSON endpoints that do not declare a specialized limit. */
+export const DEFAULT_JSON_BODY_LIMIT = 4 * 1024 * 1024
+/** Tavern card payloads are larger than ordinary JSON, but remain bounded. */
+export const CARD_IMPORT_BODY_LIMIT = 32 * 1024 * 1024
+
+export class RequestBodyTooLargeError extends Error {
+  constructor(maxBytes: number) {
+    super('request body exceeds ' + String(maxBytes) + ' bytes')
+    this.name = 'RequestBodyTooLargeError'
   }
-  return text
 }
 
-/**
- * Parse a JSON request body, or `undefined` when it is absent or malformed —
- * the caller answers 400, because only the caller knows the expected shape.
- */
-export async function readJsonBody(req: RequestLike): Promise<Record<string, unknown> | undefined> {
+export interface ReadBodyOptions {
+  maxBytes?: number
+}
+
+/** Read a UTF-8 request body while enforcing a bound on actual bytes consumed. */
+export async function readBody(req: RequestLike, options: ReadBodyOptions = {}): Promise<string> {
+  const maxBytes = options.maxBytes ?? DEFAULT_JSON_BODY_LIMIT
+  let bytes = 0
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    const chunkBytes =
+      typeof chunk === 'string' ? Buffer.byteLength(chunk, 'utf8') : chunk.byteLength
+    if (bytes + chunkBytes > maxBytes) throw new RequestBodyTooLargeError(maxBytes)
+    const buffer =
+      typeof chunk === 'string'
+        ? Buffer.from(chunk, 'utf8')
+        : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+    bytes += chunkBytes
+    chunks.push(buffer)
+  }
+  return Buffer.concat(chunks, bytes).toString('utf8')
+}
+
+export type JsonBodyResult =
+  { ok: true; body: Record<string, unknown> } | { ok: false; status: 400 | 413; error: string }
+
+/** Parse a bounded JSON object and preserve a structured HTTP error for callers. */
+export async function readJsonBody(
+  req: RequestLike,
+  options: ReadBodyOptions = {},
+): Promise<JsonBodyResult> {
+  let text: string
   try {
-    const parsed = JSON.parse(await readBody(req)) as unknown
-    return typeof parsed === 'object' && parsed !== null
-      ? (parsed as Record<string, unknown>)
-      : undefined
+    text = await readBody(req, options)
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return { ok: false, status: 413, error: 'request body too large' }
+    }
+    return { ok: false, status: 400, error: 'invalid JSON body' }
+  }
+  try {
+    const parsed = JSON.parse(text) as unknown
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      return { ok: true, body: parsed as Record<string, unknown> }
+    }
+    return { ok: false, status: 400, error: 'invalid JSON body' }
   } catch {
-    return undefined
+    return { ok: false, status: 400, error: 'invalid JSON body' }
   }
 }
 

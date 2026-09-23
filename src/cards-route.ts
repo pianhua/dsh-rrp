@@ -24,6 +24,7 @@ import {
   type WebServerService,
   queryOf,
   readJsonBody,
+  CARD_IMPORT_BODY_LIMIT,
   face,
   send,
 } from './host-faces.ts'
@@ -94,11 +95,12 @@ export function registerCardsRoute(ctx: Context): void {
           return
         }
         try {
-          const body = await readJsonBody(req)
-          if (body === undefined) {
-            send(res, 400, { error: 'invalid JSON body' })
+          const result = await readJsonBody(req, { maxBytes: CARD_IMPORT_BODY_LIMIT })
+          if (!result.ok) {
+            send(res, result.status, { error: result.error })
             return
           }
+          const body = result.body
           if (body.kind !== 'png' && body.kind !== 'json') {
             send(res, 400, { error: 'kind must be png or json' })
             return
