@@ -288,11 +288,12 @@ export function registerCopilotRoute(ctx: Context): void {
           send(res, 405, { error: 'method not allowed' })
           return
         }
-        const body = await readJsonBody(req)
-        if (body === undefined) {
-          send(res, 400, { error: 'invalid JSON body' })
+        const parsed = await readJsonBody(req)
+        if (!parsed.ok) {
+          send(res, parsed.status, { error: parsed.error })
           return
         }
+        const body = parsed.body
         const sessionId = body.sessionId
         if (typeof sessionId !== 'string' || sessionId.length === 0) {
           send(res, 400, { error: 'missing sessionId' })
@@ -347,11 +348,12 @@ export function registerCopilotRoute(ctx: Context): void {
           send(res, 405, { error: 'method not allowed' })
           return
         }
-        const body = await readJsonBody(req)
-        if (body === undefined) {
-          send(res, 400, { error: 'invalid JSON body' })
+        const parsed = await readJsonBody(req)
+        if (!parsed.ok) {
+          send(res, parsed.status, { error: parsed.error })
           return
         }
+        const body = parsed.body
         const sessionId = body.sessionId
         const action = body.action
         const id = body.id
@@ -448,11 +450,12 @@ export function registerCopilotRoute(ctx: Context): void {
           return
         }
 
-        const body = await readJsonBody(req)
-        if (body === undefined) {
-          send(res, 400, { error: 'invalid JSON body' })
+        const parsed = await readJsonBody(req)
+        if (!parsed.ok) {
+          send(res, parsed.status, { error: parsed.error })
           return
         }
+        const body = parsed.body
         const sessionId = body.sessionId
         const message = body.message
         if (typeof sessionId !== 'string' || sessionId.length === 0) {

@@ -332,10 +332,14 @@ export function registerLoreRoute(ctx: Context): void {
       kind: 'exact',
       path: LORE_PATH,
       handler: async (req, res) => {
-        const body = req.method === 'POST' ? await readJsonBody(req) : undefined
-        if (req.method === 'POST' && body === undefined) {
-          send(res, 400, { error: 'invalid JSON body' })
-          return
+        let body: Record<string, unknown> | undefined
+        if (req.method === 'POST') {
+          const result = await readJsonBody(req)
+          if (!result.ok) {
+            send(res, result.status, { error: result.error })
+            return
+          }
+          body = result.body
         }
         const sessionId = sessionIdOf(queryOf(req), body)
         if (sessionId.length === 0) {

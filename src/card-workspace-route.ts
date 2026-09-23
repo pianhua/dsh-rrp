@@ -65,12 +65,12 @@ export function registerCardWorkspaceRoute(ctx: Context): void {
           send(res, 405, { error: 'method not allowed' })
           return
         }
-        const body = await readJsonBody(req)
-        if (body === undefined) {
-          send(res, 400, { error: 'invalid JSON body' })
+        const result = await readJsonBody(req)
+        if (!result.ok) {
+          send(res, result.status, { error: result.error })
           return
         }
-        const request = body as { cardId?: unknown; cardName?: unknown }
+        const request = result.body as { cardId?: unknown; cardName?: unknown }
         if (typeof request.cardId !== 'string' || !isCardId(request.cardId)) {
           send(res, 400, { error: 'invalid cardId' })
           return

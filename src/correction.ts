@@ -61,11 +61,12 @@ export function registerCorrectionRoute(ctx: Context): void {
           send(res, 405, { error: 'method not allowed' })
           return
         }
-        const request = await readJsonBody(req)
-        if (request === undefined) {
-          send(res, 400, { error: 'invalid JSON body' })
+        const result = await readJsonBody(req)
+        if (!result.ok) {
+          send(res, result.status, { error: result.error })
           return
         }
+        const request = result.body
         if (typeof request.sessionId !== 'string' || request.sessionId.length === 0) {
           send(res, 400, { error: 'missing sessionId' })
           return

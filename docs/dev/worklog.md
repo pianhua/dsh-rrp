@@ -1,5 +1,25 @@
 # WORKLOG.md — 工作区状态盘点（追加式，最新在上）
 
+## 2026-09-23 · GitHub #40/#41 修复
+
+### 目标与决策
+- 处理开放 Issue #40（共享 JSON 请求体无限读取）与 #41（StagePanel 条件 Hook 顺序变化）。
+- 保持宿主 Web Server 接入与现有项目结构；普通 JSON 请求体限 4 MiB，卡片导入限 32 MiB；Stage 同实例状态切换由真实 React DOM 测试覆盖。
+
+### 已完成
+- #40：`src/host-faces.ts` 的 `readBody` 按实际 UTF-8/二进制字节数累计并在超限首个 chunk 立即拒绝；`readJsonBody` 返回结构化成功/400/413。全部共享 JSON 路由统一响应；卡片导入显式提高限额。世界线和月停主 POST 在存储访问前解析与拒绝请求，避免超限请求触发副作用。
+- #41：`src/client/stage-tab.tsx` 将 WorldlineDigest 投影 Hook 移至无卡分支返回之前；新增 happy-dom 同一 React root 测试覆盖无卡→有卡→无卡、digest transcript 推送和卡切换页面更新。
+- 本地票据 `.scratch/repository-audit/issues/01-bounded-request-body.md` 与 `02-stage-hook-order.md` 均标记 resolved。
+
+### 验证
+- `pnpm exec vitest run tests/route-contract.spec.ts tests/stage-hook-order.spec.ts tests/host-faces.spec.ts`：3 文件、16 用例通过。
+- `pnpm test -- --run`：44 文件、380 用例通过。
+- `pnpm run typecheck`、`pnpm run lint`、`pnpm run format:check`、`pnpm run build`、`git diff --check`：均通过。
+
+### 状态
+- 未提交、未推送。工作区改动仅覆盖 #40/#41、happy-dom 测试依赖、测试与本工作日志；GitHub issue 状态尚未修改。
+
+
 > 纪律（见 `docs/dev/workflow.md` 第 4 节）：已确认的内容必须落盘，上下文压缩后只认本文件。
 > 每条带日期；事项关闭时标注（关闭 + 日期），不删旧条。
 

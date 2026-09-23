@@ -227,12 +227,12 @@ export function registerWorldlineRoute(ctx: Context): void {
       kind: 'exact',
       path: HIDDEN_PATH,
       handler: async (req, res) => {
-        const store = await takeStore()
-        if (store === undefined) {
-          send(res, 503, { error: 'worldline archive unavailable' })
-          return
-        }
         if (req.method === 'GET') {
+          const store = await takeStore()
+          if (store === undefined) {
+            send(res, 503, { error: 'worldline archive unavailable' })
+            return
+          }
           send(res, 200, { hidden: store.listHidden() })
           return
         }
@@ -240,9 +240,15 @@ export function registerWorldlineRoute(ctx: Context): void {
           send(res, 405, { error: 'method not allowed' })
           return
         }
-        const request = await readJsonBody(req)
-        if (request === undefined) {
-          send(res, 400, { error: 'invalid JSON body' })
+        const result = await readJsonBody(req)
+        if (!result.ok) {
+          send(res, result.status, { error: result.error })
+          return
+        }
+        const request = result.body
+        const store = await takeStore()
+        if (store === undefined) {
+          send(res, 503, { error: 'worldline archive unavailable' })
           return
         }
         if (

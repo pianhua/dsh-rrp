@@ -133,12 +133,12 @@ export function registerStartRoute(ctx: Context): void {
           send(res, 405, { error: 'method not allowed' })
           return
         }
-        const parsedBody = await readJsonBody(req)
-        if (parsedBody === undefined) {
-          send(res, 400, { error: 'invalid JSON body' })
+        const result = await readJsonBody(req)
+        if (!result.ok) {
+          send(res, result.status, { error: result.error })
           return
         }
-        const request = parsedBody as {
+        const request = result.body as {
           sessionId?: unknown
           state?: unknown
           opening?: unknown
