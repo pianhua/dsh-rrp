@@ -1,5 +1,25 @@
 # WORKLOG.md — 工作区状态盘点（追加式，最新在上）
 
+## 2026-09-23 · GitHub #42/#43 修复
+
+### 目标与决策
+- 闭环开放 Issue #42（host-runner 仅终止自身管理的 DSH 进程）与 #43（将 cleanup 生命周期测试隔离到临时 DSH_HOME）。
+- host-runner 通过抽象进程身份、精确参数切分、启动时间与 PID 双重比对确保强所有权；遇到端口冲突安全失败，拒绝终止未知进程。
+- cleanup 规范生命周期测试，通过 `withIsolatedDshHome` 重定向至独立临时目录，保证开发者本机 `$HOME/.dsh` 不被读取、创建、刷新或删除；断言已存在自定义修改时不发生覆盖。
+
+### 已完成
+- #42：提取纯函数决策逻辑至 `scripts/host-runner-ownership.mjs`，包含参数精确切分、非子串参数匹配与端口所有权状态决策；新增 `scripts/host-runner-ownership.d.mts` 强类型定义；重构 `scripts/host-runner.mjs`，在 Windows 下安全调用 PowerShell 提取进程并防御性格式化时间，修复 `processStartedAt` 状态持久化与 `stopHost`/`startHost` 冲突拒绝逻辑；新增 `tests/host-runner-ownership.spec.ts` 覆盖状态决策、PID 复用拒绝、Windows/POSIX 命令行解析。
+- #43：在 `tests/cleanup.spec.ts` 中封装 `withIsolatedDshHome`，将所有 `rrp.apply(ctx)` 生命周期测试限制在临时工作区中执行；增加针对已修改 preset 的不覆盖断言。
+- 本地票据 `.scratch/repository-audit/issues/03-host-runner-kill-ownership.md` 与 `04-isolate-cleanup-test-home.md` 均标记 resolved。
+
+### 验证
+- `pnpm exec vitest run tests/host-runner-ownership.spec.ts tests/cleanup.spec.ts`：2 文件、15 用例通过。
+- `pnpm test -- --run`：45 文件、390 用例通过。
+- `pnpm run typecheck`、`pnpm run lint`、`pnpm run format:check`、`pnpm run build`：均通过。
+
+### 状态
+- 准备提交特性分支并合并至主分支。
+
 ## 2026-09-23 · GitHub #40/#41 修复
 
 ### 目标与决策
