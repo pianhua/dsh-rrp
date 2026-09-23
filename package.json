@@ -49,9 +49,13 @@
     }
   },
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": ">=24.16.0 <25"
   },
+  "packageManager": "pnpm@10.14.0",
   "scripts": {
+    "preinstall": "node scripts/check-environment.mjs --install",
+    "check:environment": "node scripts/check-environment.mjs",
+    "prebuild": "pnpm run check:environment",
     "build": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && tsdown",
     "watch": "tsdown --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",

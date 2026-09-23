@@ -9,9 +9,10 @@
  * bundle-declaration reconciliation then reports:
  *   "dsh-rrp declares no dsh.bundle — installed as a plain dependency".
  *
- * An NTFS directory junction works across drives and is followed by Node's
- * resolver, so this script creates one at the exact node_modules path the
- * loader resolves, and registers the package in `dsh.profile.bundles`.
+ * A directory link is followed by Node's resolver, so this script creates one
+ * at the exact node_modules path the loader resolves, and registers the package
+ * in `dsh.profile.bundles`. Windows uses an NTFS junction (which also works
+ * across drives); POSIX systems use a directory symlink.
  *
  * Usage:
  *   node scripts/link-dev.mjs            # links into $DSH_HOME/profiles/rp-dev
@@ -31,6 +32,7 @@ const dshHome = process.env.DSH_HOME ?? join(homedir(), '.dsh')
 const profileDir = join(dshHome, 'profiles', profileName)
 const manifestPath = join(profileDir, 'package.json')
 const linkPath = join(profileDir, 'node_modules', pkg.name)
+const linkType = process.platform === 'win32' ? 'junction' : 'dir'
 
 if (!pkg.dsh?.bundle?.patch)
   throw new Error(`${pkg.name} declares no dsh.bundle.patch; run 'pnpm run build' first`)
@@ -41,7 +43,7 @@ if (!existsSync(join(repoRoot, 'lib', 'index.js')))
 
 mkdirSync(join(profileDir, 'node_modules'), { recursive: true })
 rmSync(linkPath, { recursive: true, force: true })
-symlinkSync(repoRoot, linkPath, 'junction')
+symlinkSync(repoRoot, linkPath, linkType)
 
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 const bundles = manifest.dsh?.profile?.bundles ?? []
@@ -56,6 +58,6 @@ if (manifest.dependencies?.[pkg.name] !== undefined) {
 writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
 
 console.log(`linked ${pkg.name}`)
-console.log(`  junction : ${linkPath} -> ${repoRoot}`)
+console.log(`  link     : ${linkPath} -> ${repoRoot} (${linkType})`)
 console.log(`  profile  : ${profileName} (${manifestPath})`)
 console.log(`  bundles  : ${bundles.join(', ')}`)
