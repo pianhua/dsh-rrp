@@ -1,14 +1,16 @@
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 
 /**
  * Vitest config for dsh-rrp.
  *
- * The one override: \`@deepseek-ai/dsh-client-ui-primitives\` is a browser
- * platform module (see tsdown.config.ts) that is never installed, so the client
- * unit tests alias it to a neutral stub. Everything else uses the defaults.
+ * The client alias maps \`@deepseek-ai/dsh-client-ui-primitives\`, an uninstalled
+ * browser platform module (see tsdown.config.ts), to a neutral stub for unit tests.
  */
 export default defineConfig({
+  test: {
+    exclude: [...configDefaults.exclude, '.worktrees/**'],
+  },
   resolve: {
     alias: {
       '@deepseek-ai/dsh-client-ui-primitives': fileURLToPath(

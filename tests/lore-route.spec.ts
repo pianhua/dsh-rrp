@@ -1,15 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { registerLoreRoute } from '../src/lore-route.ts'
+import { readActivity } from '../src/activity.ts'
+import { registerLoreCommand, registerLoreRoute } from '../src/lore-route.ts'
 import { seedCardTriggersForTesting } from '../src/cards.ts'
 import type { CardContext } from '../src/card-types.ts'
 import { parseWhen, type TriggerDef, type WhenCondition } from '../src/lore-condition.ts'
 import { RRP_LORE_KEY, applyLoreChange, type LoreEntry } from '../src/lore-state.ts'
 import { rrpPayloadOf } from '../src/state-payload.ts'
+import { TRANSCRIPT_KEY, emptyTranscriptSlice } from '../src/transcript.ts'
 import { emptyWorldState, type WorldState } from '../src/world-state.ts'
 import { transcriptProjections } from './stubs/transcript-projections.ts'
 
 /** Minimal fake host with synchronous projection folding, like Session.append. */
-function fakeHost(opts?: { agentPreset?: string; card?: CardContext; worldState?: WorldState }) {
+function fakeHost(opts?: {
+  agentPreset?: string
+  card?: CardContext
+  worldState?: WorldState
+  transcript?: unknown
+  agents?: unknown
+  llm?: unknown
+  jobs?: unknown
+  commands?: unknown
+}) {
   let lore: LoreEntry[] = []
   let failAppend = false
   const appended: Array<{ type: string; data: unknown }> = []
@@ -26,6 +37,7 @@ function fakeHost(opts?: { agentPreset?: string; card?: CardContext; worldState?
   const sessions = { get: (id: string) => (id === session.id ? session : undefined) }
   const projections = transcriptProjections(appended, (_session: unknown, key: string) => {
     if (key === RRP_LORE_KEY) return lore
+    if (key === TRANSCRIPT_KEY) return opts?.transcript
     if (key === 'agentPreset') return opts?.agentPreset
     if (key === 'rrpCard') return opts?.card
     if (key === 'rrpWorldState') return opts?.worldState
@@ -46,7 +58,10 @@ function fakeHost(opts?: { agentPreset?: string; card?: CardContext; worldState?
           webServer,
           sessions,
           sessionProjections: projections,
-          agents: { get: () => undefined },
+          agents: opts?.agents ?? { get: () => undefined },
+          llm: opts?.llm,
+          jobs: opts?.jobs,
+          commands: opts?.commands,
         }) as Record<string, unknown>
       )[name],
   }
@@ -159,6 +174,159 @@ describe('lore route (D8)', () => {
     const discard = exchange('POST', '/dsh-rrp/lore', { sessionId: 's1', action: 'discard' })
     await host.route()!.handler(discard.req, discard.res)
     expect(discard.res.statusCode).toBe(200)
+  })
+
+  it('runs one Scribe job, stages its draft, and writes only after confirmation', async () => {
+    type JobStartSpec = {
+      kind: string
+      label: string
+      run(): { cancel(reason?: string): void; done: Promise<{ status: string }> }
+    }
+    const jobs: JobStartSpec[] = []
+    const transcript = {
+      ...emptyTranscriptSlice(),
+      entries: [{ seq: 0, role: 'user' as const, text: '客栈夜间必须落栓。' }],
+    }
+    const host = fakeHost({
+      transcript,
+      agents: { get: () => ({ options: { provider: 'provider', model: 'model' } }) },
+      llm: {
+        stream: () =>
+          (async function* () {
+            yield { type: 'text-delta', text: JSON.stringify(DRAFT) }
+          })(),
+      },
+      jobs: { start: (spec: JobStartSpec) => (jobs.push(spec), 'job-1') },
+    })
+    registerLoreRoute(host.ctx as never)
+
+    const requestDraft = exchange('POST', '/dsh-rrp/lore', {
+      sessionId: 's1',
+      action: 'draft',
+      topic: '客栈规矩',
+    })
+    await host.route()!.handler(requestDraft.req, requestDraft.res)
+    expect(requestDraft.res.statusCode).toBe(200)
+    expect(requestDraft.res.payload).toEqual({ ok: true, drafting: true })
+    expect(jobs).toHaveLength(1)
+    expect(jobs[0]?.kind).toBe('scribe')
+
+    const duplicate = exchange('POST', '/dsh-rrp/lore', {
+      sessionId: 's1',
+      action: 'draft',
+    })
+    await host.route()!.handler(duplicate.req, duplicate.res)
+    expect(jobs).toHaveLength(1)
+
+    const started = jobs[0]!.run()
+    expect(await started.done).toEqual({ status: 'completed' })
+    const staged = exchange('GET', '/dsh-rrp/lore?sessionId=s1')
+    await host.route()!.handler(staged.req, staged.res)
+    expect(staged.res.payload).toMatchObject({ pending: DRAFT, drafting: false })
+    expect(host.appended).toEqual([])
+    const scribeActivity = readActivity('s1').entries.filter((entry) => entry.actor === 'scribe')
+    expect(scribeActivity.map((entry) => entry.phase)).toEqual(['started', 'committed'])
+    expect(scribeActivity[1]).toMatchObject({
+      detailKey: 'detail.stagedDraft',
+      detailName: DRAFT.name,
+    })
+    expect(scribeActivity[1]?.id).toBe(scribeActivity[0]?.id)
+
+    const confirm = exchange('POST', '/dsh-rrp/lore', { sessionId: 's1', action: 'confirm' })
+    await host.route()!.handler(confirm.req, confirm.res)
+    expect(confirm.res.statusCode).toBe(200)
+    expect(host.lore()).toEqual([DRAFT])
+    expect(rrpPayloadOf(host.appended[0])?.sediment).toEqual({ kind: 'add', skill: DRAFT })
+  })
+
+  it('routes /lore through the same Scribe job capability', async () => {
+    type JobStartSpec = {
+      kind: string
+      label: string
+      run(): { cancel(reason?: string): void; done: Promise<{ status: string }> }
+    }
+    type Invocation = {
+      rawInput: string
+      agent?: { session?: { id: string; append(type: string, data: unknown): unknown } }
+    }
+    const jobs: JobStartSpec[] = []
+    let command: { handler(invocation: Invocation): unknown } | undefined
+    const host = fakeHost({
+      agents: { get: () => ({ options: { provider: 'provider', model: 'model' } }) },
+      llm: { stream: () => (async function* () {})() },
+      jobs: { start: (spec: JobStartSpec) => (jobs.push(spec), 'job-1') },
+      commands: {
+        register: (definition: { handler(invocation: Invocation): unknown }) => {
+          command = definition
+          return () => {}
+        },
+      },
+    })
+    registerLoreCommand(host.ctx as never)
+
+    expect(
+      command?.handler({
+        rawInput: '  客栈规矩  ',
+        agent: { session: { id: 's1', append: () => ({}) } },
+      }),
+    ).toMatchObject({ kind: 'success' })
+    expect(jobs.map((job) => job.kind)).toEqual(['scribe'])
+    const started = jobs[0]!.run()
+    expect(await started.done).toEqual({ status: 'completed' })
+  })
+
+  it('cancels a running Scribe job and clears its drafting state', async () => {
+    type JobStartSpec = {
+      kind: string
+      label: string
+      run(): { cancel(reason?: string): void; done: Promise<{ status: string }> }
+    }
+    const jobs: JobStartSpec[] = []
+    let streamStarted!: () => void
+    const enteredStream = new Promise<void>((resolve) => {
+      streamStarted = resolve
+    })
+    const transcript = {
+      ...emptyTranscriptSlice(),
+      entries: [{ seq: 0, role: 'user' as const, text: '最近剧情正文。' }],
+    }
+    const host = fakeHost({
+      transcript,
+      agents: { get: () => ({ options: { provider: 'provider', model: 'model' } }) },
+      llm: {
+        stream: (options: Record<string, unknown>) => {
+          const signal = options.signal as AbortSignal
+          return (async function* () {
+            streamStarted()
+            await new Promise<void>((resolve) =>
+              signal.addEventListener('abort', () => resolve(), { once: true }),
+            )
+            yield { type: 'text-delta', text: JSON.stringify(DRAFT) }
+          })()
+        },
+      },
+      jobs: { start: (spec: JobStartSpec) => (jobs.push(spec), 'job-1') },
+    })
+    registerLoreRoute(host.ctx as never)
+    const requestDraft = exchange('POST', '/dsh-rrp/lore', { sessionId: 's1', action: 'draft' })
+    await host.route()!.handler(requestDraft.req, requestDraft.res)
+
+    const running = jobs[0]!.run()
+    await enteredStream
+    running.cancel()
+    expect(await running.done).toEqual({ status: 'killed' })
+    const listed = exchange('GET', '/dsh-rrp/lore?sessionId=s1')
+    await host.route()!.handler(listed.req, listed.res)
+    expect(listed.res.payload).toMatchObject({ pending: null, drafting: false })
+    expect(host.appended).toEqual([])
+    expect(
+      readActivity('s1')
+        .entries.filter((entry) => entry.actor === 'scribe')
+        .at(-1),
+    ).toMatchObject({
+      phase: 'failed',
+      detailKey: 'detail.cancelled',
+    })
   })
 
   it('reports Scribe unavailability and unknown sessions', async () => {

@@ -1,5 +1,30 @@
 # WORKLOG.md — 工作区状态盘点（追加式，最新在上）
 
+## 2026-09-23 · 仓库架构重构分支与基线门禁
+
+### 目标与决策
+- 在隔离分支中进行循证、小步、保持行为兼容的架构维护；审计不支持无差别重写全仓。
+- 保留 `.worktrees/` 本地数据，改为在 Git、ESLint、Vitest 与 Prettier 中排除它，防止嵌套 checkout 被误当作当前仓库文件。
+- 已建立 `.scratch/repo-refactor/spec.md` 与 5 个实现切片票据；进一步切片必须保留 DSH Host-First、路由与会话持久化契约。
+
+### 已完成
+- 当前工作分支 `refactor/repo-architecture`，从 `main` / `origin/main` 的 `9b0cdc7` 创建；未提交、未推送、未合并。
+- 首轮审计覆盖插件入口/生命周期/投影发布、服务端领域路由、客户端与契约、工具链/测试组织；识别类型重复、导入职责耦合、Lore 共用能力依赖路由、WorldState 表单纯转换耦合组件、卡片列表 DTO 未复用等候选；无证据支持投影、Stage、世界线或 host-runner 大改。
+- `.gitignore`、`.prettierignore`、ESLint 与 Vitest 配置已加入 `.worktrees/` 排除；不删除、不移动、不改动任何嵌套 worktree 内容。
+
+### 基线验证
+- 首轮 `pnpm run check:environment`、`pnpm run format:check`、`pnpm run typecheck`：通过。
+- 首轮 `pnpm run lint`：因递归扫描 `.worktrees/feat-auto-20260923-47726507`，报 268 个多 `tsconfigRootDir` 解析错误；首轮 Vitest 收集根与嵌套 checkout 共 87 个文件，760 个用例通过但嵌套旧 checkout 缺少 `happy-dom`，另有 1 个收集错误；build 因测试链中止未运行。
+- 将 `.worktrees/` 排除于 `.gitignore`、`.prettierignore`、ESLint 和 Vitest 配置；不修改嵌套目录内容。执行 `pnpm install --frozen-lockfile` 恢复 package.json 已声明但本地未链接的 `happy-dom`，lockfile 未变。
+- 修正后 `pnpm run check:environment`、`pnpm run format:check`、`pnpm run typecheck`、`pnpm run lint`、`pnpm test --silent`（45 文件 / 391 用例）与 `pnpm run build` 均通过；`git check-ignore` 确认 `.worktrees/` 被忽略。
+
+### 集成结果与状态
+- 00–05 票据均已 resolved；完成共享宿主类型/清理覆盖、卡片导入解析与落盘分层、Lore 应用层、WorldState 草稿纯转换、卡片 DTO 对齐。
+- 最终验证：`pnpm run check:environment`、`pnpm run format:check`、`pnpm run typecheck`、`pnpm run lint`、`pnpm test --silent`（46 文件 / 407 用例）、`pnpm run build`、`git diff --check` 均通过。
+- 经维护者指示尝试 `node scripts/host-runner.mjs start`：启动器移除了已存在的空闲 runner 状态文件并截断日志，但因无法验证 Windows 进程所有权而未生成新状态。随后 `status` 报告 `3099` 为 `CONFLICT (unverified PID 42936)`；服务仍监听，`GET /dsh-rrp/cards` 返回 200（2 张卡），`GET /` 返回 401。为避免误停可能的用户进程，没有执行 stop；未读取包含本地认证信息的日志。当前可用性受登录认证阻塞，登录 URL 未能由 runner 安全捕获。
+- 分支 `refactor/repo-architecture` 尚未提交、推送或合并；根 `.worktrees/` 仍存在且未改动，`git worktree list` 保留原有注册。
+
+
 ## 2026-09-23 · GitHub #42/#43 修复
 
 ### 目标与决策

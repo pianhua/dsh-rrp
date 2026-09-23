@@ -25,20 +25,15 @@ import { CARD_KEY, type CardContext } from '../card-types.ts'
 import { SUMMARY_KEY, type MacroSummary } from '../macro-summary.ts'
 import { promptBudgetReport } from '../prompt-budget.ts'
 import { RRP_ROUTES, routeUrl, type LoreGetResponse } from '../route-contract.ts'
+import { WORLD_STATE_KEY, type WorldStateView } from '../world-state.ts'
 import {
-  createDynamicField,
-  getDynamicKeys,
-  isValidFieldId,
-  WORLD_STATE_KEY,
-  type DynamicFieldValue,
-  type WorldState,
-  type WorldStateCharacter,
-  type WorldStateItem,
-  type WorldStateRelation,
-  type WorldStateView,
-} from '../world-state.ts'
+  draftOf,
+  isEmptyDraft,
+  stateOfDraft,
+  type WorldStateDraft as Draft,
+} from './world-state-draft.ts'
 import type { RrpClientContext, RrpJobView, RrpUseSessions } from './context-types.ts'
-import { DynamicFieldsSection, type DynamicFieldRow } from './components/world-state-dynamic.tsx'
+import { DynamicFieldsSection } from './components/world-state-dynamic.tsx'
 import {
   BudgetGauge,
   clockOf,
@@ -52,10 +47,6 @@ import {
   InventorySection,
   RelationsSection,
   SceneSection,
-  type CharacterRow,
-  type FlagRow,
-  type InventoryRow,
-  type SceneDraft,
 } from './components/world-state-sections.tsx'
 
 /** Implementation identity; also the key the body registers under. */
@@ -78,155 +69,7 @@ interface WorldStatePanelProps {
   sessionId?: string
 }
 
-interface Draft {
-  characters: CharacterRow[]
-  inventory: InventoryRow[]
-  flags: FlagRow[]
-  scene: SceneDraft
-  relations: WorldStateRelation[]
-  dynamicFields: DynamicFieldRow[]
-}
-
-/** The three row lists that need generated React keys (see WorldStatePanel). */
 type RowListName = 'characters' | 'inventory' | 'flags'
-
-/** Project the read-only slice into an array-based draft for stable editing. */
-function draftOf(view: WorldStateView | undefined): Draft {
-  const dynamicKeys = view ? getDynamicKeys(view) : []
-  const dynamicFields: DynamicFieldRow[] = dynamicKeys.map((id) => {
-    const field = view![id] as DynamicFieldValue
-    return {
-      id,
-      type: field.type,
-      value: String(field.value),
-      min: field.min !== undefined ? String(field.min) : undefined,
-      max: field.max !== undefined ? String(field.max) : undefined,
-    }
-  })
-
-  return {
-    characters: Object.entries(view?.characters ?? {}).map(([name, value]) => ({
-      name,
-      affinity: value.affinity === undefined ? '' : String(value.affinity),
-      mood: value.mood ?? '',
-      appearance: value.appearance ?? '',
-      condition: value.condition ?? '',
-    })),
-    inventory: Object.entries(view?.inventory ?? {}).map(([name, value]) => ({
-      name,
-      quantity: value.quantity === undefined ? '' : String(value.quantity),
-      note: value.note ?? '',
-    })),
-    flags: Object.entries(view?.flags ?? {}).map(([key, value]) => ({ key, value: String(value) })),
-    scene: {
-      location: view?.scene?.location ?? '',
-      time: view?.scene?.time ?? '',
-      weather: view?.scene?.weather ?? '',
-    },
-    // Relations are read-only in the panel (maintained by the Chronicler);
-    // copy them so draft edits can never alias projection objects.
-    relations: (view?.relations ?? []).map((rel) => ({ ...rel })),
-    dynamicFields,
-  }
-}
-
-/** True when the whole slice carries no information at all. */
-function isEmptyDraft(draft: Draft): boolean {
-  return (
-    draft.characters.length === 0 &&
-    draft.inventory.length === 0 &&
-    draft.flags.length === 0 &&
-    draft.relations.length === 0 &&
-    draft.scene.location.length === 0 &&
-    draft.scene.time.length === 0 &&
-    draft.scene.weather.length === 0 &&
-    draft.dynamicFields.length === 0
-  )
-}
-
-/** Parse a free-text flag value into string | number | boolean. */
-function parseFlagValue(raw: string): string | number | boolean {
-  const text = raw.trim()
-  if (text === 'true') return true
-  if (text === 'false') return false
-  if (text.length > 0 && !Number.isNaN(Number(text))) return Number(text)
-  return raw
-}
-
-/** Rebuild the whole-value WorldState from the editable draft. */
-function stateOfDraft(draft: Draft): WorldState {
-  const characters: Record<string, WorldStateCharacter> = {}
-  for (const row of draft.characters) {
-    const name = row.name.trim()
-    if (name.length === 0) continue
-    const entry: WorldStateCharacter = {}
-    const affinity = row.affinity.trim()
-    if (affinity.length > 0 && !Number.isNaN(Number(affinity))) entry.affinity = Number(affinity)
-    if (row.mood.trim().length > 0) entry.mood = row.mood.trim()
-    if (row.appearance.trim().length > 0) entry.appearance = row.appearance.trim()
-    if (row.condition.trim().length > 0) entry.condition = row.condition.trim()
-    characters[name] = entry
-  }
-  const inventory: Record<string, WorldStateItem> = {}
-  for (const row of draft.inventory) {
-    const name = row.name.trim()
-    if (name.length === 0) continue
-    const entry: WorldStateItem = {}
-    const quantity = row.quantity.trim()
-    if (quantity.length > 0 && !Number.isNaN(Number(quantity))) entry.quantity = Number(quantity)
-    if (row.note.trim().length > 0) entry.note = row.note.trim()
-    inventory[name] = entry
-  }
-  const flags: WorldState['flags'] = {}
-  for (const row of draft.flags) {
-    const key = row.key.trim()
-    if (key.length === 0) continue
-    flags[key] = parseFlagValue(row.value)
-  }
-  const scene: WorldState['scene'] = {}
-  if (draft.scene.location.trim().length > 0) scene.location = draft.scene.location.trim()
-  if (draft.scene.time.trim().length > 0) scene.time = draft.scene.time.trim()
-  if (draft.scene.weather.trim().length > 0) scene.weather = draft.scene.weather.trim()
-
-  const state: WorldState = {
-    characters,
-    inventory,
-    flags,
-    scene,
-    relations: draft.relations.map((rel) => ({ ...rel })),
-  }
-
-  for (const row of draft.dynamicFields) {
-    const id = row.id.trim()
-    if (id.length === 0 || !isValidFieldId(id)) continue
-
-    let value: number | string | boolean
-    const valueStr = row.value.trim()
-
-    if (row.type === 'number') {
-      value = Number(valueStr)
-      if (Number.isNaN(value)) value = 0
-    } else if (row.type === 'boolean') {
-      value = valueStr === 'true' || valueStr === '1'
-    } else {
-      value = valueStr
-    }
-
-    const constraints: { min?: number; max?: number } = {}
-    if (row.min !== undefined && row.min.trim().length > 0) {
-      const min = Number(row.min)
-      if (!Number.isNaN(min)) constraints.min = min
-    }
-    if (row.max !== undefined && row.max.trim().length > 0) {
-      const max = Number(row.max)
-      if (!Number.isNaN(max)) constraints.max = max
-    }
-
-    state[id] = createDynamicField(row.type, value, constraints)
-  }
-
-  return state
-}
 
 function WorldStatePanel(props: WorldStatePanelProps): ReactNode {
   const t: Translate = typeof props.t === 'function' ? props.t : (key) => key

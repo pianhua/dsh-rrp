@@ -6,6 +6,9 @@ lib/
 dist/
 *.tsbuildinfo
 
+# Local Git worktrees
+/.worktrees/
+
 # Test / coverage
 coverage/
 

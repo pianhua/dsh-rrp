@@ -34,7 +34,13 @@ import {
   type CardPlayer,
 } from '../card-types.ts'
 import { presetIdForCard } from '../preset-id.ts'
-import { RRP_ROUTES, type CardImportResponse, type RrpErrorBody } from '../route-contract.ts'
+import {
+  RRP_ROUTES,
+  type CardImportResponse,
+  type CardListResponse,
+  type CardOneResponse,
+  type RrpErrorBody,
+} from '../route-contract.ts'
 import { uniqueMainTitle } from '../save-naming.ts'
 import { withPlayerPersona } from '../world-state.ts'
 import type { RrpClientContext } from './context-types.ts'
@@ -792,14 +798,14 @@ export function registerGallery(ctx: RrpClientContext): void {
   const loadList = async (): Promise<CardMeta[]> => {
     const response = await fetch(RRP_ROUTES.cards)
     if (!response.ok) throw new Error(String(response.status))
-    const body = (await response.json()) as { cards: CardMeta[] }
+    const body = (await response.json()) as CardListResponse
     return body.cards
   }
 
   const loadCard = async (id: string): Promise<CardPack | undefined> => {
     const response = await fetch(RRP_ROUTES.cardOne + '?id=' + encodeURIComponent(id))
     if (!response.ok) return undefined
-    const body = (await response.json()) as { card: CardPack }
+    const body = (await response.json()) as CardOneResponse
     return body.card
   }
 

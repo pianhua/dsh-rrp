@@ -1,5 +1,5 @@
 import { gunzipSync, gzipSync } from 'node:zlib'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -11,6 +11,8 @@ import {
   pngTextChunks,
   writeImportedCard,
 } from '../src/card-import.ts'
+import * as cardImportCompat from '../src/card-import.ts'
+import * as cardImportParse from '../src/card-import-parse.ts'
 import { readCard } from '../src/cards.ts'
 
 /** Build a minimal PNG carrying the given tEXt chunks (CRCs are not validated). */
@@ -41,6 +43,15 @@ const V2 = {
 }
 
 describe('character card normalization (issue #31 P1-D)', () => {
+  it('keeps the existing parser exports available from card-import', () => {
+    expect(cardImportCompat.cardIdFromName).toBe(cardImportParse.cardIdFromName)
+    expect(cardImportCompat.importCardFromJson).toBe(cardImportParse.importCardFromJson)
+    expect(cardImportCompat.importCardFromPng).toBe(cardImportParse.importCardFromPng)
+    expect(cardImportCompat.normalizeCharacterCard).toBe(cardImportParse.normalizeCharacterCard)
+    expect(cardImportCompat.pngTextChunks).toBe(cardImportParse.pngTextChunks)
+    expect(cardImportCompat.writeImportedCard).toBe(writeImportedCard)
+  })
+
   it('maps v2 fields onto our vocabulary and expands placeholders', () => {
     const source = normalizeCharacterCard(V2)
     expect(source).toBeDefined()
@@ -55,13 +66,52 @@ describe('character card normalization (issue #31 P1-D)', () => {
     expect(source?.creator).toBe('tester')
   })
 
-  it('reads v3 { spec, data } cards', () => {
-    const source = normalizeCharacterCard({
+  it('reads v3 { spec, data } cards from objects and JSON', () => {
+    const card = {
       spec: 'chara_card_v3',
       data: { name: '剑客', description: '独臂。', first_mes: '……' },
-    })
+    }
+    const source = normalizeCharacterCard(card)
     expect(source?.name).toBe('剑客')
     expect(source?.worldCore).toBe('独臂。')
+    expect(importCardFromJson(JSON.stringify(card))?.name).toBe('剑客')
+    expect(importCardFromJson(JSON.stringify(V2))?.name).toBe('Mia the Maid')
+  })
+
+  it('trims mapped fields, falls back to the root creator, and caps unique tags', () => {
+    const source = normalizeCharacterCard({
+      spec: 'chara_card_v3',
+      creator: ' root creator ',
+      data: {
+        name: '  Hero  ',
+        description: '  {{char}} meets {{user}}  ',
+        scenario: ' a room ',
+        personality: ' brave ',
+        mes_example: ' sample ',
+        first_mes: '  {{char}} says hello to {{user}}. ',
+        creator: ' ',
+        tags: [
+          ' tag-1 ',
+          'tag-1',
+          'tag-2',
+          'tag-3',
+          'tag-4',
+          'tag-5',
+          'tag-6',
+          'tag-7',
+          'tag-8',
+          'tag-9',
+        ],
+      },
+    })
+    expect(source).toEqual({
+      name: 'Hero',
+      worldCore: 'Hero meets 你\n\n【情境】\na room',
+      persona: 'brave\n\n示例对话（学习文风，勿照抄）：\nsample',
+      firstMessage: 'Hero says hello to 你.',
+      tags: ['tag-1', 'tag-2', 'tag-3', 'tag-4', 'tag-5', 'tag-6', 'tag-7', 'tag-8'],
+      creator: 'root creator',
+    })
   })
 
   it('rejects cards without a usable character', () => {
@@ -83,6 +133,31 @@ describe('tavern PNG parsing', () => {
     expect(source?.name).toBe('Mia the Maid')
     expect(gunzipSync(Buffer.from(chunks!.get('ccv3')!, 'base64')).toString('utf8')).toContain(
       'chara_card_v3',
+    )
+  })
+
+  it('prefers ccv3 over chara over ccv2 and falls through invalid candidates', () => {
+    const encoded = (value: unknown) =>
+      Buffer.from(JSON.stringify(value), 'utf8').toString('base64')
+    const preferred = {
+      spec: 'chara_card_v3',
+      data: { name: 'Preferred' },
+    }
+    const png = pngWith(
+      ['ccv2', encoded({ name: 'V2 fallback' })],
+      ['chara', encoded({ name: 'Legacy fallback' })],
+      ['ccv3', gzipSync(Buffer.from(JSON.stringify(preferred))).toString('base64')],
+    )
+    expect(importCardFromPng(png)?.name).toBe('Preferred')
+
+    const fallback = pngWith(
+      ['ccv3', 'not a card'],
+      ['chara', encoded({ name: 'Legacy fallback' })],
+      ['ccv2', encoded({ name: 'V2 fallback' })],
+    )
+    expect(importCardFromPng(fallback)?.name).toBe('Legacy fallback')
+    expect(importCardFromPng(pngWith(['ccv2', encoded({ name: 'V2 fallback' })]))?.name).toBe(
+      'V2 fallback',
     )
   })
 
@@ -122,8 +197,15 @@ describe('writeImportedCard (issue #31 P1-D)', () => {
     expect(first?.id).toBe('mia-the-maid')
     const pack = readCard(first!.id, home)
     expect(pack).toBeDefined()
+    expect(pack?.dir).toBe(join(home, '.dsh-rrp', 'cards', first!.id))
     expect(pack?.meta.name).toBe('Mia the Maid')
     expect(pack?.meta.tags).toEqual(['女仆', '大小姐'])
+    const presetDir = join(home, '.agent-presets', 'rp-mia-the-maid')
+    expect(existsSync(join(presetDir, 'agent.cordis.yml'))).toBe(true)
+    expect(readFileSync(join(presetDir, 'agent.cordis.yml'), 'utf8')).not.toContain(
+      '__DSH_RRP_SKILL_DIR__',
+    )
+    expect(existsSync(join(presetDir, '.dsh-rrp.json'))).toBe(true)
     expect(pack?.persona).toContain('倔强、细心')
     expect(pack?.worldCore).toContain('落难贵族之女')
     expect(pack?.openings).toHaveLength(1)
@@ -137,6 +219,25 @@ describe('writeImportedCard (issue #31 P1-D)', () => {
     expect(second?.id).toBe('mia-the-maid-2')
     const third = writeImportedCard(source, home)
     expect(third?.id).toBe('mia-the-maid-3')
+  })
+
+  it('preserves user-card priority and avoids shipped-card id collisions', () => {
+    expect(readCard('yanmen-inn', home)?.meta.name).toBe('雪夜雁门客栈')
+    const userDir = join(home, '.dsh-rrp', 'cards', 'yanmen-inn')
+    mkdirSync(userDir, { recursive: true })
+    writeFileSync(
+      join(userDir, 'card.md'),
+      '---\nid: yanmen-inn\nname: User override\n---\n\nUser card body.\n',
+    )
+
+    expect(readCard('yanmen-inn', home)?.meta.name).toBe('User override')
+    expect(readCard('yanmen-inn', home)?.dir).toBe(userDir)
+    const source = normalizeCharacterCard({ name: 'Yanmen Inn', description: 'Imported copy.' })!
+    const written = writeImportedCard(source, home)
+
+    expect(written?.id).toBe('yanmen-inn-2')
+    expect(existsSync(join(home, '.dsh-rrp', 'cards', 'yanmen-inn-2', 'card.md'))).toBe(true)
+    expect(readCard('yanmen-inn-2', home)?.meta.name).toBe('Yanmen Inn')
   })
 
   it('writes a pack without an opening when first_mes is empty', () => {

@@ -14,7 +14,12 @@ import { ensureCardPreset } from './preset.ts'
 
 const TAG = '[dsh-rrp]'
 /** Exact read paths; the list returns summaries, \`one\` takes the whole pack. */
-import { RRP_ROUTES, type CardImportResponse } from './route-contract.ts'
+import {
+  RRP_ROUTES,
+  type CardImportResponse,
+  type CardListResponse,
+  type CardOneResponse,
+} from './route-contract.ts'
 const LIST_PATH = RRP_ROUTES.cards
 const ONE_PATH = RRP_ROUTES.cardOne
 const IMPORT_PATH = RRP_ROUTES.cardImport
@@ -55,7 +60,7 @@ export function registerCardsRoute(ctx: Context): void {
           // A card added after boot has no rp-<id> preset yet; make it
           // startable (agentPresets.select) without a plugin reload.
           for (const card of cards) ensureCardPreset(card.id)
-          send(res, 200, { cards })
+          send(res, 200, { cards } satisfies CardListResponse)
         } catch (error) {
           send(res, 500, { error: String(error) })
         }
@@ -80,7 +85,7 @@ export function registerCardsRoute(ctx: Context): void {
             send(res, 404, { error: 'unknown card' })
             return
           }
-          send(res, 200, { card })
+          send(res, 200, { card } satisfies CardOneResponse)
         } catch (error) {
           send(res, 500, { error: String(error) })
         }

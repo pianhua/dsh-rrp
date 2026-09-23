@@ -49,7 +49,7 @@ import {
 } from './copilot-store.ts'
 import { transcriptOf } from './transcript-reader.ts'
 import { SUMMARY_KEY, renderMacroSummary } from './macro-summary.ts'
-import { stageLoreDraft, reservedNames } from './lore-route.ts'
+import { stageLoreDraft, reservedNames } from './lore-application.ts'
 import { RRP_LORE_KEY, loreEntriesOf, validateLoreEntry } from './lore-state.ts'
 import { publishState } from './state-publisher.ts'
 import {

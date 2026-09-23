@@ -16,6 +16,7 @@
  * deduplicated, and hidden settings/lore operations share the facts event.
  */
 import { randomUUID } from 'node:crypto'
+import type { ProjectionsService, SessionLike } from './host-faces.ts'
 import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
 import {
   hitSet,
@@ -36,15 +37,9 @@ const TAG = '[dsh-rrp]'
 /** Model-facing breadcrumb for metadata-only facts publishes (see publishState). */
 const LORE_ONLY_NOTICE = '【dsh-rrp】世界知识条目已更新（内容经系统技能注入，上文状态未变）。'
 
-/** The session face this module writes through. */
-export interface StateSession {
-  readonly id: string
-  append(type: string, data: unknown, intent?: unknown): unknown
-}
-/** The projection read face. */
-export interface StateProjections {
-  stateOf(session: unknown, key: string): unknown
-}
+/** Compatibility names backed by the shared host faces. */
+export type StateSession = SessionLike
+export type StateProjections = ProjectionsService
 
 /** One writer's change set; omitted fields keep their projected value. */
 export interface RrpStatePatch {

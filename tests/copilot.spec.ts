@@ -25,7 +25,7 @@ import {
   openCopilotStore,
 } from '../src/copilot-store.ts'
 import { forgetProposals } from '../src/steward-proposals.ts'
-import { hasLoreDraft } from '../src/lore-route.ts'
+import { hasLoreDraft } from '../src/lore-drafts.ts'
 
 let copilotDir: string
 
@@ -396,6 +396,16 @@ describe('copilot route', () => {
     })
     await host.routes.get('/dsh-rrp/copilot')!.handler(req, res)
     expect(hasLoreDraft('s-lore')).toBe(true)
+    expect(
+      readActivity('s-lore').entries.some(
+        (entry) =>
+          entry.actor === 'copilot' &&
+          entry.target === 'lore' &&
+          entry.phase === 'corrected' &&
+          entry.detailKey === 'detail.stagedDraft' &&
+          entry.detailName === 'inn-rule',
+      ),
+    ).toBe(true)
     // Staging is not a session-log write.
     expect(host.appended).toHaveLength(0)
   })

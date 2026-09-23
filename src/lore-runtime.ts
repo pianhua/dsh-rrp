@@ -12,28 +12,28 @@
  * agent that already exists when the plugin boots.
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { type ListeningRuntimeFaces, type ProjectionsService, face } from './host-faces.ts'
+import {
+  type ListeningRuntimeFaces,
+  type ProjectionsService,
+  type SessionLike,
+  face,
+} from './host-faces.ts'
 import { harnessHome } from './home.ts'
 import { belongsToRpPreset } from './preset-id.ts'
 import { createLoreProvider, type LoreProviderControl } from './lore-provider.ts'
 import { backupLegacyLore, listLegacyLore } from './lore.ts'
 import { RRP_LORE_KEY, loreEntriesOf } from './lore-state.ts'
 import { TRANSCRIPT_KEY, type TranscriptSlice } from './transcript.ts'
-import { publishState, type StateSession } from './state-publisher.ts'
+import { publishState } from './state-publisher.ts'
 import { forgetLore } from './lore-drafts.ts'
 
 const TAG = '[dsh-rrp]'
 
 /**
- * The agent-scoped surfaces this module speaks to. Named apart from the
- * `host-faces.ts` faces on purpose: a LoreSession whose `append` may be absent
- * (an agent can outlive its writable session), and a LoreAgent carrying its own
- * `ctx` — which is how one worldline's lore stays agent-local.
+ * The agent-scoped Session view keeps `append` optional because an agent can
+ * outlive its writable Session; the agent's own `ctx` keeps lore worldline-local.
  */
-interface LoreSession {
-  readonly id: string
-  append?(type: string, data: unknown, intent?: unknown): unknown
-}
+type LoreSession = Omit<SessionLike, 'append'> & { append?: SessionLike['append'] }
 interface SkillsServiceLike {
   registerProvider(create: (control: LoreProviderControl) => unknown): () => void
 }
@@ -99,7 +99,7 @@ export function migrateLegacyLore(
     })),
   )
   if (skills.length === 0) return false
-  const published = publishState(session as StateSession, projections, {
+  const published = publishState(session as SessionLike, projections, {
     sediment: { kind: 'snapshot', skills },
   })
   if (!published) return false

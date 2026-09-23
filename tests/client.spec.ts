@@ -115,6 +115,29 @@ describe('dsh-rrp client half', () => {
     expect(nav?.id).toBe('dsh-rrp/chronicle')
   })
 
+  it('reads card list and detail from their existing response envelopes', async () => {
+    const { ctx, bodies } = fakeContext()
+    const fetchMock = vi.fn(async (url: string) =>
+      url === RRP_ROUTES.cards
+        ? { ok: true, json: async () => ({ cards: [CARD.meta] }) }
+        : { ok: true, json: async () => ({ card: CARD }) },
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    client.apply(ctx as never)
+
+    const injected = bodies.find((entry) => entry.name === 'main')?.inject?.() as {
+      loadList?: () => Promise<unknown>
+      loadCard?: (id: string) => Promise<unknown>
+    }
+    await expect(injected.loadList?.()).resolves.toEqual([CARD.meta])
+    await expect(injected.loadCard?.(CARD.id)).resolves.toEqual(CARD)
+    expect(fetchMock).toHaveBeenNthCalledWith(1, RRP_ROUTES.cards)
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      RRP_ROUTES.cardOne + '?id=' + encodeURIComponent(CARD.id),
+    )
+  })
+
   it('creates the session inside the card workspace ensured by the host route', async () => {
     const { ctx, bodies } = fakeContext()
     const creates: Array<Record<string, unknown>> = []
@@ -182,6 +205,42 @@ describe('dsh-rrp client half', () => {
     }
     expect(injected.workspaces).toBeUndefined()
     expect((await injected.start?.(CARD))?.ok).toBe(true)
+    expect(creates).toEqual([{}])
+  })
+
+  it('falls back to an ungrouped start when the workspace response has no id', async () => {
+    const { ctx, bodies } = fakeContext()
+    const creates: Array<Record<string, unknown>> = []
+    Object.assign(ctx, {
+      get: () => undefined,
+      sessions: {
+        create: async (options: Record<string, unknown>) => {
+          creates.push(options)
+          return 'session-3'
+        },
+        open() {},
+        binding: () => ({ session: { async rename() {} } }),
+      },
+      remote: { agentPresets: { select: async () => ({ ok: true }) } },
+      layout: { selectPanel() {} },
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.endsWith(RRP_ROUTES.cardWorkspace)
+          ? { ok: true, json: async () => ({ ok: true, path: 'D:/rp', created: true }) }
+          : { ok: true, text: async () => '' },
+      ),
+    )
+    client.apply(ctx as never)
+
+    const injected = bodies.find((entry) => entry.name === 'main')?.inject?.() as {
+      start?: (card: CardPack) => Promise<{ ok: boolean; message?: string }>
+    }
+    await expect(injected.start?.(CARD)).resolves.toEqual({
+      ok: true,
+      message: 'gallery.workspaceFallback',
+    })
     expect(creates).toEqual([{}])
   })
 

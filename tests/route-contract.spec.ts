@@ -1,4 +1,8 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { listCards, readCard } from '../src/cards.ts'
 import { registerActivityRoute } from '../src/activity-route.ts'
 import { DEFAULT_JSON_BODY_LIMIT } from '../src/host-faces.ts'
 import { registerCardsRoute } from '../src/cards-route.ts'
@@ -106,6 +110,34 @@ describe('route contract (issue #22)', () => {
         RRP_ROUTES.worldState,
       ].sort(),
     )
+  })
+
+  it('returns the existing card list and detail JSON envelopes', async () => {
+    const previousHome = process.env.DSH_HOME
+    const home = mkdtempSync(join(tmpdir(), 'dsh-rrp-card-routes-'))
+    process.env.DSH_HOME = home
+    try {
+      const expectedCards = listCards(home)
+      const expectedCard = readCard('maid-heiress', home)
+      expect(expectedCard).toBeDefined()
+
+      const host = fakeHost()
+      registerCardsRoute(host.ctx as never)
+      const list = await call(host, RRP_ROUTES.cards)
+      const one = await call(host, RRP_ROUTES.cardOne, {
+        method: 'GET',
+        url: 'http://localhost' + RRP_ROUTES.cardOne + '?id=maid-heiress',
+      })
+
+      expect(list.res.statusCode).toBe(200)
+      expect(JSON.parse(list.text)).toEqual({ cards: expectedCards })
+      expect(one.res.statusCode).toBe(200)
+      expect(JSON.parse(one.text)).toEqual({ card: expectedCard })
+    } finally {
+      if (previousHome === undefined) delete process.env.DSH_HOME
+      else process.env.DSH_HOME = previousHome
+      rmSync(home, { recursive: true, force: true })
+    }
   })
 
   it('every non-2xx response carries the contracted RrpErrorBody shape', async () => {
