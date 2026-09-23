@@ -17,10 +17,15 @@
  *   node scripts/host-runner.mjs status [--port 3099]
  */
 
-import { execSync, spawn } from 'node:child_process'
+import { execFileSync, execSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  decidePortOwnership,
+  matchesRunnerArguments,
+  parseWindowsCommandLine,
+} from './host-runner-ownership.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, '..')
@@ -51,51 +56,41 @@ function parseArgs() {
   return { action, port, profile }
 }
 
-/** Find DSH entry script directly without batch wrappers. */
+/** Locate @deepseek-ai/dsh lib/bin.js directly to bypass cmd wrapper. */
 function resolveDshBin() {
-  // 1. Try global npm root
   try {
-    const globalRoot = execSync('npm root -g', { encoding: 'utf8' }).trim()
-    const candidate = join(globalRoot, '@deepseek-ai', 'dsh', 'lib', 'bin.js')
-    if (existsSync(candidate)) return candidate
+    const dshPkgPath = execSync('node -e "console.log(require.resolve(\'@deepseek-ai/dsh\'))"', {
+      encoding: 'utf8',
+      cwd: repoRoot,
+    }).trim()
+    const dshRoot = dirname(dshPkgPath)
+    const binJs = join(dshRoot, 'bin.js')
+    if (existsSync(binJs)) return binJs
   } catch {
     // ignore
   }
 
-  // 2. Try AppData fallback on Windows
-  if (process.platform === 'win32' && process.env.APPDATA) {
-    const candidate = join(
-      process.env.APPDATA,
-      'npm',
-      'node_modules',
-      '@deepseek-ai',
-      'dsh',
-      'lib',
-      'bin.js',
-    )
-    if (existsSync(candidate)) return candidate
-  }
+  // Fallback to local node_modules
+  const localBin = join(repoRoot, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+  if (existsSync(localBin)) return localBin
 
-  // 3. Fallback to CLI command name
   return null
 }
 
-/** Find PID listening on given port (Windows + POSIX fallback). */
+/** Check if a port has a listening process. Returns PID or null. */
 function findPidOnPort(port) {
   if (process.platform === 'win32') {
     try {
-      const output = execSync(`netstat -ano`, { encoding: 'utf8' })
-      for (const line of output.split('\n')) {
-        const match = line
-          .trim()
-          .match(
-            new RegExp(
-              `TCP\\s+(?:127\\.0\\.0\\.1|0\\.0\\.0\\.0):${port}\\s+.*LISTENING\\s+(\\d+)`,
-              'i',
-            ),
-          )
-        if (match) {
-          return parseInt(match[1], 10)
+      const output = execSync(`netstat -ano -p tcp | findstr :${port}`, {
+        encoding: 'utf8',
+        shell: 'cmd.exe',
+      })
+      const lines = output.split('\n')
+      for (const line of lines) {
+        if (line.includes('LISTENING')) {
+          const parts = line.trim().split(/\s+/)
+          const pid = parseInt(parts[parts.length - 1], 10)
+          if (!isNaN(pid) && pid > 0) return pid
         }
       }
     } catch {
@@ -112,18 +107,112 @@ function findPidOnPort(port) {
   return null
 }
 
-/** Terminate a PID tree. */
-function killPid(pid) {
-  if (!pid) return
+function parseCreationDate(raw) {
+  if (typeof raw !== 'string') return null
+  const msMatch = /^\/Date\((\d+)\)\/$/.exec(raw)
+  const date = msMatch ? new Date(Number(msMatch[1])) : new Date(raw)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+function readProcessInfo(pid) {
+  if (!isPositivePid(pid)) return null
+
+  if (process.platform === 'win32') {
+    try {
+      const script =
+        '$p = Get-CimInstance Win32_Process -Filter "ProcessId = ' +
+        String(pid) +
+        '"; if ($null -eq $p) { exit 2 }; $p | Select-Object ProcessId, @{Name="CreationDate";Expression={$_.CreationDate.ToString("o")}}, CommandLine | ConvertTo-Json -Compress'
+      const raw = execFileSync(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-Command', script],
+        {
+          encoding: 'utf8',
+          windowsHide: true,
+        },
+      )
+      const row = JSON.parse(raw)
+      if (!row || typeof row.CommandLine !== 'string') return null
+      const startedAt = parseCreationDate(row.CreationDate)
+      if (!startedAt) return null
+      return {
+        pid: Number(row.ProcessId),
+        startedAt,
+        argv: parseWindowsCommandLine(row.CommandLine),
+      }
+    } catch {
+      return null
+    }
+  }
+
   try {
-    if (process.platform === 'win32') {
-      execSync(`taskkill /F /T /PID ${pid} 2>nul || exit 0`, { shell: 'cmd.exe' })
-    } else {
-      process.kill(pid, 'SIGKILL')
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+    const close = stat.lastIndexOf(')')
+    if (close < 0) return null
+    const fields = stat
+      .slice(close + 2)
+      .trim()
+      .split(/\s+/)
+    const startTicks = fields[19]
+    const cmdline = readFileSync(`/proc/${pid}/cmdline`)
+      .toString('utf8')
+      .split('\0')
+      .filter(Boolean)
+    if (!startTicks || cmdline.length === 0) return null
+    const startTime = Number(startTicks)
+    if (!Number.isFinite(startTime)) return null
+    const bootTimeLine = readFileSync('/proc/stat', 'utf8')
+      .split('\n')
+      .find((line) => line.startsWith('btime '))
+    const bootTime = Number(bootTimeLine?.split(/\s+/)[1])
+    const ticksPerSecond = Number(execSync('getconf CLK_TCK', { encoding: 'utf8' }).trim())
+    if (!Number.isFinite(bootTime) || !Number.isFinite(ticksPerSecond) || ticksPerSecond <= 0)
+      return null
+    return {
+      pid,
+      startedAt: new Date((bootTime + startTime / ticksPerSecond) * 1000).toISOString(),
+      argv: cmdline,
     }
   } catch {
-    // Process might already be dead
+    return null
   }
+}
+
+function readState() {
+  if (!existsSync(stateFile)) return null
+  try {
+    return JSON.parse(readFileSync(stateFile, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+function portOwnership(port) {
+  const state = readState()
+  const listenerPid = findPidOnPort(port)
+  const processInfo = state && isPositivePid(state.pid) ? readProcessInfo(state.pid) : null
+  const decision = decidePortOwnership(state, processInfo, listenerPid, port)
+  if (decision === 'idle') return { kind: 'idle', state }
+  if (decision === 'owned') return { kind: 'owned', state, pid: state.pid }
+  return { kind: 'conflict', state, listenerPid }
+}
+
+function killPid(pid) {
+  if (!isPositivePid(pid)) return false
+  try {
+    if (process.platform === 'win32') {
+      execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore', windowsHide: true })
+    } else {
+      process.kill(pid, 'SIGTERM')
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+function isPositivePid(pid) {
+  return Number.isSafeInteger(pid) && pid > 0
 }
 
 /** Clean environment without proxy variables. */
@@ -140,53 +229,62 @@ function getCleanEnv() {
 
 async function stopHost(port) {
   console.log(`[host-runner] Stopping DSH host on port ${port}...`)
+  const ownership = portOwnership(port)
+  if (ownership.kind === 'idle') {
+    if (ownership.state) rmSync(stateFile, { force: true })
+    console.log(`[host-runner] Port ${port} is idle; stale runner state removed.`)
+    return
+  }
+  if (ownership.kind === 'conflict') {
+    console.error(
+      `[host-runner] Refusing to stop PID ${ownership.listenerPid} on port ${port}: process ownership could not be verified. Stop it manually if appropriate, then retry.`,
+    )
+    process.exitCode = 1
+    return
+  }
 
-  // 1. Check saved state
-  if (existsSync(stateFile)) {
-    try {
-      const state = JSON.parse(readFileSync(stateFile, 'utf8'))
-      if (state.pid) {
-        killPid(state.pid)
-      }
-    } catch {
-      // ignore
-    }
-    try {
+  console.log(`[host-runner] Stopping verified runner process ${ownership.pid}...`)
+  const confirmed = portOwnership(port)
+  if (confirmed.kind !== 'owned' || confirmed.pid !== ownership.pid) {
+    console.error(`[host-runner] Process identity changed before stop; refusing to signal any PID.`)
+    process.exitCode = 1
+    return
+  }
+  if (!killPid(confirmed.pid)) {
+    console.error(`[host-runner] Could not stop verified runner process ${confirmed.pid}.`)
+    process.exitCode = 1
+    return
+  }
+
+  for (let i = 0; i < 30; i++) {
+    if (!findPidOnPort(port)) {
       rmSync(stateFile, { force: true })
-    } catch {
-      /* ignore */
+      console.log(`[host-runner] Host on port ${port} stopped cleanly.`)
+      return
     }
-  }
-
-  // 2. Double check port listener
-  const occupyingPid = findPidOnPort(port)
-  if (occupyingPid) {
-    console.log(`[host-runner] Killing remaining process ${occupyingPid} on port ${port}...`)
-    killPid(occupyingPid)
-  }
-
-  // Wait for port release
-  for (let i = 0; i < 20; i++) {
-    if (!findPidOnPort(port)) break
     await new Promise((r) => setTimeout(r, 200))
   }
 
-  if (findPidOnPort(port)) {
-    console.error(`[host-runner] Failed to release port ${port}!`)
-    process.exit(1)
-  }
-
-  console.log(`[host-runner] Host on port ${port} stopped cleanly.`)
+  console.error(
+    `[host-runner] Verified runner process did not release port ${port}; state retained.`,
+  )
+  process.exitCode = 1
 }
 
 async function startHost(port, profile) {
-  // 1. Ensure any old process on this port is stopped
-  const existingPid = findPidOnPort(port)
-  if (existingPid) {
-    console.log(
-      `[host-runner] Port ${port} currently occupied by PID ${existingPid}. Cleaning up...`,
-    )
+  const ownership = portOwnership(port)
+  if (ownership.kind === 'owned') {
+    console.log(`[host-runner] Found verified runner process ${ownership.pid}; stopping it first.`)
     await stopHost(port)
+    if (process.exitCode) return
+  } else if (ownership.kind === 'conflict') {
+    console.error(
+      `[host-runner] Port ${port} is occupied by PID ${ownership.listenerPid}, which is not verified as runner-owned. No process was stopped; choose another port or stop the service manually.`,
+    )
+    process.exitCode = 1
+    return
+  } else if (ownership.state) {
+    rmSync(stateFile, { force: true })
   }
 
   mkdirSync(logsDir, { recursive: true })
@@ -230,7 +328,28 @@ async function startHost(port, profile) {
   const hostPid = child.pid
   console.log(`[host-runner] Background process spawned with PID ${hostPid}. Waiting for boot...`)
 
-  // 3. Poll log file for launch token URL
+  // 3. Poll for the port listener and capture an OS process identity.
+  let ownedProcess = null
+  for (let i = 0; i < 50; i++) {
+    const listenerPid = findPidOnPort(port)
+    if (listenerPid !== null) {
+      const candidate = readProcessInfo(listenerPid)
+      if (candidate && matchesRunnerArguments(candidate.argv, port, profile)) {
+        ownedProcess = candidate
+        break
+      }
+    }
+    await new Promise((r) => setTimeout(r, 200))
+  }
+  if (ownedProcess === null) {
+    console.error(
+      `[host-runner] Could not verify DSH process ownership on port ${port}; leaving any listener untouched.`,
+    )
+    process.exitCode = 1
+    return
+  }
+
+  // 4. Poll log file for launch token URL
   const tokenRegex = /dsh web:\s+(https?:\/\/127\.0\.0\.1:\d+\/\?token=([A-Za-z0-9_-]+))/
   let tokenUrl = null
   let token = null
@@ -301,6 +420,7 @@ async function startHost(port, profile) {
     token,
     cookie: sessionCookie,
     logFile,
+    processStartedAt: ownedProcess.startedAt,
     startedAt: new Date().toISOString(),
     status: 'ready',
   }
@@ -318,17 +438,11 @@ async function startHost(port, profile) {
 }
 
 async function statusHost(port) {
+  const ownership = portOwnership(port)
   const pid = findPidOnPort(port)
-  let state = null
-  if (existsSync(stateFile)) {
-    try {
-      state = JSON.parse(readFileSync(stateFile, 'utf8'))
-    } catch {
-      // ignore
-    }
-  }
+  const state = readState()
 
-  if (!pid) {
+  if (ownership.kind === 'idle') {
     console.log(`[host-runner] Port ${port}: IDLE (no process listening)`)
     if (state) {
       console.log(`[host-runner] Cleaning stale state file...`)
@@ -341,15 +455,18 @@ async function statusHost(port) {
     return
   }
 
-  console.log(`[host-runner] Port ${port}: ACTIVE (PID: ${pid})`)
-  if (state?.tokenUrl) {
-    console.log(`  * Token URL : ${state.tokenUrl}`)
-    console.log(`  * Started At: ${state.startedAt}`)
-    console.log(`  * Cookie    : ${state.cookie || '(none recorded)'}`)
-  } else {
+  if (ownership.kind === 'conflict') {
+    console.log(`[host-runner] Port ${port}: CONFLICT (unverified PID ${pid} listening)`)
     console.log(
-      `  * Note: PID ${pid} is running without runner metadata. Run 'node scripts/host-runner.mjs start' to restart cleanly with token capture.`,
+      `  * Note: PID ${pid} is running without verified runner metadata. Stop it manually if appropriate.`,
     )
+  } else {
+    console.log(`[host-runner] Port ${port}: ACTIVE (PID: ${pid}, verified runner process)`)
+    if (state?.tokenUrl) {
+      console.log(`  * Token URL : ${state.tokenUrl}`)
+      console.log(`  * Started At: ${state.startedAt}`)
+      console.log(`  * Cookie    : ${state.cookie || '(none recorded)'}`)
+    }
   }
 
   // Test cards route

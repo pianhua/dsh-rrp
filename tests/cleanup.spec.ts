@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { cleanupSession, extractSessionId } from '../src/index.ts'
 import { readActivity, recordActivity } from '../src/activity.ts'
@@ -107,45 +110,76 @@ describe('Lifecycle disposal listener integration (P0-4)', () => {
     return { ctx, listeners }
   }
 
+  function withIsolatedDshHome<T>(action: (home: string) => T): T {
+    const previousHome = process.env.DSH_HOME
+    const home = mkdtempSync(join(tmpdir(), 'dsh-rrp-cleanup-'))
+    process.env.DSH_HOME = home
+    try {
+      return action(home)
+    } finally {
+      if (previousHome === undefined) delete process.env.DSH_HOME
+      else process.env.DSH_HOME = previousHome
+      rmSync(home, { recursive: true, force: true })
+    }
+  }
+
   it('triggers cleanup on session/disposed', () => {
-    const sessionId = 'session-disposed-e2e'
-    recordActivity(sessionId, {
-      id: 'act-1',
-      at: new Date().toISOString(),
-      actor: 'chronicler',
-      target: 'world-state',
-      phase: 'committed',
+    withIsolatedDshHome(() => {
+      const sessionId = 'session-disposed-e2e'
+      recordActivity(sessionId, {
+        id: 'act-1',
+        at: new Date().toISOString(),
+        actor: 'chronicler',
+        target: 'world-state',
+        phase: 'committed',
+      })
+      expect(readActivity(sessionId).entries).toHaveLength(1)
+
+      const { ctx, listeners } = fakeLifecycleHost()
+      rrp.apply(ctx as never)
+
+      const onSessionDisposed = listeners.get('session/disposed')
+      expect(onSessionDisposed).toBeDefined()
+      onSessionDisposed?.({ id: sessionId })
+
+      expect(readActivity(sessionId).entries).toEqual([])
     })
-    expect(readActivity(sessionId).entries).toHaveLength(1)
-
-    const { ctx, listeners } = fakeLifecycleHost()
-    rrp.apply(ctx as never)
-
-    const onSessionDisposed = listeners.get('session/disposed')
-    expect(onSessionDisposed).toBeDefined()
-    onSessionDisposed?.({ id: sessionId })
-
-    expect(readActivity(sessionId).entries).toEqual([])
   })
 
   it('triggers cleanup on agent/disposed', () => {
-    const sessionId = 'agent-disposed-e2e'
-    recordActivity(sessionId, {
-      id: 'act-2',
-      at: new Date().toISOString(),
-      actor: 'player',
-      target: 'world-state',
-      phase: 'corrected',
+    withIsolatedDshHome(() => {
+      const sessionId = 'agent-disposed-e2e'
+      recordActivity(sessionId, {
+        id: 'act-2',
+        at: new Date().toISOString(),
+        actor: 'player',
+        target: 'world-state',
+        phase: 'corrected',
+      })
+      expect(readActivity(sessionId).entries).toHaveLength(1)
+
+      const { ctx, listeners } = fakeLifecycleHost()
+      rrp.apply(ctx as never)
+
+      const onAgentDisposed = listeners.get('agent/disposed')
+      expect(onAgentDisposed).toBeDefined()
+      onAgentDisposed?.({ agent: { session: { id: sessionId } } })
+
+      expect(readActivity(sessionId).entries).toEqual([])
     })
-    expect(readActivity(sessionId).entries).toHaveLength(1)
+  })
 
-    const { ctx, listeners } = fakeLifecycleHost()
-    rrp.apply(ctx as never)
+  it('does not overwrite a pre-modified preset or marker in the home directory during apply()', () => {
+    withIsolatedDshHome((home) => {
+      const userPresetDir = join(home, '.agent-presets', 'rp')
+      mkdirSync(userPresetDir, { recursive: true })
+      const targetFile = join(userPresetDir, 'agent.cordis.yml')
+      writeFileSync(targetFile, '# user modified content\n')
 
-    const onAgentDisposed = listeners.get('agent/disposed')
-    expect(onAgentDisposed).toBeDefined()
-    onAgentDisposed?.({ agent: { session: { id: sessionId } } })
+      const { ctx } = fakeLifecycleHost()
+      rrp.apply(ctx as never)
 
-    expect(readActivity(sessionId).entries).toEqual([])
+      expect(readFileSync(targetFile, 'utf8')).toBe('# user modified content\n')
+    })
   })
 })
