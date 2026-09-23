@@ -23,8 +23,8 @@
 - 宿主能力映射与红线：[`../HOST_ALIGNMENT.md`](../HOST_ALIGNMENT.md)（git 跟踪）
 - 开发环境与日常循环：[`../DEVELOPMENT.md`](../DEVELOPMENT.md)
 - 真机测试档案：`../../dsh-rrp-test-report/`
-- 外部参考项目（只读克隆）：`D:\projects\deepseek-harness`（宿主源码 @ dsh-v0.1.6-alpha.2）、
-  `D:\projects\dsh-tavern-v2`、`D:\projects\DSH-better-sidebar`
+- 外部参考项目（只读克隆）：各机器本地的 `deepseek-harness`（宿主源码 @ dsh-v0.1.6-alpha.2）、
+  `dsh-tavern-v2`、`DSH-better-sidebar`；本机绝对路径不写入共享文档
 
 ## 归档说明
 

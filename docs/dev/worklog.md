@@ -291,3 +291,28 @@
 2. **Round-6 真机抽查**：brief 在案（`E2E_BRIEF_ROUND6.md`，T42–T48 舞台页签），但基线标注为 `97653a3`，已落后当前 HEAD，执行前先刷新 brief 的对照基线。
 3. **条件注入 v1（issue #16）**：`docs/plans/conditional-injection-v1.md` 设计已对齐（R1 评审五条全采纳），T1–T8 待动工。
 
+### 接手复核（2026-09-22）
+
+- 接手时基线：`HEAD=0350a68`，`main` 与 `origin/main` 同步，工作树干净；上一节关于“未提交改动”和条件注入待动工的描述属于历史快照，不再代表当前状态。
+- 条件注入 v1 的 T1–T8 已实现，计划文档与 Round-7 真机报告均标记正式闭环；当前 `.scratch/` 只有已 `resolved` 的格式债务票据，没有可直接领取的 `ready-for-agent` 代码票据。
+- 本机复核（Linux、Node `v22.22.1`、pnpm `12.4.1`）：`format:check`、`typecheck`、`lint`、`pnpm test -- --run` 均通过；`pnpm run build` 在 tsdown 配置加载阶段失败，因当前 Node 的 `process.features.typescript=false`，tsdown 自动选择未安装的可选 `unrun` loader。项目开发基线要求 Node `v24.16.0` / pnpm `10.14.0`，故该失败先记为运行时基线不一致，未改动依赖或源码。
+- 下一道开工门：先由所有者拍板 `HOST_ALIGNMENT.md` §3.1 的 D14/酒馆卡一次性导入张力，并明确下一项需求；若要重新声称构建全绿，先把本机运行时对齐到项目基线。
+
+### Windows/Linux 共享基线落地（2026-09-23）
+
+- 所有者确认需要把跨机协作规则落盘并通过 GitHub 共享；采用单一 `main` 共享基线 + 按功能命名分支，不建立按操作系统长期分叉。
+- 新增 `.node-version`（Node `24.16.0`）、`package.json` 的 `packageManager`（pnpm `10.14.0`）与 `scripts/check-environment.mjs`；安装和构建会拒绝未对齐的运行时，避免再次出现 Node 22 下的 tsdown loader 误报。
+- 新增 `CONTRIBUTING.md` 与 GitHub Actions `quality.yml`；详细开发协议集中在 `docs/DEVELOPMENT.md`，README 与 AGENTS 只保留入口指针。
+- 本轮只修改文档、版本/协作配置与环境检查脚本，不修改业务逻辑；尚未提交或推送 GitHub。
+- 验证结果：`format:check`、`typecheck`、`lint`、Vitest `42` 文件 / `371` 用例、`docs:build` 与 workflow YAML 解析均通过；当前 Linux 的 `check:environment` 与 `build` 按设计因 Node `22.22.1` 不等于 `24.16.0` 而阻断，pnpm 已由 Corepack 对齐为 `10.14.0`。
+- 复核共享文档时发现 `reference/HOST_SEAMS.md` 仍含旧 Windows 本机绝对路径，已改为 `HOST` / `WRK` / `SRC` 的跨平台本机占位约定；归档目录中的历史路径不作为当前协作规则。
+
+### Linux 工具链对齐与宿主冒烟验证（2026-09-23）
+
+- Linux 安装并启用 nvm `v0.40.3`，Node.js 对齐到 `v24.16.0`；pnpm 通过 Corepack 对齐到 `10.14.0`，`pnpm run check:environment` 通过。
+- 依赖使用 `CI=true pnpm install --frozen-lockfile` 完成；期间发现用户级 npm 配置残留失效代理 `127.0.0.1:7890`，清理后 registry 访问恢复，未修改仓库 lockfile。
+- Linux 原有 DSH CLI 为 `0.1.7-alpha.1`，已安装项目基线 `@deepseek-ai/dsh@0.1.6-alpha.2`；从 `web` 模板生成 `rp-dev`，并以 POSIX 目录 symlink 注册当前 checkout。
+- Node `24.16.0` 下 `format:check`、`typecheck`、`lint`、Vitest `42` 文件 / `371` 用例和 `build` 全部通过；tsdown 正常生成 host/client 产物。
+- Linux host-runner 冒烟通过：12/12 个关键插件启动标记出现，`GET /dsh-rrp/cards` 返回 200（2 张卡），缺少 session 参数的 activity 请求按契约返回 400；随后 host 干净停止，3099 端口空闲且 runner 状态文件已清理。
+- 本轮未执行依赖真实 LLM 凭据和浏览器交互的完整游玩流程；该部分仍以已有真机报告为依据，Linux 本次结论限定为工具链、profile、宿主加载和只读路由冒烟通过。
+

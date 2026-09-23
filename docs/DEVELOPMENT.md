@@ -1,37 +1,53 @@
 # 开发环境与日常流程（DEVELOPMENT.md）
 
-> 面向本仓库的开发者（人类与 AI）：一条命令构建，一条命令挂到真实 DSH 验证。
+> 面向本仓库的开发者（人类与 AI）：Windows 与 Linux 共用同一份版本、分支和验证协议。
 > **接手先读 [`HOST_ALIGNMENT.md`](HOST_ALIGNMENT.md)**（宿主能力映射与红线）；宿主接缝的证据链见 [`reference/HOST_SEAMS.md`](reference/HOST_SEAMS.md)；契约层是 [`../AGENTS.md`](../AGENTS.md)；协作流程（对齐 → 落盘 → 冲突检查）见 [`dev/workflow.md`](dev/workflow.md)，状态盘点见 [`dev/worklog.md`](dev/worklog.md)。
+> GitHub/人类协作者的最短入口是 [`../CONTRIBUTING.md`](../CONTRIBUTING.md)。
 
 ---
 
-## 1. 本机基线（实测）
+## 1. 共享工具链基线
 
-| 项 | 值 |
+| 项 | 共享要求 |
 | :--- | :--- |
 | `dsh` CLI | 0.1.6-alpha.2 |
 | 宿主包（`@deepseek-ai/dsh-*`） | 0.1.6-alpha.2（嵌在全局 dsh 安装内，非顶层包） |
-| 宿主源码克隆 | `D:\projects\deepseek-harness` @ tag `dsh-v0.1.6-alpha.2` |
-| Node | v24.16.0 |
-| 包管理器 | pnpm 10.14.0 |
-| 构建 | tsdown 0.23.0 + typescript 5.9 |
+| Node.js | `.node-version` 固定为 `24.16.0` |
+| 包管理器 | `package.json` 固定为 `pnpm@10.14.0` |
+| 构建 | tsdown 0.23.0 + TypeScript 5.9 |
 
-> 版本对账的唯一入口是 [`reference/HOST_BASELINE.md`](reference/HOST_BASELINE.md)：安装版本 ↔ 源码 tag ↔ seam 清单 ↔ 废弃债务。**升级宿主先读它。**
+Node.js 与 pnpm 是**共享代码库的工具链基线**，不是 Windows/Linux 的分支差异。版本声明的唯一机器可读来源是 `.node-version` 与 `package.json`；`pnpm run check:environment` 会在本机和 CI 中检查它们。版本对账的宿主入口是 [`reference/HOST_BASELINE.md`](reference/HOST_BASELINE.md)：安装版本 ↔ 源码 tag ↔ seam 清单 ↔ 废弃债务。**升级宿主先读它。**
 
----
+### 1.1 首次准备（Windows/Linux 相同）
 
-## 1.5 宿主源码与索引（2026-09 基建）
-
-- **源码克隆**：`D:\projects\deepseek-harness`，必须与安装版本同 tag（升级宿主时先 `git fetch && git checkout dsh-v<版本>`）。宿主问题一律读源码，不读 `AppData` 里的编译产物。
-- **codegraph 索引**：只对宿主克隆建索引（本仓库不索引）。`codegraph query/callers/callees/impact` CLI 即查；MCP 形态（`mcp__codegraph__*`）已写入 `~/.kimi-code/mcp.json`——**MCP 服务器只加入配置之后新建的会话**，中途配的需新开会话才能用。索引随宿主升级用 `codegraph init` 刷新。
-- 图谱负责「谁调用谁 / 影响面」类问题；精确文本与配置仍走 Grep/Glob。
-
----
-
-## 2. 一次性准备
+先用本机已有的 Node 版本管理器加载仓库根目录的 `.node-version`：
 
 ```bash
-pnpm install     # devDependencies：cordis / typescript / tsdown / vitest / @types/node
+# nvm：nvm use 24.16.0
+# fnm：fnm use 24.16.0
+
+corepack enable
+corepack prepare pnpm@10.14.0 --activate
+pnpm run check:environment
+pnpm install --frozen-lockfile
+```
+
+Windows PowerShell 和 Linux shell 使用同样的 `pnpm` / `node` / `git` 命令；只有 Node 版本管理器的安装方式和 DSH 本机安装目录可能不同。**不要使用 `--ignore-scripts` 绕过 `preinstall` 环境检查。**
+
+### 1.2 宿主源码与索引
+
+- **源码克隆**：每台机器在自己的任意路径保存 `deepseek-harness`，必须与安装版本同 tag（升级宿主时先 `git fetch && git checkout dsh-v<版本>`）。例如 Windows 可用 `D:\projects\deepseek-harness`，Linux 可用 `~/projects/deepseek-harness`；这些路径不能写进共享源码或规范。
+- **codegraph 索引**：只对宿主克隆建索引，本仓库不索引。索引工具和 MCP 配置属于本机开发环境；索引随宿主升级用 `codegraph init` 刷新。
+- 图谱负责「谁调用谁 / 影响面」类问题；精确文本与配置仍走 Grep/Glob。
+- 宿主问题一律读对应 tag 的源码，不读 Windows `AppData` 或 Linux 缓存目录里的编译产物。
+
+---
+
+## 2. 构建与产物
+
+首次准备完成后，构建命令在 Windows/Linux 相同：
+
+```bash
 pnpm run build   # tsc 出 lib/types，tsdown 出 lib/index.js 与 lib/client.js
 ```
 
@@ -59,21 +75,22 @@ pnpm run link:dev          # = node scripts/link-dev.mjs [profile]
 
 ### 为什么不用 `dsh plugin add .`
 
-`dsh plugin` 转发给 pnpm，而 pnpm 的 `link:` 协议把路径**按 profile 目录相对**解析。本仓库在 `D:\`、`$DSH_HOME` 在 `C:\` 时跨盘相对路径不存在，于是生成断链，并报 `declares no dsh.bundle`。
+`dsh plugin` 转发给 pnpm，而 pnpm 的 `link:` 协议把路径**按 profile 目录相对**解析。只要仓库和 `$DSH_HOME` 不在同一可解析路径上，就可能生成断链，并报 `declares no dsh.bundle`。
 
-`scripts/link-dev.mjs` 改用 **NTFS 目录联接（junction）**（跨盘可用、Node 解析器可跟随），并直接把包登记进 `dsh.profile.bundles`。链接后 `node_modules/dsh-rrp` 指向本仓库，改源码 → `pnpm run build` 即生效。
+`scripts/link-dev.mjs` 会在 profile 的 `node_modules/dsh-rrp` 位置创建目录链接，并直接把包登记进 `dsh.profile.bundles`：Windows 使用 junction，Linux 使用符号链接语义。链接后该路径指向当前 checkout，改源码 → `pnpm run build` 即生效。`DSH_HOME`、profile 和链接目标都是本机状态，不提交到 GitHub。
 
 ---
 
 ## 4. 日常循环
 
 ```bash
+pnpm run check:environment                      # 先确认 Node/pnpm 与共享基线一致
 pnpm run typecheck                              # 类型检查（含 tests）
 pnpm run lint                                   # eslint 扁平配置，零告警为准
 pnpm run format:check                           # prettier 排版检查（可用 pnpm run format 修）
 pnpm test                                       # vitest：以当前输出为准（含 HMR 无残留）
 pnpm run build                                  # 构建 host + client
-node scripts/host-runner.mjs start              # 真实宿主自动化启动（自动杀冲突进程、剥离SOCKS代理、捕获Token鉴权URL）
+node scripts/host-runner.mjs start              # 真实宿主自动化启动（自动杀冲突进程、剥离代理、捕获 Token 鉴权 URL）
 node scripts/host-runner.mjs status             # 查看宿主运行状态、Token URL 与健康检查
 node scripts/host-runner.mjs stop               # 停止测试宿主
 node scripts/inspect-context.mjs --latest       # 需要时：解码日志、统计上下文与缓存
@@ -86,7 +103,7 @@ node scripts/inspect-context.mjs --latest       # 需要时：解码日志、统
 启动日志中应出现：
 
 ```text
-[dsh-rrp] RP preset refreshed at <dshHome>\.agent-presets\rp
+[dsh-rrp] RP preset refreshed at <dshHome>/.agent-presets/rp
 [dsh-rrp] WorldState projection registered (key rrpWorldState)
 [dsh-rrp] macro-summary projection registered (key rrpSummary)
 [dsh-rrp] RP settings projection registered (key rrpSettings)
@@ -108,7 +125,9 @@ RP 基础模式物化到 `<dshHome>/.agent-presets/rp/`，**每张卡**另有一
 不启动服务器即可确认组合：
 
 ```bash
-dsh --profile rp-dev --dump-config | grep -A2 dsh-rrp
+dsh --profile rp-dev --dump-config
+# Linux 需要筛选时：... | grep -A2 dsh-rrp
+# PowerShell 需要筛选时：... | Select-String dsh-rrp -Context 2,0
 ```
 
 带 token 访问 `http://127.0.0.1:3099/?token=<启动日志中的 token>`，页面 boot graph 应含 `dsh-rrp/client.js`。

@@ -43,7 +43,7 @@ dsh-rrp/
 ├── docs/                        # 设计、宿主映射与开发流程
 │   ├── DESIGN.md                # 唯一产品目标规格
 │   ├── HOST_ALIGNMENT.md        # 宿主能力映射与反重复造轮子红线
-│   ├── DEVELOPMENT.md           # 开发环境与日常循环（维护者本地私有日志，不随仓库分发）
+│   ├── DEVELOPMENT.md           # 共享开发环境、跨平台协作与日常循环
 │   ├── reference/               # 为什么这么设计：决策/术语/经验/技能
 │   │   └── HOST_BASELINE.md     # 宿主版本基线、seam 清单与升级流程（升级宿主前必读）
 │   ├── agents/                  # Matt Skills 的票据与领域文档映射

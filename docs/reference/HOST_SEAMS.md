@@ -7,11 +7,13 @@
 
 ## 0. 证据路径约定与版本
 
-| 记号 | 绝对路径 |
+证据路径只在勘察机器上解析，**不把任一 Windows/Linux 本机绝对路径写进共享文档**。执行勘察时，请在本机将下列符号替换为实际路径：
+
+| 记号 | 本机含义 |
 | :--- | :--- |
-| `HOST` | `/c/Users/10697/AppData/Roaming/npm/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai` |
-| `WRK` | `/d/projects/dsh-rrp/node_modules/@deepseek-ai` |
-| `SRC` | `/d/projects/deepseek-harness`（本机源码检出，tag `dsh-v0.1.6-alpha.2`，commit `ddefc45fbc`，与安装宿主严格同版；仅在安装树缺失类型时兜底引用） |
+| `HOST` | DSH 宿主全局安装树中的 `@deepseek-ai` 根目录 |
+| `WRK` | 当前工作区的 `node_modules/@deepseek-ai` |
+| `SRC` | 当前机器的 `deepseek-harness` 源码检出，tag `dsh-v0.1.6-alpha.2`、commit `ddefc45fbc`，与安装宿主严格同版；仅在安装树缺失类型时兜底引用 |
 
 - 下文凡写 `dsh-xxx/lib/...`，均指 `HOST/dsh-xxx/lib/...`。
 - **关键坑**：`@deepseek-ai/dsh-client-ui-slots` 与 `@deepseek-ai/dsh-client-store` **不在 HOST 安装树里**（构建期依赖，已被 tsdown 打进各 client bundle；各 .d.ts 里的同名 import 是悬空声明）。`dsh-client-ui-slots` 的类型可在工作区读到：`WRK/dsh-client-ui-slots/lib/types/index.d.ts`（随基线的 0.1.6-alpha.2）；`dsh-client-store` 在本机完全缺失类型。

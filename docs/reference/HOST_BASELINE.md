@@ -10,7 +10,7 @@
 | 项 | 值 |
 | :--- | :--- |
 | 安装宿主 | `@deepseek-ai/dsh@0.1.6-alpha.2`（npm 全局，`dsh --version` 核验） |
-| 源码克隆 | `D:\projects\deepseek-harness`，tag `dsh-v0.1.6-alpha.2`（commit `ddefc45fbc`） |
+| 源码克隆 | 每台机器的本地 `deepseek-harness` checkout，tag `dsh-v0.1.6-alpha.2`（commit `ddefc45fbc`） |
 | 索引 | codegraph（仅索引宿主克隆；`codegraph telemetry off` 已执行） |
 | peerDependencies | 7 个 `dsh-*` peer 全部 `^0.1.6-alpha.2`（dev 实装同版；npm semver 下旧 `^0.1.5-rc.1` 不覆盖本基线的预发布） |
 | 升级日期 | 2026-09-18 |
@@ -62,20 +62,20 @@
 
 ## 查询宿主源码
 
-- **源码克隆**：`D:\projects\deepseek-harness`（与安装版本同 tag）。所有宿主问题先查源码，不读 npm 发布产物（客户端尤其只有压缩 bundle）。
-- **codegraph 索引**：只索引宿主克隆（`.codegraph/codegraph.db`，6,601 文件约 10s 建完；本仓库不索引）。
+- **源码克隆**：每台机器的本地 `deepseek-harness` checkout（与安装版本同 tag）。所有宿主问题先查源码，不读 npm 发布产物（客户端尤其只有压缩 bundle）。
+- **codegraph 索引**：只索引宿主克隆（`.codegraph/codegraph.db`，本机建立；本仓库不索引）。
   - CLI：`codegraph query <symbol> --json` / `callers` / `callees` / `impact` / `affected <file>`。
-  - MCP：`mcp__codegraph__*` 已配进 `~/.kimi-code/mcp.json`（stdio 起 `codegraph serve --mcp`）。**MCP 服务器只加入配置后新建的会话**——会话中途配置需新开会话生效。
+  - MCP：`mcp__codegraph__*` 和配置文件属于本机开发环境；MCP 服务器只加入配置后新建的会话，会话中途配置需新开会话生效。
   - 升级宿主后 `codegraph init` 刷新索引。
 - 图谱答「谁调用谁 / 影响面」；精确文本、locale、配置仍走 Grep/Glob。
 
 ## 升级流程
 
-1. `npm i -g @deepseek-ai/dsh@<目标版本>`（宿主若在运行先关闭，Windows 会锁安装目录）。
-2. 克隆切到对应 tag；`codegraph init` 刷新索引。
+1. `npm i -g @deepseek-ai/dsh@<目标版本>`（宿主若在运行先关闭；Windows/Linux 的全局安装路径各自保留在本机）。
+2. 宿主源码克隆切到对应 tag；`codegraph init` 刷新本机索引。
 3. 对照上表逐 seam 复核（重点看「状态」列有无变化）。
-4. `grep -rn "snapshotEvents\|eventAt\|ownEvents" src/` 必须为空。
-5. `pnpm run typecheck && pnpm test && pnpm run build`。
+4. 在本仓库执行 `git grep -n -E 'snapshotEvents|eventAt|ownEvents' -- src`，结果必须为空。
+5. `pnpm run check:environment && pnpm run typecheck && pnpm test && pnpm run build`。
 6. 更新本表「当前基线」与日期，并把复核结论追加到本文件末尾的「审计历史」表。
 
 ## 审计历史
