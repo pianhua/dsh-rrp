@@ -13,10 +13,13 @@ import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } 
 import { CARD_KEY, type CardContext } from '../card-types.ts'
 import { RRP_ROUTES, type CardUiResponse } from '../route-contract.ts'
 import { WORLD_STATE_KEY, emptyWorldState, type WorldState } from '../world-state.ts'
+import { filterWorldState } from '../world-state-visibility.ts'
 import {
   applyButtonPatch,
   readCharacters,
   readGaugeValue,
+  readReferenceName,
+  readTimeline,
   visiblePanels,
   type UiManifest,
   type UiPanelDecl,
@@ -70,15 +73,22 @@ function CharacterCard(props: { panel: UiPanelDecl; state: WorldState; t: Transl
   return (
     <div style={S.charList}>
       {rows.map((row) => {
-        const entry = (row.state ?? {}) as Record<string, unknown>
-        const lines = ['mood', 'condition', 'appearance']
-          .map((key) => (typeof entry[key] === 'string' ? (entry[key] as string) : undefined))
-          .filter((line): line is string => line !== undefined && line.length > 0)
+        const entry = row.state
+        const lines = [
+          entry.character?.emotionalState,
+          entry.character?.outfit,
+          entry.character?.appearance,
+          ...Object.values(entry.fields).map((field) =>
+            typeof field.value === 'string' ? field.value : undefined,
+          ),
+        ].filter((line): line is string => line !== undefined && line.length > 0)
         return (
           <div key={row.name} style={S.char}>
             <div style={S.charHead}>
               <span style={S.charName}>{row.name}</span>
-              {typeof entry.affinity === 'number' ? <Pill>{String(entry.affinity)}</Pill> : null}
+              {typeof entry.character?.affinity === 'number' ? (
+                <Pill>{String(entry.character.affinity)}</Pill>
+              ) : null}
             </div>
             {lines.map((line) => (
               <div key={line} style={S.charLine}>
@@ -94,30 +104,39 @@ function CharacterCard(props: { panel: UiPanelDecl; state: WorldState; t: Transl
 
 /** The relation net as plain pairs. */
 function RelationTable(props: { panel: UiPanelDecl; state: WorldState; t: Translate }): ReactNode {
-  const relations = (props.state.relations ?? []) as Array<{ a: string; b: string; label: string }>
+  const relations = props.state.relations
   if (relations.length === 0) return <div style={S.muted}>{props.t('stage.noData')}</div>
   return (
     <div style={S.rows}>
       {relations.map((rel) => (
-        <div key={rel.a + '|' + rel.b + '|' + rel.label} style={S.row}>
+        <div key={rel.id} style={S.row}>
           <span style={S.rowPair}>
-            {rel.a} × {rel.b}
+            {readReferenceName(rel.a, props.state)} × {readReferenceName(rel.b, props.state)}
           </span>
-          <span style={S.rowLabel}>{rel.label}</span>
+          <span style={S.rowLabel}>{rel.labels.join(' · ')}</span>
         </div>
       ))}
     </div>
   )
 }
 
-/** Where and when the story stands. */
+/** Where and when the story stands, from scene tracked-object fields. */
 function Timeline(props: { panel: UiPanelDecl; state: WorldState; t: Translate }): ReactNode {
-  const scene = (props.state.scene ?? {}) as Record<string, unknown>
-  const parts = ['time', 'location', 'weather']
-    .map((key) => (typeof scene[key] === 'string' ? (scene[key] as string) : undefined))
-    .filter((part): part is string => part !== undefined && part.length > 0)
-  if (parts.length === 0) return <div style={S.muted}>{props.t('stage.noData')}</div>
-  return <div style={S.sceneLine}>{parts.join(' · ')}</div>
+  const scenes = readTimeline(props.panel.bind, props.state)
+  const lines = scenes.flatMap((scene) => {
+    const values = Object.values(scene.fields).filter(
+      (value): value is string => typeof value === 'string' && value.length > 0,
+    )
+    return values.length === 0 ? [] : [scene.name + ' · ' + values.join(' · ')]
+  })
+  if (lines.length === 0) return <div style={S.muted}>{props.t('stage.noData')}</div>
+  return (
+    <div style={S.sceneLine}>
+      {lines.map((line) => (
+        <div key={line}>{line}</div>
+      ))}
+    </div>
+  )
 }
 
 /** Buttons — the only place card UI can act. */
@@ -230,7 +249,7 @@ export function StagePanel(props: StagePanelProps): ReactNode {
   const useProjection = typeof props.useProjection === 'function' ? props.useProjection : undefined
   const card = useProjection?.(CARD_KEY) as CardContext | null | undefined
   const live = (useProjection?.(WORLD_STATE_KEY) as WorldState | undefined) ?? null
-  const state = live ?? emptyWorldState()
+  const state = live === null ? emptyWorldState() : filterWorldState(live, 'player')
   const [manifest, setManifest] = useState<UiManifest | null>(null)
   const [error, setError] = useState('')
   const [nonce, setNonce] = useState(0)

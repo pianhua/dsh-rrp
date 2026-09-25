@@ -3,7 +3,8 @@
  *
  * A card is a directory: `card.md` (frontmatter metadata + world core),
  * `openings/*.md` (in-world first messages), optional `state.json` (initial
- * WorldState), optional `skills/<id>/SKILL.md` (world knowledge, D7). This module
+ * WorldState), optional `state.schema.json` (card-owned field definitions), and
+ * optional `skills/<id>/SKILL.md` (world knowledge, D7). This module
  * is the read side only: discovery + parsing, no HTTP, no database, no engine.
  *
  * Format spec: docs/reference/CARDS.md. Card roots (user first, then shipped):
@@ -22,6 +23,7 @@ import {
   type TriggerDef,
 } from './lore-condition.ts'
 import { worldStateSchema } from './projection/world-state.ts'
+import { readCardStateSchema } from './card-state-schema.ts'
 import type { WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
@@ -37,6 +39,13 @@ export type Frontmatter = Record<string, FrontmatterValue>
 import type { CardMeta, CardOpening, CardPack, CardSkill } from './card-types.ts'
 
 export type { CardMeta, CardOpening, CardPack, CardPlayer, CardSkill } from './card-types.ts'
+export type {
+  CardStateAlias,
+  CardStateField,
+  CardStateFieldStatus,
+  CardStateMigration,
+  CardStateSchema,
+} from './card-state-schema.ts'
 
 /** Card roots, user override first. */
 export function cardRoots(home: string = harnessHome()): string[] {
@@ -311,6 +320,7 @@ export function readCard(id: string, home: string = harnessHome()): CardPack | u
         worldCore: parsed.worldCore,
         openings: readOpenings(dir),
         initialState,
+        stateSchema: readCardStateSchema(dir),
         skills: readSkills(dir, parsed.meta.name, initialState),
       }
     } catch {

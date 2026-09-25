@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { listCards, readCard } from '../src/cards.ts'
+import { toPlayerSafeCardPack } from '../src/card-types.ts'
 import { registerActivityRoute } from '../src/activity-route.ts'
 import { DEFAULT_JSON_BODY_LIMIT } from '../src/host-faces.ts'
 import { registerCardsRoute } from '../src/cards-route.ts'
@@ -132,7 +133,7 @@ describe('route contract (issue #22)', () => {
       expect(list.res.statusCode).toBe(200)
       expect(JSON.parse(list.text)).toEqual({ cards: expectedCards })
       expect(one.res.statusCode).toBe(200)
-      expect(JSON.parse(one.text)).toEqual({ card: expectedCard })
+      expect(JSON.parse(one.text)).toEqual({ card: toPlayerSafeCardPack(expectedCard!) })
     } finally {
       if (previousHome === undefined) delete process.env.DSH_HOME
       else process.env.DSH_HOME = previousHome

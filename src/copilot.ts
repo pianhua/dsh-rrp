@@ -42,7 +42,6 @@ import {
 } from './host-faces.ts'
 import {
   openCopilotStore,
-  type CopilotHistoryView,
   type CopilotStoreHandle,
   type CopilotTurn,
   type CopilotTurnAction,
@@ -65,18 +64,16 @@ import {
   encodeSseFrame,
 } from './route-contract.ts'
 import {
-  NO_WORLD_STATE_CHANGE,
   WORLD_STATE_KEY,
-  applyConstraints,
   diffWorldState,
   emptyWorldState,
-  pruneWorldState,
   renderWorldState,
-  type DynamicFieldValue,
+  renderWorldStateDiff,
   type WorldState,
-  type WorldStateRelation,
 } from './world-state.ts'
-import { worldStateSchema } from './projection/world-state.ts'
+import { applyWorldStatePatch } from './world-state-references.ts'
+import { sanitizePlayerText, sanitizeWorldStateDiff } from './world-state-visibility.ts'
+import type { CopilotWorldStateProposal, CopilotHistoryView } from './route-contract.ts'
 
 const TAG = '[dsh-rrp]'
 const COPILOT_PATH = RRP_ROUTES.copilot
@@ -90,6 +87,72 @@ const UNDO_LIMIT = 10
 /** Copilot turns fed back as conversation history. */
 const HISTORY_FEED = 20
 
+interface PendingWorldStateProposal extends CopilotWorldStateProposal {
+  patch: Record<string, unknown>
+  snapshot: WorldState
+  state: WorldState
+}
+
+const WORLD_STATE_PROPOSALS = new Map<string, PendingWorldStateProposal[]>()
+const WORLD_STATE_PROPOSAL_LIMIT = 20
+
+function worldStateProposalsOf(sessionId: string): PendingWorldStateProposal[] {
+  return WORLD_STATE_PROPOSALS.get(sessionId) ?? []
+}
+
+function publicWorldStateProposalsOf(sessionId: string): CopilotWorldStateProposal[] {
+  return worldStateProposalsOf(sessionId).map((proposal) => {
+    const changes = sanitizeWorldStateDiff(
+      { changes: proposal.changes },
+      proposal.snapshot,
+      proposal.state,
+    ).changes
+    return {
+      id: proposal.id,
+      digest: renderWorldStateDiff({ changes }),
+      at: proposal.at,
+      ...(proposal.evidence === undefined
+        ? {}
+        : { evidence: sanitizePlayerText(proposal.evidence, proposal.snapshot, proposal.state) }),
+      changes,
+    }
+  })
+}
+
+function stageWorldStateProposal(
+  sessionId: string,
+  patch: Record<string, unknown>,
+  snapshot: WorldState,
+  state: WorldState,
+  evidence: string | undefined,
+): PendingWorldStateProposal {
+  const changes = diffWorldState(snapshot, state).changes
+  const playerSafeChanges = sanitizeWorldStateDiff({ changes }, snapshot, state).changes
+  const playerSafeEvidence =
+    evidence === undefined ? undefined : sanitizePlayerText(evidence, snapshot, state)
+  const proposal: PendingWorldStateProposal = {
+    id: randomUUID(),
+    digest: renderWorldStateDiff({ changes: playerSafeChanges }),
+    at: nowIso(),
+    changes,
+    patch: structuredClone(patch),
+    snapshot: structuredClone(snapshot),
+    state: structuredClone(state),
+    ...(playerSafeEvidence === undefined ? {} : { evidence: playerSafeEvidence }),
+  }
+  WORLD_STATE_PROPOSALS.set(
+    sessionId,
+    [...worldStateProposalsOf(sessionId), proposal].slice(-WORLD_STATE_PROPOSAL_LIMIT),
+  )
+  return proposal
+}
+
+function removeWorldStateProposal(sessionId: string, id: string): void {
+  const next = worldStateProposalsOf(sessionId).filter((proposal) => proposal.id !== id)
+  if (next.length === 0) WORLD_STATE_PROPOSALS.delete(sessionId)
+  else WORLD_STATE_PROPOSALS.set(sessionId, next)
+}
+
 // ---------------------------------------------------------------------------
 // History lives on the host Storage domain (see copilot-store.ts). Fork
 // isolation is deliberate: sessionId keys the record, so a forked worldline
@@ -97,7 +160,12 @@ const HISTORY_FEED = 20
 
 function readCopilotHistory(handle: CopilotStoreHandle, sessionId: string): CopilotHistoryView {
   const store = handle.load(sessionId)
-  return { turns: store.turns.slice(-TURNS_LIMIT), undoCount: store.undo.length }
+  return {
+    turns: store.turns.slice(-TURNS_LIMIT),
+    undoCount: store.undo.length,
+    proposals: listProposals(sessionId),
+    worldStateProposals: publicWorldStateProposalsOf(sessionId),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -108,11 +176,13 @@ const IN_FLIGHT = new Set<string>()
 /** Drop in-flight markers when a session is disposed. */
 export function forgetCopilot(sessionId: string): void {
   IN_FLIGHT.delete(sessionId)
+  WORLD_STATE_PROPOSALS.delete(sessionId)
 }
 
 /** Drop every in-flight marker (plugin unload must not leave state behind). */
 export function forgetAllCopilot(): void {
   IN_FLIGHT.clear()
+  WORLD_STATE_PROPOSALS.clear()
 }
 
 /**
@@ -142,87 +212,17 @@ function writeSse(res: ResponseLike, event: string, data: unknown): void {
 }
 
 /**
- * Merge one action patch over the current state: per-name merge for
- * characters/inventory, per-field merge for scene/flags, whole-value replace
- * for relations and dynamic fields (with constraint clamping); null deletes
- * a dynamic-field key.
+ * Apply one v2 action patch over the current complete snapshot. Collections that
+ * are arrays are replaced as a unit; tracked objects and scalar fields merge by
+ * id, while archive/restore/delete operations remain explicit.
  */
 export function mergeWorldStatePatch(
   prior: WorldState,
   patch: Record<string, unknown>,
 ): WorldState {
-  const next: WorldState = structuredClone(prior)
-  for (const [key, value] of Object.entries(patch)) {
-    if (key === 'characters' || key === 'inventory' || key === 'flags') {
-      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        throw new Error('patch.' + key + ' 必须是对象')
-      }
-      const bucket = next[key] as Record<string, unknown>
-      for (const [name, entry] of Object.entries(value as Record<string, unknown>)) {
-        if (entry === null) {
-          delete bucket[name]
-        } else if (key === 'flags') {
-          if (
-            typeof entry !== 'string' &&
-            typeof entry !== 'number' &&
-            typeof entry !== 'boolean'
-          ) {
-            throw new Error('patch.flags.' + name + ' 必须是标量')
-          }
-          bucket[name] = entry
-        } else {
-          if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
-            throw new Error('patch.' + key + '.' + name + ' 必须是对象')
-          }
-          bucket[name] = {
-            ...((bucket[name] as Record<string, unknown>) ?? {}),
-            ...(entry as Record<string, unknown>),
-          }
-        }
-      }
-      continue
-    }
-    if (key === 'scene') {
-      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        throw new Error('patch.scene 必须是对象')
-      }
-      next.scene = { ...next.scene, ...(value as Record<string, string>) }
-      continue
-    }
-    if (key === 'relations') {
-      // Whole-value replace; pruneWorldState normalizes pairs afterwards.
-      if (!Array.isArray(value)) {
-        throw new Error('patch.relations 必须是数组')
-      }
-      next.relations = value as WorldStateRelation[]
-      continue
-    }
-    // Dynamic field: full DynamicFieldValue, clamped to its constraints.
-    if (value === null) {
-      delete (next as Record<string, unknown>)[key]
-      continue
-    }
-    if (typeof value !== 'object' || Array.isArray(value)) {
-      throw new Error('patch.' + key + ' 必须是动态字段对象或 null')
-    }
-    const field = value as Partial<DynamicFieldValue>
-    if (
-      field.value === undefined ||
-      (field.type !== 'number' && field.type !== 'string' && field.type !== 'boolean')
-    ) {
-      throw new Error('patch.' + key + ' 需要完整的 {type, value}')
-    }
-    ;(next as Record<string, unknown>)[key] = applyConstraints({
-      type: field.type,
-      value: field.value as number | string | boolean,
-      ...(typeof field.min === 'number' ? { min: field.min } : {}),
-      ...(typeof field.max === 'number' ? { max: field.max } : {}),
-    })
-  }
-  const pruned = pruneWorldState(next)
-  const validated = worldStateSchema.safeParse(pruned)
-  if (!validated.success) throw new Error('状态校验失败：' + validated.error.issues[0]?.message)
-  return validated.data as WorldState
+  const result = applyWorldStatePatch(prior, patch)
+  if (!result.ok) throw new Error(result.message)
+  return result.state
 }
 
 /** Register the Copilot routes. Capability-gated like every other route. */
@@ -316,7 +316,29 @@ export function registerCopilotRoute(ctx: Context): void {
         }
         // The revert is itself one new published state (append-only honesty):
         // the values roll back, the ledger keeps both records.
-        if (!publishState(session, projections, { worldState: entry.snapshot })) {
+        const prior =
+          (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ??
+          emptyWorldState()
+        const undoDiff = diffWorldState(prior, entry.snapshot)
+        if (undoDiff.changes.length === 0) {
+          send(res, 200, {
+            ok: true,
+            digest: entry.digest,
+            undoCount: store.load(sessionId).undo.length,
+          })
+          return
+        }
+        if (
+          !publishState(session, projections, {
+            worldState: entry.snapshot,
+            worldStateTimelineBatch: {
+              kind: 'changes',
+              changes: undoDiff.changes,
+              provenance: { actor: 'copilot', at: nowIso(), evidence: 'undo' },
+              origin: 'local',
+            },
+          })
+        ) {
           await store.mutate(sessionId, (draft) => {
             draft.undo.push(entry)
           })
@@ -361,13 +383,89 @@ export function registerCopilotRoute(ctx: Context): void {
           send(res, 400, { error: 'missing sessionId' })
           return
         }
-        if (resolveSession(sessionId, res) === undefined) return
+        const session = resolveSession(sessionId, res)
+        if (session === undefined) return
+        const store = await takeStore()
+        if (store === undefined) {
+          send(res, 503, { error: 'copilot history unavailable' })
+          return
+        }
         if (
           (action !== 'confirm' && action !== 'discard') ||
           typeof id !== 'string' ||
           id.length === 0
         ) {
           send(res, 400, { error: 'unknown action' })
+          return
+        }
+
+        const worldProposal = worldStateProposalsOf(sessionId).find(
+          (proposal) => proposal.id === id,
+        )
+        if (worldProposal !== undefined) {
+          if (action === 'discard') {
+            removeWorldStateProposal(sessionId, id)
+            send(res, 200, {
+              ok: true,
+              proposals: listProposals(sessionId),
+              worldStateProposals: publicWorldStateProposalsOf(sessionId),
+            })
+            return
+          }
+          const prior =
+            (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ??
+            emptyWorldState()
+          const prepared = applyWorldStatePatch(prior, worldProposal.patch, {
+            allowHiddenContent: true,
+          })
+          if (!prepared.ok || prepared.diff.changes.length === 0) {
+            removeWorldStateProposal(sessionId, id)
+            send(res, 409, { error: 'WorldState proposal is stale or unchanged' })
+            return
+          }
+          const batch = {
+            kind: 'changes' as const,
+            changes: prepared.diff.changes,
+            provenance: {
+              actor: 'copilot' as const,
+              at: nowIso(),
+              ...(worldProposal.evidence === undefined ? {} : { evidence: worldProposal.evidence }),
+            },
+            origin: 'local' as const,
+          }
+          if (
+            !publishState(session, projections, {
+              worldState: prepared.state,
+              worldStateTimelineBatch: batch,
+            })
+          ) {
+            send(res, 500, { error: 'WorldState write failed' })
+            return
+          }
+          await store.mutate(sessionId, (draft) => {
+            draft.undo.push({
+              id: randomUUID(),
+              at: nowIso(),
+              digest: worldProposal.digest,
+              snapshot: prior,
+            })
+            draft.undo = draft.undo.slice(-UNDO_LIMIT)
+          })
+          removeWorldStateProposal(sessionId, id)
+          recordActivity(sessionId, {
+            id: randomUUID(),
+            at: nowIso(),
+            actor: 'copilot',
+            target: 'world-state',
+            phase: 'corrected',
+            detail: worldProposal.digest,
+          })
+          send(res, 200, {
+            ok: true,
+            summary: '已确认月停世界状态动作：' + worldProposal.digest,
+            proposals: listProposals(sessionId),
+            worldStateProposals: publicWorldStateProposalsOf(sessionId),
+          })
           return
         }
 
@@ -575,37 +673,36 @@ export function registerCopilotRoute(ctx: Context): void {
           // and never abort the turn — the player still got their answer.
           const applied: CopilotTurnAction[] = []
           const actions = parseCopilotActions(reply)
-          const worldActions = actions.filter((action) => action.type === 'update_world_state')
-          let priorForUndo: WorldState | undefined
-          if (worldActions.length > 0) {
-            priorForUndo =
-              (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ??
-              emptyWorldState()
-          }
           for (const action of actions) {
             try {
               if (action.type === 'update_world_state') {
                 const prior =
                   (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ??
                   emptyWorldState()
-                const next = mergeWorldStatePatch(prior, action.patch)
-                const digest = diffWorldState(prior, next)
-                if (digest === NO_WORLD_STATE_CHANGE) {
+                const prepared = applyWorldStatePatch(prior, action.patch, {
+                  allowHiddenContent: true,
+                })
+                if (!prepared.ok) throw new Error(prepared.message)
+                if (prepared.diff.changes.length === 0) {
                   applied.push({ kind: 'failed', error: '状态无实质变化' })
                   continue
                 }
-                if (!publishState(session, projections, { worldState: next })) {
-                  throw new Error('WorldState write failed')
-                }
+                const proposal = stageWorldStateProposal(
+                  sessionId,
+                  action.patch,
+                  prior,
+                  prepared.state,
+                  action.reason,
+                )
                 recordActivity(sessionId, {
                   id: randomUUID(),
                   at: nowIso(),
                   actor: 'copilot',
                   target: 'world-state',
-                  phase: 'corrected',
-                  detail: (action.reason !== undefined ? action.reason + '：' : '') + digest,
+                  phase: 'started',
+                  detail: '已暂存月停世界状态动作，等待玩家确认：' + proposal.digest,
                 })
-                applied.push({ kind: 'world-state', digest })
+                applied.push({ kind: 'world-state', digest: proposal.digest })
                 continue
               }
               // propose_card_edit / propose_doc_note: stage for player
@@ -693,24 +790,6 @@ export function registerCopilotRoute(ctx: Context): void {
             ...(applied.length > 0 ? { actions: applied } : {}),
           }
           const undoCount = await store.mutate(sessionId, (draft) => {
-            if (
-              priorForUndo !== undefined &&
-              applied.some((entry) => entry.kind === 'world-state')
-            ) {
-              draft.undo.push({
-                id: randomUUID(),
-                at: nowIso(),
-                digest: applied
-                  .filter(
-                    (entry): entry is { kind: 'world-state'; digest: string } =>
-                      entry.kind === 'world-state',
-                  )
-                  .map((entry) => entry.digest)
-                  .join('；'),
-                snapshot: priorForUndo,
-              })
-              draft.undo = draft.undo.slice(-UNDO_LIMIT)
-            }
             draft.turns.push(copilotTurn)
             draft.turns = draft.turns.slice(-TURNS_LIMIT)
             return draft.undo.length

@@ -9,9 +9,10 @@
  * the host webServer + plain fetch/SSE stay exactly as they are — no RPC
  * framework, per the personal-toy positioning.
  */
-import type { CardContext, CardMeta, CardPack } from './card-types.ts'
+import type { CardContext, CardMeta, CardPackPlayerView } from './card-types.ts'
 import type { StewardProposal } from './steward-proposals.ts'
-import type { WorldState } from './world-state.ts'
+import type { WorldState, WorldStateDiagnostic, WorldStateDiff } from './world-state.ts'
+import type { WorldStateTimeline } from './world-state-timeline.ts'
 import type { WorldlineTree } from './worldline-tree.ts'
 import type { UiManifest } from './ui-schema.ts'
 
@@ -24,6 +25,7 @@ export const RRP_ROUTES = {
   cardImport: '/dsh-rrp/cards/import',
   start: '/dsh-rrp/start',
   worldState: '/dsh-rrp/world-state',
+  worldStateTimeline: '/dsh-rrp/world-state-timeline',
   activity: '/dsh-rrp/activity',
   lore: '/dsh-rrp/lore',
   copilot: '/dsh-rrp/copilot',
@@ -83,12 +85,28 @@ export interface StartResponse {
 export interface CorrectionRequest {
   sessionId: string
   state: WorldState
+  /** Return the diff and diagnostics without appending a state snapshot. */
+  preview?: boolean
+  /** Optional player-facing explanation stored in timeline provenance. */
+  evidence?: string
+  /** Only supplied when the player explicitly confirms reference downgrade. */
+  confirmDeleteIds?: string[]
+  /** Host-provided turn metadata; omitted means unknown. */
+  storyTurn?: number
 }
 
 export interface CorrectionResponse {
   ok: true
   /** True when the posted state equalled the current slice and nothing was appended. */
   unchanged?: boolean
+  /** True when this was a preview-only request. */
+  preview?: boolean
+  diff?: WorldStateDiff
+  diagnostics?: WorldStateDiagnostic[]
+}
+
+export interface WorldStateTimelineResponse {
+  timeline: WorldStateTimeline
 }
 
 // ── /dsh-rrp/cards ──────────────────────────────────────────────────────────
@@ -97,7 +115,7 @@ export interface CardListResponse {
 }
 
 export interface CardOneResponse {
-  card: CardPack
+  card: CardPackPlayerView
 }
 
 // ── /dsh-rrp/lore ───────────────────────────────────────────────────────────
@@ -205,7 +223,7 @@ export type CopilotTurnAction =
   | { kind: 'world-state'; digest: string }
   | { kind: 'lore'; name: string }
   /** `subject` is the dynamic half (file path / note title); the panel owns the fixed wording. */
-  | { kind: 'proposal'; proposalKind: 'card-edit' | 'doc-note'; subject: string }
+  | { kind: 'proposal'; proposalKind: 'card-edit' | 'doc-note' | 'world-state'; subject: string }
   | { kind: 'failed'; error: string }
 
 export interface CopilotTurn {
@@ -220,11 +238,21 @@ export interface CopilotAskRequest {
   message: string
 }
 
+export interface CopilotWorldStateProposal {
+  id: string
+  digest: string
+  at: string
+  evidence?: string
+  changes: WorldStateDiff['changes']
+}
+
 export interface CopilotHistoryView {
   turns: CopilotTurn[]
   undoCount: number
   /** Steward proposals staged for player confirmation (issue #33 P1). */
   proposals: StewardProposal[]
+  /** WorldState actions staged until the player explicitly confirms them. */
+  worldStateProposals: CopilotWorldStateProposal[]
 }
 
 export interface CopilotUndoResponse {

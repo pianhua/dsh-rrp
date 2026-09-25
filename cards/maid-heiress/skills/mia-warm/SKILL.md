@@ -1,7 +1,7 @@
 ---
 name: maid-mia-warm
 description: 好感≥40 阶段米娅的进阶人设：关系升温后的口吻变化、亲密小动作与患得患失的弱化。系统按世界状态自动注入，命中时无需再行调取。
-when: characters.米娅.affinity >= 40
+when: trackedObjects.mia.character.affinity >= 40
 ---
 
 # 米娅 · 温热阶段（好感 ≥ 40）

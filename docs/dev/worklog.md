@@ -1,5 +1,90 @@
 # WORKLOG.md — 工作区状态盘点（追加式，最新在上）
 
+## 2026-09-25 · WorldState v2 Phase 6/7/9 UI、可见性与消费者迁移
+
+### 已完成
+- Phase 6：WorldState 加入 `conversation.view`；主区工作区与 native 右侧栏共享按 Session 隔离的 draft store；支持 v2 对象/目标/矛盾/认知/事件/关系、预算诊断、timeline 筛选、保存预览、引用删除二次确认和 hidden markup 防泄漏。
+- Phase 7：内部/model/player 可见性过滤、player-safe projection/卡包 detail/timeline route、hidden 写保护和不泄密提示完成。
+- Phase 9：条件注入、Stage、WorldlineDigest、活动摘要、UI schema 与两张官方卡的 v1 flat 路径已迁移到 v2 tracked-object/object-field/global-field 路径；不恢复 v1 fallback。
+- 票据 07、09 已 resolved；票据 06、08 标为 `ready-for-human`。已知宿主边界是 DSH 0.1.6-alpha.2 没有公开 Session 导航拦截 seam，因此 Save/Discard/Stay 是可观察降级控件，不伪造导航拦截；票据 08 的真实 host/browser 验收仍待执行。
+
+### 验证
+- 全量标准质量门：environment、format、typecheck、lint、Vitest（55 文件 / 410 用例）、build、`git diff --check` 均通过。
+- 可见性/双入口/安全写入定向回归：7 文件 / 42 用例通过；Phase 7 player-safe/card-route/timeline 测试通过。
+- 旧 v1 consumers、官方卡 when/Stage bind、prune/activity fixtures 已迁移；官方卡加载不再产生旧 flat path 警告。
+
+### 未完成/下一步
+- 票据 08 仍需真实 DSH 浏览器验证：两张官方卡新建会话、主区/右栏共享 draft、推演竞态、timeline 筛选、hidden 内容不泄漏、native fork 的 inherited/local timeline 边界。
+- 按此前用户授权尝试 `node scripts/host-runner.mjs start`：启动器未能生成可验证 runner 状态或认证 URL；随后 `status` 报 `3099 CONFLICT (unverified PID 5584)`，但 `/dsh-rrp/cards` 返回 200。未执行 stop，避免误停未知进程；未读取认证日志。真实 DSH/browser 验收保持未验证，票据 08 为 `ready-for-human`。
+- 未提交、未推送、未合并；`.agents/` 与 `skills-lock.json` 仍是本机技能资产。
+
+## 2026-09-24 · WorldState v2 Phase 4/5 Agent 与安全写入切片
+
+### 已完成
+- Phase 4：Chronicler/Author 已迁移到 v2 完整 WorldState；Chronicler 输出变更摘要/证据，按明确剧情证据更新对象、认知、目标、矛盾和事件，实际变化写 actor=chronicler timeline batch；no-op/失败/取消不写 timeline；Author 输入分层并加入 model/hidden 秘密边界。
+- Phase 5：玩家矫正和月停 WorldState 动作使用 v2 safe-write；支持 diff preview、完整 snapshot、actor provenance、引用安全、归档/恢复/确认删除、隐藏内容保护和预算诊断；月停动作先暂存，玩家确认后以 actor=copilot 写入，undo 保持追加恢复快照。
+- 主审修正：玩家写路径不能通过删除 hidden 对象/字段绕过保护；fork 子线玩家批次始终明确 `origin: local`。
+- 票据 `.scratch/world-state-v2/issues/04-chronicler-and-author-contract.md`、`05-player-correction-and-safe-writes.md` 已 resolved。
+
+### 验证与边界
+- Phase 4 定向：2 文件 / 24 用例；Phase 4 回归集：8 文件 / 60 用例通过。
+- Phase 5 定向：7 文件 / 50 用例通过；相关 ESLint、Prettier、`git diff --check` 通过。
+- 全仓 typecheck/test 仍被尚未迁移的 client/UI、lore-condition、旧 world-state-draft/activity/prune 测试阻塞；不以 v1 fallback 掩盖，后续票据继续迁移。
+
+## 2026-09-24 · WorldState v2 Phase 1 领域模型与投影切片
+
+### 已完成
+- 在 `feat/world-state-v2` 分支开始实现；保留访谈期 docs 改动和未跟踪本地技能资产，不修改 `.agents/` / `skills-lock.json`。
+- 完成 v2 `WorldState` 领域词汇：追踪对象、外部引用、角色通用字段、卡包/未定义标量字段、近期目标、活跃矛盾、认知、双向关系、当前事件、visibility、归档/删除引用安全、结构化 diff 和预算诊断。
+- 完成 `rrpWorldState` v2 projection（stateVersion 2）和 `rrpWorldStateTimeline` host-only projection；payload 在已知 `user/message.source.rrp` 中携带完整 snapshot + 原子 `worldStateTimelineBatch`，没有新增 Session event。
+- 移除 Phase 1 范围内的 v1 relations 回填、扁平顶层动态字段 fallback、硬数量静默裁剪和旧会话隐式迁移。
+- 修正审查发现：角色在场改为 `present/absent/unknown` 三态；当前事件状态覆盖 `pending/active/blocked/completed/invalid/abandoned`。
+
+### 验证
+- Phase 1 定向 Vitest：6 文件、37 用例通过。
+- Phase 1 定向 ESLint、Prettier、`git diff --check`：通过。
+- 全量 typecheck/test 暂未全绿：错误集中在尚未迁移的 Chronicler、Correction、Copilot、Lore 条件、旧客户端、卡包和旧测试消费者；未通过 v1 fallback 掩盖，下一阶段按票据继续迁移。
+
+### 当前状态
+- 票据 `.scratch/world-state-v2/issues/01-domain-model-and-projection.md` 已记录为 resolved。
+- 下一步是票据 02 卡包 schema/官方卡迁移和票据 03 持久时间线写入；Phase 1 的 wire shape 与 projection key 已固定。
+
+## 2026-09-24 · WorldState v2 Phase 2/3 卡包 schema 与持久时间线
+
+### 已完成
+- Phase 2：新增独立 `state.schema.json` 契约与 `src/card-state-schema.ts`；`maid-heiress`、`yanmen-inn` 的 `state.json` 迁移到 v2，`affinity` 仅在女仆卡适用；schema 不进入 CardContext、source payload、preset 或 UI runtime。
+- Phase 3：新增/完善 baseline 与原子 `worldStateTimelineBatch` 写入；时间线继续寄生于已知 `user/message.source.rrp`，host-only projection `rrpWorldStateTimeline` 折叠物理事件前缀；无变化、失败、取消、非法载荷不写 WorldState timeline。
+- 两个票据已 resolved：`.scratch/world-state-v2/issues/02-card-schema-and-official-cards.md`、`03-persistent-worldstate-timeline.md`。
+
+### 验证与已知边界
+- Phase 2/3 定向验证通过：卡包/schema/start/preset/card-ui、publisher/fork/transcript/timeline 测试；合计当前目标文件全绿。
+- 现有 `lore-condition.ts` 仍按 v1 WorldState 路径求值，官方卡加载会出现旧路径警告；Chronicler、Correction、Copilot、客户端和 UI 尚未迁移，属于后续票据 04–07，不恢复 v1 fallback。
+- 全仓 typecheck/test 尚未全绿，失败来自上述尚未迁移的 v1 消费者和测试；不得在 Phase 2/3 结论中声称全仓完成。
+
+## 2026-09-24 · WorldState v2 领域设计确认与规格落盘
+
+### 目标与决策
+- 维护者确认从开发阶段转入 WorldState 定向维护/优化/升级/精细打磨；本轮完成 144 个设计问题的分层访谈并确认共享理解。
+- WorldState v2 负责近期、当前、可行动状态：追踪对象、角色通用字段、卡包专属字段、角色认知、双向关系、近期目标、活跃矛盾、当前事件和持久只读时间线；剧情脉络负责高维长线视角，卡包/Skills 负责硬设定。
+- WorldState 进入 `conversation.view` 会话页签，右侧栏保留完整编辑能力；两处共享 Session 草稿。D6 无锁玩家矫正保留；D22 已修订为近期状态与高维剧情视角分工。
+- 已确认不为旧会话做新 schema/时间线兼容迁移；动态字段及主要状态对象暂不设硬数量上限，不静默删除，由预算/体积提示和实测驱动后续限额决策。
+
+### 已落盘
+- 术语与决策：`docs/reference/GLOSSARY.md`、`docs/reference/DECISIONS.md`（D5、D22、D23）。
+- 规格：`.scratch/world-state-v2/spec.md`。
+- 垂直票据：`.scratch/world-state-v2/issues/01`–`08`，含真实阻塞关系、验收和 out-of-scope。
+- 当前只改设计文档、术语/决策和本工作日志；没有进入 `src/`、`tests/` 或构建配置。
+
+### Ready-to-code gate 状态
+- 用户目标、标准术语、字段边界、生命周期、可见性、异常、fork 语义、双入口 UI 和验收场景已落盘。
+- 规格和票据已形成；实现前仍需按每张票据执行编码前冲突检查，并从 `01-domain-model-and-projection` 开始按依赖顺序实施。
+- 工作区另有技能安装产生的未跟踪 `.agents/` 与 `skills-lock.json`，本轮不纳入 WorldState v2，也不修改或清理。
+
+### 下一步
+- 先做规格/票据与 `AGENTS.md`、`DESIGN.md`、`HOST_ALIGNMENT.md`、`DECISIONS.md`、`GLOSSARY.md`、`HOST_SEAMS.md` 的冲突审查。
+- 冲突门通过后，按 01→02/03→04/05→06/07→08 的依赖顺序实现；每张票据独立测试，最终进行两张官方卡的浏览器/宿主验收。
+
+
 ## 2026-09-23 · 仓库架构重构分支与基线门禁
 
 ### 目标与决策
@@ -381,3 +466,12 @@
 - Linux host-runner 冒烟通过：12/12 个关键插件启动标记出现，`GET /dsh-rrp/cards` 返回 200（2 张卡），缺少 session 参数的 activity 请求按契约返回 400；随后 host 干净停止，3099 端口空闲且 runner 状态文件已清理。
 - 本轮未执行依赖真实 LLM 凭据和浏览器交互的完整游玩流程；该部分仍以已有真机报告为依据，Linux 本次结论限定为工具链、profile、宿主加载和只读路由冒烟通过。
 
+
+### WorldState v2 真机验收与热修（2026-09-25，feat/world-state-v2）
+
+- 宿主环境：本机全局 npm `@deepseek-ai/dsh@0.1.6-alpha.2` 与基线一致；用户在桌面备好同版本 tarball 备查。发现 `~/.dsh/.dsh-rrp/cards/maid-heiress` 为 9/20 的 v1 残留卡且优先于随包卡，导致 `when` 注入报旧路径语法错误；已移出为 `maid-heiress.v1-stale-20260920`，启动日志恢复干净。
+- 内置浏览器走通票据 08 全部真机验收：双卡新建会话（maid-heiress 主线4 / yanmen-inn 主线2）、主区+右侧栏共享草稿双向同步、玩家矫正预览→确认→`actor: player` 入 timeline、真实 Chronicler 提交 13 项变化（`actor: chronicler`）、`Session.fork` 子线只继承物理前缀且本地批次 `origin: local` 边界正确、hidden 内容不进玩家视图。票据 08 已置 `resolved`，证据写在票据内。
+- 真机暴露并修复四个代码级缺陷（均含回归测试，Vitest 55 文件 / 416 用例全绿）：① 玩家矫正对任何带 hidden 内容的卡必失败（缺失改为从 prior 恢复，改写/新建仍拒绝）；② Chronicler 值漂移（definition 自造词、裸名引用、1e999→Infinity）加确定性信封修复；③ Chronicler 结构漂移（空集合无样例）加 prompt 结构样例块 + 一次带 issue 列表的引导重试；④ diff 的 added/deleted 侧显式 undefined 被宿主事件日志拒绝（省略缺失侧）。另加可观测性：校验失败附 zod issue 路径、`DSH_RRP_DEBUG_DUMP` 落盘畸形回复、appendLane 拒绝时报首个不可序列化路径。
+- 已知遗留：主区世界状态页签在左侧栏折叠为图标轨时左侧被裁约一栏宽（宿主 slot 布局上下文，展开侧栏正常），记于票据 08 备查。
+- 最终质量门：format / typecheck / lint / Vitest 416 / build / git diff --check 全绿。未提交未推送，等所有者决策。
+- 左侧裁切修复（同日追加）：根因定位为世界状态工作区在窄容器下的横向溢出——`overflow-y:auto` 使 overflow-x 按规范计为 auto，焦点落到换行字段行右缘时浏览器自动持久横向滚动（scrollLeft），整面板呈现左侧裁切；flex 项默认 `min-width:auto` 加剧溢出。修复：`S.root` 补 `width:100%/minWidth:0`，`S.scroll` 显式 `overflowX:'hidden'`。内置浏览器真机 A/B 复验（图标轨/展开侧栏 × 右栏开合 × 字段聚焦）均渲染正常。质量门复跑全绿。

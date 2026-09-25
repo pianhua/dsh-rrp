@@ -16,6 +16,8 @@
  * Do NOT port the background agents' JSON discipline into this prompt, and do
  * NOT port this prompt's literary license into the background agents.
  */
+import type { MacroSummary } from '../macro-summary.ts'
+import { renderWorldState, type WorldState } from '../world-state.ts'
 import type { AgentPromptContract } from './contract.ts'
 
 /** The Author's complete system prompt — deployed verbatim into the RP preset. */
@@ -34,6 +36,13 @@ export const AUTHOR_SYSTEM_PROMPT = [
   '- Load world settings on demand through skills: call a skill only when the current scene genuinely needs that passage. Never preload every skill "just in case", and never reload a setting you have already seen.',
   '- Skill-based lookup is sufficient. Do not browse or read workspace files to find or verify settings — no additional setting exists in any file. The injected card baseline and the skill catalog are the complete source.',
   '- When unsure whether a depiction crosses a boundary, consult the relevant skill once instead of guessing.',
+  '',
+  '## Layered Input Contract',
+  '- Card package and loaded Skills are the hard-setting layer: world rules, character canon, card-defined fields, and secret-disclosure rules are authoritative and cannot be overridden by short-term state or prose.',
+  '- WorldState v2 is the recent-state layer: use the latest complete snapshot for current facts, presence, objects, cognition, relationships, objectives, conflicts, current events, and model-visible fields. Player correction is the latest current-state write.',
+  '- The Summarizer macro compass is the high-level direction layer: use its goals, long-range conflicts, turning points, and threads to preserve story direction, but it cannot overwrite WorldState facts or player correction.',
+  '- Visibility is a contract, not a suggestion: player-visible content may be shown when perceptible; model-visible content may guide narration without direct disclosure; hidden content must obey the card/Skill 秘密揭示规则 and may be revealed only when that rule and an explicit in-world reveal both permit it. Never mention protected content in prose or explain that it was hidden.',
+  '- When the layers appear to conflict, split by domain rather than inventing a global priority: hard setting governs rules, WorldState governs current facts, and the macro compass governs long-range direction.',
   '',
   '## Narrative Requirements',
   '- Third person, consistent tense; favor atmosphere, action, and concrete detail over summarizing chronicle and exposition.',
@@ -127,17 +136,42 @@ export const AUTHOR_SYSTEM_PROMPT = [
   'The response is the novel and nothing else. Think silently, in whatever language you like; only the finished prose is sent. Every visible character of the response must belong to the Simplified Chinese narrative — never internal monologue, reasoning, planning, drafts, self-correction, second-guessing, meta-commentary, or English of any kind. There is exactly one artifact: the final prose.',
 ].join('\n')
 
+export interface AuthorPromptInput {
+  playerText: string
+  cardSettings?: string
+  skills?: string[]
+  worldState?: WorldState
+  macroSummary?: MacroSummary | null
+}
+
+/** Render the four Author input layers without changing the prose-only output contract. */
+export function buildAuthorPrompt(input: AuthorPromptInput | string): string {
+  if (typeof input === 'string') return input
+  const parts: string[] = []
+  if (input.cardSettings !== undefined) {
+    parts.push('【卡包/Skills 硬设定】\n' + input.cardSettings)
+  }
+  if (input.skills !== undefined && input.skills.length > 0) {
+    parts.push('【卡包/Skills 已加载片段】\n' + input.skills.join('\n\n'))
+  }
+  if (input.worldState !== undefined) {
+    parts.push('【WorldState 近期状态】\n' + renderWorldState(input.worldState))
+  }
+  if (input.macroSummary !== undefined && input.macroSummary !== null) {
+    parts.push('【Summarizer 高维视角】\n' + JSON.stringify(input.macroSummary))
+  }
+  parts.push('【玩家本轮输入】\n' + input.playerText)
+  return parts.join('\n\n')
+}
+
 /**
  * The Author's unified prompt contract (issue #32). The Author is prose-only:
  * no schema, no JSON — the host streams the reply straight to the player.
- * `buildUserPrompt` is identity on purpose: the host assembles the message
- * (state facts are appended to the message stream by the publisher), and the
- * player's text is the final, volatile segment of that stream.
  */
-export const authorAgent: AgentPromptContract<string, string> = {
+export const authorAgent: AgentPromptContract<AuthorPromptInput | string, string> = {
   id: 'author',
   name: '叙事执笔（Author）',
   systemPrompt: AUTHOR_SYSTEM_PROMPT,
-  buildUserPrompt: (playerText: string) => playerText,
+  buildUserPrompt: buildAuthorPrompt,
   parseReply: (rawReply: string) => rawReply,
 }

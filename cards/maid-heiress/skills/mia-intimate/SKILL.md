@@ -1,7 +1,7 @@
 ---
 name: maid-mia-intimate
 description: 好感≥80 阶段米娅的亲密人设：明确的双向告白关系、婚后的预演式相处与大小姐气质的只对玩家卸下。系统按世界状态自动注入，命中时无需再行调取。
-when: characters.米娅.affinity >= 80
+when: trackedObjects.mia.character.affinity >= 80
 ---
 
 # 米娅 · 亲密阶段（好感 ≥ 80）

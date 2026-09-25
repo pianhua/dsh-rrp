@@ -8,3 +8,5 @@ docs
 cards
 dist
 /.worktrees/
+.agents
+skills-lock.json

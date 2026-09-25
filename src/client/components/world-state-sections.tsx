@@ -154,9 +154,9 @@ export function RelationsSection(props: {
       ) : (
         relations.map((rel, index) => (
           <div key={'relation-' + String(index)} style={S.relationRow}>
-            <span style={S.relationName}>{rel.a}</span>
-            <span style={S.relationLabel}>· {rel.label} ·</span>
-            <span style={S.relationName}>{rel.b}</span>
+            <span style={S.relationName}>{rel.a.objectId ?? rel.a.external?.name ?? '—'}</span>
+            <span style={S.relationLabel}>· {rel.labels.join(', ')} ·</span>
+            <span style={S.relationName}>{rel.b.objectId ?? rel.b.external?.name ?? '—'}</span>
           </div>
         ))
       )}

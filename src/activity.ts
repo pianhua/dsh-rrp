@@ -14,6 +14,18 @@
  *
  * Dependency-free: shared by host writers and the client bundle.
  */
+import type { WorldStateDiff } from './world-state.ts'
+
+/** Render a bounded, value-free summary of a structured v2 state diff. */
+export function renderActivityWorldStateDiff(diff: WorldStateDiff): string {
+  if (diff.changes.length === 0) return '（无实质变化）'
+  const shown = diff.changes.slice(0, 6).map((change) => {
+    const path = change.field ?? (change.objectId === undefined ? 'state' : change.objectId)
+    return change.type + ':' + path
+  })
+  const omitted = diff.changes.length - shown.length
+  return omitted > 0 ? shown.join('；') + '；另有 ' + String(omitted) + ' 处变化' : shown.join('；')
+}
 
 /** Which writer produced an entry. */
 export type RrpActor = 'chronicler' | 'summarizer' | 'player' | 'card' | 'scribe' | 'copilot'

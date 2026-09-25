@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "fields": [
+    {
+      "id": "condition",
+      "label": "当前状态",
+      "appliesTo": ["character"],
+      "type": "string",
+      "order": 20,
+      "component": "textarea",
+      "visibility": "player"
+    },
+    {
+      "id": "note",
+      "label": "物品备注",
+      "appliesTo": ["item"],
+      "type": "string",
+      "component": "textarea",
+      "visibility": "player"
+    },
+    {
+      "id": "location",
+      "label": "地点",
+      "appliesTo": ["scene"],
+      "type": "string",
+      "order": 10,
+      "component": "text",
+      "visibility": "player"
+    },
+    {
+      "id": "time",
+      "label": "时间",
+      "appliesTo": ["scene"],
+      "type": "string",
+      "order": 20,
+      "component": "text",
+      "visibility": "player"
+    },
+    {
+      "id": "weather",
+      "label": "天气",
+      "appliesTo": ["scene"],
+      "type": "string",
+      "order": 30,
+      "component": "textarea",
+      "visibility": "player"
+    },
+    {
+      "id": "snowbound",
+      "label": "暴雪封关",
+      "appliesTo": ["global"],
+      "type": "string",
+      "component": "textarea",
+      "visibility": "player"
+    },
+    {
+      "id": "inn_rules",
+      "label": "客栈规矩",
+      "appliesTo": ["global"],
+      "type": "string",
+      "component": "textarea",
+      "visibility": "player"
+    },
+    {
+      "id": "innkeeper_blood",
+      "label": "老板娘袖口的血腥味",
+      "appliesTo": ["global"],
+      "type": "string",
+      "component": "textarea",
+      "visibility": "model"
+    }
+  ],
+  "migrations": [
+    {
+      "fromVersion": 0,
+      "toVersion": 1,
+      "aliases": [
+        { "from": "place", "to": "location" }
+      ]
+    }
+  ]
+}

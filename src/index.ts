@@ -1,7 +1,7 @@
 /**
  * dsh-rrp — host half.
  *
- * The host half materializes the RP preset family, registers the seven pure
+ * The host half materializes the RP preset family, registers the eight pure
  * Session projections, and wires the DSH-native routes/jobs/agent scopes used
  * by the card, WorldState, summary, and lore flows.
  *
@@ -22,6 +22,7 @@ import { registerLoreCommand, registerLoreRoute } from './lore-route.ts'
 import { registerLoreRuntime } from './lore-runtime.ts'
 import { registerChronicler, forgetAllInference, forgetInference } from './chronicler.ts'
 import { registerCorrectionRoute } from './correction.ts'
+import { registerWorldStateTimelineRoute } from './world-state-timeline-route.ts'
 import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
 import { presetIdForCard } from './preset-id.ts'
 import { cardProjection } from './projection/card.ts'
@@ -30,6 +31,7 @@ import { settingsProjection } from './projection/settings.ts'
 import { loreProjection } from './projection/lore.ts'
 import { transcriptProjection } from './projection/transcript.ts'
 import { worldStateProjection } from './projection/world-state.ts'
+import { worldStateTimelineProjection } from './projection/world-state-timeline.ts'
 import { registerStartRoute } from './start.ts'
 import {
   registerSummarizer,
@@ -76,7 +78,8 @@ interface SessionProjectionsService {
       | typeof loreProjection
       | typeof cardProjection
       | typeof transcriptProjection
-      | typeof worldlineDigestProjection,
+      | typeof worldlineDigestProjection
+      | typeof worldStateTimelineProjection,
   ): () => void
 }
 
@@ -119,6 +122,10 @@ export function apply(ctx: Context): void {
     console.log(
       `${TAG} worldline digest projection registered (key '${worldlineDigestProjection.key}')`,
     )
+    projectionDisposers.push(registry.register(worldStateTimelineProjection))
+    console.log(
+      `${TAG} WorldState timeline projection registered (key '${worldStateTimelineProjection.key}')`,
+    )
   })
   ctx.effect(() => {
     return () => {
@@ -139,6 +146,7 @@ export function apply(ctx: Context): void {
   // Player correction: the panel's write path into the session log (D6).
   ctx.inject(['webServer', 'sessions', 'sessionProjections'], (scoped: Context) => {
     registerCorrectionRoute(scoped)
+    registerWorldStateTimelineRoute(scoped)
   })
 
   // Card packs (Stage 6): read-only routes the gallery/start flow consumes.

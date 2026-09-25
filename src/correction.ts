@@ -1,27 +1,15 @@
-/**
- * dsh-rrp — player correction write path (D6, natural-time, no locks).
- *
- * The right-sidebar panel posts the player's edited WorldState here. We
- * validate it and publish it as the newest facts context message (structured
- * payload in the message source): the correction is simply the last write, and
- * the next Author step consumes the newest slice. No lock, no arbitration, no
- * conflict matrix.
- *
- * The route rides the host webserver (HOST_ALIGNMENT: only register an
- * endpoint when one is genuinely needed; never `createServer`).
- */
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import { recordActivity } from './activity.ts'
+import { recordActivity, renderActivityWorldStateDiff } from './activity.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 import { publishState } from './state-publisher.ts'
+import { WORLD_STATE_KEY, emptyWorldState, type WorldState } from './world-state.ts'
 import {
-  WORLD_STATE_KEY,
-  diffWorldState,
-  NO_WORLD_STATE_CHANGE,
-  pruneWorldState,
-  type WorldState,
-} from './world-state.ts'
+  preparePlayerWorldState,
+  type SafeWorldStateWriteResult,
+} from './world-state-references.ts'
+import { sanitizeWorldStateDiff } from './world-state-visibility.ts'
+import { type WorldStateTimelineProvenance } from './world-state-timeline.ts'
 import {
   type ProjectionsService,
   type RuntimeFaces,
@@ -29,19 +17,79 @@ import {
   type WebServerService,
   acceptsRrpWrites,
   face,
+  nowIso,
   readJsonBody,
   send,
 } from './host-faces.ts'
+import { RRP_ROUTES, type CorrectionRequest, type CorrectionResponse } from './route-contract.ts'
 
 const TAG = '[dsh-rrp]'
-/** Same-origin exact route the panel posts to. */
-import { RRP_ROUTES } from './route-contract.ts'
 const CORRECTION_PATH = RRP_ROUTES.worldState
 
-/**
- * Register the player-correction route.
- * @param ctx - the host context owning the registration.
- */
+function parseRequest(body: Record<string, unknown>): CorrectionRequest | undefined {
+  if (typeof body.sessionId !== 'string' || body.sessionId.length === 0) return undefined
+  const state = worldStateSchema.safeParse(body.state)
+  if (!state.success) return undefined
+  return {
+    sessionId: body.sessionId,
+    state: state.data as WorldState,
+    ...(body.preview === true ? { preview: true } : {}),
+    ...(typeof body.evidence === 'string' ? { evidence: body.evidence } : {}),
+    ...(Array.isArray(body.confirmDeleteIds)
+      ? {
+          confirmDeleteIds: body.confirmDeleteIds.filter(
+            (id): id is string => typeof id === 'string',
+          ),
+        }
+      : {}),
+    ...(typeof body.storyTurn === 'number' &&
+    Number.isInteger(body.storyTurn) &&
+    body.storyTurn >= 0
+      ? { storyTurn: body.storyTurn }
+      : {}),
+  }
+}
+
+function timelineProvenance(request: CorrectionRequest): WorldStateTimelineProvenance {
+  return {
+    actor: 'player',
+    ...(request.storyTurn === undefined ? {} : { storyTurn: request.storyTurn }),
+    at: nowIso(),
+    ...(request.evidence === undefined || request.evidence.trim().length === 0
+      ? {}
+      : { evidence: request.evidence }),
+  }
+}
+
+function responseForWrite(
+  result: Extract<SafeWorldStateWriteResult, { ok: true }>,
+  preview: boolean,
+): CorrectionResponse {
+  return {
+    ok: true,
+    ...(result.diff.changes.length === 0 ? { unchanged: true } : {}),
+    ...(preview ? { preview: true } : {}),
+    diff: result.diff,
+    diagnostics: result.diagnostics,
+  }
+}
+
+function errorForWrite(result: Exclude<SafeWorldStateWriteResult, { ok: true }>): {
+  status: 400 | 403 | 409
+  error: string
+  details?: unknown
+} {
+  if (result.reason === 'hidden-content') return { status: 403, error: result.message }
+  if (result.reason === 'references') {
+    return {
+      status: 409,
+      error: result.message,
+      details: { objectId: result.objectId, references: result.references },
+    }
+  }
+  return { status: 400, error: result.message }
+}
+
 export function registerCorrectionRoute(ctx: Context): void {
   const runtime = ctx as unknown as RuntimeFaces
   const webServer = face<WebServerService>(runtime, 'webServer')
@@ -66,13 +114,12 @@ export function registerCorrectionRoute(ctx: Context): void {
           send(res, result.status, { error: result.error })
           return
         }
-        const request = result.body
-        if (typeof request.sessionId !== 'string' || request.sessionId.length === 0) {
+        if (typeof result.body.sessionId !== 'string' || result.body.sessionId.length === 0) {
           send(res, 400, { error: 'missing sessionId' })
           return
         }
-        const state = worldStateSchema.safeParse(request.state)
-        if (!state.success) {
+        const request = parseRequest(result.body)
+        if (request === undefined) {
           send(res, 400, { error: 'invalid WorldState' })
           return
         }
@@ -81,34 +128,54 @@ export function registerCorrectionRoute(ctx: Context): void {
           send(res, 404, { error: 'unknown session' })
           return
         }
-        // Write-path guard: only RP-family sessions accept RRP state writes.
         if (!acceptsRrpWrites(projections, session)) {
           send(res, 403, { error: 'not an RP session' })
           return
         }
-        const pruned = pruneWorldState(state.data as WorldState)
-        // No-change short-circuit: a stray click on "save" with an identical
-        // state must not append a facts message (log noise + wasted tokens).
-        const prior = projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined
-        if (prior !== undefined && diffWorldState(prior, pruned) === NO_WORLD_STATE_CHANGE) {
-          send(res, 200, { ok: true, unchanged: true })
+        const prior =
+          (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined) ??
+          emptyWorldState()
+        const prepared = preparePlayerWorldState(prior, request.state, request.confirmDeleteIds)
+        if (!prepared.ok) {
+          const failure = errorForWrite(prepared)
+          send(res, failure.status, {
+            error: failure.error,
+            ...(failure.details === undefined ? {} : { details: failure.details }),
+          })
           return
         }
-        const published = publishState(session, projections, { worldState: pruned })
-        if (!published) {
+        const response = responseForWrite(prepared, request.preview === true)
+        if (request.preview === true || prepared.diff.changes.length === 0) {
+          send(res, 200, response)
+          return
+        }
+        const batch = {
+          kind: 'changes' as const,
+          changes: prepared.diff.changes,
+          provenance: timelineProvenance(request),
+          origin: 'local' as const,
+        }
+        if (
+          !publishState(session, projections, {
+            worldState: prepared.state,
+            worldStateTimelineBatch: batch,
+          })
+        ) {
           send(res, 500, { error: 'WorldState write failed' })
           return
         }
         recordActivity(request.sessionId, {
           id: randomUUID(),
-          at: new Date().toISOString(),
+          at: nowIso(),
           actor: 'player',
           target: 'world-state',
           phase: 'corrected',
-          detailKey: 'detail.playerCorrected',
+          detail: renderActivityWorldStateDiff(
+            sanitizeWorldStateDiff(prepared.diff, prior, prepared.state),
+          ),
         })
         console.log(TAG + ' player correction committed for session ' + request.sessionId)
-        send(res, 200, { ok: true })
+        send(res, 200, response)
       },
     })
     console.log(TAG + ' player correction route armed at ' + CORRECTION_PATH)

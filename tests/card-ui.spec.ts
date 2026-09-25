@@ -7,8 +7,16 @@ import { readCard, shippedCardRoot } from '../src/cards.ts'
 import { renderCardContext } from '../src/card-types.ts'
 import { registerCardUiRoute } from '../src/card-ui-route.ts'
 import { RRP_ROUTES, type CardUiResponse } from '../src/route-contract.ts'
-import { emptyWorldState } from '../src/world-state.ts'
-import { readGaugeValue, visiblePanels, type UiManifest } from '../src/ui-schema.ts'
+import { createDynamicField, emptyWorldState } from '../src/world-state.ts'
+import {
+  applyButtonPatch,
+  readCharacters,
+  readGaugeValue,
+  readReferenceName,
+  readTimeline,
+  visiblePanels,
+  type UiManifest,
+} from '../src/ui-schema.ts'
 
 /** Write one card directory with an optional ui/manifest.json. */
 function cardDirWith(manifestText: string | null): string {
@@ -30,12 +38,17 @@ const GOOD = JSON.stringify({
     {
       id: 'warn',
       component: 'gauge',
-      bind: 'characters.老周.affinity',
+      bind: 'trackedObjects.old-zhou.character.affinity',
       title: '好感',
       min: 0,
       max: 100,
     },
-    { id: 'when-rich', component: 'gauge', bind: '财富', when: '财富 >= 100' },
+    {
+      id: 'when-rich',
+      component: 'gauge',
+      bind: 'globalFields.wealth.value',
+      when: 'globalFields.wealth.value >= 100',
+    },
     {
       id: 'buttons',
       component: 'buttonRow',
@@ -207,17 +220,20 @@ describe('UI panel resolution (shared by host preview and the client)', () => {
       {
         id: 'rich',
         component: 'gauge',
-        bind: '财富',
-        when: { path: { kind: 'dynamic', id: '财富' }, op: '>=', value: 100 },
+        bind: 'globalFields.wealth.value',
+        when: { path: { kind: 'global-field', fieldId: 'wealth' }, op: '>=', value: 100 },
       },
       { id: 'first', component: 'relationTable', order: 1 },
     ],
   }
 
   it('hides unmet conditions and orders by order then id (no order sorts first)', () => {
-    const state = { ...emptyWorldState(), 财富: { type: 'number', value: 50 } }
+    const state = {
+      ...emptyWorldState(),
+      globalFields: { wealth: createDynamicField('number', 50) },
+    }
     expect(visiblePanels(manifest, state).map((p) => p.id)).toEqual(['first', 'late'])
-    state['财富'] = { type: 'number', value: 500 }
+    state.globalFields.wealth = createDynamicField('number', 500)
     expect(visiblePanels(manifest, state).map((p) => p.id)).toEqual(['rich', 'first', 'late'])
   })
 
@@ -227,22 +243,91 @@ describe('UI panel resolution (shared by host preview and the client)', () => {
   })
 
   it('reads gauge numbers through the same path grammar as when:', () => {
-    const state = { ...emptyWorldState(), 财富: { type: 'number', value: 12 } }
-    expect(readGaugeValue('财富', state)).toBe(12)
+    const state = {
+      ...emptyWorldState(),
+      globalFields: { wealth: createDynamicField('number', 12) },
+    }
+    expect(readGaugeValue('globalFields.wealth.value', state)).toBe(12)
     expect(
-      readGaugeValue('characters.米娅.affinity', {
+      readGaugeValue('trackedObjects.mia.character.affinity', {
         ...emptyWorldState(),
-        characters: { 米娅: { affinity: 80 } },
+        trackedObjects: {
+          mia: {
+            id: 'mia',
+            kind: 'character',
+            name: '米娅',
+            character: { affinity: 80 },
+            fields: {},
+          },
+        },
       }),
     ).toBe(80)
     expect(
-      readGaugeValue('characters.米娅.mood', {
+      readGaugeValue('trackedObjects.mia.character.emotionalState', {
         ...emptyWorldState(),
-        characters: { 米娅: { mood: '羞涩' } },
+        trackedObjects: {
+          mia: {
+            id: 'mia',
+            kind: 'character',
+            name: '米娅',
+            character: { emotionalState: '羞涩' },
+            fields: {},
+          },
+        },
       }),
     ).toBeUndefined()
     expect(readGaugeValue('scene', state)).toBeUndefined()
     expect(readGaugeValue(undefined, state)).toBeUndefined()
+  })
+  it('reads v2 character, relation, and scene bindings without flat domains', () => {
+    const state = {
+      ...emptyWorldState(),
+      trackedObjects: {
+        mia: {
+          id: 'mia',
+          kind: 'character' as const,
+          name: '米娅',
+          character: { affinity: 80, emotionalState: '欣喜' },
+          fields: { condition: createDynamicField('string', '在场') },
+        },
+        apartment: {
+          id: 'apartment',
+          kind: 'scene' as const,
+          name: '公寓',
+          fields: {
+            location: createDynamicField('string', '门口'),
+            time: createDynamicField('string', '清晨'),
+          },
+        },
+      },
+      relations: [
+        {
+          id: 'mia-player',
+          a: { objectId: 'mia' },
+          b: { external: { name: '玩家' } },
+          labels: ['主仆'],
+        },
+      ],
+    }
+    expect(readCharacters(undefined, state).map((row) => row.name)).toEqual(['米娅'])
+    expect(readCharacters('trackedObjects.mia', state)[0]?.state.character?.affinity).toBe(80)
+    expect(readReferenceName(state.relations[0]!.a, state)).toBe('米娅')
+    expect(readReferenceName(state.relations[0]!.b, state)).toBe('玩家')
+    expect(readTimeline('apartment', state)).toEqual([
+      { name: '公寓', fields: { location: '门口', time: '清晨' } },
+    ])
+  })
+
+  it('applies only v2 correction patches', () => {
+    const state = {
+      ...emptyWorldState(),
+      globalFields: { trust: createDynamicField('number', 1) },
+    }
+    const next = applyButtonPatch(state, {
+      globalFields: { trust: createDynamicField('number', 2) },
+    })
+    expect(next.globalFields.trust?.value).toBe(2)
+    expect(applyButtonPatch(state, { characters: { 米娅: { affinity: 80 } } })).toBe(state)
   })
 })
 

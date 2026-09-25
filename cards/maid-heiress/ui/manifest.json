@@ -4,11 +4,11 @@
   "layout": "grid",
   "panels": [
     { "id": "console", "component": "app", "src": "console.html", "span": 2, "title": "现场控制台" },
-    { "id": "affinity", "component": "gauge", "title": "米娅好感", "bind": "characters.米娅.affinity", "min": 0, "max": 100 },
+    { "id": "affinity", "component": "gauge", "title": "米娅好感", "bind": "trackedObjects.mia.character.affinity", "min": 0, "max": 100 },
     { "id": "here", "component": "timeline", "title": "此刻" },
     { "id": "cast", "component": "characterCard", "title": "在场人物" },
     { "id": "bonds", "component": "relationTable", "title": "关系" },
-    { "id": "warm", "component": "gauge", "title": "升温阶段", "bind": "characters.米娅.affinity", "min": 40, "max": 100, "when": "characters.米娅.affinity >= 40" },
+    { "id": "warm", "component": "gauge", "title": "升温阶段", "bind": "trackedObjects.mia.character.affinity", "min": 40, "max": 100, "when": "trackedObjects.mia.character.affinity >= 40" },
     { "id": "ask", "component": "buttonRow", "title": "出戏求助", "span": 2, "buttons": [
       { "label": "现在该怎么办", "action": "ask_copilot", "question": "按当前世界状态和已发生的剧情，我下一步该往哪个方向推？给我三条可选路线和各自依据的状态条目。" },
       { "label": "她刚才哪里露馅了", "action": "ask_copilot", "question": "米娅最近一次说漏嘴是什么？对照卡包设定，玩家角色目前掌握的信息差在哪里？" }

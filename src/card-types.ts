@@ -3,7 +3,9 @@
  * gallery. Dependency-free: no node imports, so the browser bundle can import
  * it (\`src/cards.ts\` adds filesystem parsing on top).
  */
-import type { WorldState } from './world-state.ts'
+import type { CardStateSchema } from './card-state-schema.ts'
+import { filterWorldState } from './world-state-visibility.ts'
+import type { WorldState, WorldStatePlayerView } from './world-state.ts'
 
 /** Declared player character (solves "the Author does not know who you are"). */
 export interface CardPlayer {
@@ -49,7 +51,51 @@ export interface CardPack {
   worldCore: string
   openings: CardOpening[]
   initialState: WorldState | null
+  /** Optional card-owned field definitions; never part of CardContext. */
+  stateSchema?: CardStateSchema | null
   skills: CardSkill[]
+}
+
+export type CardSkillPlayerView = Omit<CardSkill, 'dir'>
+
+export interface CardPackPlayerView {
+  id: string
+  meta: CardMeta
+  persona: string
+  worldCore: string
+  openings: CardOpening[]
+  initialState: WorldState | null
+  stateSchema?: CardStateSchema | null
+  skills: CardSkillPlayerView[]
+}
+
+/** Remove model-only card state before a pack reaches browser code. */
+export function toPlayerSafeCardPack(card: CardPack): CardPackPlayerView {
+  const initialState = card.initialState
+  let safeInitialState: WorldState | null = null
+  if (initialState !== null) {
+    const filtered = filterWorldState(initialState, 'player') as WorldStatePlayerView
+    const { visibilityNotices: _visibilityNotices, ...state } = filtered
+    safeInitialState = state
+  }
+  const schema = card.stateSchema
+  const safeSchema =
+    schema === undefined || schema === null
+      ? schema
+      : {
+          version: schema.version,
+          fields: schema.fields.filter((field) => field.visibility === 'player'),
+        }
+  return {
+    id: card.id,
+    meta: card.meta,
+    persona: card.persona,
+    worldCore: card.worldCore,
+    openings: card.openings,
+    initialState: safeInitialState,
+    ...(safeSchema === undefined ? {} : { stateSchema: safeSchema }),
+    skills: card.skills.map(({ dir: _dir, ...skill }) => skill),
+  }
 }
 
 /** The active card's model-facing setting (projected; never player-facing). */

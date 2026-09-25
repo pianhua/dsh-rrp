@@ -42,21 +42,23 @@
   window.rrp.onState(function (msg) {
     current = msg.state || null;
     var s = current || {};
-    var mia = (s.characters || {})['米娅'] || {};
+    var mia = ((s.trackedObjects || {}).mia || {}).character || {};
     document.getElementById('aff').textContent = typeof mia.affinity === 'number' ? String(mia.affinity) : '—';
-    var sc = s.scene || {};
-    document.getElementById('scene').textContent = [sc.time, sc.location, sc.weather].filter(Boolean).join(' · ') || '—';
+    var scene = ((s.trackedObjects || {})['apartment-door'] || {}).fields || {};
+    document.getElementById('scene').textContent = [scene.time, scene.location, scene.weather].map(function (field) {
+      return field && field.value;
+    }).filter(Boolean).join(' · ') || '—';
   });
   function bump(n) {
     var cur = parseInt(document.getElementById('aff').textContent, 10);
     if (!isFinite(cur)) return;
-    window.rrp.correctState({ characters: { '米娅': { affinity: Math.min(100, cur + n) } } });
+    window.rrp.correctState({ trackedObjects: { mia: { character: { affinity: Math.min(100, cur + n) } } } });
   }
   document.querySelectorAll('[data-bump]').forEach(function (b) {
     b.onclick = function () { bump(parseInt(b.getAttribute('data-bump'), 10)); };
   });
   document.getElementById('reveal').onclick = function () {
-    window.rrp.correctState({ flags: { '米娅已摊牌': true } });
+    window.rrp.correctState({ globalFields: { mia_is_maid: { type: 'boolean', value: true, definition: 'card-defined', visibility: 'player' } } });
   };
   document.getElementById('ask').onclick = function () {
     var v = document.getElementById('q').value.trim();

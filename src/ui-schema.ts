@@ -7,8 +7,7 @@
  * only, against a CLOSED component set — anything richer is a card HTML app
  * (L2), never a bigger schema.
  *
- * Dependency-free like world-state.ts / lore-condition.ts: the host route and
- * the client panel share this one module. Card UI never enters the model
+ * The host route and client panel share this one module. Card UI never enters the model
  * context — it is player-facing presentation, not a world fact.
  */
 import {
@@ -17,7 +16,8 @@ import {
   resolveWhenPath,
   type WhenCondition,
 } from './lore-condition.ts'
-import type { WorldState } from './world-state.ts'
+import { applyWorldStatePatch } from './world-state-references.ts'
+import type { ObjectReference, TrackedObject, WorldState } from './world-state.ts'
 
 /** The closed interpreter set: five declarative panels, or one card-authored page. */
 export type UiComponentKind =
@@ -58,9 +58,9 @@ export interface UiPanelDecl {
   title?: string
   /**
    * What the panel binds to, per component:
-   * `gauge` → a number path (`characters.<名>.affinity` / `inventory.<名>.quantity`
-   * / `flags.<名>` / `scene.<字段>` / a dynamic field's top-level key);
-   * `characterCard` → one character name (omit = every character);
+   * `gauge` → a v2 number path;
+   * `characterCard` → a tracked object id (omit = every character);
+   * `timeline` → an optional scene tracked object id;
    * the rest → unused.
    */
   bind?: string
@@ -121,55 +121,53 @@ export function readGaugeValue(bind: string | undefined, state: WorldState): num
   return typeof raw === 'number' && Number.isFinite(raw) ? raw : undefined
 }
 
-/** The characters a `characterCard` panel shows (one by bind, or all). */
+/** The characters a `characterCard` panel shows (one by object id, or all). */
 export function readCharacters(
   bind: string | undefined,
   state: WorldState,
-): Array<{ name: string; state: unknown }> {
-  const characters = state.characters as Record<string, unknown> | undefined
-  if (characters === undefined || characters === null) return []
-  if (bind !== undefined && bind.length > 0) {
-    const one = characters[bind]
-    return one === undefined ? [] : [{ name: bind, state: one }]
+): Array<{ name: string; state: TrackedObject }> {
+  const objects = Object.values(state.trackedObjects)
+    .filter((object) => object.kind === 'character')
+    .sort((a, b) => a.id.localeCompare(b.id))
+  if (bind === undefined || bind.length === 0) {
+    return objects.map((object) => ({ name: object.name, state: object }))
   }
-  return Object.keys(characters)
-    .sort()
-    .map((name) => ({ name, state: characters[name] }))
+  const objectId = bind.startsWith('trackedObjects.') ? bind.split('.')[1] : bind
+  const object = objectId === undefined ? undefined : state.trackedObjects[objectId]
+  return object?.kind === 'character' ? [{ name: object.name, state: object }] : []
 }
 
-/**
- * Merge one button's patch into the live state.
- *
- * The correction route takes a whole slice, so a button writes intent and the
- * merge happens here — same shape the copilot patch uses: `characters` and
- * `inventory` merge by name (only the named sub-fields change), everything else
- * is a whole-domain replace, and `null` deletes a key.
- */
-export function applyButtonPatch(state: WorldState, patch: Record<string, unknown>): WorldState {
-  const next: Record<string, unknown> = { ...state }
-  for (const [key, value] of Object.entries(patch)) {
-    const current = next[key]
-    if (key === 'characters' || key === 'inventory') {
-      if (typeof value !== 'object' || value === null) {
-        next[key] = value
-        continue
-      }
-      const merged: Record<string, unknown> = {
-        ...(typeof current === 'object' && current !== null ? current : {}),
-      }
-      for (const [name, entry] of Object.entries(value as Record<string, unknown>)) {
-        if (entry === null) delete merged[name]
-        else
-          merged[name] =
-            typeof entry === 'object'
-              ? { ...(merged[name] as object | undefined), ...(entry as object) }
-              : entry
-      }
-      next[key] = merged
-      continue
-    }
-    if (value === null) delete next[key]
-    else next[key] = value
+/** Scene tracked objects and their scalar field values for a timeline panel. */
+export function readTimeline(
+  bind: string | undefined,
+  state: WorldState,
+): Array<{ name: string; fields: Record<string, unknown> }> {
+  const objectId = bind?.startsWith('trackedObjects.') ? bind.split('.')[1] : bind
+  return Object.values(state.trackedObjects)
+    .filter(
+      (object) => object.kind === 'scene' && (objectId === undefined || object.id === objectId),
+    )
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((object) => ({
+      name: object.name,
+      fields: Object.fromEntries(
+        Object.entries(object.fields)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([fieldId, field]) => [fieldId, field.value]),
+      ),
+    }))
+}
+
+/** Resolve a relation endpoint to a player-safe display name. */
+export function readReferenceName(reference: ObjectReference, state: WorldState): string {
+  if (reference.objectId !== undefined) {
+    return state.trackedObjects[reference.objectId]?.name ?? '不公开对象'
   }
-  return next as WorldState
+  return reference.external?.name ?? '不公开对象'
+}
+
+/** Apply a v2 button patch through the same safe write semantics as correction. */
+export function applyButtonPatch(state: WorldState, patch: Record<string, unknown>): WorldState {
+  const result = applyWorldStatePatch(state, patch)
+  return result.ok ? result.state : state
 }

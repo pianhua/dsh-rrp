@@ -17,10 +17,13 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity } from './activity.ts'
 import { interpolateCardText, type CardContext } from './card-types.ts'
+import { readCard } from './cards.ts'
 import { isCardId, presetIdForCard } from './preset-id.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 import { publishState } from './state-publisher.ts'
 import type { WorldState } from './world-state.ts'
+import { mergePlayerVisibleWorldState } from './world-state-visibility.ts'
+import type { WorldStateTimelineBatch } from './world-state-timeline.ts'
 
 const TAG = '[dsh-rrp]'
 import { RRP_ROUTES } from './route-contract.ts'
@@ -177,14 +180,32 @@ export function registerStartRoute(ctx: Context): void {
             send(res, 400, { error: 'invalid WorldState' })
             return
           }
-          state = validated.data as WorldState
+          const submitted = validated.data as WorldState
+          const cardInitial = card === undefined ? undefined : readCard(card.id)?.initialState
+          state =
+            cardInitial === undefined || cardInitial === null
+              ? submitted
+              : mergePlayerVisibleWorldState(cardInitial, submitted)
+        } else if (card !== undefined) {
+          state = readCard(card.id)?.initialState ?? undefined
         }
+
+        const baseline: WorldStateTimelineBatch | undefined =
+          state === undefined
+            ? undefined
+            : {
+                kind: 'baseline',
+                snapshot: 'initial-state',
+                provenance: { actor: 'initial-state', at: nowIso() },
+                origin: 'local',
+              }
 
         // Publish the durable context FIRST (card lane + facts lane).
         if (card !== undefined || state !== undefined) {
           const published = publishState(session, projections, {
             ...(card === undefined ? {} : { card }),
             ...(state === undefined ? {} : { worldState: state }),
+            ...(baseline === undefined ? {} : { worldStateTimelineBatch: baseline }),
           })
           if (!published) {
             send(res, 500, { error: 'initial RP state write failed' })

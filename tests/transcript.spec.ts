@@ -78,7 +78,18 @@ describe('Chronicler transcript selection', () => {
   it('NEVER folds conditional-injection block text into prose entries (issue #16)', () => {
     // T8: the injection block rides the facts lane; Chronicler/Summarizer
     // transcripts must stay physically free of it (feedback-loop isolation).
-    const state = { ...emptyWorldState(), characters: { 米娅: { affinity: 90 } } }
+    const state = {
+      ...emptyWorldState(),
+      trackedObjects: {
+        mia: {
+          id: 'mia',
+          kind: 'character' as const,
+          name: '米娅',
+          character: { affinity: 90 },
+          fields: {},
+        },
+      },
+    }
     const block = renderTriggerBlock([
       { id: 'mia-warm', name: '温热', excerpt: 'UNIQUE-INJECTION-EXCERPT' },
     ])
@@ -88,6 +99,19 @@ describe('Chronicler transcript selection', () => {
         type: 'user/message',
         data: rrpStateMessage('m1', renderWorldState(state) + '\n\n' + block, {
           worldState: state,
+          worldStateTimelineBatch: {
+            kind: 'changes',
+            changes: [
+              {
+                type: 'modified',
+                objectId: 'mia',
+                field: 'character.affinity',
+                before: 80,
+                after: 90,
+              },
+            ],
+            provenance: { actor: 'player', evidence: 'TIMELINE-ONLY-EVIDENCE' },
+          },
         }),
       },
       { type: 'assistant/message', data: text('叙述回复') },
@@ -97,6 +121,7 @@ describe('Chronicler transcript selection', () => {
     expect(broad).toContain('叙述回复')
     expect(broad).not.toContain('UNIQUE-INJECTION-EXCERPT')
     expect(broad).not.toContain('条件注入')
+    expect(broad).not.toContain('TIMELINE-ONLY-EVIDENCE')
     const latest = latestTurnTranscriptOf(projections, SESSION)
     expect(latest).not.toContain('UNIQUE-INJECTION-EXCERPT')
   })

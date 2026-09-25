@@ -167,38 +167,49 @@ describe('copilot agent (prompt + action parsing)', () => {
     expect(COPILOT_SYSTEM_PROMPT).toContain('严禁下划线')
   })
 
-  it('merges patches per-name, clamps dynamic fields, and deletes null keys', () => {
+  it('merges v2 object fields, clamps constrained values, and deletes explicit fields', () => {
     const prior: WorldState = {
       ...emptyWorldState(),
-      characters: { 米娅: { affinity: 60, mood: '平静', appearance: '', condition: '' } },
-      scene: { location: '客厅', time: '夜', weather: '晴' },
-      sanity: { type: 'number', value: 80, min: 0, max: 100 },
+      trackedObjects: {
+        mia: {
+          id: 'mia',
+          kind: 'character',
+          name: '米娅',
+          character: { presence: 'present', affinity: 60 },
+          fields: {
+            sanity: { type: 'number', value: 80, definition: 'undeclared', min: 0, max: 100 },
+          },
+        },
+      },
     }
     const next = mergeWorldStatePatch(prior, {
-      characters: { 米娅: { affinity: 80 } },
-      scene: { weather: '大雨' },
-      sanity: { type: 'number', value: 150, min: 0, max: 100 },
-      flags: { 获得钥匙: true },
+      trackedObjects: {
+        mia: {
+          character: { affinity: 80 },
+          fields: {
+            sanity: { type: 'number', value: 150, definition: 'undeclared', min: 0, max: 100 },
+          },
+        },
+      },
+      globalFields: {
+        获得钥匙: { type: 'boolean', value: true, definition: 'undeclared' },
+      },
     })
-    expect(next.characters['米娅']?.affinity).toBe(80)
-    expect(next.characters['米娅']?.mood).toBe('平静')
-    expect(next.scene.weather).toBe('大雨')
-    expect(next.scene.location).toBe('客厅')
-    expect((next.sanity as { value: number }).value).toBe(100)
-    expect(next.flags['获得钥匙']).toBe(true)
+    expect(next.trackedObjects.mia?.character?.affinity).toBe(80)
+    expect(next.trackedObjects.mia?.fields.sanity.value).toBe(100)
+    expect(next.globalFields['获得钥匙']?.value).toBe(true)
 
-    const deleted = mergeWorldStatePatch(next, { flags: { 获得钥匙: null }, sanity: null })
-    expect(deleted.flags['获得钥匙']).toBeUndefined()
-    expect(deleted.sanity).toBeUndefined()
+    const deleted = mergeWorldStatePatch(next, {
+      globalFields: { 获得钥匙: null },
+      trackedObjects: { mia: { fields: { sanity: null } } },
+    })
+    expect(deleted.globalFields['获得钥匙']).toBeUndefined()
+    expect(deleted.trackedObjects.mia?.fields.sanity).toBeUndefined()
 
     expect(() =>
-      mergeWorldStatePatch(prior, { scene: 'oops' as unknown as Record<string, unknown> }),
+      mergeWorldStatePatch(prior, { globalFields: 'oops' as unknown as Record<string, unknown> }),
     ).toThrow()
-    expect(() =>
-      mergeWorldStatePatch(prior, {
-        bogus: { noType: true } as unknown as Record<string, unknown>,
-      }),
-    ).toThrow()
+    expect(() => mergeWorldStatePatch(prior, { bogus: true })).toThrow()
   })
 })
 
@@ -210,7 +221,10 @@ function fakeHost(opts?: {
   failAppend?: boolean
 }) {
   const id = opts?.id ?? 's1'
-  let state: WorldState = { ...emptyWorldState(), scene: { location: '客厅' } }
+  let state: WorldState = {
+    ...emptyWorldState(),
+    globalFields: { weather: { type: 'string', value: '晴', definition: 'undeclared' } },
+  }
   const appended: Array<{ type: string; data: unknown }> = []
   const session = {
     id,
@@ -347,37 +361,45 @@ describe('copilot route', () => {
     expect(host.appended).toHaveLength(0)
   })
 
-  it('executes update_world_state, records the undo snapshot, and undo restores it', async () => {
+  it('stages update_world_state, confirms it, records undo, and restores it', async () => {
     forgetState('s-undo')
     forgetCopilot('s-undo')
     const reply =
-      '好的。\n```rrp-action\n{"actions":[{"type":"update_world_state","patch":{"scene":{"weather":"大雨"},"characters":{"米娅":{"affinity":80,"mood":"","appearance":"","condition":""}}},"reason":"应要求调整"}]}\n```'
+      '好的。\n```rrp-action\n{"actions":[{"type":"update_world_state","patch":{"globalFields":{"weather":{"type":"string","value":"大雨","definition":"undeclared"}}},"reason":"应要求调整"}]}\n```'
     const host = fakeHost({ id: 's-undo', reply })
     registerCopilotRoute(host.ctx as never)
 
     const ask = exchange('POST', '/dsh-rrp/copilot', {
       sessionId: 's-undo',
-      message: '把天气改成大雨，米娅好感 80',
+      message: '把天气改成大雨',
     })
     await host.routes.get('/dsh-rrp/copilot')!.handler(ask.req, ask.res)
-    expect(host.stateOf().scene.weather).toBe('大雨')
-    expect(host.stateOf().characters['米娅']?.affinity).toBe(80)
+    expect(host.appended).toHaveLength(0)
+
+    const history = exchange('GET', '/dsh-rrp/copilot?sessionId=s-undo')
+    await host.routes.get('/dsh-rrp/copilot')!.handler(history.req, history.res)
+    const view = JSON.parse(history.res.chunks[0] ?? '{}') as {
+      worldStateProposals: Array<{ id: string }>
+    }
+    expect(view.worldStateProposals).toHaveLength(1)
+    const confirm = exchange('POST', '/dsh-rrp/copilot/proposals', {
+      sessionId: 's-undo',
+      action: 'confirm',
+      id: view.worldStateProposals[0]!.id,
+    })
+    await host.routes.get('/dsh-rrp/copilot/proposals')!.handler(confirm.req, confirm.res)
+    expect(host.stateOf().globalFields.weather?.value).toBe('大雨')
 
     const done = sseEvents(ask.res).find((entry) => entry.event === 'done')?.data as {
       undoCount: number
     }
-    expect(done.undoCount).toBe(1)
-    const activity = readActivity('s-undo')
-    expect(
-      activity.entries.some((entry) => entry.actor === 'copilot' && entry.phase === 'corrected'),
-    ).toBe(true)
+    expect(done.undoCount).toBe(0)
+    expect(readActivity('s-undo').entries.some((entry) => entry.actor === 'copilot')).toBe(true)
 
-    // Undo = one revert publish; values roll back, the ledger keeps both records.
     const undo = exchange('POST', '/dsh-rrp/copilot/undo', { sessionId: 's-undo' })
     await host.routes.get('/dsh-rrp/copilot/undo')!.handler(undo.req, undo.res)
     expect(undo.res.statusCode).toBe(200)
-    expect(host.stateOf().scene.weather).toBeUndefined()
-    expect(host.stateOf().characters['米娅']).toBeUndefined()
+    expect(host.stateOf().globalFields.weather?.value).toBe('晴')
     expect(
       readActivity('s-undo').entries.some((entry) => entry.detailKey === 'detail.copilotUndone'),
     ).toBe(true)

@@ -10,6 +10,10 @@ import { setCopilotLegacyDirForTesting, setCopilotWitnessForTesting } from '../s
 import { DRAFTING } from '../src/lore-drafts.ts'
 import { hasLoreDraft, stageLoreDraftForTesting } from '../src/lore-route.ts'
 import { getLastSummarizedTurn, registerSummarizer } from '../src/summarizer.ts'
+import {
+  getWorldStateDraftStore,
+  resetWorldStateDraftStore,
+} from '../src/client/world-state-draft-store.ts'
 import { listProposals, stageProposal } from '../src/steward-proposals.ts'
 import { publishState } from '../src/state-publisher.ts'
 import { emptyWorldState } from '../src/world-state.ts'
@@ -61,6 +65,25 @@ describe('extractSessionId', () => {
     expect(extractSessionId(null)).toBeUndefined()
     expect(extractSessionId({})).toBeUndefined()
     expect(extractSessionId(123)).toBeUndefined()
+  })
+})
+
+describe('WorldState v2 draft cleanup seam', () => {
+  it('drops a dirty session draft when the existing reset seam runs', () => {
+    const sessionId = 'draft-cleanup-test'
+    const store = getWorldStateDraftStore(sessionId, emptyWorldState())
+    store.setPath('globalFields.weather', {
+      type: 'string',
+      value: '大雪',
+      definition: 'undeclared',
+    })
+    expect(store.getSnapshot().isDirty).toBe(true)
+
+    resetWorldStateDraftStore(sessionId)
+    const fresh = getWorldStateDraftStore(sessionId, emptyWorldState())
+    expect(fresh.getSnapshot().isDirty).toBe(false)
+    expect(fresh.getSnapshot().draft.globalFields).toEqual({})
+    resetWorldStateDraftStore(sessionId)
   })
 })
 

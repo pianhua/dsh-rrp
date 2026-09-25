@@ -9,6 +9,10 @@ dist/
 # Local Git worktrees
 /.worktrees/
 
+# Local agent skills installed by the development client
+.agents/
+skills-lock.json
+
 # Test / coverage
 coverage/
 

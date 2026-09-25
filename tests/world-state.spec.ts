@@ -2,199 +2,342 @@ import { describe, expect, it } from 'vitest'
 import { worldStateProjection, worldStateSchema } from '../src/projection/world-state.ts'
 import { rrpStateMessage } from '../src/state-payload.ts'
 import {
-  WORLD_STATE_LIMITS,
+  archiveTrackedObject,
+  canDeleteTrackedObject,
+  deleteTrackedObject,
+  diagnoseWorldState,
   diffWorldState,
   emptyWorldState,
-  normalizeRelationEndpoint,
-  normalizeRelations,
-  pruneWorldState,
-  renderWorldState,
-  withPlayerPersona,
+  restoreTrackedObject,
+  normalizeWorldState,
+  type TrackedObject,
+  type WorldState,
 } from '../src/world-state.ts'
 
-/** One plugin context message carrying a structured world-state payload. */
+const tracked = (overrides: Partial<TrackedObject> = {}): TrackedObject => ({
+  id: 'mia',
+  kind: 'character',
+  name: '米娅',
+  character: {
+    presence: 'present',
+    outfit: '女仆装',
+    emotionalState: '警惕',
+    affinity: 12,
+  },
+  fields: {
+    stamina: { type: 'number', value: 80, definition: 'undeclared', min: 0, max: 100 },
+  },
+  ...overrides,
+})
+
+const state = (): WorldState => ({
+  ...emptyWorldState(),
+  trackedObjects: { mia: tracked() },
+  globalFields: {
+    weather: { type: 'string', value: '雨', definition: 'card-defined', visibility: 'player' },
+  },
+  objectives: [
+    {
+      id: 'reach-inn',
+      owners: [{ objectId: 'mia' }],
+      desiredOutcome: '抵达客栈',
+      status: 'active',
+      nextStep: '穿过雨幕',
+      primary: true,
+      order: 1,
+    },
+  ],
+})
+
 const stateEvent = (payload: Record<string, unknown>) => ({
   type: 'user/message',
-  data: rrpStateMessage('m1', 'context text', payload),
+  data: rrpStateMessage('m1', 'context', payload),
 })
 
-describe('WorldState projection unit', () => {
-  it('adopts the complete state from a state-bearing context message', () => {
-    const before = emptyWorldState()
-    const next = {
-      ...before,
-      scene: { location: '归离客栈', time: '入夜' },
-      characters: { 毓忻: { affinity: 3, mood: '警惕' } },
-    }
-    const after = worldStateProjection.apply(before, stateEvent({ worldState: next }))
-    expect(after).toBe(next)
-    expect(worldStateSchema.parse(after)).toEqual(next)
+describe('WorldState v2 domain', () => {
+  it('models tracked objects, optional common fields, scoped scalar fields, and visibility', () => {
+    const current = state()
+    expect(current.version).toBe(2)
+    expect(current.trackedObjects.mia.character?.presence).toBe('present')
+    expect(current.trackedObjects.mia.character?.affinity).toBe(12)
+    expect(current.trackedObjects.mia.fields.stamina.definition).toBe('undeclared')
+    expect(current.globalFields.weather.visibility).toBe('player')
+    expect(worldStateSchema.safeParse(current).success).toBe(true)
   })
 
-  it('returns the same reference for unrelated events (Object.is gate)', () => {
-    const state = emptyWorldState()
-    expect(worldStateProjection.apply(state, { type: 'user/message', data: {} })).toBe(state)
+  it('uses explicit tri-state character presence and rejects the legacy boolean field', () => {
+    const current = state()
+    expect(current.trackedObjects.mia.character?.presence).toBe('present')
     expect(
-      worldStateProjection.apply(
-        state,
-        stateEvent({ card: { id: 'c', name: 'n', persona: '', worldCore: '' } }),
-      ),
-    ).toBe(state)
-  })
-
-  it('initializes a fresh empty state per session', () => {
-    const a = worldStateProjection.init()
-    const b = worldStateProjection.init()
-    expect(a).not.toBe(b)
-    expect(a).toEqual(emptyWorldState())
-  })
-
-  it('wire view reuses the state reference', () => {
-    const state = emptyWorldState()
-    expect(worldStateProjection.wire.view(state)).toBe(state)
-  })
-
-  it('backfills relations: [] for a legacy payload without the domain', () => {
-    // Pre-relations session log: the four core domains only.
-    const legacy = { characters: {}, inventory: {}, scene: {}, flags: {} }
-    const after = worldStateProjection.apply(emptyWorldState(), stateEvent({ worldState: legacy }))
-    expect(after.relations).toEqual([])
-    expect(after).not.toBe(legacy)
-    expect(worldStateSchema.parse(after)).toEqual(after)
-  })
-
-  it('adopts relations from a state-bearing payload', () => {
-    const state = {
-      ...emptyWorldState(),
-      relations: [{ a: '米娅', b: '玩家', label: '主仆' }],
-    }
-    const after = worldStateProjection.apply(emptyWorldState(), stateEvent({ worldState: state }))
-    expect(after).toBe(state)
-  })
-})
-
-describe('Relation normalization', () => {
-  it('normalizeRelationEndpoint strips bracket modifiers and trims', () => {
-    expect(normalizeRelationEndpoint(' 米娅（女仆长） ')).toBe('米娅')
-    expect(normalizeRelationEndpoint('洛克[已黑化]')).toBe('洛克')
-    expect(normalizeRelationEndpoint('白狼（旧称：灰影）')).toBe('白狼')
-    expect(normalizeRelationEndpoint('【幕后】东家')).toBe('东家')
-  })
-
-  it('normalizeRelationEndpoint maps player aliases case-insensitively', () => {
-    for (const alias of ['我', '你', '玩家', '主角', 'user', 'USER', 'Player']) {
-      expect(normalizeRelationEndpoint(alias)).toBe('玩家')
-    }
-  })
-
-  it('normalizeRelationEndpoint leaves other names untouched (incl. traditional)', () => {
-    expect(normalizeRelationEndpoint('雲長')).toBe('雲長')
-    expect(normalizeRelationEndpoint('米娅')).toBe('米娅')
-  })
-
-  it('normalizeRelations dedupes undirected pairs, last write wins', () => {
-    const out = normalizeRelations([
-      { a: '米娅', b: '玩家', label: '主仆' },
-      { a: '我', b: '米娅', label: '猜忌' },
-      { a: '米娅', b: '主角', label: '信赖' },
-    ])
-    expect(out).toEqual([{ a: '米娅', b: '玩家', label: '信赖' }])
-  })
-
-  it('normalizeRelations drops blank entries and keeps the input reference when unchanged', () => {
+      worldStateSchema.safeParse({
+        ...current,
+        trackedObjects: {
+          ...current.trackedObjects,
+          mia: { ...current.trackedObjects.mia, character: { presence: 'unknown' } },
+        },
+      }).success,
+    ).toBe(true)
     expect(
-      normalizeRelations([
-        { a: ' ', b: 'x', label: 'y' },
-        { a: 'a', b: 'b', label: ' ' },
+      worldStateSchema.safeParse({
+        ...current,
+        trackedObjects: {
+          ...current.trackedObjects,
+          mia: { ...current.trackedObjects.mia, character: { present: true } },
+        },
+      }).success,
+    ).toBe(false)
+  })
+
+  it('models targets, conflicts, cognition, relations, events, external references, and visibility', () => {
+    const current: WorldState = {
+      ...state(),
+      conflicts: [
+        {
+          id: 'storm',
+          parties: [{ objectId: 'mia' }, { external: { name: '北境商会', kind: 'group' } }],
+          stakes: '客栈归属',
+          pressure: '巡查即将抵达',
+          status: 'active',
+          visibility: 'model',
+        },
+      ],
+      cognition: [
+        {
+          id: 'mia-knows-door',
+          character: { objectId: 'mia' },
+          proposition: '后门通向码头',
+          markers: ['known'],
+          visibility: 'hidden',
+        },
+      ],
+      relations: [
+        {
+          id: 'mia-player',
+          a: { objectId: 'mia' },
+          b: { external: { name: '玩家', kind: 'character' } },
+          labels: ['主仆'],
+          aToB: { attitude: '信任', value: 80 },
+          visibility: 'player',
+        },
+      ],
+      currentEvents: [
+        {
+          id: 'secret-promise',
+          type: 'promise',
+          fact: '米娅答应保守秘密',
+          relatedObjects: [{ objectId: 'mia' }, { external: { name: '玩家' } }],
+          status: 'blocked',
+          visibility: 'hidden',
+        },
+      ],
+    }
+    expect(worldStateSchema.safeParse(current).success).toBe(true)
+  })
+
+  it('accepts every current-event lifecycle status and closes completed, invalid, and abandoned events', () => {
+    const statuses = ['pending', 'active', 'blocked', 'completed', 'invalid', 'abandoned'] as const
+    for (const status of statuses) {
+      expect(
+        worldStateSchema.safeParse({
+          ...state(),
+          currentEvents: [
+            {
+              id: 'event-' + status,
+              type: 'ongoing',
+              fact: '事项',
+              relatedObjects: [{ objectId: 'mia' }],
+              status,
+            },
+          ],
+        }).success,
+      ).toBe(true)
+    }
+
+    const before = {
+      ...state(),
+      currentEvents: [
+        {
+          id: 'event',
+          type: 'ongoing',
+          fact: '事项',
+          relatedObjects: [{ objectId: 'mia' }],
+          status: 'active' as const,
+        },
+      ],
+    }
+    for (const status of ['completed', 'invalid', 'abandoned'] as const) {
+      const after = {
+        ...before,
+        currentEvents: [{ ...before.currentEvents[0]!, status }],
+      }
+      expect(diffWorldState(before, after).changes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'closed', field: 'currentEvents.status' }),
+        ]),
+      )
+    }
+  })
+
+  it('does not impose quantity caps or silently truncate diagnostics', () => {
+    const current = state()
+    const manyObjects = Object.fromEntries(
+      Array.from({ length: 100 }, (_, index) => [String(index), tracked({ id: String(index) })]),
+    )
+    const expanded = { ...current, trackedObjects: manyObjects }
+    expect(Object.keys(expanded.trackedObjects)).toHaveLength(100)
+    expect(diagnoseWorldState(expanded, { diagnosticSerializedChars: 10 })).toEqual(
+      expect.arrayContaining([
+        { kind: 'serialized-budget', path: '$', actual: expect.any(Number), limit: 10 },
       ]),
-    ).toEqual([])
-    const intact = [{ a: 'a', b: 'b', label: 'x' }]
-    expect(normalizeRelations(intact)).toBe(intact)
+    )
+    expect(Object.keys(expanded.trackedObjects)).toHaveLength(100)
   })
 
-  it('pruneWorldState caps relations at the limit, keeping the head', () => {
-    const relations = Array.from({ length: WORLD_STATE_LIMITS.relations + 4 }, (_, index) => ({
-      a: '甲' + String(index),
-      b: '乙',
-      label: 'r',
-    }))
-    const pruned = pruneWorldState({ ...emptyWorldState(), relations })
-    expect(pruned.relations).toHaveLength(WORLD_STATE_LIMITS.relations)
-    expect(pruned.relations[0]?.a).toBe('甲0')
-    expect(pruned.relations[WORLD_STATE_LIMITS.relations - 1]?.a).toBe(
-      '甲' + String(WORLD_STATE_LIMITS.relations - 1),
+  it('clamps number values but does not change scalar type or field ownership', () => {
+    const current = state()
+    const next = {
+      ...current,
+      trackedObjects: {
+        mia: {
+          ...current.trackedObjects.mia,
+          fields: { stamina: { ...current.trackedObjects.mia.fields.stamina, value: 200 } },
+        },
+      },
+    }
+    const normalized = normalizeWorldState(next)
+    expect(normalized.trackedObjects.mia.fields.stamina.value).toBe(100)
+    expect(normalized.trackedObjects.mia.fields.stamina.definition).toBe('undeclared')
+    expect(
+      worldStateProjection.apply(emptyWorldState(), stateEvent({ worldState: normalized }))
+        .trackedObjects.mia,
+    ).toEqual(normalized.trackedObjects.mia)
+  })
+
+  it('blocks deletion while referenced, then downgrades references only after explicit confirmation', () => {
+    const current = state()
+    expect(canDeleteTrackedObject(current, 'mia').allowed).toBe(false)
+    const blocked = deleteTrackedObject(current, 'mia')
+    expect(blocked.ok).toBe(false)
+    if (blocked.ok) throw new Error('expected reference protection')
+    expect(blocked.references[0]?.collection).toBe('objectives')
+
+    const deleted = deleteTrackedObject(current, 'mia', true)
+    expect(deleted.ok).toBe(true)
+    if (!deleted.ok) throw new Error('expected confirmed delete')
+    expect(deleted.state.trackedObjects.mia).toBeUndefined()
+    expect(deleted.state.objectives[0]?.owners[0]).toEqual({
+      external: { name: '米娅', kind: 'character' },
+    })
+  })
+
+  it('keeps archive distinct from delete and allows restoration', () => {
+    const archived = archiveTrackedObject(state(), 'mia')
+    expect(archived.trackedObjects.mia?.archived).toBe(true)
+    expect(restoreTrackedObject(archived, 'mia').trackedObjects.mia?.archived).toBe(false)
+  })
+
+  it('classifies archive and restore changes without deleting the object', () => {
+    const archived = archiveTrackedObject(state(), 'mia')
+    const restored = restoreTrackedObject(archived, 'mia')
+    expect(diffWorldState(state(), archived).changes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'archived', objectId: 'mia' })]),
+    )
+    expect(diffWorldState(archived, restored).changes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'restored', objectId: 'mia' })]),
+    )
+    expect(restored.trackedObjects.mia).toBeDefined()
+  })
+
+  it('produces structured field-level changes for objects and current entries', () => {
+    const before = state()
+    const after = {
+      ...before,
+      trackedObjects: {
+        ...before.trackedObjects,
+        mia: { ...before.trackedObjects.mia, character: { presence: 'absent' as const } },
+        guard: tracked({ id: 'guard', name: '守卫' }),
+      },
+      objectives: [{ ...before.objectives[0]!, status: 'completed' as const }],
+    }
+    const diff = diffWorldState(before, after)
+    expect(diff.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'modified',
+          objectId: 'mia',
+          field: 'trackedObjects.character.presence',
+        }),
+        expect.objectContaining({ type: 'added', objectId: 'guard' }),
+        expect.objectContaining({
+          type: 'closed',
+          objectId: 'reach-inn',
+          field: 'objectives.status',
+        }),
+      ]),
     )
   })
 
-  it('pruneWorldState normalizes relations on the write path', () => {
-    const pruned = pruneWorldState({
-      ...emptyWorldState(),
-      relations: [{ a: '我', b: '米娅（女仆）', label: '主仆 ' }],
-    })
-    expect(pruned.relations).toEqual([{ a: '玩家', b: '米娅', label: '主仆' }])
-  })
-
-  it('diffWorldState reports relation additions, removals and label changes', () => {
-    const prior = {
-      ...emptyWorldState(),
-      relations: [
-        { a: '米娅', b: '玩家', label: '主仆' },
-        { a: '甲', b: '乙', label: '旧谊' },
-      ],
-    }
-    const next = {
-      ...emptyWorldState(),
-      relations: [
-        { a: '玩家', b: '米娅', label: '信赖' },
-        { a: '丙', b: '丁', label: '同盟' },
-      ],
-    }
-    const digest = diffWorldState(prior, next)
-    // Label-change clause renders the `next` side's endpoint order.
-    expect(digest).toContain('「玩家 × 米娅」关系 主仆 → 信赖')
-    expect(digest).toContain('移除关系「甲 × 乙（旧谊）」')
-    expect(digest).toContain('新增关系「丙 × 丁（同盟）」')
-  })
-
-  it('renderWorldState carries a stable relations line', () => {
-    expect(renderWorldState(emptyWorldState())).toContain('relations: []')
-    const rendered = renderWorldState({
-      ...emptyWorldState(),
-      relations: [{ a: '米娅', b: '玩家', label: '主仆' }],
-    })
-    expect(rendered).toContain('relations: ')
-    expect(rendered).toContain('主仆')
+  it('omits the undefined side of added/deleted changes so diffs stay event-log safe', () => {
+    const before = state()
+    const after = structuredClone(before) as ReturnType<typeof state>
+    delete after.trackedObjects.mia
+    after.trackedObjects.guard = tracked({ id: 'guard', name: '守卫' })
+    const diff = diffWorldState(before, after)
+    const added = diff.changes.find(
+      (change) => change.type === 'added' && change.objectId === 'guard',
+    )
+    const deleted = diff.changes.find(
+      (change) => change.type === 'deleted' && change.objectId === 'mia',
+    )
+    expect(added).toBeDefined()
+    expect('before' in (added as object)).toBe(false)
+    expect(deleted).toBeDefined()
+    expect('after' in (deleted as object)).toBe(false)
+    // The whole diff must survive the host's lossless JSON round-trip.
+    expect(JSON.parse(JSON.stringify(diff))).toEqual(diff)
   })
 })
 
-describe('withPlayerPersona (issue #31 P1-B)', () => {
-  it('empty persona passes the state through untouched (same ref)', () => {
-    const state = emptyWorldState()
-    expect(withPlayerPersona(state, '   ')).toBe(state)
-    expect(withPlayerPersona(null, '')).toBe(null)
+describe('WorldState v2 projection', () => {
+  it('adopts a valid complete snapshot by whole value', () => {
+    const current = state()
+    const after = worldStateProjection.apply(emptyWorldState(), stateEvent({ worldState: current }))
+    expect(after).toEqual(current)
+    expect(after).not.toBe(emptyWorldState())
+    expect(worldStateProjection.stateVersion).toBe(2)
   })
 
-  it('merges the persona as the player dynamic string field', () => {
-    const state = { ...emptyWorldState(), scene: { location: '客栈' } }
-    const merged = withPlayerPersona(state, '  黑衣剑客，寡言，背负旧案。 ')
-    expect(merged).not.toBe(state)
-    expect(merged?.scene.location).toBe('客栈')
-    expect(merged?.player).toEqual({ type: 'string', value: '黑衣剑客，寡言，背负旧案。' })
-    // The Author's fact baseline renders it like any D5 field.
-    expect(renderWorldState(merged!)).toContain('player: "黑衣剑客，寡言，背负旧案。"')
+  it('rejects invalid and v1-shaped payloads without polluting the existing projection', () => {
+    const current = state()
+    const invalid = worldStateProjection.apply(
+      current,
+      stateEvent({ worldState: { ...current, version: 1 } }),
+    )
+    expect(invalid).toBe(current)
+    const malformed = worldStateProjection.apply(
+      current,
+      stateEvent({ worldState: { version: 2 } }),
+    )
+    expect(malformed).toBe(current)
+    const extraWireKey = worldStateProjection.apply(
+      current,
+      stateEvent({
+        ...current,
+        objectives: [
+          {
+            ...current.objectives[0]!,
+            owners: [{ external: { name: '陌生对象', unexpected: true } }],
+          },
+        ],
+      }),
+    )
+    expect(extraWireKey).toBe(current)
   })
 
-  it('builds a fresh state for cards without an initial state', () => {
-    const merged = withPlayerPersona(null, '旅人')
-    expect(merged?.characters).toEqual({})
-    expect(merged?.player).toEqual({ type: 'string', value: '旅人' })
-  })
-
-  it('caps an overlong persona and survives pruneWorldState round-trips', () => {
-    const long = '长'.repeat(500)
-    const merged = withPlayerPersona(emptyWorldState(), long)
-    const field = merged?.player as { type: string; value: string }
-    expect(field.value).toHaveLength(400)
-    expect(pruneWorldState(merged!)).toEqual(merged)
+  it('ignores unrelated events without changing the projection reference', () => {
+    const current = state()
+    expect(worldStateProjection.apply(current, { type: 'assistant/message', data: {} })).toBe(
+      current,
+    )
   })
 })

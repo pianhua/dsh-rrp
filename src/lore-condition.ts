@@ -8,11 +8,10 @@
  * framework owns evaluation and rendering once; the card author only writes
  * declarative data.
  *
- * v1 scope (plan: docs/plans/conditional-injection-v1.md):
- * - Syntax `路径 运算符 字面量`; operators > >= < <= == !=.
+ * Current scope:
+ * - Syntax `v2 路径 运算符 字面量`; operators > >= < <= == !=.
  * - Literals are NUMBER or BOOLEAN only. String equality is rejected at parse
- *   time (free-text drift vs the Chronicler would silently break the floor);
- *   v2 may unlock it behind a vocabulary contract + zod validation.
+ *   time because free-text drift would silently break the floor.
  * - A missing path evaluates false, never throws.
  *
  * Dependency-free: host (cards.ts loader, state-publisher, lore-route) and any
@@ -20,22 +19,20 @@
  */
 import type { WorldState } from './world-state.ts'
 
-/** Comparison operators accepted by v1 syntax. */
+/** Comparison operators accepted by the condition syntax. */
 export type WhenOperator = '>' | '>=' | '<' | '<=' | '==' | '!='
 
-/** One parsed condition path, by domain. */
+/** One parsed v2 condition path. */
 export type WhenPath =
-  | { kind: 'characters'; name: string; field: string }
-  | { kind: 'inventory'; name: string; field: string }
-  | { kind: 'scene'; field: string }
-  | { kind: 'flags'; name: string }
-  | { kind: 'dynamic'; id: string }
+  | { kind: 'character'; objectId: string; field: string }
+  | { kind: 'object-field'; objectId: string; fieldId: string }
+  | { kind: 'global-field'; fieldId: string }
 
 /** A parsed `when` condition: path + operator + numeric/boolean literal. */
 export interface WhenCondition {
   path: WhenPath
   op: WhenOperator
-  /** v1: number or boolean only. */
+  /** Number or boolean only. */
   value: number | boolean
 }
 
@@ -63,16 +60,13 @@ export interface TriggerHit {
 
 const OPERATORS: readonly WhenOperator[] = ['>=', '<=', '==', '!=', '>', '<']
 
-/** Scene fields addressable by `scene.<field>`. */
-const SCENE_FIELDS = new Set(['location', 'time', 'weather'])
-
-/** Message appended to string-literal rejections: the v1 migration hint. */
+/** Message appended to string-literal rejections. */
 const STRING_LITERAL_HINT =
-  'v1 仅支持数值与布尔字面量；字符串条件请把该信息建模为布尔或数值字段（如 flags.身份已暴露 == true），字符串等值比较留待 v2 解锁'
+  '当前仅支持数值与布尔字面量；字符串条件请把该信息建模为布尔或数值字段（如 globalFields.identity_revealed.value == true）'
 
 /**
  * Parse one `when` source.
- * @param src - the raw frontmatter value, e.g. `characters.米娅.affinity >= 80`.
+ * @param src - the raw frontmatter value, e.g. `trackedObjects.mia.character.affinity >= 80`.
  * @param locator - "卡名 / skill 名" used to locate load-time errors.
  * @returns the parsed condition, or an Error carrying the locator.
  */
@@ -108,58 +102,52 @@ export function parseWhen(src: string, locator: string): WhenCondition | Error {
   return fail('不支持的右值字面量「' + literalSrc + '」。' + STRING_LITERAL_HINT)
 }
 
-/** Parse one bare condition path (also the address grammar card UI binds to). */
+/** Parse one v2 condition path (also the address grammar card UI binds to). */
 export function parseWhenPath(src: string): WhenPath | Error {
   const segments = src.split('.').map((part) => part.trim())
   if (segments.some((part) => part.length === 0)) {
     return new Error('when 路径含空段：' + src)
   }
-  const head = segments[0] ?? ''
-  if (head === 'characters' || head === 'inventory') {
-    if (segments.length < 3) {
-      return new Error('when 路径需要 ' + head + '.<名>.<字段> 三段：' + src)
+  if (segments.length === 4 && segments[0] === 'trackedObjects' && segments[2] === 'character') {
+    return {
+      kind: 'character',
+      objectId: segments[1] as string,
+      field: segments[3] as string,
     }
-    const field = segments[segments.length - 1] as string
-    const name = segments.slice(1, -1).join('.')
-    return { kind: head, name, field }
   }
-  if (head === 'scene') {
-    if (segments.length !== 2)
-      return new Error('when 场景路径仅支持 scene.location|time|weather：' + src)
-    return { kind: 'scene', field: segments[1] as string }
+  if (
+    segments.length === 5 &&
+    segments[0] === 'trackedObjects' &&
+    segments[2] === 'fields' &&
+    segments[4] === 'value'
+  ) {
+    return {
+      kind: 'object-field',
+      objectId: segments[1] as string,
+      fieldId: segments[3] as string,
+    }
   }
-  if (head === 'flags') {
-    if (segments.length !== 2) return new Error('when 事件路径仅支持 flags.<名>：' + src)
-    return { kind: 'flags', name: segments[1] as string }
+  if (segments.length === 3 && segments[0] === 'globalFields' && segments[2] === 'value') {
+    return { kind: 'global-field', fieldId: segments[1] as string }
   }
-  if (segments.length === 1) return { kind: 'dynamic', id: head }
   return new Error(
     '无法识别的 when 路径：' +
       src +
-      '（支持 characters.<名>.<字段> / inventory.<名>.<字段> / scene.<字段> / flags.<名> / 自定义字段顶层键）',
+      '（支持 trackedObjects.<对象ID>.character.<字段> / trackedObjects.<对象ID>.fields.<字段ID>.value / globalFields.<字段ID>.value）',
   )
 }
 
-/** Resolve a condition path to a raw state value (undefined when absent). */
+/** Resolve a v2 condition path to a raw state value (undefined when absent). */
 export function resolveWhenPath(path: WhenPath, state: WorldState): unknown {
   switch (path.kind) {
-    case 'characters':
-      return (state.characters?.[path.name] as Record<string, unknown> | undefined)?.[path.field]
-    case 'inventory':
-      return (state.inventory?.[path.name] as Record<string, unknown> | undefined)?.[path.field]
-    case 'scene':
-      return state.scene?.[path.field as keyof WorldState['scene']]
-    case 'flags':
-      return state.flags?.[path.name]
-    case 'dynamic': {
-      const field = state[path.id]
-      return field !== null &&
-        typeof field === 'object' &&
-        !Array.isArray(field) &&
-        'value' in field
-        ? (field as { value: unknown }).value
-        : undefined
-    }
+    case 'character':
+      return state.trackedObjects[path.objectId]?.character?.[
+        path.field as keyof NonNullable<WorldState['trackedObjects'][string]['character']>
+      ]
+    case 'object-field':
+      return state.trackedObjects[path.objectId]?.fields[path.fieldId]?.value
+    case 'global-field':
+      return state.globalFields[path.fieldId]?.value
   }
 }
 
@@ -293,61 +281,51 @@ export function whenPathWarning(
 ): string | undefined {
   if (initial === null) return undefined
   const path = cond.path
-  switch (path.kind) {
-    case 'characters':
-      if (initial.characters?.[path.name] === undefined) {
-        return (
-          locator +
-          '：when 路径所指角色「' +
-          path.name +
-          '」不在卡包初始状态中，该条件将永远求值为 false'
-        )
-      }
-      return undefined
-    case 'inventory':
-      if (initial.inventory?.[path.name] === undefined) {
-        return (
-          locator +
-          '：when 路径所指物品「' +
-          path.name +
-          '」不在卡包初始状态中，该条件将永远求值为 false'
-        )
-      }
-      return undefined
-    case 'scene':
-      if (!SCENE_FIELDS.has(path.field)) {
-        return locator + '：when 场景字段「' + path.field + '」不是 location/time/weather 之一'
-      }
-      return undefined
-    case 'flags':
-      if (initial.flags?.[path.name] === undefined) {
-        return (
-          locator +
-          '：when 路径所指事件「' +
-          path.name +
-          '」不在卡包初始状态中，该条件将永远求值为 false'
-        )
-      }
-      return undefined
-    case 'dynamic': {
-      const { characters, inventory, scene, flags, relations, ...rest } = initial as Record<
-        string,
-        unknown
-      >
-      void characters
-      void inventory
-      void scene
-      void flags
-      void relations
-      if (rest[path.id] === undefined) {
-        return (
-          locator +
-          '：when 路径所指自定义字段「' +
-          path.id +
-          '」不在卡包初始状态中，该条件将永远求值为 false'
-        )
-      }
-      return undefined
+  if (path.kind === 'global-field') {
+    if (initial.globalFields[path.fieldId] === undefined) {
+      return (
+        locator +
+        '：when 路径所指全局字段「' +
+        path.fieldId +
+        '」不在卡包初始状态中，该条件将永远求值为 false'
+      )
     }
+    return undefined
   }
+
+  const object = initial.trackedObjects[path.objectId]
+  if (object === undefined) {
+    return (
+      locator +
+      '：when 路径所指追踪对象「' +
+      path.objectId +
+      '」不在卡包初始状态中，该条件将永远求值为 false'
+    )
+  }
+  if (path.kind === 'character') {
+    if (
+      object.character?.[path.field as keyof NonNullable<typeof object.character>] === undefined
+    ) {
+      return (
+        locator +
+        '：when 路径所指角色字段「' +
+        path.objectId +
+        '.character.' +
+        path.field +
+        '」不在卡包初始状态中，该条件将永远求值为 false'
+      )
+    }
+    return undefined
+  }
+  if (object.fields[path.fieldId] === undefined) {
+    return (
+      locator +
+      '：when 路径所指对象字段「' +
+      path.objectId +
+      '.fields.' +
+      path.fieldId +
+      '」不在卡包初始状态中，该条件将永远求值为 false'
+    )
+  }
+  return undefined
 }

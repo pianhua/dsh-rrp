@@ -12,8 +12,9 @@
  * message must keep its position across turns for the previous request to stay
  * a prefix of the next. Replacing moved the message to the tail and collapsed
  * the measured hit rate from ~90% to 27%. We therefore append and dedup by
- * content — the session-constant card is published once, rendered facts are
- * deduplicated, and hidden settings/lore operations share the facts event.
+ * rendered content and timeline batch — the session-constant card is published
+ * once, rendered facts are deduplicated, and hidden settings/lore operations
+ * share the facts event.
  */
 import { randomUUID } from 'node:crypto'
 import type { ProjectionsService, SessionLike } from './host-faces.ts'
@@ -30,7 +31,19 @@ import { RRP_SETTINGS_KEY, rrpSettingsOf, type RrpSettings } from './settings.ts
 import type { LoreChange } from './lore-state.ts'
 import { rrpStateMessage, type RrpStatePayload } from './state-payload.ts'
 import { TRANSCRIPT_KEY, type TranscriptSlice } from './transcript.ts'
-import { WORLD_STATE_KEY, renderWorldState, type WorldState } from './world-state.ts'
+import {
+  WORLD_STATE_KEY,
+  diffWorldState,
+  renderWorldState,
+  stableJson,
+  type WorldState,
+} from './world-state.ts'
+import {
+  WORLD_STATE_TIMELINE_KEY,
+  isWorldStateTimelineBatch,
+  type WorldStateTimeline,
+  type WorldStateTimelineBatch,
+} from './world-state-timeline.ts'
 
 const TAG = '[dsh-rrp]'
 
@@ -45,6 +58,8 @@ export type StateProjections = ProjectionsService
 export interface RrpStatePatch {
   card?: CardContext
   worldState?: WorldState
+  /** One atomic timeline batch paired with this full snapshot write. */
+  worldStateTimelineBatch?: WorldStateTimelineBatch
   /** Seq of the newest prose this fold covered (the Chronicler's cursor). */
   stateFoldSeq?: number
   summary?: MacroSummary | null
@@ -58,6 +73,8 @@ export interface RrpStatePatch {
 interface Retained {
   cardFingerprint?: string
   factsFingerprint?: string
+  timelineFingerprint?: string
+  timelineHasBaseline?: boolean
   /** Chronicler fold cursor at the last publish (must never be deduped away). */
   factsFoldSeq?: number
   /** Conditional-injection hits at the last publish (revoke diff baseline). */
@@ -77,9 +94,60 @@ const RETAINED = new Map<string, Retained>()
 
 /** Append one lane message. Callers wrap; append validates before committing. */
 function appendLane(session: StateSession, text: string, payload: RrpStatePayload): void {
-  session.append('user/message', rrpStateMessage(randomUUID(), text, payload), {
-    surfaceOp: 'append',
-  })
+  try {
+    session.append('user/message', rrpStateMessage(randomUUID(), text, payload), {
+      surfaceOp: 'append',
+    })
+  } catch (error) {
+    // The host rejects non-JSON-serializable data (undefined, non-finite
+    // numbers, -0, BigInt, exotic objects, …); name the offending path so a
+    // drifting writer is identifiable offline instead of by stack frame alone.
+    console.warn(
+      TAG +
+        ' lane append rejected; first non-serializable path: ' +
+        (nonSerializablePath(payload) ?? '(payload looks serializable; check the text/source)') +
+        (error instanceof Error ? ' | ' + error.message : ''),
+    )
+    throw error
+  }
+}
+
+/**
+ * Host-mirror probe: the first JSON path that the session log would refuse,
+ * or undefined when the value passes the same rules (undefined in objects,
+ * non-finite numbers, -0, BigInt, function/symbol, Map/Set/Date/class, circular,
+ * sparse arrays).
+ */
+export function nonSerializablePath(value: unknown, path = '$'): string | undefined {
+  if (value === null) return undefined
+  const kind = typeof value
+  if (kind === 'bigint' || kind === 'function' || kind === 'symbol' || kind === 'undefined') {
+    return path
+  }
+  if (kind === 'number') {
+    return Number.isFinite(value) && !Object.is(value, -0) ? undefined : path
+  }
+  if (kind === 'string' || kind === 'boolean') return undefined
+  if (value instanceof Date || value instanceof Map || value instanceof Set) return path
+  if (kind === 'object') {
+    if (Array.isArray(value)) {
+      for (let index = 0; index < value.length; index++) {
+        if (!(index in value)) return path + '[' + String(index) + '] (sparse)'
+        const found = nonSerializablePath(value[index], path + '[' + String(index) + ']')
+        if (found !== undefined) return found
+      }
+      return undefined
+    }
+    const proto = Object.getPrototypeOf(value)
+    if (proto !== null && proto !== Object.prototype) return path + ' (exotic object)'
+    const seen = value as Record<string, unknown>
+    for (const [key, entry] of Object.entries(seen)) {
+      const found = nonSerializablePath(entry, path + '.' + key)
+      if (found !== undefined) return found
+    }
+    return undefined
+  }
+  return path
 }
 
 /**
@@ -102,6 +170,10 @@ function cardFingerprint(text: string, card: CardContext): string {
   return text + '\u0000card=' + card.id
 }
 
+function timelineFingerprint(batch: WorldStateTimelineBatch): string {
+  return stableJson(batch)
+}
+
 /**
  * Adopt the lanes the transcript slice already folded, so a restart/resume
  * does not republish the constant card or duplicate an unchanged facts
@@ -111,10 +183,14 @@ function cardFingerprint(text: string, card: CardContext): string {
 function adopt(session: StateSession, projections: StateProjections): Retained {
   const retained: Retained = {}
   let slice: TranscriptSlice | undefined
+  let timeline: WorldStateTimeline | undefined
   try {
     slice = projections.stateOf(session, TRANSCRIPT_KEY) as TranscriptSlice | undefined
+    timeline = projections.stateOf(session, WORLD_STATE_TIMELINE_KEY) as
+      WorldStateTimeline | undefined
   } catch {
     slice = undefined
+    timeline = undefined
   }
   if (slice?.card !== undefined) retained.cardFingerprint = slice.card.fingerprint
   if (slice?.facts !== undefined) {
@@ -126,6 +202,11 @@ function adopt(session: StateSession, projections: StateProjections): Retained {
     // back from the log: an adopted block means "unknown what it listed".
     retained.triggerBaselineUnknown = slice.facts.text.includes(TRIGGER_BLOCK_HEADER)
     retained.factsFoldSeq = slice.lastFoldSeq
+  }
+  const latestTimelineBatch = timeline?.batches.at(-1)
+  if (timeline !== undefined && latestTimelineBatch !== undefined) {
+    retained.timelineFingerprint = timelineFingerprint(latestTimelineBatch)
+    retained.timelineHasBaseline = timeline.batches.some((batch) => batch.kind === 'baseline')
   }
   return retained
 }
@@ -160,6 +241,17 @@ export function publishState(
 
     const state =
       patch.worldState ?? (projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined)
+    const priorState = projections.stateOf(session, WORLD_STATE_KEY) as WorldState | undefined
+    const timelineBatch = isWorldStateTimelineBatch(patch.worldStateTimelineBatch)
+      ? patch.worldStateTimelineBatch
+      : undefined
+    const timelineEligible =
+      timelineBatch === undefined ||
+      (timelineBatch.kind === 'baseline'
+        ? retained.timelineHasBaseline !== true
+        : priorState === undefined ||
+          state === undefined ||
+          diffWorldState(priorState, state).changes.length > 0)
     if (
       state !== undefined ||
       patch.summary !== undefined ||
@@ -201,12 +293,25 @@ export function publishState(
       }
       const factsText = parts.join('\n\n')
       const fingerprint = factsFingerprint(factsText, settings)
+      const nextTimelineFingerprint =
+        timelineBatch === undefined || !timelineEligible
+          ? retained.timelineFingerprint
+          : timelineFingerprint(timelineBatch)
+      const timelineMoved =
+        timelineBatch !== undefined &&
+        timelineEligible &&
+        retained.timelineFingerprint !== nextTimelineFingerprint
       // The cursor always travels with its state: a fold that rendered
       // byte-identical facts still has to be booked, or the Chronicler would
       // re-read the same prose forever.
       const foldMoved =
         patch.stateFoldSeq !== undefined && retained.factsFoldSeq !== patch.stateFoldSeq
-      if (patch.sediment !== undefined || retained.factsFingerprint !== fingerprint || foldMoved) {
+      if (
+        patch.sediment !== undefined ||
+        timelineMoved ||
+        retained.factsFingerprint !== fingerprint ||
+        foldMoved
+      ) {
         // Metadata-only publish (e.g. a confirmed lore entry whose state text is
         // unchanged): keep the model-visible content to one breadcrumb line
         // instead of re-rendering the full state — the lore data itself
@@ -223,9 +328,14 @@ export function publishState(
           ...(patch.summaryTurn === undefined ? {} : { summaryTurn: patch.summaryTurn }),
           settings,
           ...(patch.sediment === undefined ? {} : { sediment: patch.sediment }),
+          ...(timelineMoved ? { worldStateTimelineBatch: timelineBatch } : {}),
           ...(patch.stateFoldSeq === undefined ? {} : { stateFoldSeq: patch.stateFoldSeq }),
         })
         retained.factsFingerprint = fingerprint
+        if (timelineMoved) {
+          retained.timelineFingerprint = nextTimelineFingerprint
+          if (timelineBatch?.kind === 'baseline') retained.timelineHasBaseline = true
+        }
         if (patch.stateFoldSeq !== undefined) retained.factsFoldSeq = patch.stateFoldSeq
       }
     }

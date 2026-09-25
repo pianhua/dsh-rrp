@@ -7,9 +7,10 @@ import {
   pendingActivity,
   readActivity,
   recordActivity,
+  renderActivityWorldStateDiff,
   type RrpActivity,
 } from '../src/activity.ts'
-import { NO_WORLD_STATE_CHANGE, diffWorldState, emptyWorldState } from '../src/world-state.ts'
+import { diffWorldState, emptyWorldState } from '../src/world-state.ts'
 
 /** A complete ledger entry with overridable fields. */
 function entry(overrides: Partial<RrpActivity> = {}): RrpActivity {
@@ -60,29 +61,44 @@ describe('activity ledger (host-side, in-memory)', () => {
 })
 
 describe('WorldState change digest', () => {
-  it('names the changed entries, and the no-change case', () => {
+  it('renders structured v2 object and global changes as a readable activity summary', () => {
     const prior = emptyWorldState()
     const next = {
       ...prior,
-      scene: { location: '归离客栈' },
-      characters: { 毓忻: { affinity: 3 } },
-      inventory: { 铜钥匙: { quantity: 1 } },
-      flags: { 已知晓密道: true },
+      trackedObjects: {
+        mia: {
+          id: 'mia',
+          kind: 'character' as const,
+          name: '米娅',
+          character: { affinity: 3 },
+          fields: {},
+        },
+      },
+      globalFields: {
+        identity_revealed: {
+          type: 'boolean' as const,
+          value: true,
+          definition: 'card-defined' as const,
+        },
+      },
     }
-    const digest = diffWorldState(prior, next)
-    expect(digest).toContain('地点 （空） → 归离客栈')
-    expect(digest).toContain('新增角色「毓忻」')
-    expect(digest).toContain('新增物品「铜钥匙」')
-    expect(digest).toContain('新事件「已知晓密道」')
-    expect(diffWorldState(next, next)).toBe(NO_WORLD_STATE_CHANGE)
+    const digest = renderActivityWorldStateDiff(diffWorldState(prior, next))
+    expect(digest).toContain('added:trackedObjects')
+    expect(digest).toContain('added:globalFields.identity_revealed')
+    expect(digest).not.toContain('米娅')
+    expect(renderActivityWorldStateDiff(diffWorldState(next, next))).toBe('（无实质变化）')
   })
 
-  it('caps a very large digest', () => {
+  it('caps a very large digest without exposing values', () => {
     const prior = emptyWorldState()
-    const next = {
-      ...prior,
-      flags: Object.fromEntries(Array.from({ length: 12 }, (_, index) => ['事件' + index, true])),
-    }
-    expect(diffWorldState(prior, next)).toContain('共 12 处变化')
+    const trackedObjects = Object.fromEntries(
+      Array.from({ length: 12 }, (_, index) => [
+        'object-' + String(index),
+        { id: 'object-' + String(index), kind: 'item' as const, name: '物品', fields: {} },
+      ]),
+    )
+    const digest = renderActivityWorldStateDiff(diffWorldState(prior, { ...prior, trackedObjects }))
+    expect(digest).toContain('另有')
+    expect(digest).not.toContain('物品')
   })
 })

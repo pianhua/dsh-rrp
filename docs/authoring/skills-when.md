@@ -27,7 +27,7 @@ description 的写法决定调取准确率：**写「什么时候该看我」，
 ---
 name: 米娅 · 亲密阶段
 description: 好感≥80 阶段人设。系统按世界状态自动注入，命中时无需再行调取。
-when: characters.米娅.affinity >= 80
+when: trackedObjects.mia.character.affinity >= 80
 ---
 ```
 
@@ -37,17 +37,17 @@ when: characters.米娅.affinity >= 80
 2. **撤销句**：命中集缩小时，掉出去的条目被点名作废——旧污染当场买断；
 3. **调用纪律**：已注入的条目模型不再重复调取，省 token 也防口径打架。
 
-## 条件语言（v1）
+## 条件语言（WorldState v2）
 
 | 支持 | 写法示例 |
 | :--- | :--- |
-| 数值字段路径 | `characters.米娅.affinity >= 80` |
-| 布尔 flag | `flags.秘密已暴露 == true` |
-| 自定义数值字段 | `magic_power > 50` |
+| 角色通用数值字段 | `trackedObjects.mia.character.affinity >= 80` |
+| 对象级数值/布尔字段 | `trackedObjects.inn.fields.alert.value == true` |
+| 全局数值/布尔字段 | `globalFields.identity_revealed.value == true` |
 | 运算符 | `> >= < <= == !=` |
 
-::: warning 明确不支持（v1）
-- **字符串等值比较**——自由文本词表漂移会让保下限静默失效，拒绝是保护你。想让一句话可触发？把它建成布尔 flag；
+::: warning 明确不支持
+- **字符串等值比较**——自由文本词表漂移会让保下限静默失效，拒绝是保护你。想让一句话可触发？把它建成布尔或数值字段；
 - 嵌套逻辑（`&&` / `||` / 括号）——一条 when 一个原子比较，复杂条件拆成多个 skill；
 - 未命中路径按不满足处理（不报错），所以字段名拼错 = 永不注入，用右侧栏状态面板核对字段名。
 :::
