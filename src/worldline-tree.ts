@@ -9,19 +9,21 @@
  * invent coordinates or a parallel session model: the tree is a fold of
  * facts the host already keeps.
  */
-import type { WorldlineBadge } from './worldline-digest.ts'
+import type { WorldlineBadge, WorldlineTurnMeta } from './worldline-digest.ts'
 
-export type { WorldlineBadge } from './worldline-digest.ts'
+export type { WorldlineBadge, WorldlineTurnMeta } from './worldline-digest.ts'
 
 /** One player turn as the fold sees it (excerpts pre-cut by the caller). */
 export interface WorldlineTurnFact {
-  /** 0-based turn index over the session's FULL log (inherited prefix included). */
+  /** Absolute turn number, continuous across the lineage (prefix included). */
   turn: number
-  /** Seq of the player message; also the fork boundary for rerolls. */
+  /** Seq of the player message; also the fork boundary for "fork from here". */
   seq: number
   playerExcerpt: string
   proseExcerpt: string
   badge?: WorldlineBadge
+  /** Per-turn state attribution (actor/origin/changeCount), when booked. */
+  meta?: WorldlineTurnMeta
 }
 
 /** One live session as the fold sees it. */
@@ -33,15 +35,28 @@ export interface WorldlineSessionFact {
   title: string
   /** Host header.parentSession — present exactly on forked worldlines. */
   parentId?: string
-  /** How many FULL turns of the parent this fork inherited (seedLength converted). */
+  /**
+   * Fork cut in ABSOLUTE parent turns: how many full turns of the parent this
+   * fork inherited (topology's only input besides parentId; read straight from
+   * the digest counter, never recomputed by counting retained entries).
+   */
   seedTurns?: number
+  /**
+   * False when the fork cut could not be resolved precisely (cold lineage, cut
+   * outside the retained window): the fold still mounts by lineage but the
+   * client must show the honest 「位置未知」 label instead of a fake position.
+   */
+  seedKnown?: boolean
+  /** Latest local turn number (head) — the client's precise current-position
+   * marker: a node is 「当前回合」 iff its session matches AND turn === headTurn. */
+  headTurn?: number
   /**
    * True for COLD skeleton facts (issue #29): the session exists on disk but is
    * not loaded, so there are no turn digests — only lineage and a title. The
    * fold renders it as one placeholder node instead of skipping it.
    */
   stub?: boolean
-  /** Every player turn of this session, in order, turn indices 0..n-1. */
+  /** Every player turn of this session, in order, absolute turn numbers. */
   turns: readonly WorldlineTurnFact[]
 }
 
@@ -51,11 +66,18 @@ export interface WorldlineNode {
   sessionId: string
   sessionTitle: string
   turn: number
-  /** Seq of the player message — the fork boundary for "reroll from here". */
+  /** Seq of the player message — the fork boundary for "fork from here". */
   seq: number
   playerExcerpt: string
   proseExcerpt: string
   badge?: WorldlineBadge
+  meta?: WorldlineTurnMeta
+  /** True exactly on this session's head node — the precise current-position
+   * marker (with sessionId === current) replacing the old "every node of the
+   * current session is current" behavior. */
+  isHead?: boolean
+  /** False when this branch's fork cut is unresolved (位置未知, honest label). */
+  seedKnown?: boolean
   /**
    * False exactly on cold skeleton nodes (issue #29): the session is on disk
    * but not loaded, so excerpts are empty and reroll/load must not be offered.

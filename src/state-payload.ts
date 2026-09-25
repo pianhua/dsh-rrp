@@ -48,6 +48,14 @@ export interface RrpStatePayload {
   settings?: RrpSettings
   /** One incremental dynamic-lore operation for this worldline. */
   sediment?: LoreChange
+  /**
+   * Fork-cut marker appended to the PARENT line when this plugin notices a
+   * fork (session/created + header.parentSession + isSeeded, D24). The digest
+   * folds `turn` into forkCuts (cap-protected mount points); `turn: null` =
+   * cut outside the retained window, honestly unknown. Never carries state —
+   * the transcript fold must NOT advance its booking watermark on this key.
+   */
+  worldlineForkCut?: { child: string; turn: number } | { child: string; turn: null }
 }
 
 /**

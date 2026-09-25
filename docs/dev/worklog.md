@@ -475,3 +475,12 @@
 - 已知遗留：主区世界状态页签在左侧栏折叠为图标轨时左侧被裁约一栏宽（宿主 slot 布局上下文，展开侧栏正常），记于票据 08 备查。
 - 最终质量门：format / typecheck / lint / Vitest 416 / build / git diff --check 全绿。未提交未推送，等所有者决策。
 - 左侧裁切修复（同日追加）：根因定位为世界状态工作区在窄容器下的横向溢出——`overflow-y:auto` 使 overflow-x 按规范计为 auto，焦点落到换行字段行右缘时浏览器自动持久横向滚动（scrollLeft），整面板呈现左侧裁切；flex 项默认 `min-width:auto` 加剧溢出。修复：`S.root` 补 `width:100%/minWidth:0`，`S.scroll` 显式 `overflowX:'hidden'`。内置浏览器真机 A/B 复验（图标轨/展开侧栏 × 右栏开合 × 字段聚焦）均渲染正常。质量门复跑全绿。
+
+
+### 世界线 v2 重做：研究、决策落盘与开工（2026-09-25，feat/worldline-v2）
+
+- 重做前双份勘察（源码 + 宿主 0.1.6-alpha.2 逐条核实）：现有实现确认 6 项结构性 bug——digest 500 上限与 fork 切口计算冲突、异步徽标糊尾节点、徽标只增不删、冷线挂父线尾部、「读档」只开会话末尾、V2 时间线零接入。宿主侧确认：无会话删除/回退 API（软归档为唯一清理）、无 fork 事件（`session/created` + `header.parentSession/isSeeded` 推断）、`sessionQuery.traceSession/readSession` 可拿冷线真实切口、`conversation.view` 可注册第三视图、宿主原生「轨迹」= 单会话执行轨迹（与世界线互补不替代）。
+- 决策落盘：DECISIONS.md 新增 **D24**（16 题拷问访谈全部按建议锁定：双栏视图替代 galgame SVG、拓扑与 digest 解耦、徽标全量重建 + `stateFoldSeq`/`summaryTurn` 对齐、时间线 provenance 接入、fork 切口标记走父线 `source.rrp.worldlineForkCut` 追加、冷线精确切口/位置未知诚实标注、读档诚实语义 = 查看该回合 + 从此分叉）；GLOSSARY §3 新增 分叉切口 / 节点徽标 / 从此分叉 / 位置未知。
+- 规格与票据：`.scratch/worldline-v2/spec.md`（契约到字段级）+ 票据 01（服务端数据层）/ 02（客户端双栏重写）/ 03（集成验收）。Ready-to-code gate 已过：无新事件类型（切口标记走既有 `user/message` source.rrp）、不自建分支库、不同步读日志、D21 各自渲染面、D10 拓扑只映射宿主 fork。
+- 契约类型已先落盘：`src/worldline-digest.ts`（v2 词汇：绝对回合计数 nextTurn/firstLocalTurn/forkCuts/meta/seedTurnsOf）、`src/worldline-tree.ts`（fact/node 增 seedKnown/headTurn/isHead/meta）、`src/state-payload.ts`（RrpStatePayload 增 worldlineForkCut）。发现并已纳入规格的关键护栏：transcript 投影 payload 分支对**任何** payload 消息推进 `lastStateSeq`，纯切口标记会误导 Chronicler 跳过未推演正文——改为仅 `worldState`/`summary` 键推进。
+- 分支 `feat/worldline-v2` 已从 main（a64b52a）切出，进入票据 01 实现。
