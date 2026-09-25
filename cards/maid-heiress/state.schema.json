@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "fields": [
+    {
+      "id": "affinity",
+      "label": "好感",
+      "appliesTo": ["character"],
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 100,
+      "order": 10,
+      "component": "gauge",
+      "visibility": "player"
+    },
+    {
+      "id": "condition",
+      "label": "当前状态",
+      "appliesTo": ["character"],
+      "type": "string",
+      "order": 20,
+      "component": "textarea",
+      "visibility": "player"
+    },
+    {
+      "id": "location",
+      "label": "地点",
+      "appliesTo": ["scene"],
+      "type": "string",
+      "order": 10,
+      "component": "text",
+      "visibility": "player"
+    },
+    {
+      "id": "time",
+      "label": "时间",
+      "appliesTo": ["scene"],
+      "type": "string",
+      "order": 20,
+      "component": "text",
+      "visibility": "player"
+    },
+    {
+      "id": "weather",
+      "label": "天气",
+      "appliesTo": ["scene"],
+      "type": "string",
+      "order": 30,
+      "component": "textarea",
+      "visibility": "player"
+    },
+    {
+      "id": "mia_is_maid",
+      "label": "米娅已成为贴身女仆",
+      "appliesTo": ["global"],
+      "type": "boolean",
+      "component": "toggle",
+      "visibility": "player"
+    },
+    {
+      "id": "cecilia_allowance",
+      "label": "塞西莉亚承诺定期提供生活费",
+      "appliesTo": ["global"],
+      "type": "boolean",
+      "component": "toggle",
+      "visibility": "player"
+    },
+    {
+      "id": "mia_identity",
+      "label": "米娅的真实身份",
+      "appliesTo": ["global"],
+      "type": "string",
+      "component": "textarea",
+      "visibility": "model"
+    }
+  ]
+}

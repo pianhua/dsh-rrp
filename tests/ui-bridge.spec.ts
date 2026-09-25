@@ -6,7 +6,10 @@ describe('card app bridge protocol', () => {
   it('accepts exactly the verbs a card app may raise', () => {
     expect(parseUiCall({ t: 'rrp:hello' })).toEqual({ t: 'rrp:hello' })
     expect(
-      parseUiCall({ t: 'rrp:correct_state', patch: { flags: { 已摊牌: true } } }),
+      parseUiCall({
+        t: 'rrp:correct_state',
+        patch: { globalFields: { identity_revealed: { type: 'boolean', value: true } } },
+      }),
     ).toMatchObject({ t: 'rrp:correct_state' })
     expect(parseUiCall({ t: 'rrp:ask_copilot', question: '现在怎么办' })).toMatchObject({
       t: 'rrp:ask_copilot',

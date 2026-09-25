@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as client from '../src/client/index.ts'
 import type { CardPack } from '../src/card-types.ts'
 import { RRP_ROUTES } from '../src/route-contract.ts'
+import { referenceConflictFromBody } from '../src/client/world-state-workspace.tsx'
 
 /** Minimal fake of the client Context: records every registration. */
 function fakeContext() {
@@ -242,6 +243,24 @@ describe('dsh-rrp client half', () => {
       message: 'gallery.workspaceFallback',
     })
     expect(creates).toEqual([{}])
+  })
+
+  it('registers WorldState in the conversation view and keeps the native sidebar entry', () => {
+    const { ctx, types, bodies } = fakeContext()
+    client.apply(ctx as never)
+    const worldStateType = types.find((entry) => entry.kind === 'dsh-rrp-worldstate')
+    expect(worldStateType?.id).toBe('dsh-rrp/world-state')
+    const worldStateViews = bodies.filter((entry) => entry.name === 'conversation.view')
+    expect(worldStateViews.some((entry) => entry.id === 'dsh-rrp/world-state')).toBe(true)
+    const sidebar = bodies.find(
+      (entry) => entry.name === 'sidebar.right.pane.tab' && entry.key === 'dsh-rrp/world-state',
+    )
+    expect(sidebar).toBeDefined()
+  })
+
+  it('parses a correction reference conflict for the confirmation flow', () => {
+    expect(referenceConflictFromBody({ details: { objectId: 'mia' } })).toEqual({ objectId: 'mia' })
+    expect(referenceConflictFromBody({ details: { references: [] } })).toBeUndefined()
   })
 
   it('registers the Stage panel as a conversation view with the two-action API only', () => {

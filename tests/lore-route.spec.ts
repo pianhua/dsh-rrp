@@ -7,7 +7,7 @@ import { parseWhen, type TriggerDef, type WhenCondition } from '../src/lore-cond
 import { RRP_LORE_KEY, applyLoreChange, type LoreEntry } from '../src/lore-state.ts'
 import { rrpPayloadOf } from '../src/state-payload.ts'
 import { TRANSCRIPT_KEY, emptyTranscriptSlice } from '../src/transcript.ts'
-import { emptyWorldState, type WorldState } from '../src/world-state.ts'
+import { createDynamicField, emptyWorldState, type WorldState } from '../src/world-state.ts'
 import { transcriptProjections } from './stubs/transcript-projections.ts'
 
 /** Minimal fake host with synchronous projection folding, like Session.append. */
@@ -377,7 +377,19 @@ describe('lore route (D8)', () => {
 
   it('GET reports card triggers with active flags and the injected character budget', async () => {
     const card: CardContext = { id: 'trig-lore-card', name: '触发卡', persona: '', worldCore: '' }
-    const state: WorldState = { ...emptyWorldState(), characters: { 米娅: { affinity: 50 } } }
+    const state: WorldState = {
+      ...emptyWorldState(),
+      trackedObjects: {
+        mia: {
+          id: 'mia',
+          kind: 'character',
+          name: '米娅',
+          character: { affinity: 50 },
+          fields: {},
+        },
+      },
+      globalFields: { threshold: createDynamicField('number', 50) },
+    }
     const mustCond = (src: string): WhenCondition => {
       const parsed = parseWhen(src, '测试')
       if (parsed instanceof Error) throw parsed
@@ -386,13 +398,13 @@ describe('lore route (D8)', () => {
     const warm: TriggerDef = {
       id: 'mia-warm',
       name: '温热',
-      condition: mustCond('characters.米娅.affinity >= 40'),
+      condition: mustCond('trackedObjects.mia.character.affinity >= 40'),
       excerpt: 'abc',
     }
     const intimate: TriggerDef = {
       id: 'mia-intimate',
       name: '亲密',
-      condition: mustCond('characters.米娅.affinity >= 80'),
+      condition: mustCond('trackedObjects.mia.character.affinity >= 80'),
       excerpt: 'defgh',
     }
     seedCardTriggersForTesting(card.id, [warm, intimate])

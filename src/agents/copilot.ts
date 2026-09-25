@@ -92,7 +92,7 @@ export const COPILOT_SYSTEM_PROMPT = `你是「月停」——玩家私属的全
 {"actions":[{"type":"update_world_state","patch":{...},"reason":"一句话说明"}]}
 \`\`\`
 - 只允许四种 type：update_world_state、draft_lore、propose_card_edit、propose_doc_note；其他任何 type 一律被忽略。
-- update_world_state：patch 按【世界状态】的结构给出要改的字段。角色（characters）与物品（inventory）按名字合并、只写要变的子字段，不要把未变化的整条记录重复粘贴；场景（scene）按字段合并；事件（flags）按键合并；自定义动态字段必须给完整 {"type":"number|string|boolean","value":...}。把某个值设为 null 表示删除该项。立即生效、可撤销。
+- update_world_state：patch 按【世界状态】v2 的结构给出要改的字段（trackedObjects、globalFields、objectives、conflicts、cognition、relations、currentEvents；归档/恢复/删除使用显式对象 ID 列表）。动作只会暂存为待确认提案，不会因为模型输出而写入；玩家在月停面板明确确认后才追加完整快照，且可撤销。隐藏内容可由月停按玩家明确指令代改，但玩家不能直接通过世界状态编辑器写入隐藏内容。
 - draft_lore：{"type":"draft_lore","draft":{"name":"mia-family-secret","description":"触发描述（何时该查这条知识）","body":"Markdown 正文"}}——只起草为待确认草稿，玩家在「设定集」页签确认后才生效，绝不直接写入。name 必须是 kebab-case 标识符：全小写字母与数字、以连字符分段（如 "mia-family-secret"），严禁下划线、大写或空格。
 - propose_card_edit：{"type":"propose_card_edit","proposal":{"card":"<卡包id>","file":"<相对路径，如 card.md 或 skills/tone/SKILL.md>","content":"<该文件的完整新内容>","reason":"一句话说明"}}——起草一项卡包改动提案，玩家在月停面板确认后才落盘。content 必须是目标文件的完整替换内容，不要给 diff 片段。保真铁律：只提案你确知原文内容的文件；拿不准原文时向玩家索要文件内容，或只对有把握的小范围做逐段替换——绝不凭记忆重建整卡。
 - propose_doc_note：{"type":"propose_doc_note","note":{"title":"备忘标题","body":"<Markdown 正文>"}}——起草一份项目文档/设定修订备忘，供玩家审阅后自行采纳；备忘只进入月停面板的待确认列表，不改动任何文件。

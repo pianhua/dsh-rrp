@@ -16,10 +16,20 @@ const SUMMARY: MacroSummary = { goal: '目标', conflict: '矛盾', turningPoint
 /** A state whose rendered size measures exactly `tokens` tokens. */
 function stateWithTokens(tokens: number): WorldState {
   const probe = emptyWorldState()
-  probe.characters = { 占位角色: { mood: '' } }
+  probe.trackedObjects = {
+    placeholder: {
+      id: 'placeholder',
+      kind: 'character',
+      name: '占位角色',
+      character: { emotionalState: '' },
+      fields: {},
+    },
+  }
   const baseChars = renderWorldState(probe).length
   const targetChars = Math.floor(tokens * 3.2)
-  probe.characters['占位角色'] = { mood: 'x'.repeat(Math.max(0, targetChars - baseChars)) }
+  probe.trackedObjects.placeholder.character = {
+    emotionalState: 'x'.repeat(Math.max(0, targetChars - baseChars)),
+  }
   return probe
 }
 

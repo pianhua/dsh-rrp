@@ -1,115 +1,223 @@
 import { describe, expect, it } from 'vitest'
-import { summaryProjection } from '../src/projection/summary.ts'
-import { settingsProjection } from '../src/projection/settings.ts'
-import { loreProjection } from '../src/projection/lore.ts'
 import { worldStateProjection } from '../src/projection/world-state.ts'
+import { worldStateTimelineProjection } from '../src/projection/world-state-timeline.ts'
 import { rrpStateMessage } from '../src/state-payload.ts'
-import { emptyWorldState } from '../src/world-state.ts'
+import { emptyWorldState, type WorldState } from '../src/world-state.ts'
+import { type WorldStateTimelineBatch } from '../src/world-state-timeline.ts'
 
-/** One synthetic committed session event (non-RP noise is a plain known event). */
 function event(type: string, data: unknown, seq: number) {
-  return { type, seq, time: 0, data }
+  return { type, seq, data }
 }
 
-/** One state-bearing context message (the only way our state enters the log). */
-function stateEvent(payload: Record<string, unknown>, seq: number) {
-  return event('user/message', rrpStateMessage('m' + seq, 'context', payload), seq)
+function stateEvent(worldState: WorldState, batch?: WorldStateTimelineBatch, seq = 0) {
+  return event(
+    'user/message',
+    rrpStateMessage('m' + seq, 'context', { worldState, worldStateTimelineBatch: batch }),
+    seq,
+  )
 }
 
-/** Fold a projection unit from its init over a whole log (as the host does). */
-function fold(
-  definition:
-    | typeof worldStateProjection
-    | typeof summaryProjection
-    | typeof settingsProjection
-    | typeof loreProjection,
-  events: ReturnType<typeof event>[],
-) {
-  let state = (definition as { init(): unknown }).init()
-  for (const item of events) {
-    state = (definition as { apply(s: unknown, e: unknown): unknown }).apply(state, item)
-  }
-  return state as Record<string, any>
+function fold(definition: any, events: Array<{ type: string; data: unknown }>): any {
+  let state = definition.init()
+  for (const item of events) state = definition.apply(state, item)
+  return state
 }
 
-// A parent log: two WorldState snapshots and one macro summary, plus noise.
-const prefix = [
-  event('turn/start', { turn: 1 }, 0),
-  stateEvent({ worldState: { ...emptyWorldState(), scene: { location: '归离客栈' } } }, 1),
-  event('assistant/message', {}, 2),
-  stateEvent(
-    { worldState: { ...emptyWorldState(), scene: { location: '枯河滩' }, flags: { 受伤: true } } },
-    3,
-  ),
-  stateEvent(
-    { summary: { goal: '北行', conflict: '沙盗', turningPoints: ['离开客栈'], threads: [] } },
-    4,
-  ),
-]
+const initial = {
+  ...emptyWorldState(),
+  trackedObjects: {
+    mia: { id: 'mia', kind: 'character' as const, name: '米娅', fields: {} },
+  },
+}
+const baseline: WorldStateTimelineBatch = {
+  kind: 'baseline',
+  snapshot: 'initial-state',
+  provenance: { actor: 'initial-state', at: 'unknown' },
+  origin: 'local',
+}
+const localA: WorldStateTimelineBatch = {
+  kind: 'changes',
+  changes: [
+    { type: 'modified', objectId: 'mia', field: 'character.present', before: true, after: false },
+  ],
+  provenance: { actor: 'player', storyTurn: 2 },
+  origin: 'local',
+}
+const localB: WorldStateTimelineBatch = {
+  kind: 'changes',
+  changes: [
+    { type: 'modified', objectId: 'mia', field: 'character.present', before: true, after: true },
+  ],
+  provenance: { actor: 'chronicler', storyTurn: 2 },
+  origin: 'local',
+}
 
-describe('worldline replay (fork) correctness', () => {
-  it('reconstructs the parent terminal slice by replaying the inherited prefix', () => {
+describe('WorldState v2 fork replay', () => {
+  it('replays complete snapshots and timeline batches from the physical prefix', () => {
+    const prefix = [stateEvent(initial, baseline, 1)]
     const state = fold(worldStateProjection, prefix)
-    const summary = fold(summaryProjection, prefix)
-    expect(state.scene.location).toBe('枯河滩')
-    expect(state.flags['受伤']).toBe(true)
-    expect(summary?.goal).toBe('北行')
+    const timeline = fold(worldStateTimelineProjection, prefix)
+    expect(state.trackedObjects.mia?.name).toBe('米娅')
+    expect(timeline.batches).toEqual([baseline])
   })
 
-  it('keeps sibling branches independent (no cross-branch leakage)', () => {
+  it('keeps sibling state and timeline branches independent', () => {
+    const prefix = [stateEvent(initial, baseline, 1)]
     const branchA = [
       ...prefix,
       stateEvent(
-        { worldState: { ...emptyWorldState(), scene: { location: 'A 分支' } } },
-        prefix.length,
+        {
+          ...initial,
+          trackedObjects: {
+            ...initial.trackedObjects,
+            mia: { ...initial.trackedObjects.mia!, character: { presence: 'absent' } },
+          },
+        },
+        localA,
+        2,
       ),
     ]
     const branchB = [
       ...prefix,
       stateEvent(
-        { worldState: { ...emptyWorldState(), scene: { location: 'B 分支' } } },
-        prefix.length,
+        {
+          ...initial,
+          trackedObjects: {
+            ...initial.trackedObjects,
+            mia: { ...initial.trackedObjects.mia!, character: { presence: 'present' } },
+          },
+        },
+        localB,
+        2,
+      ),
+    ]
+    expect(fold(worldStateProjection, branchA).trackedObjects.mia?.character?.presence).toBe(
+      'absent',
+    )
+    expect(fold(worldStateProjection, branchB).trackedObjects.mia?.character?.presence).toBe(
+      'present',
+    )
+    expect(fold(worldStateTimelineProjection, branchA).batches).toEqual([baseline, localA])
+    expect(fold(worldStateTimelineProjection, branchB).batches).toEqual([baseline, localB])
+    expect(fold(worldStateTimelineProjection, prefix).batches).toEqual([baseline])
+  })
+
+  it('inherits only the physical fork prefix and preserves explicit origin metadata', () => {
+    const inheritedPrefixBatch: WorldStateTimelineBatch = {
+      ...baseline,
+      origin: 'inherited',
+    }
+    const parentLateBatch: WorldStateTimelineBatch = {
+      kind: 'changes',
+      changes: [
+        {
+          type: 'modified',
+          objectId: 'mia',
+          field: 'character.presence',
+          before: 'present',
+          after: 'absent',
+        },
+      ],
+      provenance: { actor: 'chronicler', storyTurn: 3 },
+      origin: 'local',
+    }
+    const childLocalBatch: WorldStateTimelineBatch = {
+      kind: 'changes',
+      changes: [
+        {
+          type: 'modified',
+          objectId: 'mia',
+          field: 'character.presence',
+          before: 'present',
+          after: 'unknown',
+        },
+      ],
+      provenance: { actor: 'player', storyTurn: 2 },
+      origin: 'local',
+    }
+    const prefix = [stateEvent(initial, inheritedPrefixBatch, 1)]
+    const parent = [
+      ...prefix,
+      stateEvent(
+        {
+          ...initial,
+          trackedObjects: {
+            ...initial.trackedObjects,
+            mia: { ...initial.trackedObjects.mia!, character: { presence: 'absent' } },
+          },
+        },
+        parentLateBatch,
+        3,
+      ),
+    ]
+    const child = [
+      ...prefix,
+      stateEvent(
+        {
+          ...initial,
+          trackedObjects: {
+            ...initial.trackedObjects,
+            mia: { ...initial.trackedObjects.mia!, character: { presence: 'unknown' } },
+          },
+        },
+        childLocalBatch,
+        2,
       ),
     ]
 
-    expect(fold(worldStateProjection, branchA).scene.location).toBe('A 分支')
-    expect(fold(worldStateProjection, branchB).scene.location).toBe('B 分支')
-    // Replaying the shared prefix is unaffected by either branch's own writes.
-    expect(fold(worldStateProjection, prefix).scene.location).toBe('枯河滩')
-  })
-
-  it('is deterministic: the same log folds to the same slice', () => {
-    expect(fold(worldStateProjection, prefix)).toEqual(fold(worldStateProjection, prefix))
-    expect(fold(summaryProjection, prefix)).toEqual(fold(summaryProjection, prefix))
-  })
-
-  it('inherits summary settings through the fork prefix and isolates later changes', () => {
-    const shared = [...prefix, stateEvent({ settings: { summaryEnabled: false } }, 5)]
-    const branchA = [...shared, stateEvent({ settings: { summaryEnabled: true } }, 6)]
-    const branchB = [...shared]
-
-    expect(fold(settingsProjection, shared).summaryEnabled).toBe(false)
-    expect(fold(settingsProjection, branchA).summaryEnabled).toBe(true)
-    expect(fold(settingsProjection, branchB).summaryEnabled).toBe(false)
-  })
-
-  it('inherits lore before a fork and isolates branch-local additions', () => {
-    const inherited = { name: 'shared-lore', description: 'shared', body: '# Shared' }
-    const onlyA = { name: 'branch-a-lore', description: 'A', body: '# A' }
-    const shared = [...prefix, stateEvent({ sediment: { kind: 'add', skill: inherited } }, 5)]
-    const branchA = [...shared, stateEvent({ sediment: { kind: 'add', skill: onlyA } }, 6)]
-    const branchB = [
-      ...shared,
-      stateEvent({ sediment: { kind: 'remove', name: inherited.name } }, 6),
-    ]
-
-    expect(fold(loreProjection, shared).map((entry: { name: string }) => entry.name)).toEqual([
-      'shared-lore',
+    expect(fold(worldStateProjection, parent).trackedObjects.mia?.character?.presence).toBe(
+      'absent',
+    )
+    expect(fold(worldStateProjection, child).trackedObjects.mia?.character?.presence).toBe(
+      'unknown',
+    )
+    expect(fold(worldStateTimelineProjection, child).batches).toEqual([
+      inheritedPrefixBatch,
+      childLocalBatch,
     ])
-    expect(fold(loreProjection, branchA).map((entry: { name: string }) => entry.name)).toEqual([
-      'shared-lore',
-      'branch-a-lore',
-    ])
-    expect(fold(loreProjection, branchB)).toEqual([])
+    expect(fold(worldStateTimelineProjection, child).batches).not.toContain(parentLateBatch)
+    expect(
+      fold(worldStateTimelineProjection, child).batches.map(
+        (batch: WorldStateTimelineBatch) => batch.origin,
+      ),
+    ).toEqual(['inherited', 'local'])
+  })
+
+  it('does not infer origin, actor, turn, or time from event sequence', () => {
+    const batch: WorldStateTimelineBatch = {
+      kind: 'changes',
+      changes: [{ type: 'added', objectId: 'mia', after: { name: '米娅' } }],
+      provenance: { actor: 'unknown' },
+    }
+    const timeline = fold(worldStateTimelineProjection, [stateEvent(initial, batch, 99)])
+    expect(timeline.batches[0]).toEqual(batch)
+    expect(
+      (timeline.batches[0] as Extract<WorldStateTimelineBatch, { kind: 'changes' }>).provenance
+        .storyTurn,
+    ).toBeUndefined()
+  })
+
+  it('is host-only and requires a complete snapshot for an atomic timeline batch', () => {
+    expect('wire' in worldStateTimelineProjection).toBe(false)
+    const current = worldStateTimelineProjection.init()
+    const next = worldStateTimelineProjection.apply(current, {
+      type: 'user/message',
+      data: rrpStateMessage('timeline-only', 'context', { worldStateTimelineBatch: localA }),
+    })
+    expect(next).toBe(current)
+    const invalidSnapshot = worldStateTimelineProjection.apply(
+      current,
+      stateEvent({ ...initial, version: 1 } as unknown as WorldState, localA, 3),
+    )
+    expect(invalidSnapshot).toBe(current)
+  })
+
+  it('rejects an invalid timeline batch without mutating the folded timeline', () => {
+    const current = worldStateTimelineProjection.init()
+    const next = worldStateTimelineProjection.apply(
+      current,
+      stateEvent(initial, { kind: 'changes', changes: [], provenance: { actor: 'player' } }, 3),
+    )
+    expect(next).toBe(current)
   })
 })

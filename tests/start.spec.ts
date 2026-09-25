@@ -1,10 +1,23 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { forgetActivity, readActivity } from '../src/activity.ts'
 import { forgetState } from '../src/state-publisher.ts'
 import { registerStartRoute } from '../src/start.ts'
 import { emptyWorldState } from '../src/world-state.ts'
 
-const STATE = { ...emptyWorldState(), scene: { location: '平民公寓 · 门口' } }
+const STATE = {
+  ...emptyWorldState(),
+  trackedObjects: {
+    scene: {
+      id: 'scene',
+      kind: 'scene' as const,
+      name: '平民公寓 · 门口',
+      fields: {},
+    },
+  },
+}
 const OPENING = '周末的清晨……'
 
 /** Minimal fake host: records appended events and the registered route. */
@@ -89,6 +102,12 @@ describe('card start route', () => {
     // then the opening LAST so the live follow stream ends on it.
     expect(host.appended.map((entry) => entry.type)).toEqual(['user/message', 'assistant/message'])
     expect(payloadOf(host.appended[0]?.data)?.worldState).toEqual(STATE)
+    expect(payloadOf(host.appended[0]?.data)?.worldStateTimelineBatch).toEqual({
+      kind: 'baseline',
+      snapshot: 'initial-state',
+      provenance: expect.objectContaining({ actor: 'initial-state' }),
+      origin: 'local',
+    })
 
     const activity = readActivity('s1')
     expect(activity.entries.map((entry) => entry.phase)).toEqual(['committed'])
@@ -226,6 +245,56 @@ describe('card start route', () => {
     })
     await selected.route()!.handler(currentProjection.req, currentProjection.res)
     expect(currentProjection.res.statusCode).toBe(200)
+  })
+
+  it('hydrates protected card initial state when the browser sends a filtered snapshot', async () => {
+    const previousHome = process.env.DSH_HOME
+    const home = mkdtempSync(join(tmpdir(), 'dsh-rrp-start-hidden-'))
+    try {
+      process.env.DSH_HOME = home
+      const card = join(home, '.dsh-rrp', 'cards', 'secret-card')
+      mkdirSync(card, { recursive: true })
+      writeFileSync(card + '/card.md', '---\nid: secret-card\nname: 秘密卡\n---\n\n公开核心')
+      writeFileSync(
+        card + '/state.json',
+        JSON.stringify({
+          version: 2,
+          trackedObjects: {},
+          globalFields: {
+            secret: {
+              type: 'string',
+              value: '隐藏初始状态',
+              definition: 'card-defined',
+              visibility: 'hidden',
+            },
+          },
+          objectives: [],
+          conflicts: [],
+          cognition: [],
+          relations: [],
+          currentEvents: [],
+        }),
+      )
+      const host = fakeHost({ preset: 'rp-secret-card' })
+      registerStartRoute(host.ctx as never)
+      const { req, res } = exchange({
+        sessionId: 's1',
+        card: { id: 'secret-card', name: '秘密卡', persona: '', worldCore: '' },
+        state: emptyWorldState(),
+      })
+      await host.route()!.handler(req, res)
+      expect(res.statusCode).toBe(200)
+      const stateMessage = host.appended.find(
+        (entry) => payloadOf(entry.data)?.worldState !== undefined,
+      )
+      expect(payloadOf(stateMessage?.data)?.worldState).toMatchObject({
+        globalFields: { secret: { value: '隐藏初始状态' } },
+      })
+    } finally {
+      if (previousHome === undefined) delete process.env.DSH_HOME
+      else process.env.DSH_HOME = previousHome
+      rmSync(home, { recursive: true, force: true })
+    }
   })
 
   it('does not append the opening or report success when initial state fails', async () => {

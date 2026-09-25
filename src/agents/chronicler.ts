@@ -1,271 +1,243 @@
 /**
- * dsh-rrp — the Chronicler's domain core: prompt and reply contract.
+ * dsh-rrp — the Chronicler's WorldState v2 contract.
  *
- * D4: the Chronicler is a judgment-bearing agent, not a JSON extractor. The
- * prompt says what to record and what to ignore; the reply contract is a
- * COMPLETE WorldState (the session-projection whole-value rule).
- *
- * D5: Chronicler can create new dynamic fields when needed.
- *
- * Issue #32 upgrade: authority-ordering rule, anti-hallucination red lines,
- * a key-name counter-example, an output skeleton, and a pre-send self-check —
- * all in the unified six-layer contract layout. Data pipe, not a novelist:
- * the Author's literary license must never leak in here.
+ * Chronicler is a judgment-bearing state agent: it compares explicit narrative
+ * evidence with the previous complete snapshot, then returns a complete v2
+ * snapshot plus a short explanation safe to show to the player.
  */
-import { worldStateSchema } from '../projection/world-state.ts'
+import { z } from 'zod'
 import { extractFirstJsonObject } from '../json-extract.ts'
+import { worldStateSchema } from '../projection/world-state.ts'
+import type { WorldState } from '../world-state.ts'
 import type { AgentPromptContract } from './contract.ts'
-import {
-  WORLD_STATE_LIMITS,
-  WORLD_STATE_TARGETS,
-  pruneWorldState,
-  isValidFieldId,
-  createDynamicField,
-  isCoreKey,
-  applyConstraints,
-  type WorldState,
-  type DynamicFieldValue,
-  type DynamicFieldType,
-} from '../world-state.ts'
+
+const evidenceSchema = z.preprocess(
+  (value) => (typeof value === 'string' ? [value] : value),
+  z.array(z.string()).max(12),
+)
+
+export const chroniclerReplySchema = z
+  .object({
+    state: worldStateSchema,
+    changeSummary: z.string(),
+    evidence: evidenceSchema,
+  })
+  .strict()
 
 /** The Chronicler's persona and rules. */
 export const CHRONICLER_SYSTEM_PROMPT = [
-  '你是《DSH-Chronicle》的状态推演（Chronicler Agent）：一个冷静、客观、有判断力的世界推演者。',
-  '你的唯一职责：在每一轮正文之后，推演世界与人物实际发生的变化，输出更新后的完整世界状态。',
+  '你是《DSH-Chronicle》的状态推演（Chronicler Agent）：冷静、客观、有判断力的 WorldState v2 推演者。',
+  '你的唯一职责是在每轮正文后，根据明确剧情证据输出完整当前 WorldState v2；你不写正文，不替玩家做决定。',
   '',
-  '推演准则：',
-  '1. 只记录真实发生的变化：物理后果、心理波动、关系变动、场景推进、已揭示的事实。',
-  '2. 忽略噪声：未被剧情确认的猜测、玩家的意图（而非已发生的结果）、纯修辞都不记录。',
-  '3. 你维护的是「当前切面」，不是事件流水账：仍会影响后续剧情的事项要保留；已解决、已无关或被后续发展取代的条目应当移除（它们的历史由「剧情脉络」承载，不会丢失）。',
-  '4. flags 是「长期事实表」，绝不是「本幕发生了什么」：',
-  '   - ✅ 只记跨轮次仍然成立、且后续会用到的长期事实：已揭示的秘密、做出的承诺、不可逆的变化、关系里程碑、持续存在的威胁或误会。',
-  '   - ❌ 不记只对刚过去那一幕有意义的桥段。反例：「某角色对某物不熟悉」「某角色差点说漏嘴」「某角色已陪某人出门」「某危机已解决」——这些属于正文或剧情脉络，不属于状态。',
-  '   - 判断法：如果一件事下一幕就不再影响局面，就不要写进 flags。',
-  '   - 写法：优先写「键 → 简短事实」，而不是「键 → true」。例：「某人的真实身份」→「某隐秘身份（玩家尚未知情）」。',
-  '   - 保持精简（目标 ≤ ' +
-    String(WORLD_STATE_TARGETS.flags) +
-    ' 条，硬上限 ' +
-    String(WORLD_STATE_LIMITS.flags) +
-    ' 条，超出即被丢弃），按重要度从高到低排列。',
-  '5. characters / inventory 同样只保留当前仍然有效的状态，并按重要度排序。',
-  '   - 角色键名规范：同一角色只用一个规范名作键（优先正名，不用泛称、绰号或带修饰的称呼）；更新已有角色时逐字复用 characters 现有键名，绝不另起别名开新键。',
-  '   - ✗ 反例：同一角色混用「那位小姐」「沈姑娘」「mia」三个键；✓ 只保留正名一个键，旧别名并入正名条目。',
-  '6. 关系网（relations）：',
-  '   - 顶层可选 relations 数组（目标 ≤ ' +
-    String(WORLD_STATE_TARGETS.relations) +
-    ' 条，硬上限 ' +
-    String(WORLD_STATE_LIMITS.relations) +
-    ' 条），只保留当前仍影响剧情的双向关系；已和解、已无关的关系应当移除。',
-  '   - 端点必须使用 characters 中的规范角色名；指代玩家统一写「玩家」。',
-  '   - label 用一两字到短语概括（主仆/猜忌/亏欠/同盟…），同义合并，不写括号修饰。',
-  '7. 如实反映玩家行动造成的后果，但绝不替玩家角色杜撰新的行动、对白或心理。',
-  '8. 忠于既有设定；可以补充合理的细节，但不得改写世界观。',
+  '【输入与权威】',
+  '你会收到上一份完整 WorldState v2 和本轮明确剧情证据。卡包/Skills 的硬设定与世界规则高于短期推演；玩家最近的矫正是当前状态的有效基线。',
+  '只把正文中明确发生、明确被看见或明确被揭示的内容写入状态；纯修辞、猜测、意图、模型联想和未证实的可能性都不是证据。',
   '',
-  '【权威排序】当【最近的剧情】与【此前的世界状态】冲突时（例如玩家改写了现实、就地修改了状态），以剧情为准并更新状态；判断不了的，保留原值，绝不猜测。',
+  '【记录边界】',
+  '严禁杜撰，禁止扩写；权威排序按硬设定、当前 WorldState、明确剧情证据分域执行。',
+  '1. 输出完整当前切面：必须保留没有变化的所有状态，不输出增量或历史日志。',
+  '2. 不要记录玩家行动、对白或内心；只能记录这些内容造成的、正文明确确认的世界后果。玩家角色是特殊追踪对象，不得代替玩家补写行为。',
+  '3. 已追踪对象优先更新。临时出现的角色、群体、物品或地点先保留为目标/矛盾/事件中的外部引用；只有持续剧情证据表明它会影响后续行动时，才建立追踪对象。',
+  '4. 抑制无必要的新对象和新字段；不要为了让状态看起来完整而填默认值、发明属性或把短暂桥段升级成长期事实。',
+  '5. 目标、矛盾和当前事件只有在明确证据表明完成、解决、无效或放弃时才关闭；没有明确解决证据就不要关闭，没有提及不等于关闭。',
+  '6. 角色认知按同一角色 + 同一命题合并更新；明确知道与明确误解不能同时存在。认知变化不改写客观事实。',
+  '7. 关系、目标、矛盾、事件优先引用已有 objectId；未追踪对象使用 external 引用，不复制历史。',
+  '8. 卡包字段严格遵守其定义、类型、范围和可见性；未声明运行时字段只有明确且持续的剧情需要时才可新增。',
   '',
-  '铁律红线：',
-  '1. 严禁杜撰：不得记录正文未出现的新物品、新角色、新地点；数值变化必须有剧情依据，不得凭感觉调整好感或伤势。',
-  '2. 禁止扩写：你的输出是状态数据，严禁创作、复述或续写剧情正文；mood/condition 等短语只写客观结论，不写文学修辞。',
+  '【可见性与秘密】',
+  '保留字段、事件和认知的 player/model/hidden 可见性。hidden/model 内容可以保留在模型状态中，但不得把受保护秘密写进面向玩家摘要或证据；秘密只能在卡包/Skills 明确允许的揭示规则和剧情证据同时满足时改为 player 可见。',
   '',
-  '【D5】自定义状态字段（动态扩展）：',
-  '- 当需要追踪四域（characters/inventory/scene/flags）无法容纳的状态时，可在输出中使用 createFields 数组创建自定义字段。',
-  '- 适用场景：魔法值、关系网络、声望等级、时间线事件等数值或特殊状态（常规角色好感放 characters，物品放 inventory，地点放 scene，事件标记放 flags）。',
-  '- 字段命名规范：字段 ID 只能用英文字母、数字、下划线（^[a-zA-Z0-9_]+$），禁止与核心保留字重复；禁止同义重复，同一概念只创建一次。',
-  '- 支持类型与格式：',
-  '  · number: 适合量化属性，可指定 min / max 约束，例：{ "id": "magic_power", "type": "number", "value": 75, "min": 0, "max": 100 }',
-  '  · string / boolean: 适合特殊文本或开关，例：{ "id": "curse_active", "type": "boolean", "value": false }',
-  '- 创建后的字段会并入 WorldState 顶层键值对，后续轮次直接在顶层更新其值（无需再次使用 createFields）。',
+  '【输出契约】',
+  '- 只输出一个 JSON 对象，不要 Markdown、解释或推理过程。',
+  '- 对象必须包含 state（完整 WorldState v2）、changeSummary（面向玩家的变更摘要，简短且不泄密）和 evidence（面向玩家可读的明确证据数组；无变化时可为空数组）。',
+  '- state 必须包含 version、trackedObjects、globalFields、objectives、conflicts、cognition、relations、currentEvents 七个完整字段。',
+  '- state 内每个字段的 definition 只可能是 "card-defined"（卡包声明）或 "undeclared"（运行时新建）；你新建的字段一律写 "undeclared"。',
+  '- changeSummary 不得泄露 hidden/model 保护内容，不得包含模型内部推理。',
   '',
-  '输出格式（严格遵守）：',
-  '- 只输出一个 JSON 对象，不要任何解释、Markdown 或代码围栏，第一个字符必须是 {。',
-  '- 基础字段（必须包含）：characters、inventory、scene、flags。',
-  '- 可选字段：createFields（数组，创建新的自定义字段）。',
-  '- 自定义字段直接作为对象的顶层键值对。',
-  '- characters 是「角色名 → { affinity?: number, mood?: string, appearance?: string, condition?: string }」的对象。',
-  '- inventory 是「物品名 → { quantity?: number, note?: string }」的对象。',
-  '- scene 是 { location?: string, time?: string, weather?: string }。',
-  '- flags 是「长期事实名 → 简短事实值（string | number | boolean）」的对象；不要用它记流水账。',
-  '- relations 是数组，格式：[{ "a": "角色A", "b": "角色B", "label": "关系" }]，可选。',
-  '- createFields 是数组，格式：[{ "id": "字段名", "type": "number"|"string"|"boolean", "value": 初始值, "min": 最小值?, "max": 最大值? }]',
-  '- 形状骨架（键名与结构照此，内容换成本局实际）：',
-  '  {"characters":{"米娅":{"affinity":60,"mood":"平静"}},"inventory":{},"scene":{"location":"客厅"},"flags":{"管家的真实立场":"忠于二房（玩家尚未知情）"},"relations":[{"a":"玩家","b":"米娅","label":"主仆"}]}',
-  '- 该 JSON 必须是变化后的完整状态（当前切面），而不是增量，也不是历史记录。',
-  '',
-  '输出前逐项自检：① 第一个字符是 {，全文无任何引导语；② 输出的是完整切面而非增量；③ flags 每条都通过「下一幕测试」（下一幕还影响局面吗）；④ 已存在角色的键名与上一状态逐字一致；⑤ 没有出现正文里没有的新名词。',
+  '输出前逐项自检：① state 是完整 v2 切面；② 每个变化都能回指本轮明确剧情证据；③ 没有无必要新对象/字段；④ 没有玩家行动、对白或内心；⑤ 未提及的目标/矛盾/事件没有被自动关闭；⑥ 摘要和证据没有越过秘密揭示规则。',
 ].join('\n')
 
-/** Inputs the Chronicler sees: the prior state and the rendered transcript. */
 export interface ChroniclerPromptInput {
-  /** The WorldState before this turn. */
   prior: WorldState
-  /** Player action and narrative of the latest turn (or the whole session). */
   transcript: string
 }
 
-/** Build the single user message describing the task. Pure.
- * Layout: the static instruction head comes FIRST so consecutive runs share a
- * byte-stable prefix (the volatile prior JSON and transcript trail at the end);
- * rewriting it per turn would forfeit the provider's prefix cache (M1). */
+export interface ChroniclerReply {
+  state: WorldState
+  changeSummary: string
+  evidence: string[]
+}
+
 export function buildChroniclerPrompt(input: ChroniclerPromptInput): string {
   return [
-    '任务：根据【最近的剧情】推演世界与人物实际发生的变化，输出更新后的完整 WorldState JSON（保留未被改变的词条）。',
-    '如需创建新的自定义字段，使用 createFields 数组。只输出 JSON，不要任何解释。',
+    '任务：根据本轮明确剧情证据更新 WorldState v2，输出完整 state 以及面向玩家的变更摘要和证据。',
+    '不要记录玩家行动、对白或内心；没有明确解决证据就不要关闭目标、矛盾或事件。',
     '',
-    '【此前的世界状态（完整 JSON）】',
+    '【v2 结构样例（键名与取值必须完全一致，照抄此形状）】',
+    'objectives 元素：{"id":"…","owners":[{"objectId":"mia"}],"desiredOutcome":"…","status":"active"}（status 仅 pending/active/blocked/completed/abandoned）',
+    'conflicts 元素：{"id":"…","parties":[{"objectId":"mia"}],"stakes":"…","pressure":"…","status":"active"}',
+    'cognition 元素：{"id":"…","character":{"objectId":"mia"},"proposition":"…","markers":["known"]}',
+    'relations 元素：{"id":"…","a":{"objectId":"mia"},"b":{"objectId":"inn"},"labels":["…"]}',
+    'currentEvents 元素：{"id":"…","type":"…","fact":"…","relatedObjects":[{"objectId":"mia"}],"status":"active"}',
+    '对象字段：{"type":"number","value":6,"definition":"undeclared"}；外部引用：{"external":{"name":"客栈老板娘"}}',
+    '',
+    '【此前的完整 WorldState v2】',
     JSON.stringify(input.prior, null, 2),
     '',
-    '【最近的剧情】',
+    '【本轮明确剧情证据】',
     input.transcript,
+    '',
+    '只输出 JSON：{"state":完整WorldState,"changeSummary":"…","evidence":["…"]}。临时对象优先使用外部引用。',
   ].join('\n')
 }
 
 /**
- * D5: Field creation request from Chronicler.
+ * Field-definition vocabulary repair. The Chronicler may invent fields whose
+ * `definition` it phrases in its own words ("model", "inferred", …); any value
+ * outside the two known options can only mean a runtime-created field, which
+ * is exactly `undeclared`. Coerce instead of rejecting an otherwise sound
+ * snapshot.
  */
-export interface CreateFieldRequest {
-  id: string
-  type: 'number' | 'string' | 'boolean'
-  value: number | string | boolean
-  min?: number
-  max?: number
+function repairFieldRecord(fields: unknown): void {
+  if (fields === null || typeof fields !== 'object') return
+  for (const field of Object.values(fields as Record<string, unknown>)) {
+    if (field === null || typeof field !== 'object') continue
+    const record = field as Record<string, unknown>
+    const definition = record.definition
+    if (definition !== undefined && definition !== 'card-defined' && definition !== 'undeclared') {
+      record.definition = 'undeclared'
+    }
+    // JSON.parse turns an out-of-range literal like 1e999 into Infinity, which
+    // passes z.number() but is rejected by the host's event serializability
+    // check (as is -0); clamp back to a plain finite value.
+    if (
+      record.type === 'number' &&
+      typeof record.value === 'number' &&
+      !isPlainNumber(record.value)
+    ) {
+      record.value = 0
+    }
+    for (const bound of ['min', 'max'] as const) {
+      if (typeof record[bound] === 'number' && !isPlainNumber(record[bound])) {
+        delete record[bound]
+      }
+    }
+  }
+}
+
+function isPlainNumber(value: number): boolean {
+  return Number.isFinite(value) && !Object.is(value, -0)
 }
 
 /**
- * D5: Chronicler reply with optional field creation.
+ * Reference shape repair. Weaker models sometimes emit a bare name string
+ * where an object reference belongs; a string that matches a tracked object id
+ * becomes an objectId reference, anything else an external named reference.
  */
-export interface ChroniclerReply {
-  state: WorldState
-  createFields?: CreateFieldRequest[]
-}
-
-/** True when `value` is a well-formed D5 DynamicFieldValue. */
-function isWellFormedDynamicField(value: unknown): boolean {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+function repairReference(
+  value: unknown,
+  knownIds: ReadonlySet<string>,
+): Record<string, unknown> | undefined {
+  if (value === null || typeof value !== 'object') return undefined
   const record = value as Record<string, unknown>
-  const type = record.type
-  if (type !== 'number' && type !== 'string' && type !== 'boolean') return false
-  return typeof record.value === type
+  if (typeof record.objectId === 'string' || record.external !== undefined) return record
+  if (typeof record.name === 'string') {
+    return knownIds.has(record.name)
+      ? { objectId: record.name }
+      : { external: { name: record.name } }
+  }
+  return undefined
 }
 
-/**
- * Parse the Chronicler's reply into a validated WorldState with optional field creation.
- * Tolerates surrounding prose; rejects an invalid shape.
- * @param reply - the raw model output.
- * @returns the validated state and field creation requests, or undefined when unusable.
- */
-export function parseChroniclerReply(
-  reply: string,
-  existingState?: WorldState,
-): ChroniclerReply | undefined {
-  const parsed = extractFirstJsonObject(reply)
-  if (!parsed || typeof parsed !== 'object') return undefined
-  const obj = parsed as Record<string, unknown>
+function repairReferenceList(list: unknown, knownIds: ReadonlySet<string>): void {
+  if (!Array.isArray(list)) return
+  for (let index = 0; index < list.length; index++) {
+    const item = list[index]
+    if (typeof item === 'string') {
+      list[index] = knownIds.has(item) ? { objectId: item } : { external: { name: item } }
+      continue
+    }
+    const repaired = repairReference(item, knownIds)
+    if (repaired !== undefined) list[index] = repaired
+  }
+}
 
-  // Extract createFields if present
-  const createFields = obj.createFields as CreateFieldRequest[] | undefined
-  delete obj.createFields // Remove from state object
-
-  // Preprocess dynamic fields: wrap bare scalars into DynamicFieldValue format
-  for (const key of Object.keys(obj)) {
-    if (isCoreKey(key)) continue
-    const val = obj[key]
-    if (typeof val === 'number' || typeof val === 'string' || typeof val === 'boolean') {
-      const existing = existingState?.[key] as DynamicFieldValue | undefined
-      const type: DynamicFieldType =
-        existing &&
-        typeof existing === 'object' &&
-        (existing.type === 'number' || existing.type === 'string' || existing.type === 'boolean')
-          ? existing.type
-          : (typeof val as DynamicFieldType)
-
-      let value: number | string | boolean = val
-      if (type === 'number' && typeof val !== 'number') {
-        // Number('') is 0: an empty string must NOT silently become zero.
-        const text = String(val).trim()
-        const num = text.length > 0 ? Number(text) : Number.NaN
-        if (!Number.isNaN(num)) value = num
-      } else if (type === 'string' && typeof val !== 'string') {
-        value = String(val)
-      } else if (type === 'boolean' && typeof val !== 'boolean') {
-        // Boolean('false') is true: parse the negation, never coerce blindly.
-        value = typeof val === 'string' ? val.trim().toLowerCase() === 'true' : Boolean(val)
+function repairReferences(record: Record<string, unknown>): void {
+  const objects = record.trackedObjects
+  const knownIds = new Set<string>(
+    objects !== null && typeof objects === 'object'
+      ? Object.keys(objects as Record<string, unknown>)
+      : [],
+  )
+  for (const collection of ['objectives', 'conflicts', 'cognition', 'relations', 'currentEvents']) {
+    const items = record[collection]
+    if (!Array.isArray(items)) continue
+    for (const item of items) {
+      if (item === null || typeof item !== 'object') continue
+      const entry = item as Record<string, unknown>
+      if (collection === 'objectives') repairReferenceList(entry.owners, knownIds)
+      if (collection === 'conflicts') repairReferenceList(entry.parties, knownIds)
+      if (collection === 'cognition') {
+        const repaired = repairReference(entry.character, knownIds)
+        if (repaired !== undefined) entry.character = repaired
       }
-
-      const field: DynamicFieldValue = { type, value }
-      if (existing && typeof existing === 'object') {
-        if (existing.min !== undefined) field.min = existing.min
-        if (existing.max !== undefined) field.max = existing.max
+      if (collection === 'relations') {
+        const a = repairReference(entry.a, knownIds)
+        if (a !== undefined) entry.a = a
+        const b = repairReference(entry.b, knownIds)
+        if (b !== undefined) entry.b = b
       }
-      obj[key] = field
+      if (collection === 'currentEvents') repairReferenceList(entry.relatedObjects, knownIds)
     }
   }
+}
 
-  // Validate base state
-  let result = worldStateSchema.safeParse(obj)
-  if (!result.success) {
-    // Salvage: a single malformed dynamic (non-core) key — an array, a nested
-    // object, a mistyped value — must not cost the whole turn. Drop the junk
-    // keys and retry; core-domain errors still reject outright.
-    const salvaged = { ...obj }
-    let dropped = false
-    for (const key of Object.keys(salvaged)) {
-      if (isCoreKey(key)) continue
-      if (!isWellFormedDynamicField(salvaged[key])) {
-        delete salvaged[key]
-        dropped = true
-      }
-    }
-    if (dropped) result = worldStateSchema.safeParse(salvaged)
-  }
-  if (!result.success) return undefined
-
-  const state = pruneWorldState(result.data as WorldState)
-
-  // Validate and apply createFields
-  if (createFields && Array.isArray(createFields)) {
-    const validatedFields: CreateFieldRequest[] = []
-
-    for (const req of createFields) {
-      // Validate field request
-      if (!req.id || typeof req.id !== 'string') continue
-      if (!isValidFieldId(req.id)) continue // Check naming rules
-      if (req.id in state) {
-        const existingField = state[req.id] as DynamicFieldValue
-        if (typeof existingField === 'object' && existingField !== null) {
-          if (req.min !== undefined) existingField.min = req.min
-          if (req.max !== undefined) existingField.max = req.max
-          state[req.id] = applyConstraints(existingField)
+export function repairChroniclerEnvelope(parsed: unknown): unknown {
+  if (parsed === null || typeof parsed !== 'object') return parsed
+  const state = (parsed as Record<string, unknown>).state
+  if (state === null || typeof state !== 'object') return parsed
+  const record = state as Record<string, unknown>
+  const objects = record.trackedObjects
+  if (objects !== null && typeof objects === 'object') {
+    for (const object of Object.values(objects as Record<string, unknown>)) {
+      if (object === null || typeof object !== 'object') continue
+      const objectRecord = object as Record<string, unknown>
+      repairFieldRecord(objectRecord.fields)
+      const character = objectRecord.character
+      if (character !== null && typeof character === 'object') {
+        const affinity = (character as Record<string, unknown>).affinity
+        if (typeof affinity === 'number' && !isPlainNumber(affinity)) {
+          ;(character as Record<string, unknown>).affinity = 0
         }
-        validatedFields.push(req)
-        continue
       }
-      if (!['number', 'string', 'boolean'].includes(req.type)) continue
-
-      // Check for duplicate with existing fields (prevent synonyms)
-      const existing = Object.keys(state).filter((k) => !isCoreKey(k))
-      const normalized = req.id.toLowerCase().replace(/_/g, '')
-      const isDuplicate = existing.some((k) => k.toLowerCase().replace(/_/g, '') === normalized)
-      if (isDuplicate) continue
-
-      validatedFields.push(req)
-
-      // Apply to state
-      const field = createDynamicField(req.type, req.value, { min: req.min, max: req.max })
-      state[req.id] = field
     }
-
-    return { state, createFields: validatedFields.length > 0 ? validatedFields : undefined }
   }
-
-  return { state }
+  repairFieldRecord(record.globalFields)
+  if (Array.isArray(record.objectives)) {
+    for (const item of record.objectives) {
+      if (item === null || typeof item !== 'object') continue
+      const order = (item as Record<string, unknown>).order
+      if (typeof order === 'number' && !isPlainNumber(order)) {
+        delete (item as Record<string, unknown>).order
+      }
+    }
+  }
+  repairReferences(record)
+  return parsed
 }
 
-/** The Chronicler's unified prompt contract (issue #32). */
+/** Parse and validate the complete v2 reply envelope. */
+export function parseChroniclerReply(reply: string): ChroniclerReply | undefined {
+  const parsed = extractFirstJsonObject(reply)
+  const result = chroniclerReplySchema.safeParse(repairChroniclerEnvelope(parsed))
+  return result.success ? (result.data as ChroniclerReply) : undefined
+}
+
 export const chroniclerAgent: AgentPromptContract<ChroniclerPromptInput, ChroniclerReply> = {
   id: 'chronicler',
   name: '状态推演（Chronicler）',
   systemPrompt: CHRONICLER_SYSTEM_PROMPT,
   buildUserPrompt: buildChroniclerPrompt,
   parseReply: parseChroniclerReply,
-  outputSchema: worldStateSchema,
+  outputSchema: chroniclerReplySchema,
 }

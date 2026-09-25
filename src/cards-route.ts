@@ -10,6 +10,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { importCardFromJson, importCardFromPng, writeImportedCard } from './card-import.ts'
 import { listCards, readCard } from './cards.ts'
+import { toPlayerSafeCardPack } from './card-types.ts'
 import { ensureCardPreset } from './preset.ts'
 
 const TAG = '[dsh-rrp]'
@@ -85,7 +86,7 @@ export function registerCardsRoute(ctx: Context): void {
             send(res, 404, { error: 'unknown card' })
             return
           }
-          send(res, 200, { card } satisfies CardOneResponse)
+          send(res, 200, { card: toPlayerSafeCardPack(card) } satisfies CardOneResponse)
         } catch (error) {
           send(res, 500, { error: String(error) })
         }

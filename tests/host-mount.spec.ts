@@ -55,6 +55,37 @@ describe('dsh-rrp host half', () => {
     await fiber.dispose()
   })
 
+  it('disposes the v2 timeline projection registration on plugin unload', () => {
+    const registered: string[] = []
+    const disposed: string[] = []
+    const projectionRegistry = {
+      register(definition: { key: string }) {
+        registered.push(definition.key)
+        return () => disposed.push(definition.key)
+      },
+    }
+    const effects: Array<() => void> = []
+    const ctx = {
+      effect(fn: () => (() => void) | void) {
+        const cleanup = fn()
+        if (cleanup !== undefined) effects.push(cleanup)
+        return cleanup
+      },
+      inject(deps: string[], callback: (scoped: unknown) => void) {
+        if (deps.length === 1 && deps[0] === 'sessionProjections') callback(ctx)
+      },
+      get(name: string) {
+        return name === 'sessionProjections' ? projectionRegistry : undefined
+      },
+    }
+
+    rrp.apply(ctx as never)
+    expect(registered).toContain('rrpWorldStateTimeline')
+
+    effects.reverse().forEach((cleanup) => cleanup())
+    expect(disposed).toContain('rrpWorldStateTimeline')
+  })
+
   it('clears every session cache when the real plugin fiber is disposed', async () => {
     type Listener = (...args: unknown[]) => void
     const sessionId = 'host-mount-unload-cleanup'

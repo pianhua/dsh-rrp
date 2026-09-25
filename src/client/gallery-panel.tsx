@@ -30,7 +30,7 @@ import {
   interpolateCardText,
   type CardMeta,
   type CardOpening,
-  type CardPack,
+  type CardPackPlayerView,
   type CardPlayer,
 } from '../card-types.ts'
 import { presetIdForCard } from '../preset-id.ts'
@@ -60,10 +60,10 @@ interface GalleryStartResult {
 interface GalleryPanelProps {
   t?: Translate
   loadList?: () => Promise<CardMeta[]>
-  loadCard?: (id: string) => Promise<CardPack | undefined>
+  loadCard?: (id: string) => Promise<CardPackPlayerView | undefined>
   /** playerNameOverride: per-session player-name override (#25); empty/undefined = card-declared. */
   start?: (
-    card: CardPack,
+    card: CardPackPlayerView,
     playerNameOverride?: string,
     openingId?: string,
     playerPersona?: string,
@@ -143,7 +143,7 @@ function SkeletonRow(): ReactNode {
  * card's declared default, then the first opening (defensive). Shared by the
  * preview and the start request so what you read is what you get (#31-A).
  */
-function pickOpening(card: CardPack, openingId: string): CardOpening | undefined {
+function pickOpening(card: CardPackPlayerView, openingId: string): CardOpening | undefined {
   return (
     card.openings.find((entry) => entry.id === openingId) ??
     card.openings.find((entry) => entry.id === card.meta.opening) ??
@@ -154,7 +154,7 @@ function pickOpening(card: CardPack, openingId: string): CardOpening | undefined
 function GalleryPanel(props: GalleryPanelProps): ReactNode {
   const t: Translate = typeof props.t === 'function' ? props.t : (key) => key
   const [cards, setCards] = useState<CardMeta[] | null>(null)
-  const [selected, setSelected] = useState<CardPack | null>(null)
+  const [selected, setSelected] = useState<CardPackPlayerView | null>(null)
   const [status, setStatus] = useState<Status>({ tone: 'idle', text: '' })
   const [busy, setBusy] = useState(false)
   const [query, setQuery] = useState('')
@@ -221,7 +221,7 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
   const loadCard = props.loadCard
   // Latest-wins guard: two quick clicks must not let the slower response win.
   const selectSeq = useRef(0)
-  const selectedRef = useRef<CardPack | null>(null)
+  const selectedRef = useRef<CardPackPlayerView | null>(null)
   selectedRef.current = selected
 
   const select = (id: string, quiet = false): void => {
@@ -285,7 +285,7 @@ function GalleryPanel(props: GalleryPanelProps): ReactNode {
 
   useEffect(refresh, [])
 
-  const begin = (card: CardPack): void => {
+  const begin = (card: CardPackPlayerView): void => {
     if (props.start === undefined) return
     setBusy(true)
     setStatus({ tone: 'busy', text: t('gallery.starting') })
@@ -802,7 +802,7 @@ export function registerGallery(ctx: RrpClientContext): void {
     return body.cards
   }
 
-  const loadCard = async (id: string): Promise<CardPack | undefined> => {
+  const loadCard = async (id: string): Promise<CardPackPlayerView | undefined> => {
     const response = await fetch(RRP_ROUTES.cardOne + '?id=' + encodeURIComponent(id))
     if (!response.ok) return undefined
     const body = (await response.json()) as CardOneResponse
@@ -816,7 +816,7 @@ export function registerGallery(ctx: RrpClientContext): void {
    * the old ungrouped flow — playing must never be blocked by grouping.
    */
   const ensureCardWorkspace = async (
-    card: CardPack,
+    card: CardPackPlayerView,
   ): Promise<{ workspaceId?: string; degraded: boolean }> => {
     try {
       const response = await fetch(RRP_ROUTES.cardWorkspace, {
@@ -835,7 +835,7 @@ export function registerGallery(ctx: RrpClientContext): void {
   }
 
   const start = async (
-    card: CardPack,
+    card: CardPackPlayerView,
     playerNameOverride?: string,
     openingId?: string,
     playerPersona?: string,

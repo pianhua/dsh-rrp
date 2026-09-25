@@ -1,292 +1,618 @@
 /**
- * dsh-rrp — WorldState: the current factual slice of the world.
+ * dsh-rrp — WorldState v2 domain vocabulary.
  *
- * Dependency-free vocabulary shared by the host projection fold
- * (src/projection/world-state.ts) and the client panel. Keep this module free
- * of node/zod imports: it is part of the CLIENT-reachable bundle.
- *
- * D5: Unified flat model. Core domains (characters/inventory/scene/flags) and
- * dynamic fields share the same Record structure. Use helper functions to
- * distinguish between them.
+ * This module is dependency-free so the host projections and client contracts
+ * can share the same whole-snapshot language. Runtime validation lives in the
+ * projection module; the functions here are pure domain operations.
  */
+import { renderWorldStateForAudience } from './world-state-visibility.ts'
 
-/** One character's live state. */
-export interface WorldStateCharacter {
+export const WORLD_STATE_VERSION = 2 as const
+
+export type WorldStateVisibility = 'player' | 'model' | 'hidden'
+export type TrackedObjectKind = 'character' | 'group' | 'item' | 'scene'
+export type ScalarFieldType = 'number' | 'string' | 'boolean'
+export type DynamicFieldType = ScalarFieldType
+export type ScalarValue = number | string | boolean
+export type WorldStateFlag = ScalarValue
+
+export interface ExternalReference {
+  name: string
+  kind?: TrackedObjectKind
+}
+
+export interface ObjectReference {
+  objectId?: string
+  external?: ExternalReference
+}
+
+export type CharacterPresence = 'present' | 'absent' | 'unknown'
+
+export interface CharacterCommonFields {
+  presence?: CharacterPresence
+  outfit?: string
+  emotionalState?: string
   affinity?: number
-  mood?: string
   appearance?: string
-  condition?: string
 }
 
-/** One inventory item. */
-export interface WorldStateItem {
-  quantity?: number
-  note?: string
+export type ScalarFieldDefinition = 'card-defined' | 'undeclared'
+
+export interface WorldStateScalarField {
+  type: ScalarFieldType
+  value: ScalarValue
+  definition: ScalarFieldDefinition
+  visibility?: WorldStateVisibility
+  min?: number
+  max?: number
 }
 
-/** The current scene. */
-export interface WorldStateScene {
-  location?: string
-  time?: string
-  weather?: string
+/** Compatibility name for the shared scalar-field vocabulary. */
+export type DynamicFieldValue = WorldStateScalarField
+
+export interface TrackedObject {
+  id: string
+  kind: TrackedObjectKind
+  name: string
+  archived?: boolean
+  isPlayer?: boolean
+  visibility?: WorldStateVisibility
+  character?: CharacterCommonFields
+  fields: Record<string, WorldStateScalarField>
 }
 
-/** A flag: a secret learned, a promise made, an event triggered. */
-export type WorldStateFlag = string | number | boolean
+/** Names retained as vocabulary aliases while consumers migrate to objects. */
+export type WorldStateCharacter = CharacterCommonFields
+export type WorldStateItem = TrackedObject
+export type WorldStateScene = TrackedObject
 
-/**
- * One tracked relation: an undirected pair of endpoints plus a short label
- * (主仆 / 猜忌 / 亏欠 / 同盟 …). Endpoints are normalized character names;
- * the player is always written 「玩家」.
- */
-export interface WorldStateRelation {
-  a: string
-  b: string
-  label: string
+export type ObjectiveStatus = 'pending' | 'active' | 'blocked' | 'completed' | 'abandoned'
+
+export interface CurrentObjective {
+  id: string
+  owners: ObjectReference[]
+  desiredOutcome: string
+  progress?: string
+  status: ObjectiveStatus
+  nextStep?: string
+  primary?: boolean
+  order?: number
+  visibility?: WorldStateVisibility
 }
 
-/**
- * D5: Dynamic field types. Extensible for future types.
- */
-export type DynamicFieldType = 'number' | 'string' | 'boolean'
+export type ConflictStatus = 'active' | 'controlled' | 'resolved' | 'abandoned'
 
-/**
- * D5: A dynamic field value with optional constraints.
- */
-export interface DynamicFieldValue {
-  type: DynamicFieldType
-  value: number | string | boolean
-  min?: number // Only valid for type: 'number'
-  max?: number // Only valid for type: 'number'
+export interface ActiveConflict {
+  id: string
+  parties: ObjectReference[]
+  stakes: string
+  pressure: string
+  status: ConflictStatus
+  visibility?: WorldStateVisibility
 }
 
-/**
- * D5: WorldState — unified flat model.
- * Core domains use their original types.
- * Dynamic fields use DynamicFieldValue.
- */
+export type CognitionMarker = 'known' | 'believed' | 'suspected' | 'rumored' | 'misunderstood'
+
+export interface CharacterCognitionEntry {
+  id: string
+  character: ObjectReference
+  proposition: string
+  markers: CognitionMarker[]
+  visibility?: WorldStateVisibility
+}
+
+export interface RelationshipAttitude {
+  attitude: string
+  value?: number
+}
+
+export interface RelationshipEntry {
+  id: string
+  a: ObjectReference
+  b: ObjectReference
+  labels: string[]
+  aToB?: RelationshipAttitude
+  bToA?: RelationshipAttitude
+  visibility?: WorldStateVisibility
+}
+
+export type WorldStateRelation = RelationshipEntry
+
+export type CurrentWorldEventType = 'promise' | 'secret' | 'discovery' | 'ongoing' | string
+export type CurrentWorldEventStatus =
+  'pending' | 'active' | 'blocked' | 'completed' | 'invalid' | 'abandoned'
+
+export interface CurrentWorldEventEntry {
+  id: string
+  type: CurrentWorldEventType
+  fact: string
+  relatedObjects: ObjectReference[]
+  status: CurrentWorldEventStatus
+  visibility?: WorldStateVisibility
+}
+
+/** Complete v2 snapshot. Every state-bearing payload must carry this shape. */
 export interface WorldState {
-  characters: Record<string, WorldStateCharacter>
-  inventory: Record<string, WorldStateItem>
-  scene: WorldStateScene
-  flags: Record<string, WorldStateFlag>
-  relations: WorldStateRelation[]
-
-  /** D5: Dynamic fields stored as Record<string, DynamicFieldValue> */
-  [key: string]:
-    | Record<string, WorldStateCharacter>
-    | Record<string, WorldStateItem>
-    | WorldStateScene
-    | Record<string, WorldStateFlag>
-    | WorldStateRelation[]
-    | DynamicFieldValue
+  version: typeof WORLD_STATE_VERSION
+  trackedObjects: Record<string, TrackedObject>
+  globalFields: Record<string, WorldStateScalarField>
+  objectives: CurrentObjective[]
+  conflicts: ActiveConflict[]
+  cognition: CharacterCognitionEntry[]
+  relations: RelationshipEntry[]
+  currentEvents: CurrentWorldEventEntry[]
 }
 
-/** Core domain keys (reserved). */
-export const CORE_DOMAIN_KEYS = ['characters', 'inventory', 'scene', 'flags', 'relations'] as const
+/** Legacy names are intentionally not runtime domains; these keys are reserved by v2. */
+export const CORE_DOMAIN_KEYS = [
+  'version',
+  'trackedObjects',
+  'globalFields',
+  'objectives',
+  'conflicts',
+  'cognition',
+  'relations',
+  'currentEvents',
+] as const
 
-/** Check if a key is a core domain. */
+export const WORLD_STATE_KEY = 'rrpWorldState'
+
+export function emptyWorldState(): WorldState {
+  return {
+    version: WORLD_STATE_VERSION,
+    trackedObjects: {},
+    globalFields: {},
+    objectives: [],
+    conflicts: [],
+    cognition: [],
+    relations: [],
+    currentEvents: [],
+  }
+}
+
 export function isCoreKey(key: string): boolean {
   return CORE_DOMAIN_KEYS.includes(key as (typeof CORE_DOMAIN_KEYS)[number])
 }
 
-/** Get all dynamic field keys from a WorldState. */
+/** Return undeclared global scalar fields; v2 has no flat top-level fallback. */
 export function getDynamicKeys(state: WorldState): string[] {
-  return Object.keys(state).filter((k) => !isCoreKey(k))
-}
-
-/** The client-visible view. */
-export type WorldStateView = WorldState
-
-/** Projection key. */
-export const WORLD_STATE_KEY = 'rrpWorldState'
-
-/** A fresh empty state. */
-export function emptyWorldState(): WorldState {
-  return {
-    characters: {},
-    inventory: {},
-    scene: {},
-    flags: {},
-    relations: [],
-  }
-}
-
-/**
- * D5: Validate dynamic field ID (must be valid identifier, not reserved).
- */
-export function isValidFieldId(id: string): boolean {
-  if (!/^[a-zA-Z0-9_]+$/.test(id)) return false
-  if (isCoreKey(id)) return false
-  return true
-}
-
-/**
- * D5: Apply constraints to a dynamic field value.
- */
-export function applyConstraints(field: DynamicFieldValue): DynamicFieldValue {
-  if (field.type === 'number' && typeof field.value === 'number') {
-    let value = field.value
-    if (field.min !== undefined && value < field.min) value = field.min
-    if (field.max !== undefined && value > field.max) value = field.max
-    if (value !== field.value) return { ...field, value }
-  }
-  // A string field has a declared length ceiling too, so no write path
-  // (Chronicler createFields, 月停 patch, player correction) can grow one.
-  if (field.type === 'string' && typeof field.value === 'string') {
-    const capped = capString(field.value, WORLD_STATE_LIMITS.dynamicStringChars)
-    if (capped !== field.value) return { ...field, value: capped }
-  }
-  return field
-}
-
-/**
- * Safety caps.
- */
-export const WORLD_STATE_LIMITS = {
-  characters: 24,
-  inventory: 40,
-  flags: 16,
-  flagValueChars: 160,
-  dynamicFields: 32,
-  /** Ceiling for any string-valued dynamic field (incl. the player persona). */
-  dynamicStringChars: 400,
-  relations: 16,
-} as const
-
-/**
- * Lean targets the Chronicler prompt asks for, deliberately below the caps
- * above: a cap silently drops whatever sits past the tail, so the model is
- * told to stay well inside it. Both numbers are named here so the prompt and
- * the caps cannot drift apart.
- */
-export const WORLD_STATE_TARGETS = {
-  flags: 12,
-  relations: 12,
-} as const
-
-/** Keep at most `limit` entries, preserving key order. */
-function capRecord<T>(record: Record<string, T>, limit: number): Record<string, T> {
-  const keys = Object.keys(record)
-  if (keys.length <= limit) return record
-  const capped: Record<string, T> = {}
-  for (const key of keys.slice(0, limit)) capped[key] = record[key] as T
-  return capped
-}
-
-/** Bound a stored string's length; the cut tail becomes an ellipsis. */
-function capString(value: string, limit: number): string {
-  if (value.length <= limit) return value
-  return value.slice(0, limit - 1) + '…'
-}
-
-/** Player aliases (case-insensitive) that normalize to 「玩家」. */
-const PLAYER_ENDPOINT_ALIASES = new Set(['我', '你', '玩家', '主角', 'user', 'player'])
-
-/** Bracketed modifiers stripped from a relation endpoint: （…）(…) […]【…】. */
-const BRACKET_MODIFIER = /（[^（）]*）|\([^()]*\)|【[^【】]*】|\[[^[\]]*\]/g
-
-/**
- * Normalize one relation endpoint: trim → drop bracket modifiers (titles,
- * notes, aliases in parentheses) → map player aliases to 「玩家」. Traditional
- * characters and other names pass through untouched.
- */
-export function normalizeRelationEndpoint(name: string): string {
-  const text = String(name ?? '')
-    .replace(BRACKET_MODIFIER, '')
-    .trim()
-  if (PLAYER_ENDPOINT_ALIASES.has(text.toLowerCase())) return '玩家'
-  return text
-}
-
-/**
- * Normalize a relation list: endpoints via normalizeRelationEndpoint, drop
- * blank entries, dedupe undirected pairs (key = sorted a+b) with the LAST
- * occurrence winning. Pure; returns the SAME reference when nothing changed.
- */
-export function normalizeRelations(relations: WorldStateRelation[]): WorldStateRelation[] {
-  const byPair = new Map<string, WorldStateRelation>()
-  let changed = false
-  for (const rel of relations) {
-    const a = normalizeRelationEndpoint(rel.a)
-    const b = normalizeRelationEndpoint(rel.b)
-    const label = String(rel.label ?? '').trim()
-    if (a.length === 0 || b.length === 0 || label.length === 0) {
-      changed = true
-      continue
-    }
-    if (a !== rel.a || b !== rel.b || label !== rel.label) changed = true
-    const key = [a, b].sort().join(' ')
-    if (byPair.has(key)) {
-      changed = true
-      // Same-key later entry overrides the earlier one (last write wins).
-      byPair.set(key, { a, b, label })
-    } else {
-      byPair.set(key, { a, b, label })
-    }
-  }
-  if (byPair.size === relations.length && !changed) return relations
-  return [...byPair.values()]
-}
-
-/** Keep at most `limit` relations, preserving order. */
-function capRelations(relations: WorldStateRelation[], limit: number): WorldStateRelation[] {
-  return relations.length <= limit ? relations : relations.slice(0, limit)
-}
-
-/**
- * Bound a state to the safety caps. Pure; returns SAME reference when within limits.
- */
-export function pruneWorldState(state: WorldState): WorldState {
-  const characters = capRecord(state.characters, WORLD_STATE_LIMITS.characters)
-  const inventory = capRecord(state.inventory, WORLD_STATE_LIMITS.inventory)
-  const head = capRecord(state.flags, WORLD_STATE_LIMITS.flags)
-
-  let flags = head
-  for (const [key, value] of Object.entries(head)) {
-    if (typeof value !== 'string') continue
-    const capped = capString(value, WORLD_STATE_LIMITS.flagValueChars)
-    if (capped !== value) {
-      if (flags === head) flags = { ...head }
-      flags[key] = capped
-    }
-  }
-
-  // Relations: normalize endpoints/pairs on every write path, then cap.
-  const relations = capRelations(
-    normalizeRelations(state.relations ?? []),
-    WORLD_STATE_LIMITS.relations,
+  return Object.keys(state.globalFields).filter(
+    (key) => state.globalFields[key]?.definition === 'undeclared',
   )
-
-  // Cap dynamic fields count and apply constraints
-  const dynamicKeys = getDynamicKeys(state)
-  const pruned: WorldState = { ...state, characters, inventory, flags, relations }
-  let changed =
-    characters !== state.characters ||
-    inventory !== state.inventory ||
-    flags !== state.flags ||
-    relations !== state.relations
-
-  if (dynamicKeys.length > WORLD_STATE_LIMITS.dynamicFields) {
-    changed = true
-    for (const key of dynamicKeys.slice(WORLD_STATE_LIMITS.dynamicFields)) {
-      delete pruned[key]
-    }
-  }
-
-  for (const key of dynamicKeys.slice(0, WORLD_STATE_LIMITS.dynamicFields)) {
-    const field = state[key] as DynamicFieldValue
-    const constrained = applyConstraints(field)
-    if (constrained !== field) {
-      changed = true
-      pruned[key] = constrained
-    }
-  }
-
-  return changed ? pruned : state
 }
 
-/** Recursively sort object keys. */
+export type WorldStateAudience = 'internal' | 'model' | 'player'
+
+export interface WorldStateVisibilityNotice {
+  kind:
+    | 'tracked-object'
+    | 'field'
+    | 'objective'
+    | 'conflict'
+    | 'cognition'
+    | 'relation'
+    | 'current-event'
+  count: number
+  message: '不公开的世界信息'
+}
+
+export interface WorldStatePlayerView extends WorldState {
+  visibilityNotices?: WorldStateVisibilityNotice[]
+}
+
+export type WorldStateView = WorldStatePlayerView
+
+export function isValidFieldId(id: string): boolean {
+  return /^[a-zA-Z0-9_]+$/.test(id) && id.length > 0
+}
+
+export function createDynamicField(
+  type: DynamicFieldType,
+  value: ScalarValue,
+  constraints: { min?: number; max?: number } = {},
+): DynamicFieldValue {
+  return applyConstraints({
+    type,
+    value,
+    definition: 'undeclared',
+    ...(constraints.min === undefined ? {} : { min: constraints.min }),
+    ...(constraints.max === undefined ? {} : { max: constraints.max }),
+  })
+}
+
+export function applyConstraints(field: WorldStateScalarField): WorldStateScalarField {
+  if (field.type !== 'number' || typeof field.value !== 'number') return field
+  let value = field.value
+  if (field.min !== undefined && value < field.min) value = field.min
+  if (field.max !== undefined && value > field.max) value = field.max
+  return value === field.value ? field : { ...field, value }
+}
+
+/** Diagnostic thresholds only. No writer truncates or deletes to satisfy them. */
+export const WORLD_STATE_LIMITS = {
+  diagnosticStringChars: 4000,
+  diagnosticSerializedChars: 100000,
+} as const
+
+export interface WorldStateDiagnostic {
+  kind: 'string-length' | 'serialized-budget'
+  path: string
+  actual: number
+  limit: number
+}
+
+export type WorldStateDiagnosticLimits = {
+  diagnosticStringChars?: number
+  diagnosticSerializedChars?: number
+}
+
+export function diagnoseWorldState(
+  state: WorldState,
+  limits: WorldStateDiagnosticLimits = {},
+): WorldStateDiagnostic[] {
+  const effective = { ...WORLD_STATE_LIMITS, ...limits }
+  const diagnostics: WorldStateDiagnostic[] = []
+  const visit = (value: unknown, path: string): void => {
+    if (typeof value === 'string' && value.length > effective.diagnosticStringChars) {
+      diagnostics.push({
+        kind: 'string-length',
+        path,
+        actual: value.length,
+        limit: effective.diagnosticStringChars,
+      })
+      return
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => visit(item, `${path}[${index}]`))
+      return
+    }
+    if (value !== null && typeof value === 'object') {
+      for (const [key, item] of Object.entries(value)) {
+        visit(item, path.length === 0 ? key : `${path}.${key}`)
+      }
+    }
+  }
+  visit(state, '')
+  const serializedLength = stableJson(state).length
+  if (serializedLength > effective.diagnosticSerializedChars) {
+    diagnostics.push({
+      kind: 'serialized-budget',
+      path: '$',
+      actual: serializedLength,
+      limit: effective.diagnosticSerializedChars,
+    })
+  }
+  return diagnostics
+}
+
+/** Normalize numeric constraints without pruning any object, field, or relation. */
+export function normalizeWorldState(state: WorldState): WorldState {
+  let changed = false
+  const trackedObjects: Record<string, TrackedObject> = {}
+  for (const [id, object] of Object.entries(state.trackedObjects)) {
+    let fields = object.fields
+    for (const [fieldId, field] of Object.entries(object.fields)) {
+      const normalized = applyConstraints(field)
+      if (normalized !== field) {
+        if (fields === object.fields) fields = { ...object.fields }
+        fields[fieldId] = normalized
+        changed = true
+      }
+    }
+    trackedObjects[id] = fields === object.fields ? object : { ...object, fields }
+  }
+  let globalFields = state.globalFields
+  for (const [fieldId, field] of Object.entries(state.globalFields)) {
+    const normalized = applyConstraints(field)
+    if (normalized !== field) {
+      if (globalFields === state.globalFields) globalFields = { ...state.globalFields }
+      globalFields[fieldId] = normalized
+      changed = true
+    }
+  }
+  return changed ? { ...state, trackedObjects, globalFields } : state
+}
+
+/** Historical writer name retained as a non-pruning normalization operation. */
+export function pruneWorldState(state: WorldState): WorldState {
+  return normalizeWorldState(state)
+}
+
+export function objectReferenceFor(object: TrackedObject): ObjectReference {
+  return { objectId: object.id }
+}
+
+export function externalReferenceFor(object: TrackedObject): ObjectReference {
+  return { external: { name: object.name, kind: object.kind } }
+}
+
+function referenceUses(reference: ObjectReference, objectId: string): boolean {
+  return reference.objectId === objectId
+}
+
+export interface WorldStateReferenceUse {
+  collection: 'objectives' | 'conflicts' | 'cognition' | 'relations' | 'currentEvents'
+  entryId: string
+  path: string
+}
+
+export function referencesToObject(state: WorldState, objectId: string): WorldStateReferenceUse[] {
+  const uses: WorldStateReferenceUse[] = []
+  for (const item of state.objectives) {
+    item.owners.forEach((reference, index) => {
+      if (referenceUses(reference, objectId))
+        uses.push({ collection: 'objectives', entryId: item.id, path: `owners[${index}]` })
+    })
+  }
+  for (const item of state.conflicts) {
+    item.parties.forEach((reference, index) => {
+      if (referenceUses(reference, objectId))
+        uses.push({ collection: 'conflicts', entryId: item.id, path: `parties[${index}]` })
+    })
+  }
+  for (const item of state.cognition) {
+    if (referenceUses(item.character, objectId))
+      uses.push({ collection: 'cognition', entryId: item.id, path: 'character' })
+  }
+  for (const item of state.relations) {
+    if (referenceUses(item.a, objectId))
+      uses.push({ collection: 'relations', entryId: item.id, path: 'a' })
+    if (referenceUses(item.b, objectId))
+      uses.push({ collection: 'relations', entryId: item.id, path: 'b' })
+  }
+  for (const item of state.currentEvents) {
+    item.relatedObjects.forEach((reference, index) => {
+      if (referenceUses(reference, objectId))
+        uses.push({
+          collection: 'currentEvents',
+          entryId: item.id,
+          path: `relatedObjects[${index}]`,
+        })
+    })
+  }
+  return uses
+}
+
+export function canDeleteTrackedObject(
+  state: WorldState,
+  objectId: string,
+): { allowed: boolean; references: WorldStateReferenceUse[] } {
+  const references = referencesToObject(state, objectId)
+  return { allowed: references.length === 0, references }
+}
+
+export type DeleteTrackedObjectResult =
+  | {
+      ok: false
+      reason: 'not-found' | 'confirmation-required'
+      references: WorldStateReferenceUse[]
+    }
+  | { ok: true; state: WorldState }
+
+function downgrade(
+  reference: ObjectReference,
+  object: TrackedObject,
+  objectId: string,
+): ObjectReference {
+  return reference.objectId === objectId ? externalReferenceFor(object) : reference
+}
+
+/** Explicit delete: references are preserved as external names, never cascaded away. */
+export function deleteTrackedObject(
+  state: WorldState,
+  objectId: string,
+  confirmed = false,
+): DeleteTrackedObjectResult {
+  const object = state.trackedObjects[objectId]
+  if (object === undefined) return { ok: false, reason: 'not-found', references: [] }
+  const references = referencesToObject(state, objectId)
+  if (!confirmed) return { ok: false, reason: 'confirmation-required', references }
+  const trackedObjects = { ...state.trackedObjects }
+  delete trackedObjects[objectId]
+  return {
+    ok: true,
+    state: {
+      ...state,
+      trackedObjects,
+      objectives: state.objectives.map((item) => ({
+        ...item,
+        owners: item.owners.map((reference) => downgrade(reference, object, objectId)),
+      })),
+      conflicts: state.conflicts.map((item) => ({
+        ...item,
+        parties: item.parties.map((reference) => downgrade(reference, object, objectId)),
+      })),
+      cognition: state.cognition.map((item) => ({
+        ...item,
+        character: downgrade(item.character, object, objectId),
+      })),
+      relations: state.relations.map((item) => ({
+        ...item,
+        a: downgrade(item.a, object, objectId),
+        b: downgrade(item.b, object, objectId),
+      })),
+      currentEvents: state.currentEvents.map((item) => ({
+        ...item,
+        relatedObjects: item.relatedObjects.map((reference) =>
+          downgrade(reference, object, objectId),
+        ),
+      })),
+    },
+  }
+}
+
+export function archiveTrackedObject(state: WorldState, objectId: string): WorldState {
+  const object = state.trackedObjects[objectId]
+  if (object === undefined || object.archived === true) return state
+  return {
+    ...state,
+    trackedObjects: { ...state.trackedObjects, [objectId]: { ...object, archived: true } },
+  }
+}
+
+export function restoreTrackedObject(state: WorldState, objectId: string): WorldState {
+  const object = state.trackedObjects[objectId]
+  if (object === undefined || object.archived !== true) return state
+  return {
+    ...state,
+    trackedObjects: { ...state.trackedObjects, [objectId]: { ...object, archived: false } },
+  }
+}
+
+export type WorldStateChangeType =
+  'added' | 'modified' | 'closed' | 'archived' | 'deleted' | 'restored'
+
+export interface WorldStateChange {
+  type: WorldStateChangeType
+  objectId?: string
+  field?: string
+  before?: unknown
+  after?: unknown
+}
+
+export interface WorldStateDiff {
+  changes: WorldStateChange[]
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function statusOf(value: unknown): string | undefined {
+  return isObject(value) && typeof value.status === 'string' ? value.status : undefined
+}
+
+function changeType(before: unknown, after: unknown, path = ''): WorldStateChangeType {
+  if (path.endsWith('.archived') && after === true) return 'archived'
+  if (path.endsWith('.archived') && after === false) return 'restored'
+  if (before === undefined) return 'added'
+  if (after === undefined) return 'deleted'
+  if (isObject(before) && isObject(after) && before.archived !== after.archived) {
+    return after.archived === true ? 'archived' : 'restored'
+  }
+  const afterStatus = statusOf(after)
+  if (afterStatus === 'completed' || afterStatus === 'invalid' || afterStatus === 'abandoned') {
+    const beforeStatus = statusOf(before)
+    if (beforeStatus !== afterStatus || path.endsWith('.status')) return 'closed'
+  }
+  if (
+    path.endsWith('.status') &&
+    typeof after === 'string' &&
+    ['completed', 'invalid', 'abandoned'].includes(after) &&
+    before !== after
+  ) {
+    return 'closed'
+  }
+  return 'modified'
+}
+
+function compareValue(
+  before: unknown,
+  after: unknown,
+  path: string,
+  objectId: string | undefined,
+  changes: WorldStateChange[],
+): void {
+  if (stableJson(before) === stableJson(after)) return
+  if (!isObject(before) || !isObject(after) || Array.isArray(before) || Array.isArray(after)) {
+    // The change record crosses the session event log, where an explicit
+    // undefined side (added/deleted) fails the host's serializability check;
+    // the type already carries the direction, so omit the absent side.
+    changes.push({
+      type: changeType(before, after, path),
+      objectId,
+      field: path,
+      ...(before === undefined ? {} : { before }),
+      ...(after === undefined ? {} : { after }),
+    })
+    return
+  }
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()
+  for (const key of keys) {
+    compareValue(
+      before[key],
+      after[key],
+      path.length === 0 ? key : `${path}.${key}`,
+      objectId,
+      changes,
+    )
+  }
+}
+
+function compareCollection(
+  before: Array<Record<string, unknown>>,
+  after: Array<Record<string, unknown>>,
+  collection: string,
+  changes: WorldStateChange[],
+): void {
+  const beforeById = new Map(before.map((item) => [item.id, item]))
+  const afterById = new Map(after.map((item) => [item.id, item]))
+  const ids = [...new Set([...beforeById.keys(), ...afterById.keys()])].sort()
+  for (const id of ids) {
+    compareValue(beforeById.get(id), afterById.get(id), collection, String(id), changes)
+  }
+}
+
+export function diffWorldState(prior: WorldState, next: WorldState): WorldStateDiff {
+  const changes: WorldStateChange[] = []
+  const beforeObjects = prior.trackedObjects
+  const afterObjects = next.trackedObjects
+  const objectIds = [
+    ...new Set([...Object.keys(beforeObjects), ...Object.keys(afterObjects)]),
+  ].sort()
+  for (const objectId of objectIds) {
+    compareValue(
+      beforeObjects[objectId],
+      afterObjects[objectId],
+      'trackedObjects',
+      objectId,
+      changes,
+    )
+  }
+  compareValue(prior.globalFields, next.globalFields, 'globalFields', undefined, changes)
+  compareCollection(
+    prior.objectives as unknown as Array<Record<string, unknown>>,
+    next.objectives as unknown as Array<Record<string, unknown>>,
+    'objectives',
+    changes,
+  )
+  compareCollection(
+    prior.conflicts as unknown as Array<Record<string, unknown>>,
+    next.conflicts as unknown as Array<Record<string, unknown>>,
+    'conflicts',
+    changes,
+  )
+  compareCollection(
+    prior.cognition as unknown as Array<Record<string, unknown>>,
+    next.cognition as unknown as Array<Record<string, unknown>>,
+    'cognition',
+    changes,
+  )
+  compareCollection(
+    prior.relations as unknown as Array<Record<string, unknown>>,
+    next.relations as unknown as Array<Record<string, unknown>>,
+    'relations',
+    changes,
+  )
+  compareCollection(
+    prior.currentEvents as unknown as Array<Record<string, unknown>>,
+    next.currentEvents as unknown as Array<Record<string, unknown>>,
+    'currentEvents',
+    changes,
+  )
+  return { changes }
+}
+
+export const NO_WORLD_STATE_CHANGE = '（无实质变化）'
+
+export function renderWorldStateDiff(diff: WorldStateDiff): string {
+  if (diff.changes.length === 0) return NO_WORLD_STATE_CHANGE
+  return diff.changes
+    .slice(0, 6)
+    .map((change) => `${change.type}:${change.objectId ?? change.field ?? 'state'}`)
+    .join('；')
+}
+
 function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys)
   if (value !== null && typeof value === 'object') {
@@ -298,270 +624,43 @@ function sortKeys(value: unknown): unknown {
   return value
 }
 
-/** Deterministic JSON (sorted keys). Shared so equality never depends on key order. */
 export function stableJson(value: unknown): string {
   return JSON.stringify(sortKeys(value))
 }
 
-/**
- * Deep equality of two slices, independent of key insertion order. Used by the
- * writers' "did anything actually change" checks — `JSON.stringify` on raw
- * objects would call a reorder a real change and discard good inference.
- */
 export function worldStatesEqual(prior: WorldState, next: WorldState): boolean {
   return stableJson(prior) === stableJson(next)
 }
 
-/**
- * Render the state as the Author's fact baseline.
- */
-export function renderWorldState(state: WorldState): string {
-  const lines = [
-    '【世界状态 · 事实基准】',
-    '以下是你执笔时必须遵守的当前事实（由状态推演维护，玩家可能已就地修正）。不要把它写进正文，也不要输出这段文字。',
-    '',
-    'characters: ' + stableJson(state.characters),
-    'inventory: ' + stableJson(state.inventory),
-    'scene: ' + stableJson(state.scene),
-    'flags: ' + stableJson(state.flags),
-    'relations: ' + stableJson(state.relations ?? []),
-  ]
-
-  // D5: Render dynamic fields
-  const dynamicKeys = getDynamicKeys(state).sort()
-  if (dynamicKeys.length > 0) {
-    lines.push('')
-    lines.push('# 自定义状态字段')
-    for (const key of dynamicKeys) {
-      const field = state[key] as DynamicFieldValue
-      lines.push(key + ': ' + stableJson(field.value))
-    }
-  }
-
-  return lines.join('\n')
+/** Render only the current snapshot; timeline batches are deliberately absent. */
+export function renderWorldState(
+  state: WorldState,
+  audience: WorldStateAudience = 'model',
+): string {
+  return renderWorldStateForAudience(state, audience)
 }
 
-/** Placeholder shown when a field had no value. */
-const EMPTY_FIELD = '（空）'
-/** Shown when a writer pass changed nothing material. */
-export const NO_WORLD_STATE_CHANGE = '（无实质变化）'
-/** Cap the digest so the panel line stays readable. */
-const DIFF_CLAUSE_LIMIT = 6
-
-/** Render one field value for the change digest. */
-function showField(value: unknown): string {
-  if (value === undefined || value === null || value === '') return EMPTY_FIELD
-  return typeof value === 'string' ? value : String(value)
-}
-
-/** Every key present on either side, in first-seen order. */
-function unionKeys<T>(before: Record<string, T>, after: Record<string, T>): string[] {
-  return [...new Set([...Object.keys(before), ...Object.keys(after)])]
-}
-
-/**
- * Human-readable digest of the difference between two states.
- */
-export function diffWorldState(prior: WorldState, next: WorldState): string {
-  const clauses: string[] = []
-
-  const sceneFields: Array<[keyof WorldStateScene, string]> = [
-    ['location', '地点'],
-    ['time', '时间'],
-    ['weather', '天气'],
-  ]
-  for (const [field, label] of sceneFields) {
-    if (prior.scene[field] !== next.scene[field]) {
-      clauses.push(
-        label + ' ' + showField(prior.scene[field]) + ' → ' + showField(next.scene[field]),
-      )
-    }
-  }
-
-  const characterFields: Array<[keyof WorldStateCharacter, string]> = [
-    ['affinity', '好感'],
-    ['mood', '情绪'],
-    ['appearance', '外貌'],
-    ['condition', '状态'],
-  ]
-  for (const name of unionKeys(prior.characters, next.characters)) {
-    const before = prior.characters[name]
-    const after = next.characters[name]
-    if (before === undefined) {
-      clauses.push('新增角色「' + name + '」')
-      continue
-    }
-    if (after === undefined) {
-      clauses.push('移除角色「' + name + '」')
-      continue
-    }
-    for (const [field, label] of characterFields) {
-      if (before[field] !== after[field]) {
-        clauses.push(
-          '角色「' +
-            name +
-            '」' +
-            label +
-            ' ' +
-            showField(before[field]) +
-            ' → ' +
-            showField(after[field]),
-        )
-      }
-    }
-  }
-
-  const itemFields: Array<[keyof WorldStateItem, string]> = [
-    ['quantity', '数量'],
-    ['note', '备注'],
-  ]
-  for (const name of unionKeys(prior.inventory, next.inventory)) {
-    const before = prior.inventory[name]
-    const after = next.inventory[name]
-    if (before === undefined) {
-      clauses.push('新增物品「' + name + '」')
-      continue
-    }
-    if (after === undefined) {
-      clauses.push('移除物品「' + name + '」')
-      continue
-    }
-    for (const [field, label] of itemFields) {
-      if (before[field] !== after[field]) {
-        clauses.push(
-          '物品「' +
-            name +
-            '」' +
-            label +
-            ' ' +
-            showField(before[field]) +
-            ' → ' +
-            showField(after[field]),
-        )
-      }
-    }
-  }
-
-  for (const key of unionKeys(prior.flags, next.flags)) {
-    const before = prior.flags[key]
-    const after = next.flags[key]
-    if (before === undefined) {
-      clauses.push('新事件「' + key + '」')
-      continue
-    }
-    if (after === undefined) {
-      clauses.push('移除事件「' + key + '」')
-      continue
-    }
-    if (before !== after) {
-      clauses.push('事件「' + key + '」' + showField(before) + ' → ' + showField(after))
-    }
-  }
-
-  // Relations: undirected pairs keyed by sorted endpoints.
-  const relationKey = (rel: WorldStateRelation): string => [rel.a, rel.b].sort().join(' ')
-  const priorRelations = new Map(
-    (prior.relations ?? []).map((rel) => [relationKey(rel), rel] as [string, WorldStateRelation]),
-  )
-  const nextRelations = new Map(
-    (next.relations ?? []).map((rel) => [relationKey(rel), rel] as [string, WorldStateRelation]),
-  )
-  const allRelationKeys = [...new Set([...priorRelations.keys(), ...nextRelations.keys()])]
-  for (const key of allRelationKeys) {
-    const before = priorRelations.get(key)
-    const after = nextRelations.get(key)
-    if (before === undefined && after !== undefined) {
-      clauses.push('新增关系「' + after.a + ' × ' + after.b + '（' + after.label + '）」')
-      continue
-    }
-    if (after === undefined && before !== undefined) {
-      clauses.push('移除关系「' + before.a + ' × ' + before.b + '（' + before.label + '）」')
-      continue
-    }
-    if (before !== undefined && after !== undefined && before.label !== after.label) {
-      clauses.push(
-        '「' +
-          after.a +
-          ' × ' +
-          after.b +
-          '」关系 ' +
-          showField(before.label) +
-          ' → ' +
-          showField(after.label),
-      )
-    }
-  }
-
-  // D5: Diff dynamic fields
-  const priorDynamic = getDynamicKeys(prior)
-  const nextDynamic = getDynamicKeys(next)
-  const allDynamic = [...new Set([...priorDynamic, ...nextDynamic])]
-
-  for (const key of allDynamic) {
-    const before = prior[key] as DynamicFieldValue | undefined
-    const after = next[key] as DynamicFieldValue | undefined
-    if (before === undefined) {
-      clauses.push('新增字段「' + key + '」')
-      continue
-    }
-    if (after === undefined) {
-      clauses.push('移除字段「' + key + '」')
-      continue
-    }
-    if (before.value !== after.value) {
-      clauses.push('字段「' + key + '」' + showField(before.value) + ' → ' + showField(after.value))
-      continue
-    }
-    // Value unchanged but bounds retuned (e.g. via createFields min/max):
-    // surfaced so a constraints-only change is not silently swallowed.
-    if (before.min !== after.min || before.max !== after.max) {
-      clauses.push(
-        '字段「' +
-          key +
-          '」约束 ' +
-          showField(before.min) +
-          '~' +
-          showField(before.max) +
-          ' → ' +
-          showField(after.min) +
-          '~' +
-          showField(after.max),
-      )
-    }
-  }
-
-  if (clauses.length === 0) return NO_WORLD_STATE_CHANGE
-  const shown = clauses.slice(0, DIFF_CLAUSE_LIMIT)
-  return clauses.length > shown.length
-    ? shown.join('；') + '；…共 ' + clauses.length + ' 处变化'
-    : shown.join('；')
-}
-
-/**
- * D5: Helper to create a dynamic field.
- */
-export function createDynamicField(
-  type: DynamicFieldType,
-  value: number | string | boolean,
-  constraints?: { min?: number; max?: number },
-): DynamicFieldValue {
-  const field: DynamicFieldValue = { type, value }
-  if (constraints?.min !== undefined) field.min = constraints.min
-  if (constraints?.max !== undefined) field.max = constraints.max
-  return applyConstraints(field)
-}
-
-/**
- * P1-B (issue #31): merge the player's self-authored persona (appearance,
- * personality, background) into the initial state as the `player` dynamic
- * string field. It then rides the facts lane the Author already reads every
- * turn, survives Chronicler replays like any D5 field, and stays editable
- * mid-run in the world-state tab's dynamic-field editor — zero schema
- * changes. Empty persona = the state passes through untouched (same ref).
- */
+/** Keep the player's self-authored persona as an ordinary tracked-object field. */
 export function withPlayerPersona(state: WorldState | null, persona: string): WorldState | null {
   const text = persona.trim()
   if (text.length === 0) return state
   const base = state ?? emptyWorldState()
-  return { ...base, player: createDynamicField('string', text) }
+  const prior = base.trackedObjects.player
+  const player: TrackedObject = prior ?? {
+    id: 'player',
+    kind: 'character',
+    name: '玩家',
+    isPlayer: true,
+    fields: {},
+  }
+  return {
+    ...base,
+    trackedObjects: {
+      ...base.trackedObjects,
+      player: {
+        ...player,
+        fields: { ...player.fields, persona: createDynamicField('string', text) },
+      },
+    },
+  }
 }

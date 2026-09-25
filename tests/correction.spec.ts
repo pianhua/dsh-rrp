@@ -1,203 +1,217 @@
 import { describe, expect, it } from 'vitest'
-import { forgetActivity, readActivity } from '../src/activity.ts'
 import { registerCorrectionRoute } from '../src/correction.ts'
+import { readActivity, forgetActivity } from '../src/activity.ts'
 import { forgetState } from '../src/state-publisher.ts'
-import { emptyWorldState } from '../src/world-state.ts'
+import { rrpPayloadOf } from '../src/state-payload.ts'
+import { emptyWorldState, type WorldState } from '../src/world-state.ts'
+import { emptyWorldStateTimeline, type WorldStateTimeline } from '../src/world-state-timeline.ts'
 
-const VALID = { ...emptyWorldState(), scene: { location: '归离客栈' } }
-
-function fakeHost(failAppend = false) {
-  const appended: Array<{ type: string; data: unknown }> = []
-  const sessions = {
-    get: (id: string) =>
-      id === 's1'
-        ? {
-            id: 's1',
-            append: (type: string, data: unknown) => {
-              if (failAppend) throw new Error('append failed')
-              appended.push({ type, data })
-              return {}
-            },
-          }
-        : undefined,
+function validState(): WorldState {
+  return {
+    ...emptyWorldState(),
+    trackedObjects: {
+      mia: {
+        id: 'mia',
+        kind: 'character',
+        name: '米娅',
+        character: { presence: 'present' },
+        fields: {},
+      },
+    },
   }
-  let route: { handler: (req: unknown, res: unknown) => unknown } | undefined
+}
+
+function fakeHost(
+  initial: WorldState = validState(),
+  failAppend = false,
+  timeline: WorldStateTimeline = emptyWorldStateTimeline(),
+) {
+  let current = initial
+  const appended: Array<{ type: string; data: unknown }> = []
+  const session = {
+    id: 's1',
+    append(type: string, data: unknown) {
+      if (failAppend) throw new Error('append failed')
+      appended.push({ type, data })
+      const payload = rrpPayloadOf({ type, data })
+      if (payload?.worldState !== undefined) current = payload.worldState
+      return {}
+    },
+  }
+  let route: { handler: (req: unknown, res: unknown) => Promise<void> } | undefined
+  const projections = {
+    stateOf: (_session: unknown, key: string) => {
+      if (key === 'rrpWorldState') return current
+      if (key === 'rrpWorldStateTimeline') return timeline
+      if (key === 'agentPreset') return 'rp'
+      return undefined
+    },
+  }
   const webServer = {
-    register: (definition: { handler: (req: unknown, res: unknown) => unknown }) => {
+    register: (definition: { handler: (req: unknown, res: unknown) => Promise<void> }) => {
       route = definition
       return () => {}
     },
   }
-  const sessionProjections = { stateOf: () => undefined }
   const ctx = {
     effect(fn: () => (() => void) | void) {
       return fn()
     },
     get: (name: string) =>
-      (({ webServer, sessions, sessionProjections }) as Record<string, unknown>)[name],
+      ({
+        webServer,
+        sessions: { get: (id: string) => (id === 's1' ? session : undefined) },
+        sessionProjections: projections,
+      })[name],
   }
-  return { ctx, appended, route: () => route }
+  return { ctx, appended, route: () => route, state: () => current }
 }
 
-it('keeps the correction route idle until the projection registry is available', () => {
-  let registered = false
-  const ctx = {
-    effect: (fn: () => unknown) => fn(),
-    get: (name: string) =>
-      (
-        ({
-          webServer: {
-            register: () => {
-              registered = true
-              return () => {}
-            },
-          },
-          sessions: { get: () => undefined },
-        }) as Record<string, unknown>
-      )[name],
-  }
-  registerCorrectionRoute(ctx as never)
-  expect(registered).toBe(false)
-})
-
-function fakeExchange(body: unknown, method = 'POST') {
+function exchange(body: unknown) {
   const req = {
-    method,
+    method: 'POST',
     async *[Symbol.asyncIterator]() {
       yield JSON.stringify(body)
     },
   }
   const res = {
     statusCode: 0,
-    header: {} as Record<string, string>,
-    setHeader(name: string, value: string) {
-      this.header[name] = value
+    body: '',
+    setHeader() {},
+    end(payload?: string) {
+      this.body = payload ?? ''
     },
-    end(_payload?: string) {},
   }
   return { req, res }
 }
 
 describe('player correction route', () => {
-  it('validates and publishes the whole corrected state', async () => {
+  it('previews and then publishes a complete v2 snapshot with player provenance', async () => {
     forgetState('s1')
     forgetActivity('s1')
     const host = fakeHost()
     registerCorrectionRoute(host.ctx as never)
-    const { req, res } = fakeExchange({ sessionId: 's1', state: VALID })
-    await host.route()!.handler(req, res)
+    const next = validState()
+    next.trackedObjects.mia!.character = { presence: 'present', affinity: 80 }
 
-    expect(res.statusCode).toBe(200)
-    const writes = host.appended.filter((entry) => entry.type === 'user/message')
-    expect(writes).toHaveLength(1)
-    expect(
-      (writes[0]?.data as { source: { rrp: { worldState: unknown } } }).source.rrp.worldState,
-    ).toEqual(VALID)
+    const preview = exchange({ sessionId: 's1', state: next, preview: true })
+    await host.route()!.handler(preview.req, preview.res)
+    expect(preview.res.statusCode).toBe(200)
+    expect(JSON.parse(preview.res.body)).toMatchObject({ ok: true, preview: true })
+    expect(host.appended).toHaveLength(0)
 
-    // Attribution: a player correction is recorded as such in the ledger.
-    const activity = readActivity('s1')
-    expect(activity.entries).toHaveLength(1)
-    expect(activity.entries[0]?.actor).toBe('player')
-    expect(activity.entries[0]?.phase).toBe('corrected')
+    const save = exchange({ sessionId: 's1', state: next, evidence: '玩家修正好感' })
+    await host.route()!.handler(save.req, save.res)
+    expect(save.res.statusCode).toBe(200)
+    expect(host.appended).toHaveLength(1)
+    expect(rrpPayloadOf(host.appended[0])?.worldState).toEqual(next)
+    expect(rrpPayloadOf(host.appended[0])?.worldStateTimelineBatch).toMatchObject({
+      provenance: { actor: 'player', evidence: '玩家修正好感' },
+    })
+    expect(readActivity('s1').entries[0]?.actor).toBe('player')
   })
 
-  it('returns 200 without appending when the correction changes nothing (issue #12)', async () => {
+  it('returns unchanged without appending a no-op save', async () => {
     forgetState('s1')
     forgetActivity('s1')
-    // The projection already holds the identical state: a stray save must not
-    // append a facts message nor touch the ledger.
-    const appended: Array<{ type: string; data: unknown }> = []
-    const sessions = {
-      get: (id: string) =>
-        id === 's1'
-          ? {
-              id: 's1',
-              append: (type: string, data: unknown) => {
-                appended.push({ type, data })
-                return {}
-              },
-            }
-          : undefined,
-    }
-    let route: { handler: (req: unknown, res: unknown) => unknown } | undefined
-    const webServer = {
-      register: (definition: { handler: (req: unknown, res: unknown) => unknown }) => {
-        route = definition
-        return () => {}
-      },
-    }
-    const sessionProjections = {
-      stateOf: (_s: unknown, key: string) => (key === 'rrpWorldState' ? VALID : undefined),
-    }
-    const ctx = {
-      effect(fn: () => (() => void) | void) {
-        return fn()
-      },
-      get: (name: string) =>
-        (({ webServer, sessions, sessionProjections }) as Record<string, unknown>)[name],
-    }
-    registerCorrectionRoute(ctx as never)
-    const { req, res } = fakeExchange({ sessionId: 's1', state: VALID })
-    await route!.handler(req, res)
-
+    const host = fakeHost()
+    registerCorrectionRoute(host.ctx as never)
+    const { req, res } = exchange({ sessionId: 's1', state: validState() })
+    await host.route()!.handler(req, res)
     expect(res.statusCode).toBe(200)
-    expect(appended).toHaveLength(0)
+    expect(JSON.parse(res.body)).toMatchObject({ ok: true, unchanged: true })
+    expect(host.appended).toHaveLength(0)
     expect(readActivity('s1').entries).toHaveLength(0)
   })
 
-  it('rejects an invalid state without appending', async () => {
-    const host = fakeHost()
+  it('rejects hidden content and reference-unsafe deletion', async () => {
+    const initial = validState()
+    initial.globalFields.secret = {
+      type: 'string',
+      value: '秘密',
+      definition: 'undeclared',
+      visibility: 'hidden',
+    }
+    const host = fakeHost(initial)
     registerCorrectionRoute(host.ctx as never)
-    const { req, res } = fakeExchange({ sessionId: 's1', state: { scene: { location: 7 } } })
-    await host.route()!.handler(req, res)
-    expect(res.statusCode).toBe(400)
-    expect(host.appended).toHaveLength(0)
+    const hidden = structuredClone(initial)
+    hidden.globalFields.secret!.value = '改写秘密'
+    const hiddenExchange = exchange({ sessionId: 's1', state: hidden })
+    await host.route()!.handler(hiddenExchange.req, hiddenExchange.res)
+    expect(hiddenExchange.res.statusCode).toBe(403)
+
+    const withReference = validState()
+    withReference.objectives = [
+      {
+        id: 'goal',
+        owners: [{ objectId: 'mia' }],
+        desiredOutcome: '留在客栈',
+        status: 'active',
+      },
+    ]
+    const referencedHost = fakeHost(withReference)
+    registerCorrectionRoute(referencedHost.ctx as never)
+    const deleted = structuredClone(withReference)
+    delete deleted.trackedObjects.mia
+    const blocked = exchange({ sessionId: 's1', state: deleted })
+    await referencedHost.route()!.handler(blocked.req, blocked.res)
+    expect(blocked.res.statusCode).toBe(409)
+    expect(JSON.parse(blocked.res.body)).toMatchObject({ details: { objectId: 'mia' } })
+
+    const confirmed = exchange({
+      sessionId: 's1',
+      state: deleted,
+      confirmDeleteIds: ['mia'],
+    })
+    await referencedHost.route()!.handler(confirmed.req, confirmed.res)
+    expect(confirmed.res.statusCode).toBe(200)
+    expect(referencedHost.appended).toHaveLength(1)
   })
 
-  it('rejects an unknown session', async () => {
+  it('rejects an invalid state and unknown session', async () => {
     const host = fakeHost()
     registerCorrectionRoute(host.ctx as never)
-    const { req, res } = fakeExchange({ sessionId: 'nope', state: VALID })
-    await host.route()!.handler(req, res)
-    expect(res.statusCode).toBe(404)
-    expect(host.appended).toHaveLength(0)
+    const invalid = exchange({ sessionId: 's1', state: { version: 1 } })
+    await host.route()!.handler(invalid.req, invalid.res)
+    expect(invalid.res.statusCode).toBe(400)
+    const missing = exchange({ sessionId: 'nope', state: validState() })
+    await host.route()!.handler(missing.req, missing.res)
+    expect(missing.res.statusCode).toBe(404)
   })
 
-  it('reports a failed append and does not record a correction', async () => {
+  it('marks a player batch local even when inherited timeline history exists', async () => {
+    const inherited: WorldStateTimeline = {
+      version: 1,
+      batches: [
+        {
+          kind: 'baseline',
+          snapshot: 'initial-state',
+          provenance: { actor: 'initial-state', at: 'unknown' },
+          origin: 'inherited',
+        },
+      ],
+    }
+    const host = fakeHost(validState(), false, inherited)
+    registerCorrectionRoute(host.ctx as never)
+    const next = validState()
+    next.trackedObjects.mia!.character = { presence: 'absent' }
+    const { req, res } = exchange({ sessionId: 's1', state: next })
+    await host.route()!.handler(req, res)
+    expect(res.statusCode).toBe(200)
+    const payload = rrpPayloadOf(host.appended[0])
+    expect(payload?.worldStateTimelineBatch).toMatchObject({ origin: 'local' })
+  })
+
+  it('reports append failure without recording activity', async () => {
     forgetState('s1')
     forgetActivity('s1')
-    const host = fakeHost(true)
+    const host = fakeHost(validState(), true)
     registerCorrectionRoute(host.ctx as never)
-    const { req, res } = fakeExchange({ sessionId: 's1', state: VALID })
+    const next = validState()
+    next.trackedObjects.mia!.character = { presence: 'absent' }
+    const { req, res } = exchange({ sessionId: 's1', state: next })
     await host.route()!.handler(req, res)
     expect(res.statusCode).toBe(500)
-    expect(host.appended).toEqual([])
-    expect(readActivity('s1').entries).toEqual([])
-  })
-
-  it('prunes over-limit entries and clamps constrained dynamic fields before publishing', async () => {
-    forgetState('s1')
-    forgetActivity('s1')
-    const host = fakeHost()
-    registerCorrectionRoute(host.ctx as never)
-    const overLimitFlags: Record<string, boolean> = {}
-    for (let i = 0; i < 20; i++) overLimitFlags[`flag_${i}`] = true
-    const unprunedState = {
-      ...VALID,
-      flags: overLimitFlags,
-      mana: { type: 'number', value: 150, min: 0, max: 100 },
-    }
-    const { req, res } = fakeExchange({ sessionId: 's1', state: unprunedState })
-    await host.route()!.handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    const writes = host.appended.filter((entry) => entry.type === 'user/message')
-    expect(writes).toHaveLength(1)
-    const writtenState = (writes[0]?.data as { source: { rrp: { worldState: any } } }).source.rrp
-      .worldState
-    // Flags must be capped to 16
-    expect(Object.keys(writtenState.flags)).toHaveLength(16)
-    // Value must be clamped to max 100
-    expect(writtenState.mana).toEqual({ type: 'number', value: 100, min: 0, max: 100 })
+    expect(readActivity('s1').entries).toHaveLength(0)
   })
 })

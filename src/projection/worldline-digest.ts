@@ -49,10 +49,19 @@ export const digestSchema = z.object({
 })
 
 const worldStatePayloadSchema = z.object({
-  scene: z.record(z.string(), z.string()).optional(),
-  characters: z
-    .record(z.string(), z.object({ affinity: z.number().optional() }).passthrough())
-    .optional(),
+  trackedObjects: z
+    .record(
+      z.string(),
+      z
+        .object({
+          kind: z.string(),
+          name: z.string(),
+          character: z.object({ affinity: z.number().optional() }).passthrough().optional(),
+          fields: z.record(z.string(), z.object({ value: z.unknown() }).passthrough()).default({}),
+        })
+        .passthrough(),
+    )
+    .default({}),
 })
 
 const summaryPayloadSchema = z.object({
@@ -68,18 +77,18 @@ function badgeFromState(
   const parsed = worldStatePayloadSchema.safeParse(raw)
   if (!parsed.success) return base
   const next: WorldlineBadge = { ...base }
-  const scene = parsed.data.scene as Record<string, string | undefined> | undefined
-  const location = scene?.location
-  const time = scene?.time
+  const objects = Object.values(parsed.data.trackedObjects)
+  const scene = objects.find((object) => object.kind === 'scene')
+  const location = scene?.fields.location?.value
+  const time = scene?.fields.time?.value
   if (typeof location === 'string' && location.length > 0) next.location = location
   if (typeof time === 'string' && time.length > 0) next.time = time
-  if (parsed.data.characters !== undefined) {
-    const top = Object.entries(parsed.data.characters)
-      .map(([name, entry]) => ({ name, value: entry.affinity ?? 0 }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 3)
-    if (top.length > 0) next.affinity = top
-  }
+  const top = objects
+    .filter((object) => object.kind === 'character' && object.character !== undefined)
+    .map((object) => ({ name: object.name, value: object.character?.affinity ?? 0 }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 3)
+  if (top.length > 0) next.affinity = top
   return next
 }
 

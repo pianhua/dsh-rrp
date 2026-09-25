@@ -21,6 +21,7 @@ import type { MacroSummary } from './macro-summary.ts'
 import type { RrpSettings } from './settings.ts'
 import type { LoreChange } from './lore-state.ts'
 import type { WorldState } from './world-state.ts'
+import type { WorldStateTimelineBatch } from './world-state-timeline.ts'
 
 /** The plugin identity stamped on every context message we own. */
 export const RRP_PLUGIN = 'dsh-rrp'
@@ -31,6 +32,8 @@ export interface RrpStatePayload {
   card?: CardContext
   /** Complete post-change world state (whole-value rule). */
   worldState?: WorldState
+  /** One atomic WorldState v2 timeline batch for the same durable write. */
+  worldStateTimelineBatch?: WorldStateTimelineBatch
   /**
    * Seq of the newest prose this world-state fold actually covered. Carried
    * beside the state so the Chronicler's "what is still un-booked" cursor

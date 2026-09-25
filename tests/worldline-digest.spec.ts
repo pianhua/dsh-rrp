@@ -86,8 +86,31 @@ describe('worldline digest fold (issue #28)', () => {
     state = apply(
       state,
       stateEvent(3, {
-        scene: { location: '客栈大堂', time: '夜' },
-        characters: { 米娅: { affinity: 8 }, 温娘子: { affinity: 3 } },
+        trackedObjects: {
+          inn: {
+            id: 'inn',
+            kind: 'scene',
+            name: '客栈大堂',
+            fields: {
+              location: { type: 'string', value: '客栈大堂', definition: 'card-defined' },
+              time: { type: 'string', value: '夜', definition: 'card-defined' },
+            },
+          },
+          mia: {
+            id: 'mia',
+            kind: 'character',
+            name: '米娅',
+            character: { affinity: 8 },
+            fields: {},
+          },
+          wenyan: {
+            id: 'wenyan',
+            kind: 'character',
+            name: '温娘子',
+            character: { affinity: 3 },
+            fields: {},
+          },
+        },
       }),
     )
     expect(state.turns[0]?.badge).toEqual({
@@ -103,7 +126,21 @@ describe('worldline digest fold (issue #28)', () => {
   })
 
   it('an opening state before any turn parks in the pending watermark', () => {
-    const state = apply(emptyWorldlineDigest(), stateEvent(1, { scene: { location: '门口' } }))
+    const state = apply(
+      emptyWorldlineDigest(),
+      stateEvent(1, {
+        trackedObjects: {
+          doorway: {
+            id: 'doorway',
+            kind: 'scene',
+            name: '门口',
+            fields: {
+              location: { type: 'string', value: '门口', definition: 'card-defined' },
+            },
+          },
+        },
+      }),
+    )
     expect(state.turns).toEqual([])
     expect(state.pending?.location).toBe('门口')
   })

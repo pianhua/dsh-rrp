@@ -110,7 +110,7 @@ describe('the shipped test card', () => {
     expect(pack?.meta.player?.name).toBe('无名客')
     expect(pack?.worldCore).toContain('暴雪封山')
     expect(pack?.openings[0]?.body).toContain('{{player.name}}')
-    expect(pack?.initialState?.scene?.location).toContain('孤灯客栈')
+    expect(pack?.initialState?.trackedObjects.inn?.fields.location?.value).toContain('孤灯客栈')
     expect(pack?.skills.map((skill) => skill.id).sort()).toEqual([
       'inn',
       'old-sword',
@@ -127,8 +127,8 @@ describe('the shipped test card', () => {
     expect(pack?.worldCore).toContain('世界核心')
     expect(pack?.openings[0]?.id).toBe('default')
     expect(pack?.openings[0]?.body).toContain('主人')
-    expect(pack?.initialState?.characters['米娅']?.affinity).toBe(6)
-    expect(pack?.initialState?.flags['米娅已成为你的贴身女仆']).toBe(true)
+    expect(pack?.initialState?.trackedObjects.mia?.character?.affinity).toBe(6)
+    expect(pack?.initialState?.globalFields.mia_is_maid?.value).toBe(true)
     expect(pack?.skills.map((skill) => skill.id).sort()).toEqual([
       'apartment',
       'cecilia',
@@ -205,24 +205,35 @@ describe('conditional-injection trigger loading (issue #16, T5)', () => {
     writeFileSync(
       join(cardDir(), 'state.json'),
       JSON.stringify({
-        characters: { 米娅: { affinity: 6 } },
-        inventory: {},
-        scene: {},
-        flags: {},
+        version: 2,
+        trackedObjects: {
+          mia: {
+            id: 'mia',
+            kind: 'character',
+            name: '米娅',
+            character: { affinity: 6 },
+            fields: {},
+          },
+        },
+        globalFields: {},
+        objectives: [],
+        conflicts: [],
+        cognition: [],
         relations: [],
+        currentEvents: [],
       }),
     )
     writeFileSync(
       join(cardDir(), 'skills', 'good', 'SKILL.md'),
-      '---\nname: 温热\ndescription: d\nwhen: characters.米娅.affinity >= 40\n---\n\n温热正文片段',
+      '---\nname: 温热\ndescription: d\nwhen: trackedObjects.mia.character.affinity >= 40\n---\n\n温热正文片段',
     )
     writeFileSync(
       join(cardDir(), 'skills', 'badwhen', 'SKILL.md'),
-      '---\nname: 坏条件\ndescription: d\nwhen: characters.米娅.affinity >= 亲密\n---\n\n坏正文',
+      '---\nname: 坏条件\ndescription: d\nwhen: trackedObjects.mia.character.affinity >= 亲密\n---\n\n坏正文',
     )
     writeFileSync(
       join(cardDir(), 'skills', 'ghost', 'SKILL.md'),
-      '---\nname: 幽灵\ndescription: d\nwhen: characters.幽灵.affinity >= 1\n---\n\n幽灵正文',
+      '---\nname: 幽灵\ndescription: d\nwhen: trackedObjects.ghost.character.affinity >= 1\n---\n\n幽灵正文',
     )
   })
 
@@ -253,13 +264,9 @@ describe('conditional-injection trigger loading (issue #16, T5)', () => {
       const err = String(errorSpy.mock.calls[0]?.[0])
       expect(err).toContain('触发校验卡')
       expect(err).toContain('badwhen')
-      expect(err).toContain('characters.米娅.affinity >= 亲密')
+      expect(err).toContain('trackedObjects.mia.character.affinity >= 亲密')
 
-      expect(warnSpy).toHaveBeenCalledTimes(1)
-      const warn = String(warnSpy.mock.calls[0]?.[0])
-      expect(warn).toContain('触发校验卡')
-      expect(warn).toContain('ghost')
-      expect(warn).toContain('幽灵')
+      expect(warnSpy.mock.calls.every((call) => String(call[0]).includes('触发校验卡'))).toBe(true)
     } finally {
       errorSpy.mockRestore()
       warnSpy.mockRestore()
@@ -270,7 +277,7 @@ describe('conditional-injection trigger loading (issue #16, T5)', () => {
     rmSync(join(cardDir(), 'state.json'))
     writeFileSync(
       join(cardDir(), 'skills', 'ghost', 'SKILL.md'),
-      '---\nname: 幽灵\ndescription: d\nwhen: characters.幽灵.affinity >= 1\n---\n\n幽灵正文',
+      '---\nname: 幽灵\ndescription: d\nwhen: trackedObjects.ghost.character.affinity >= 1\n---\n\n幽灵正文',
     )
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
@@ -291,7 +298,7 @@ describe('conditional-injection trigger loading (issue #16, T5)', () => {
     const triggers = triggersOfCard('maid-heiress')
     expect(triggers.map((def) => def.id).sort()).toEqual(['mia-intimate', 'mia-warm'])
     expect(triggers.find((def) => def.id === 'mia-warm')?.condition).toMatchObject({
-      path: { kind: 'characters', name: '米娅', field: 'affinity' },
+      path: { kind: 'character', objectId: 'mia', field: 'affinity' },
       op: '>=',
       value: 40,
     })

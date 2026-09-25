@@ -29,7 +29,7 @@ cards/<你的卡>/
   "panels": [
     { "id": "now", "component": "timeline", "title": "此刻", "span": 2 },
     { "id": "hero", "component": "gauge", "title": "女主好感",
-      "bind": "characters.米娅.affinity", "min": 0, "max": 100 },
+      "bind": "trackedObjects.mia.character.affinity", "min": 0, "max": 100 },
     { "id": "cast", "component": "characterCard", "title": "在场人物" },
     { "id": "ties", "component": "relationTable", "title": "关系" }
   ]
@@ -45,11 +45,11 @@ cards/<你的卡>/
 | `gauge` | 数值进度条（好感、警戒、时间余量） | `bind` 指向一个数值；`min` / `max` |
 | `characterCard` | 人物卡：名字 + 好感 + 情绪/状态/外貌 | `bind` 指定某个角色，省略=全部 |
 | `relationTable` | 关系网 `A × B · 标签` | 无 |
-| `timeline` | 此刻：时间 · 地点 · 天气 | 无 |
+| `timeline` | 此刻：场景追踪对象的时间 · 地点 · 天气等字段 | `bind` 可指定场景追踪对象 ID |
 | `buttonRow` | 一排按钮 | `buttons`，最多 8 个 |
 | `app` | 你自己的整页界面 | `src` 指 `ui/` 下的 html |
 
-`bind` 的路径写法和[技能的条件注入](./skills-when.md)完全一致：`characters.米娅.affinity`、`inventory.旧剑.quantity`、`flags.暴雪封关`、场景 `scene.location`，以及 Chronicler 后来自己加的顶层字段。
+`bind` 的路径写法和[技能的条件注入](./skills-when.md)完全一致：`trackedObjects.mia.character.affinity`、`trackedObjects.old-sword.fields.quantity.value`、`globalFields.snowbound.value`；场景字段同样写在场景追踪对象下，例如 `trackedObjects.inn.fields.location.value`。`characterCard` 的 `bind` 可写追踪对象 ID（如 `trackedObjects.mia`），省略则显示全部角色。
 
 ## 让面板「到点了才出现」
 
@@ -57,8 +57,8 @@ cards/<你的卡>/
 
 ```json
 { "id": "warm", "component": "gauge", "title": "升温阶段",
-  "bind": "characters.米娅.affinity", "min": 40, "max": 100,
-  "when": "characters.米娅.affinity >= 40" }
+  "bind": "trackedObjects.mia.character.affinity", "min": 40, "max": 100,
+  "when": "trackedObjects.mia.character.affinity >= 40" }
 ```
 
 不成立时这一格直接不渲染。目前支持数值与布尔比较（`> >= < <= == !=`）；字符串比较刻意没开，因为自由文本词表会漂移，那样保底的显示会悄悄失效。

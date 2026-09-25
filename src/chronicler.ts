@@ -13,11 +13,15 @@
  * can start background work.
  */
 import { randomUUID } from 'node:crypto'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { recordActivity } from './activity.ts'
+import { recordActivity, renderActivityWorldStateDiff } from './activity.ts'
+import { extractFirstJsonObject } from './json-extract.ts'
 import {
   CHRONICLER_SYSTEM_PROMPT,
   buildChroniclerPrompt,
+  chroniclerReplySchema,
   parseChroniclerReply,
 } from './agents/chronicler.ts'
 import {
@@ -39,17 +43,44 @@ import {
 import { matchesPreset } from './preset-id.ts'
 import { publishState } from './state-publisher.ts'
 import { pendingTranscriptOf, proseHeadSeqOf } from './transcript-reader.ts'
+import { type WorldStateTimelineChangeBatch } from './world-state-timeline.ts'
 import {
-  NO_WORLD_STATE_CHANGE,
   WORLD_STATE_KEY,
   diffWorldState,
   emptyWorldState,
   worldStatesEqual,
   type WorldState,
 } from './world-state.ts'
+import { sanitizePlayerText, sanitizeWorldStateDiff } from './world-state-visibility.ts'
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'chronicler'
+
+/** First schema issues for a malformed Chronicler reply, for diagnostics. */
+function chroniclerReplyIssueList(text: string): string[] | undefined {
+  const parsed = extractFirstJsonObject(text)
+  if (parsed === undefined) return ['no JSON object found']
+  const result = chroniclerReplySchema.safeParse(parsed)
+  if (result.success) return undefined
+  return result.error.issues.slice(0, 5).map((issue) => issue.path.join('.') + ': ' + issue.message)
+}
+
+function chroniclerReplyIssues(text: string): string | undefined {
+  const list = chroniclerReplyIssueList(text)
+  return list === undefined ? undefined : JSON.stringify(list)
+}
+
+/** Debug seam: persist the full malformed reply for offline inspection. */
+function dumpMalformedReply(sessionId: string, text: string): void {
+  const dir = process.env.DSH_RRP_DEBUG_DUMP
+  if (dir === undefined || dir.length === 0) return
+  try {
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'chronicler-' + sessionId + '-' + Date.now() + '.txt'), text)
+  } catch {
+    // debug seam never breaks the job
+  }
+}
 
 /** The host faces this runner speaks to, gathered once at registration. */
 interface HostFaces {
@@ -200,6 +231,25 @@ export function forgetAllInference(): void {
   DISCARD_RETRIES.clear()
 }
 
+/** One LLM round-trip for the Chronicler conversation so far. */
+async function streamChroniclerText(
+  faces: HostFaces,
+  session: SessionLike,
+  route: ProviderRoute,
+  signal: AbortSignal,
+  messages: unknown[],
+): Promise<string> {
+  const stream = faces.llm.stream({
+    provider: route.provider,
+    model: route.model,
+    system: CHRONICLER_SYSTEM_PROMPT,
+    messages,
+    sessionId: session.id,
+    signal,
+  })
+  return collectText(stream)
+}
+
 /** One inference pass: prompt -> model -> parse -> append. */
 async function runInference(
   faces: HostFaces,
@@ -228,22 +278,13 @@ async function runInference(
     })
 
     const prompt = buildChroniclerPrompt({ prior, transcript })
-    const stream = faces.llm.stream({
-      provider: route.provider,
-      model: route.model,
-      system: CHRONICLER_SYSTEM_PROMPT,
-      messages: [
-        {
-          id: randomUUID(),
-          role: 'user',
-          content: [{ type: 'text', text: prompt }],
-          source: { kind: 'plugin', plugin: 'dsh-rrp' },
-        },
-      ],
-      sessionId: session.id,
-      signal,
-    })
-    const text = await collectText(stream)
+    const userMessage = {
+      id: randomUUID(),
+      role: 'user' as const,
+      content: [{ type: 'text' as const, text: prompt }],
+      source: { kind: 'plugin' as const, plugin: 'dsh-rrp' },
+    }
+    const text = await streamChroniclerText(faces, session, route, signal, [userMessage])
     if (isCancelled()) {
       recordActivity(session.id, {
         id: activityId,
@@ -259,18 +300,67 @@ async function runInference(
     // a malformed payload — both used to surface as the same format error.
     if (isEmptyReply(text)) throw emptyReplyError('Chronicler', session.id)
 
-    const reply = parseChroniclerReply(text, prior)
+    // Weak models occasionally drift off the strict v2 wire shape. Before
+    // giving up, ask once more with the validation issues spelled out; the
+    // deterministic envelope repair has already run inside parseChroniclerReply.
+    const repaired = parseChroniclerReply(text)
+    let reply = repaired
+    let finalText = text
+    if (reply === undefined && !isCancelled()) {
+      const issues = chroniclerReplyIssueList(text)
+      console.warn(
+        TAG +
+          ' Chronicler reply failed validation; requesting one repair pass: ' +
+          (issues === undefined ? 'unknown' : issues.join('; ')),
+      )
+      const repairMessage = {
+        id: randomUUID(),
+        role: 'user' as const,
+        content: [
+          {
+            type: 'text' as const,
+            text:
+              '上一次输出未通过 WorldState v2 校验。问题：\n- ' +
+              (issues ?? ['unknown']).join('\n- ') +
+              '\n请输出修正后的完整 JSON 对象（只输出 JSON，不要解释，不要 Markdown）：{"state":完整WorldState,"changeSummary":"…","evidence":[…]}。',
+          },
+        ],
+        source: { kind: 'plugin' as const, plugin: 'dsh-rrp' },
+      }
+      const assistantMessage = {
+        id: randomUUID(),
+        role: 'assistant' as const,
+        content: [{ type: 'text' as const, text }],
+      }
+      const retryText = await streamChroniclerText(faces, session, route, signal, [
+        userMessage,
+        assistantMessage,
+        repairMessage,
+      ])
+      if (!isCancelled() && !isEmptyReply(retryText)) {
+        const retryReply = parseChroniclerReply(retryText)
+        if (retryReply !== undefined) {
+          reply = retryReply
+          finalText = retryText
+        }
+      }
+    }
+
     if (reply === undefined) {
       // Log a bounded preview so a format regression names its cause instead
-      // of leaving "not a valid WorldState" as the whole story.
-      const preview = text.replace(/\s+/g, ' ').slice(0, 160)
+      // of leaving "not a valid WorldState" as the whole story; include the
+      // first schema issues so a field-level drift is identifiable offline.
+      const preview = finalText.replace(/\s+/g, ' ').slice(0, 160)
+      const issues = chroniclerReplyIssues(finalText)
       console.warn(
         TAG +
           ' Chronicler reply was not a valid WorldState (len ' +
-          String(text.length) +
+          String(finalText.length) +
           '): ' +
-          preview,
+          preview +
+          (issues === undefined ? '' : ' | issues: ' + issues),
       )
+      dumpMalformedReply(session.id, finalText)
       throw new Error('Chronicler reply was not a valid WorldState')
     }
 
@@ -314,18 +404,10 @@ async function runInference(
       return { status: 'stale' }
     }
 
-    // D5: Log field creation if present
-    if (reply.createFields && reply.createFields.length > 0) {
-      const fieldNames = reply.createFields.map((f) => f.id).join(', ')
-      console.log(TAG + ' Chronicler created new fields: ' + fieldNames)
-    }
-
     const diff = diffWorldState(prior, reply.state)
-    if (diff === NO_WORLD_STATE_CHANGE) {
-      // Nothing to book, so nothing is published — and the durable cursor
-      // stays put. The next pass re-reads this turn's prose, which is bounded
-      // by CHRONICLER_TRANSCRIPT_LIMIT and idempotent against the full prior
-      // state; appending a duplicate facts block would cost more than that.
+    if (diff.changes.length === 0) {
+      // No-op inference is activity only: it must not advance the durable prose
+      // cursor or create a WorldState timeline event.
       DISCARD_RETRIES.delete(session.id)
       recordActivity(session.id, {
         id: activityId,
@@ -339,13 +421,40 @@ async function runInference(
       return { status: 'completed' }
     }
 
-    // The cursor travels inside this same publish: it is the log that says
-    // what has been booked, so a restart or a fork resumes from the right
-    // piece of prose.
+    const turnBoundary = faces.projections.stateOf(session, 'turnBoundary') as
+      { lastTurn?: unknown } | undefined
+    const storyTurn =
+      typeof turnBoundary?.lastTurn === 'number' && Number.isInteger(turnBoundary.lastTurn)
+        ? turnBoundary.lastTurn
+        : undefined
+    const playerSafeDiff = sanitizeWorldStateDiff(diff, prior, reply.state)
+    const evidenceParts = [
+      ...(reply.changeSummary === undefined
+        ? []
+        : [sanitizePlayerText(reply.changeSummary, prior, reply.state)]),
+      ...(reply.evidence === undefined || reply.evidence.length === 0
+        ? []
+        : ['证据：' + sanitizePlayerText(reply.evidence.join('；'), prior, reply.state)]),
+    ]
+    const timelineBatch: WorldStateTimelineChangeBatch = {
+      kind: 'changes',
+      changes: diff.changes,
+      provenance: {
+        actor: 'chronicler',
+        ...(storyTurn === undefined ? {} : { storyTurn }),
+        at: nowIso(),
+        ...(evidenceParts.length === 0 ? {} : { evidence: evidenceParts.join('；') }),
+      },
+      origin: 'local',
+    }
+
+    // The cursor and the atomic timeline batch travel with the complete state
+    // snapshot. Failed/cancelled/no-op paths never reach this publisher call.
     if (
       !publishState(session, faces.projections, {
         worldState: reply.state,
         stateFoldSeq: throughSeq,
+        worldStateTimelineBatch: timelineBatch,
       })
     ) {
       throw new Error('WorldState append failed')
@@ -357,7 +466,7 @@ async function runInference(
       actor: 'chronicler',
       target: 'world-state',
       phase: 'committed',
-      detail: diff,
+      detail: renderActivityWorldStateDiff(playerSafeDiff),
     })
     console.log(TAG + ' Chronicler committed WorldState for session ' + session.id)
     return { status: 'completed' }

@@ -10,7 +10,7 @@
  *   into a background data pipe.
  */
 import { describe, expect, it } from 'vitest'
-import { authorAgent, AUTHOR_SYSTEM_PROMPT } from '../src/agents/author.ts'
+import { authorAgent, AUTHOR_SYSTEM_PROMPT, buildAuthorPrompt } from '../src/agents/author.ts'
 import { chroniclerAgent, CHRONICLER_SYSTEM_PROMPT } from '../src/agents/chronicler.ts'
 import {
   summarizerAgent,
@@ -22,12 +22,7 @@ import { copilotAgent, COPILOT_SYSTEM_PROMPT } from '../src/agents/copilot.ts'
 import { macroSummarySchema } from '../src/projection/summary.ts'
 import { SUMMARY_LIMITS } from '../src/macro-summary.ts'
 import { LORE_LIMITS } from '../src/lore-state.ts'
-import {
-  applyConstraints,
-  emptyWorldState,
-  WORLD_STATE_LIMITS,
-  WORLD_STATE_TARGETS,
-} from '../src/world-state.ts'
+import { emptyWorldState } from '../src/world-state.ts'
 
 const CONTRACTS = [
   authorAgent,
@@ -105,29 +100,12 @@ describe('unified AgentPromptContract (issue #32)', () => {
     ).toBeUndefined()
   })
 
-  it('chronicler prompt states a lean target inside the hard cap it is pruned by', () => {
-    expect(WORLD_STATE_TARGETS.flags).toBeLessThanOrEqual(WORLD_STATE_LIMITS.flags)
-    expect(WORLD_STATE_TARGETS.relations).toBeLessThanOrEqual(WORLD_STATE_LIMITS.relations)
-    expect(CHRONICLER_SYSTEM_PROMPT).toContain(
-      '目标 ≤ ' +
-        String(WORLD_STATE_TARGETS.flags) +
-        ' 条，硬上限 ' +
-        String(WORLD_STATE_LIMITS.flags) +
-        ' 条',
-    )
-    expect(CHRONICLER_SYSTEM_PROMPT).toContain(
-      '目标 ≤ ' +
-        String(WORLD_STATE_TARGETS.relations) +
-        ' 条，硬上限 ' +
-        String(WORLD_STATE_LIMITS.relations) +
-        ' 条',
-    )
-    // A dynamic string field is clamped to the declared ceiling on every write path.
-    const long = '记'.repeat(WORLD_STATE_LIMITS.dynamicStringChars + 40)
-    const capped = applyConstraints({ type: 'string', value: long })
-    expect(typeof capped.value === 'string' ? capped.value.length : -1).toBe(
-      WORLD_STATE_LIMITS.dynamicStringChars,
-    )
+  it('chronicler prompt states the v2 evidence and restraint rules', () => {
+    expect(CHRONICLER_SYSTEM_PROMPT).toContain('完整 WorldState v2')
+    expect(CHRONICLER_SYSTEM_PROMPT).toContain('持续剧情证据')
+    expect(CHRONICLER_SYSTEM_PROMPT).toContain('外部引用')
+    expect(CHRONICLER_SYSTEM_PROMPT).toContain('没有明确解决证据就不要关闭')
+    expect(CHRONICLER_SYSTEM_PROMPT).toContain('面向玩家的变更摘要')
   })
 
   it('scribe prompt states the same limits its schema binds', () => {
@@ -154,16 +132,33 @@ describe('unified AgentPromptContract (issue #32)', () => {
       prior: emptyWorldState(),
       transcript: '【玩家】\n我推门。',
     })
-    expect(prompt).toContain('【最近的剧情】')
+    expect(prompt).toContain('【本轮明确剧情证据】')
     expect(prompt).toContain('我推门。')
-    const reply = chroniclerAgent.parseReply(JSON.stringify(emptyWorldState()))
-    expect(reply?.state).toBeDefined()
+    const reply = chroniclerAgent.parseReply(
+      JSON.stringify({ state: emptyWorldState(), changeSummary: '无变化', evidence: [] }),
+    )
+    expect(reply?.state).toEqual(emptyWorldState())
   })
 
-  it('author prompt keeps its iron rules and output discipline anchors', () => {
+  it('author prompt keeps its iron rules and states the v2 input layers', () => {
     expect(AUTHOR_SYSTEM_PROMPT).toContain('## Iron Rules')
     expect(AUTHOR_SYSTEM_PROMPT).toContain('## Output Discipline')
     expect(AUTHOR_SYSTEM_PROMPT).toContain('macro compass (剧情脉络)')
+    expect(AUTHOR_SYSTEM_PROMPT).toContain('WorldState v2')
+    expect(AUTHOR_SYSTEM_PROMPT).toContain('model-visible')
+    expect(AUTHOR_SYSTEM_PROMPT).toContain('hidden')
+    expect(AUTHOR_SYSTEM_PROMPT).toContain('秘密揭示规则')
+    const prompt = buildAuthorPrompt({
+      playerText: '我推门。',
+      cardSettings: '卡包硬设定',
+      skills: ['技能设定'],
+      worldState: emptyWorldState(),
+      macroSummary: { goal: '寻找出口', conflict: '门被锁住', turningPoints: [], threads: [] },
+    })
+    expect(prompt).toContain('卡包/Skills 硬设定')
+    expect(prompt).toContain('WorldState 近期状态')
+    expect(prompt).toContain('Summarizer 高维视角')
+    expect(prompt).toContain('我推门。')
     // The DEF-04 fix and the typo sweep stay in effect.
     expect(AUTHOR_SYSTEM_PROMPT).not.toContain('the the ')
   })

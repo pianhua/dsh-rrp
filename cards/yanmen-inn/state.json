@@ -1,37 +1,122 @@
 {
-  "characters": {
-    "温衍": {
-      "affinity": 0,
-      "mood": "热情周到，滴水不漏",
-      "appearance": "靛青布裙，袖口挽着，怀里一柄算盘",
-      "condition": "袖口有血腥味，自称刚宰的羊"
+  "version": 2,
+  "trackedObjects": {
+    "wenyan": {
+      "id": "wenyan",
+      "kind": "character",
+      "name": "温衍",
+      "character": {
+        "emotionalState": "热情周到，滴水不漏",
+        "outfit": "靛青布裙，袖口挽着，怀里一柄算盘",
+        "appearance": "靛青布裙，袖口挽着，怀里一柄算盘"
+      },
+      "fields": {
+        "condition": {
+          "type": "string",
+          "value": "袖口有血腥味，自称刚宰的羊",
+          "definition": "card-defined",
+          "visibility": "player"
+        }
+      }
     },
-    "灰袍剑客": {
-      "affinity": 0,
-      "mood": "沉默警惕",
-      "appearance": "洗得发白的灰袍，一柄无鞘的长刀",
-      "condition": "进客栈后一直坐在角落，目光数次落在玩家的旧剑上"
+    "gray-swordsman": {
+      "id": "gray-swordsman",
+      "kind": "character",
+      "name": "灰袍剑客",
+      "character": {
+        "emotionalState": "沉默警惕",
+        "outfit": "洗得发白的灰袍，一柄无鞘的长刀",
+        "appearance": "洗得发白的灰袍，一柄无鞘的长刀"
+      },
+      "fields": {
+        "condition": {
+          "type": "string",
+          "value": "进客栈后一直坐在角落，目光数次落在玩家的旧剑上",
+          "definition": "card-defined",
+          "visibility": "player"
+        }
+      }
     },
-    "青脸汉": {
-      "affinity": 0,
-      "mood": "粗粝蛮横",
-      "appearance": "短打劲装，手里一块擦刀布",
-      "condition": "靠在柱子上反复擦一柄其实已经很干净的刀"
+    "blue-faced-man": {
+      "id": "blue-faced-man",
+      "kind": "character",
+      "name": "青脸汉",
+      "character": {
+        "emotionalState": "粗粝蛮横",
+        "outfit": "短打劲装，手里一块擦刀布",
+        "appearance": "短打劲装，手里一块擦刀布"
+      },
+      "fields": {
+        "condition": {
+          "type": "string",
+          "value": "靠在柱子上反复擦一柄其实已经很干净的刀",
+          "definition": "card-defined",
+          "visibility": "player"
+        }
+      }
+    },
+    "old-sword": {
+      "id": "old-sword",
+      "kind": "item",
+      "name": "旧剑",
+      "fields": {
+        "note": {
+          "type": "string",
+          "value": "家传旧物，剑身沉哑无光，却是满屋目光的焦点",
+          "definition": "card-defined",
+          "visibility": "player"
+        }
+      }
+    },
+    "inn": {
+      "id": "inn",
+      "kind": "scene",
+      "name": "雁门关外 · 孤灯客栈",
+      "fields": {
+        "location": {
+          "type": "string",
+          "value": "雁门关外 · 孤灯客栈",
+          "definition": "card-defined",
+          "visibility": "player"
+        },
+        "time": {
+          "type": "string",
+          "value": "入夜，封关第一晚",
+          "definition": "card-defined",
+          "visibility": "player"
+        },
+        "weather": {
+          "type": "string",
+          "value": "暴雪封山，至少三日",
+          "definition": "card-defined",
+          "visibility": "player"
+        }
+      }
     }
   },
-  "inventory": {
-    "旧剑": {
-      "note": "家传旧物，剑身沉哑无光，却是满屋目光的焦点"
+  "globalFields": {
+    "snowbound": {
+      "type": "string",
+      "value": "至少三日，谁也走不了",
+      "definition": "card-defined",
+      "visibility": "player"
+    },
+    "inn_rules": {
+      "type": "string",
+      "value": "入夜落栓、卯时开门",
+      "definition": "card-defined",
+      "visibility": "player"
+    },
+    "innkeeper_blood": {
+      "type": "string",
+      "value": "她自称刚宰的羊",
+      "definition": "card-defined",
+      "visibility": "model"
     }
   },
-  "scene": {
-    "location": "雁门关外 · 孤灯客栈",
-    "time": "入夜，封关第一晚",
-    "weather": "暴雪封山，至少三日"
-  },
-  "flags": {
-    "暴雪封关": "至少三日，谁也走不了",
-    "客栈规矩": "入夜落栓、卯时开门",
-    "老板娘袖口有血腥味": "她自称刚宰的羊"
-  }
+  "objectives": [],
+  "conflicts": [],
+  "cognition": [],
+  "relations": [],
+  "currentEvents": []
 }

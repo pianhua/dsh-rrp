@@ -42,6 +42,7 @@ import { RRP_ROUTES, type LoreEntryView } from './route-contract.ts'
 import { evalCondition, hitSet } from './lore-condition.ts'
 import { publishState } from './state-publisher.ts'
 import { WORLD_STATE_KEY, type WorldState } from './world-state.ts'
+import { filterWorldState } from './world-state-visibility.ts'
 import { reservedNames, scheduleLoreDraft, type LoreApplicationFaces } from './lore-application.ts'
 
 const TAG = '[dsh-rrp]'
@@ -75,7 +76,7 @@ function loreView(skill: LoreEntry): LoreEntryView {
 
 /**
  * Conditional-injection view (issue #16): every trigger of the session's card
- * evaluated against the current state, plus the hit set's total injected
+ * evaluated against the player-safe v2 state, plus the hit set's total injected
  * characters. No card / no state → empty view, never an error.
  */
 function triggerView(
@@ -87,13 +88,14 @@ function triggerView(
   if (card === null || card === undefined || state === undefined) {
     return { triggers: [], injectedChars: 0 }
   }
+  const playerState = filterWorldState(state, 'player') as WorldState
   const triggers = triggersOfCard(card.id)
   return {
     triggers: triggers.map((def) => ({
       name: def.name,
-      active: evalCondition(def.condition, state),
+      active: evalCondition(def.condition, playerState),
     })),
-    injectedChars: hitSet(triggers, state).reduce((sum, hit) => sum + hit.excerpt.length, 0),
+    injectedChars: hitSet(triggers, playerState).reduce((sum, hit) => sum + hit.excerpt.length, 0),
   }
 }
 
