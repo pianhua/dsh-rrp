@@ -30,7 +30,7 @@ import {
 } from './host-faces.ts'
 import { cardIdFromPreset } from './preset-id.ts'
 import { RRP_ROUTES, type WorldlineTreeResponse } from './route-contract.ts'
-import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from './worldline-digest.ts'
+import { WORLDLINE_DIGEST_KEY, seedTurnsOf, type WorldlineDigest } from './worldline-digest.ts'
 import {
   foldWorldlineTrees,
   type WorldlineSessionFact,
@@ -66,7 +66,10 @@ interface SessionQueryService {
   listSessions(): Promise<Array<{ header: SessionQueryHeader }>>
   readTitleSnapshots(
     ids: string[],
-  ): Promise<Array<{ status: string; value?: { title?: { title?: string } } }>>
+  ): Promise<
+    Array<{ status: string; value?: { session?: { id?: string }; title?: { title?: string } } }>
+  >
+  readSession(id: string): Promise<{ inheritedEventCount: number }>
 }
 interface SessionQueryHeader {
   readonly id?: string
@@ -82,41 +85,49 @@ function collectFacts(
 ): WorldlineSessionFact[] {
   const facts: WorldlineSessionFact[] = []
   for (const session of sessions.list?.() ?? []) {
-    if (session.header?.origin === 'subagent') continue
-    const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
-    if (card === null || card === undefined || card.id.length === 0) continue
-    const digest = (projections.stateOf(session, WORLDLINE_DIGEST_KEY) as
-      WorldlineDigest | undefined) ?? { turns: [] }
-    // The fork cut is stamped in EVENTS; the digest carries each turn's seq,
-    // so seed turns are simply the folded turns before the cut.
-    const inherited = Number(session.inheritedEventCount ?? 0)
-    const seedTurns = digest.turns.filter((entry) => entry.seq < inherited).length
-    const parentId = session.header?.parentSession
-    facts.push({
-      id: session.id,
-      cardId: card.id,
-      cardName: card.name,
-      title: '',
-      ...(parentId === undefined ? {} : { parentId }),
-      seedTurns,
-      turns: digest.turns.map((entry) => ({
-        turn: entry.turn,
-        seq: entry.seq,
-        playerExcerpt: entry.player,
-        proseExcerpt: entry.prose,
-        ...(entry.badge === undefined ? {} : { badge: entry.badge }),
-      })),
-    })
+    try {
+      if (session.header?.origin === 'subagent') continue
+      const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
+      if (card === null || card === undefined || card.id.length === 0) continue
+      const digest = projections.stateOf(session, WORLDLINE_DIGEST_KEY) as
+        WorldlineDigest | undefined
+      if (digest === undefined) continue
+      const parentId = session.header?.parentSession
+      facts.push({
+        id: session.id,
+        cardId: card.id,
+        cardName: card.name,
+        title: '',
+        ...(parentId === undefined ? {} : { parentId }),
+        seedTurns: seedTurnsOf(digest),
+        ...(parentId === undefined ? {} : { seedKnown: true }),
+        ...(digest.turns.length === 0 ? {} : { headTurn: digest.turns.at(-1)!.turn }),
+        turns: digest.turns.map((entry) => ({
+          turn: entry.turn,
+          seq: entry.seq,
+          playerExcerpt: entry.player,
+          proseExcerpt: entry.prose,
+          ...(entry.badge === undefined ? {} : { badge: entry.badge }),
+          ...(entry.meta === undefined ? {} : { meta: entry.meta }),
+        })),
+      })
+    } catch (cause) {
+      console.warn(TAG + ' worldline session skipped: ' + session.id + ' | ' + String(cause))
+    }
   }
   return facts
+}
+
+function validInheritedCount(value: number | undefined): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0
 }
 
 /**
  * Cold skeleton facts (issue #29): persisted-but-unloaded RP sessions, from
  * the host's session-query service. Card ownership comes from the preset id
- * (`rp-<cardId>`, the same rule the preset materializer uses); the title is
- * read cold via readTitleSnapshots — no session is loaded, no log is parsed.
- * Unknown cards fall back to their id as the display name (the pack may have
+ * (`rp-<cardId>`, the same rule the preset materializer uses); titles and the
+ * inherited-event count are read cold through session-query — no session is
+ * made live. Unknown cards fall back to their id as the display name (the pack may have
  * been deleted; the line itself is still real).
  */
 async function collectSkeletonFacts(
@@ -134,26 +145,59 @@ async function collectSkeletonFacts(
   if (cold.length === 0) return []
 
   const titles = new Map<string, string>()
-  const snapshots = await query.readTitleSnapshots(cold.map((record) => record.header.id as string))
-  for (const snapshot of snapshots) {
-    if (snapshot.status === 'fulfilled' && snapshot.value?.title?.title !== undefined) {
-      const id = (snapshot.value as { session?: { id?: string } }).session?.id
-      if (id !== undefined) titles.set(id, snapshot.value.title.title)
+  if (typeof query.readTitleSnapshots === 'function') {
+    const snapshots = await query.readTitleSnapshots(
+      cold.map((record) => record.header.id as string),
+    )
+    for (const snapshot of snapshots) {
+      if (snapshot.status === 'fulfilled' && snapshot.value?.title?.title !== undefined) {
+        const id = snapshot.value.session?.id
+        if (id !== undefined) titles.set(id, snapshot.value.title.title)
+      }
     }
   }
-  const names = new Map(listCards().map((card) => [card.id, card.name]))
 
+  const inherited = new Map<string, number>()
+  const readSession = query.readSession
+  if (typeof readSession === 'function') {
+    let cursor = 0
+    const worker = async (): Promise<void> => {
+      while (cursor < cold.length) {
+        const record = cold[cursor++]!
+        const id = record.header.id as string
+        try {
+          const snapshot = await readSession.call(query, id)
+          inherited.set(id, validInheritedCount(snapshot.inheritedEventCount))
+        } catch (cause) {
+          console.warn(TAG + ' cold worldline read failed: ' + id + ' | ' + String(cause))
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(4, cold.length) }, () => worker()))
+  }
+
+  const liveById = new Map(live.map((fact) => [fact.id, fact]))
+  const names = new Map(listCards().map((card) => [card.id, card.name]))
   const facts: WorldlineSessionFact[] = []
   for (const record of cold) {
     const header = record.header
+    const id = header.id as string
     const cardId = cardIdFromPreset(header.agentPreset)
     if (cardId === undefined) continue
+    const parentId = header.parentSession
+    const parent = parentId === undefined ? undefined : liveById.get(parentId)
+    const inheritedCount = inherited.get(id)
+    const cut =
+      parent !== undefined && inheritedCount !== undefined
+        ? [...parent.turns].reverse().find((turn) => turn.seq < inheritedCount)
+        : undefined
     facts.push({
-      id: header.id as string,
+      id,
       cardId,
       cardName: names.get(cardId) ?? cardId,
-      title: titles.get(header.id as string) ?? '',
-      ...(header.parentSession === undefined ? {} : { parentId: header.parentSession }),
+      title: titles.get(id) ?? '',
+      ...(parentId === undefined ? {} : { parentId }),
+      ...(cut === undefined ? { seedKnown: false } : { seedTurns: cut.turn + 1, seedKnown: true }),
       stub: true,
       turns: [],
     })

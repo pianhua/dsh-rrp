@@ -125,4 +125,18 @@ describe('Chronicler transcript selection', () => {
     const latest = latestTurnTranscriptOf(projections, SESSION)
     expect(latest).not.toContain('UNIQUE-INJECTION-EXCERPT')
   })
+
+  it('does not advance lastStateSeq for a pure worldline fork marker', () => {
+    const projections = fakeProjections([
+      { type: 'user/message', data: text('玩家行动') },
+      {
+        type: 'user/message',
+        data: rrpStateMessage('cut', '【dsh-rrp】世界线分叉切口已记录。', {
+          worldlineForkCut: { child: 'child', turn: 0 },
+        }),
+      },
+    ])
+    const slice = projections.stateOf(SESSION, 'rrpTranscript') as { lastStateSeq: number }
+    expect(slice.lastStateSeq).toBe(-1)
+  })
 })

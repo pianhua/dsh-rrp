@@ -177,10 +177,11 @@ export interface LoreDeleteResponse {
 /**
  * The whole map in one shot, folded server-side over live sessions plus COLD
  * skeleton placeholders for persisted-but-unloaded RP sessions (issue #29,
- * via the host's session-query service; absent = live-only map). Node titles
- * arrive empty for live nodes and are filled client-side from the host's own
- * session list display names; skeleton nodes carry their cold-read titles and
- * `loaded: false`, and the client must not overwrite them from the roster.
+ * via the host's session-query service; absent = live-only map). Turn numbers
+ * are absolute across each lineage; `isHead` marks the exact current node and
+ * `seedKnown: false` honestly marks a cold or out-of-window fork position.
+ * Live titles arrive empty and are filled from the host roster; cold skeleton
+ * titles come from the query service and must not be overwritten.
  */
 export interface WorldlineTreeResponse {
   trees: WorldlineTree[]

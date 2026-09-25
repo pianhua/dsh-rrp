@@ -211,4 +211,62 @@ describe('cold skeleton folds (issue #29)', () => {
     expect(chain(trees[0]?.roots[0])).toEqual([0, 1, 2])
     expect(trees[0]?.roots[0]?.loaded).toBeUndefined()
   })
+
+  it('marks only the supplied head turn as isHead', () => {
+    const trees = foldWorldlineTrees([
+      session('m', { turns: turns(3), headTurn: 2 }),
+      session('f', { parentId: 'm', seedTurns: 2, headTurn: 3, turns: turns(4, 'f') }),
+    ])
+    const root = trees[0]?.roots[0]
+    expect(root?.isHead).toBeUndefined()
+    expect(root?.children[0]?.isHead).toBeUndefined()
+    expect(root?.children[0]?.children[0]?.isHead).toBe(true)
+    expect(root?.children[0]?.children[1]?.isHead).toBeUndefined()
+    expect(root?.children[0]?.children[1]?.children[0]?.isHead).toBe(true)
+  })
+
+  it('mounts an unresolved branch on the nearest ancestor tail and marks seedKnown false', () => {
+    const trees = foldWorldlineTrees([
+      session('m', { turns: turns(3) }),
+      session('f', { parentId: 'm', seedKnown: false, turns: turns(2, 'f') }),
+    ])
+    const tail = trees[0]?.roots[0]?.children[0]?.children[0]
+    expect(tail?.sessionId).toBe('m')
+    expect(tail?.children[0]?.sessionId).toBe('f')
+    expect(tail?.children[0]?.seedKnown).toBe(false)
+  })
+
+  it('promotes a cross-card parent to a root and marks it unknown', () => {
+    const trees = foldWorldlineTrees([
+      session('m', { turns: turns(1) }),
+      session('f', {
+        cardId: 'c2',
+        cardName: '卡二',
+        parentId: 'm',
+        seedTurns: 1,
+        turns: turns(1, 'f'),
+      }),
+    ])
+    expect(trees.find((tree) => tree.cardId === 'c2')?.roots[0]?.sessionId).toBe('f')
+    expect(trees.find((tree) => tree.cardId === 'c2')?.roots[0]?.seedKnown).toBe(false)
+  })
+
+  it('does not recurse forever for cyclic parent data and warns on duplicate ids', () => {
+    const warn = console.warn
+    const messages: string[] = []
+    console.warn = (message?: unknown) => messages.push(String(message))
+    try {
+      const trees = foldWorldlineTrees([
+        session('a', { parentId: 'b', seedKnown: false, turns: turns(1) }),
+        session('b', { parentId: 'a', seedKnown: false, turns: turns(1) }),
+        session('a', { turns: turns(1, 'replacement') }),
+      ])
+      expect(trees.length).toBeGreaterThan(0)
+      expect(messages.some((message) => message.includes('duplicate worldline session id'))).toBe(
+        true,
+      )
+    } finally {
+      console.warn = warn
+    }
+  })
 })

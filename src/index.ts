@@ -18,6 +18,7 @@ import { registerExportRoute } from './export-route.ts'
 import { registerCopilotRoute, forgetAllCopilot, forgetCopilot } from './copilot.ts'
 import { worldlineDigestProjection } from './projection/worldline-digest.ts'
 import { registerWorldlineRoute } from './worldline-route.ts'
+import { registerWorldlineForkMarker } from './worldline-fork-marker.ts'
 import { registerLoreCommand, registerLoreRoute } from './lore-route.ts'
 import { registerLoreRuntime } from './lore-runtime.ts'
 import { registerChronicler, forgetAllInference, forgetInference } from './chronicler.ts'
@@ -217,6 +218,9 @@ export function apply(ctx: Context): void {
   // in-memory ledger when the domain service is absent (issue #36).
   ctx.inject(['webServer', 'sessions', 'sessionProjections'], (scoped: Context) => {
     registerWorldlineRoute(scoped)
+  })
+  ctx.inject(['sessions', 'sessionProjections'], (scoped: Context) => {
+    registerWorldlineForkMarker(scoped)
   })
 
   // Summarizer: macro compass every N turns; the /summary command toggles it.

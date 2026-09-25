@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { registerWorldlineRoute } from '../src/worldline-route.ts'
 import { RRP_ROUTES, type WorldlineTreeResponse } from '../src/route-contract.ts'
 import { emptyWorldlineDigest, type WorldlineDigest } from '../src/worldline-digest.ts'
+import { openWorldlineStore } from '../src/worldline-store.ts'
 
 /**
  * Host-truth session shape (issue #36): `inheritedEventCount` is top-level and
@@ -16,12 +17,17 @@ interface FakeSession {
   digest: WorldlineDigest
 }
 
-function fakeHost(sessions: Record<string, FakeSession>, sessionQuery?: unknown) {
+function fakeHost(
+  sessions: Record<string, FakeSession>,
+  sessionQuery?: unknown,
+  brokenProjectionId?: string,
+) {
   const list = Object.values(sessions)
   const sessionsValue = { get: (id: string) => sessions[id], list: () => list }
   const projections = {
     stateOf: (session: unknown, key: string) => {
       const fake = session as FakeSession
+      if (fake.id === brokenProjectionId) throw new Error('projection failed')
       if (key === 'rrpCard') return fake.card
       if (key === 'rrpWorldlineDigest') return fake.digest
       return undefined
@@ -54,6 +60,14 @@ function fakeHost(sessions: Record<string, FakeSession>, sessionQuery?: unknown)
 
 function turnOf(turn: number, seq: number) {
   return { turn, seq, player: 'P' + String(turn), prose: '' }
+}
+function digestOf(turns: ReturnType<typeof turnOf>[], firstLocalTurn?: number): WorldlineDigest {
+  return {
+    turns,
+    nextTurn: turns.length === 0 ? 0 : Math.max(...turns.map((turn) => turn.turn)) + 1,
+    forkCuts: [],
+    ...(firstLocalTurn === undefined ? {} : { firstLocalTurn }),
+  }
 }
 
 async function call(
@@ -90,14 +104,14 @@ const MAIN: FakeSession = {
   id: 'm',
   header: {},
   card: { id: 'c1', name: '雁门' },
-  digest: { turns: [turnOf(0, 1), turnOf(1, 3), turnOf(2, 7)] },
+  digest: digestOf([turnOf(0, 1), turnOf(1, 3), turnOf(2, 7)], 0),
 }
 const BRANCH: FakeSession = {
   id: 'b',
   inheritedEventCount: 5,
   header: { parentSession: 'm' },
   card: { id: 'c1', name: '雁门' },
-  digest: { turns: [turnOf(0, 1), turnOf(1, 3), turnOf(2, 7)] },
+  digest: digestOf([turnOf(0, 1), turnOf(1, 3), turnOf(2, 7)], 2),
 }
 // 旧版虚构结构（header.inheritedEventCount + header.meta.parentSession）——
 // 作为回归守卫喂入时必须失效，绝不能再与错误实现"自洽"。
@@ -105,7 +119,7 @@ const LEGACY_FICTION: FakeSession = {
   id: 'legacy',
   header: { inheritedEventCount: 5, meta: { parentSession: 'm' } },
   card: { id: 'c1', name: '雁门' },
-  digest: { turns: [turnOf(0, 1), turnOf(1, 3), turnOf(2, 7)] },
+  digest: digestOf([turnOf(0, 1), turnOf(1, 3), turnOf(2, 7)], 0),
 }
 
 describe('worldline routes (issue #28)', () => {
@@ -150,7 +164,7 @@ describe('worldline routes (issue #28)', () => {
       inheritedEventCount: 5,
       header: { parentSession: 'm', origin: 'subagent' },
       card: { id: 'c1', name: '雁门' },
-      digest: { turns: [turnOf(0, 1), turnOf(1, 3)] },
+      digest: digestOf([turnOf(0, 1), turnOf(1, 3)], 2),
     }
     const host = fakeHost({ m: MAIN, b: BRANCH, sub: subagent })
     registerWorldlineRoute(host.ctx as never)
@@ -187,6 +201,23 @@ describe('worldline routes (issue #28)', () => {
     expect(restored?.children).toHaveLength(2)
   })
 
+  it('isolates a failing live projection instead of failing the whole map', async () => {
+    const broken: FakeSession = {
+      id: 'broken',
+      header: {},
+      card: { id: 'c1', name: '雁门' },
+      digest: digestOf([turnOf(0, 11)], 0),
+    }
+    const host = fakeHost({ m: MAIN, broken }, undefined, 'broken')
+    registerWorldlineRoute(host.ctx as never)
+    const res = await call(host, RRP_ROUTES.worldlineTree)
+    const trees = (res.body as unknown as WorldlineTreeResponse).trees
+    const flat = (nodes: (typeof trees)[0]['roots']): string[] =>
+      nodes.flatMap((node) => [node.sessionId, ...flat(node.children)])
+    expect(flat(trees[0]?.roots ?? [])).toContain('m')
+    expect(flat(trees[0]?.roots ?? [])).not.toContain('broken')
+  })
+
   it('the hidden ledger rejects malformed bodies and non-GET trees reject methods', async () => {
     const host = fakeHost({})
     registerWorldlineRoute(host.ctx as never)
@@ -201,9 +232,33 @@ describe('worldline routes (issue #28)', () => {
   })
 })
 
+describe('worldline store compatibility', () => {
+  it('falls back to entries when the host table has no keys method', async () => {
+    let closed = false
+    const opened = await openWorldlineStore(() => ({
+      open: async () => ({
+        table: () => ({
+          get: () => undefined,
+          put: async () => {},
+          delete: async () => true,
+          entries: () => [['hidden-session', { at: 'now' }]],
+        }),
+        close: async () => {
+          closed = true
+        },
+      }),
+    }))
+    expect(opened.handle.listHidden()).toEqual(['hidden-session'])
+    await opened.handle.close()
+    expect(closed).toBe(true)
+  })
+})
+
 describe('cold skeleton facts (issue #29)', () => {
   /** Host session-query face: cold persisted records + cold title reads. */
-  function fakeSessionQuery(cold: Array<{ header: Record<string, unknown>; title?: string }>) {
+  function fakeSessionQuery(
+    cold: Array<{ header: Record<string, unknown>; title?: string; inheritedEventCount?: number }>,
+  ) {
     return {
       listSessions: async () =>
         cold.map((record) => ({ header: record.header, live: false, persisted: true })),
@@ -217,6 +272,10 @@ describe('cold skeleton facts (issue #29)', () => {
               title: record.title === undefined ? undefined : { title: record.title },
             },
           })),
+      readSession: async (id: string) => {
+        const record = cold.find((entry) => String(entry.header.id) === id)
+        return { inheritedEventCount: record?.inheritedEventCount ?? 0 }
+      },
     }
   }
 
@@ -242,6 +301,45 @@ describe('cold skeleton facts (issue #29)', () => {
     expect(stub?.title).toBe('雪夜·线2')
     // Live facts untouched: m is still the only root, b still at the cut.
     expect(trees[0]?.roots.map((root) => root.sessionId)).toEqual(['m'])
+  })
+
+  it('reads a cold session cut and mounts it at the precise live parent turn', async () => {
+    const query = fakeSessionQuery([
+      {
+        header: { id: 'cold-exact', parentSession: 'm', agentPreset: 'rp-c1' },
+        inheritedEventCount: 5,
+      },
+    ])
+    const host = fakeHost({ m: MAIN, b: BRANCH }, query)
+    registerWorldlineRoute(host.ctx as never)
+    const res = await call(host, RRP_ROUTES.worldlineTree)
+    const trees = (res.body as unknown as WorldlineTreeResponse).trees
+    const cut = trees[0]?.roots[0]?.children[0]
+    expect(cut?.turn).toBe(1)
+    expect(cut?.children.some((child) => child.sessionId === 'cold-exact')).toBe(true)
+    expect(cut?.children.find((child) => child.sessionId === 'cold-exact')?.seedKnown).toBe(true)
+  })
+
+  it('treats an invalid cold inherited-event count as unknown', async () => {
+    const query = fakeSessionQuery([
+      {
+        header: { id: 'cold-invalid', parentSession: 'm', agentPreset: 'rp-c1' },
+        inheritedEventCount: Number.NaN,
+      },
+    ])
+    const host = fakeHost({ m: MAIN, b: BRANCH }, query)
+    registerWorldlineRoute(host.ctx as never)
+    const res = await call(host, RRP_ROUTES.worldlineTree)
+    const trees = (res.body as unknown as WorldlineTreeResponse).trees
+    const nodes = (
+      nodeList: (typeof trees)[0]['roots'],
+    ): Array<{ sessionId: string; seedKnown?: boolean }> =>
+      nodeList.flatMap((node) => [
+        { sessionId: node.sessionId, seedKnown: node.seedKnown },
+        ...nodes(node.children),
+      ])
+    const node = nodes(trees[0]?.roots ?? []).find((entry) => entry.sessionId === 'cold-invalid')
+    expect(node?.seedKnown).toBe(false)
   })
 
   it('ignores cold non-RP, subagent, and live sessions; degrades silently without the service', async () => {

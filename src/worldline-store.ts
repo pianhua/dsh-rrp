@@ -30,6 +30,7 @@ interface DomainTableLike {
   put(key: string, value: HiddenRecord): Promise<void>
   delete(key: string): Promise<boolean>
   keys?(): Iterable<string>
+  entries?(): Iterable<[string, HiddenRecord]>
 }
 interface DomainLike {
   table(name: 'hidden'): DomainTableLike
@@ -54,7 +55,9 @@ export async function openWorldlineStore(
     viaHost: true,
     handle: {
       listHidden() {
-        return table.keys === undefined ? [] : [...table.keys()]
+        if (table.keys !== undefined) return [...table.keys()]
+        if (table.entries !== undefined) return [...table.entries()].map(([key]) => key)
+        return []
       },
       async setHidden(sessionId, hidden) {
         if (hidden) await table.put(sessionId, { at: new Date().toISOString() })

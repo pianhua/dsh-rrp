@@ -65,6 +65,9 @@ export const transcriptProjection = {
 
     const payload = rrpPayloadOf(event)
     if (payload !== undefined) {
+      // Only state-bearing payloads reserve a Chronicler watermark. Pure plugin
+      // markers (notably worldlineForkCut) must leave the transcript untouched.
+      if (payload.worldState === undefined && payload.summary === undefined) return state
       // State-bearing write: adopt lanes, never prose. Always a new reference.
       const next: TranscriptSlice = { ...state, lastStateSeq: seq }
       // The Chronicler's resume cursor advances only alongside the state it

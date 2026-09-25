@@ -13,28 +13,14 @@ function player(seq: number, text: string) {
   return {
     type: 'user/message',
     seq,
-    data: {
-      id: 'u' + String(seq),
-      role: 'user',
-      content: [{ type: 'text', text }],
-      source: { kind: 'user' },
-    },
+    data: { content: [{ type: 'text', text }], source: { kind: 'user' } },
   }
 }
 function assistant(seq: number, text: string) {
   return {
     type: 'assistant/message',
     seq,
-    data: {
-      turn: 0,
-      step: 0,
-      message: {
-        id: 'a' + String(seq),
-        role: 'assistant',
-        content: [{ type: 'text', text }],
-        source: { kind: 'model', provider: 'p', model: 'm' },
-      },
-    },
+    data: { message: { content: [{ type: 'text', text }] } },
   }
 }
 function notice(seq: number, text: string) {
@@ -42,124 +28,145 @@ function notice(seq: number, text: string) {
     type: 'user/message',
     seq,
     data: {
-      id: 'n' + String(seq),
-      role: 'user',
       content: [{ type: 'text', text }],
       source: { kind: 'plugin', plugin: 'dsh-rrp', form: 'notice' },
     },
   }
 }
-function stateEvent(seq: number, worldState: Partial<WorldState>) {
-  const merged = { ...emptyWorldState(), ...worldState } as WorldState
+function stateEvent(seq: number, worldState: unknown, extra: Record<string, unknown> = {}) {
+  const merged =
+    worldState === undefined
+      ? undefined
+      : ({ ...emptyWorldState(), ...(worldState as Record<string, unknown>) } as WorldState)
   return {
     type: 'user/message',
     seq,
-    data: rrpStateMessage('st' + String(seq), 'ctx', { worldState: merged }),
+    data: rrpStateMessage('st' + String(seq), 'ctx', {
+      ...(merged === undefined ? {} : { worldState: merged }),
+      ...extra,
+    }),
   }
 }
 
-describe('worldline digest fold (issue #28)', () => {
-  it('opens a save slot per real player message; the LAST assistant text wins the prose', () => {
+function scene(location: string) {
+  return {
+    trackedObjects: {
+      scene: {
+        id: 'scene',
+        kind: 'scene',
+        name: '场景',
+        fields: { location: { type: 'string', value: location } },
+      },
+    },
+  }
+}
+
+describe('worldline digest fold (v2)', () => {
+  it('opens a save slot per real player message; the LAST assistant text wins', () => {
     let state = apply(emptyWorldlineDigest(), player(1, '我推门而入'))
-    state = apply(state, assistant(2, 'The player pushes the door open...'))
+    state = apply(state, assistant(2, 'planning'))
     state = apply(state, assistant(3, '门轴吱呀一声。'))
     state = apply(state, player(4, '我环顾四周'))
     expect(state.turns.map((entry) => [entry.turn, entry.seq, entry.player, entry.prose])).toEqual([
       [0, 1, '我推门而入', '门轴吱呀一声。'],
       [1, 4, '我环顾四周', ''],
     ])
+    expect(state.nextTurn).toBe(2)
   })
 
-  it('skips plugin notices and empty messages entirely', () => {
-    const state = apply(apply(emptyWorldlineDigest(), notice(1, '序章')), player(2, ''))
-    expect(state.turns).toEqual([])
+  it('uses absolute turns and preserves the inherited prefix boundary', () => {
+    let state = worldlineDigestProjection.init({}, 7) as WorldlineDigest
+    state = apply(state, player(1, 'inherited'))
+    state = apply(state, player(7, 'local'))
+    expect(state.turns.map((entry) => entry.turn)).toEqual([0, 1])
+    expect(state.firstLocalTurn).toBe(1)
+    expect((state as WorldlineDigest & { inheritedEventCount: number }).inheritedEventCount).toBe(7)
   })
 
-  it('unrelated events keep the exact same state reference', () => {
+  it('caps the tail without rewinding nextTurn and protects cuts plus seed predecessor', () => {
+    let state = emptyWorldlineDigest()
+    for (let index = 0; index < 3; index += 1) {
+      state = apply(
+        state,
+        stateEvent(index + 1, undefined, { worldlineForkCut: { child: 'child', turn: 2 } }),
+      )
+      break
+    }
+    for (let index = 0; index < 505; index += 1)
+      state = apply(state, player(index + 10, 'P' + index))
+    expect(state.nextTurn).toBe(505)
+    expect(state.turns.map((entry) => entry.turn)).toContain(2)
+    expect(state.forkCuts).toEqual([2])
+    expect(state.turns.length).toBeLessThanOrEqual(501)
+  })
+
+  it('aligns state badges by storyTurn, then stateFoldSeq, then the tail', () => {
+    let state = apply(emptyWorldlineDigest(), player(1, 'a'))
+    state = apply(state, player(2, 'b'))
+    state = apply(state, player(3, 'c'))
+    state = apply(
+      state,
+      stateEvent(10, scene('story'), {
+        worldStateTimelineBatch: {
+          kind: 'changes',
+          changes: [{ type: 'modified', objectId: 'scene', field: 'location' }],
+          provenance: { actor: 'player', storyTurn: 1 },
+          origin: 'local',
+        },
+      }),
+    )
+    expect(state.turns[1]?.badge?.location).toBe('story')
+    state = apply(state, stateEvent(11, scene('folded'), { stateFoldSeq: 2 }))
+    expect(state.turns[1]?.badge?.location).toBe('folded')
+    state = apply(state, stateEvent(12, scene('tail')))
+    expect(state.turns[2]?.badge?.location).toBe('tail')
+  })
+
+  it('rebuilds badges with deletion semantics and forwards the pending badge', () => {
+    let state = apply(emptyWorldlineDigest(), player(1, '住店'))
+    state = apply(state, stateEvent(2, scene('客栈')))
+    expect(state.turns[0]?.badge).toEqual({ location: '客栈' })
+    state = apply(state, stateEvent(3, { trackedObjects: {} }))
+    expect(state.turns[0]?.badge).toBeUndefined()
+    state = apply(state, player(4, '上楼'))
+    expect(state.turns[1]?.badge).toBeUndefined()
+  })
+
+  it('writes timeline provenance metadata and aligns summaries by summaryTurn', () => {
+    let state = apply(emptyWorldlineDigest(), player(1, 'a'))
+    state = apply(state, player(2, 'b'))
+    state = apply(
+      state,
+      stateEvent(3, undefined, {
+        summary: { goal: 'g', conflict: '冲突', turningPoints: [], threads: [] },
+        summaryTurn: 0,
+        worldStateTimelineBatch: {
+          kind: 'baseline',
+          snapshot: 'initial-state',
+          provenance: { actor: 'initial-state' },
+        },
+      }),
+    )
+    expect(state.turns[0]?.badge?.summary).toBe('冲突')
+    expect(state.turns[0]?.meta).toEqual({ actor: 'initial-state', changeCount: 0 })
+  })
+
+  it('folds fork cuts, ignores null cuts, and preserves reference for unrelated events', () => {
     const base = apply(emptyWorldlineDigest(), player(1, 'x'))
+    const marker = apply(
+      base,
+      stateEvent(2, undefined, { worldlineForkCut: { child: 'c', turn: 0 } }),
+    )
+    expect(marker.forkCuts).toEqual([0])
+    expect(
+      apply(marker, stateEvent(3, undefined, { worldlineForkCut: { child: 'd', turn: null } })),
+    ).toBe(marker)
     expect(apply(base, { type: 'turn/end', seq: 2, data: {} })).toBe(base)
   })
 
-  it('a state publish writes the badge back onto the finished turn and forward onto the next', () => {
-    let state = apply(emptyWorldlineDigest(), player(1, '住店'))
-    state = apply(state, assistant(2, '温娘子让开门。'))
-    state = apply(
-      state,
-      stateEvent(3, {
-        trackedObjects: {
-          inn: {
-            id: 'inn',
-            kind: 'scene',
-            name: '客栈大堂',
-            fields: {
-              location: { type: 'string', value: '客栈大堂', definition: 'card-defined' },
-              time: { type: 'string', value: '夜', definition: 'card-defined' },
-            },
-          },
-          mia: {
-            id: 'mia',
-            kind: 'character',
-            name: '米娅',
-            character: { affinity: 8 },
-            fields: {},
-          },
-          wenyan: {
-            id: 'wenyan',
-            kind: 'character',
-            name: '温娘子',
-            character: { affinity: 3 },
-            fields: {},
-          },
-        },
-      }),
-    )
-    expect(state.turns[0]?.badge).toEqual({
-      location: '客栈大堂',
-      time: '夜',
-      affinity: [
-        { name: '米娅', value: 8 },
-        { name: '温娘子', value: 3 },
-      ],
-    })
-    state = apply(state, player(4, '上楼'))
-    expect(state.turns[1]?.badge).toEqual(state.turns[0]?.badge)
-  })
-
-  it('an opening state before any turn parks in the pending watermark', () => {
-    const state = apply(
-      emptyWorldlineDigest(),
-      stateEvent(1, {
-        trackedObjects: {
-          doorway: {
-            id: 'doorway',
-            kind: 'scene',
-            name: '门口',
-            fields: {
-              location: { type: 'string', value: '门口', definition: 'card-defined' },
-            },
-          },
-        },
-      }),
-    )
+  it('skips notices, reminders, and empty player messages', () => {
+    const state = apply(apply(emptyWorldlineDigest(), notice(1, '序章')), player(2, ''))
     expect(state.turns).toEqual([])
-    expect(state.pending?.location).toBe('门口')
-  })
-
-  it('the summary publish contributes the compass line', () => {
-    let state = apply(emptyWorldlineDigest(), player(1, 'x'))
-    state = apply(state, {
-      type: 'user/message',
-      seq: 2,
-      data: rrpStateMessage('sm', 'ctx', {
-        summary: { goal: 'g', conflict: '身份即将穿帮', turningPoints: [], threads: [] },
-        summaryTurn: 0,
-      }),
-    })
-    expect(state.turns[0]?.badge?.summary).toBe('身份即将穿帮')
-  })
-
-  it('long player lines are cut to the slot width', () => {
-    const state = apply(emptyWorldlineDigest(), player(1, '长'.repeat(200)))
-    expect(state.turns[0]?.player.length).toBe(120)
+    expect(apply(state, player(3, '<system-reminder>host</system-reminder>'))).toBe(state)
   })
 })

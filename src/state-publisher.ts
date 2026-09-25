@@ -112,6 +112,23 @@ function appendLane(session: StateSession, text: string, payload: RrpStatePayloa
   }
 }
 
+/** Append a fork marker without entering the state/facts deduplication lanes. */
+export function publishWorldlineForkCut(
+  session: StateSession,
+  child: string,
+  turn: number | null,
+): boolean {
+  try {
+    appendLane(session, '【dsh-rrp】世界线分叉切口已记录。', {
+      worldlineForkCut: { child, turn },
+    })
+    return true
+  } catch (error) {
+    console.warn(TAG + ' worldline fork marker publish failed:', error)
+    return false
+  }
+}
+
 /**
  * Host-mirror probe: the first JSON path that the session log would refuse,
  * or undefined when the value passes the same rules (undefined in objects,
