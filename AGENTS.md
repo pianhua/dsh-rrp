@@ -68,8 +68,8 @@ dsh-rrp/
 │   ├── correction.ts            # 玩家矫正写路径（宿主 webserver 路由）
 │   ├── copilot.ts / copilot-store.ts / steward-proposals.ts
 │   │                            # 月停路由与动作执行 / 宿主存储域历史 / 提案暂存确认落盘（issue #21 #33）
-│   ├── worldline-tree.ts / worldline-digest.ts / worldline-store.ts / worldline-route.ts
-│   │                            # 世界线树折叠 / 存档点摘要投影词汇 / 软归档名单 / 全图与归档路由（issue #28 #29）
+│   ├── worldline-tree.ts / worldline-digest.ts / worldline-store.ts / worldline-route.ts / worldline-fork-marker.ts
+│   │                            # 世界线拓扑折叠 / 存档点摘要投影词汇 / 软收起账本 / 树与收起路由（issue #28 #29）/ fork 切口标记发布（D24）
 │   ├── card-ui.ts / card-ui-route.ts / ui-schema.ts / ui-bridge.ts
 │   │                            # 卡包界面声明校验 / 只读路由 / 组件与动作契约 / 沙箱桥（issue #18）
 │   ├── cards-route.ts / start.ts / export-route.ts / card-workspace-route.ts / save-naming.ts
@@ -86,7 +86,7 @@ dsh-rrp/
 │   │   ├── lore-tab.tsx         # 设定集（D8）：起草/审阅/确认/删除
 │   │   ├── copilot-tab.tsx / copilot-prefill.ts  # 月停面板（SSE）/ 舞台「问月停」预填
 │   │   ├── gallery-panel.tsx    # 卡片展厅 + 开卡流（含导入、工作区归组）
-│   │   ├── worldline-tab.tsx    # 世界线存档图：读档 / 重roll / 收起 / 导出
+│   │   ├── worldline-tab.tsx    # 世界线页签：双栏分支列表+回合列（查看/从此分叉/重命名/收起/恢复/导出，D24 v2）
 │   │   ├── stage-tab.tsx / stage-frame.tsx / stage-types.ts  # 舞台页签：声明式解释器 + 沙箱卡页面 + 共享接口
 │   │   └── primitives.d.ts      # 宿主原子库结构面类型
 │   ├── agents/                  # 智体提示词与行为规范（统一 AgentPromptContract，issue #32）
