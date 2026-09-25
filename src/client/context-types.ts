@@ -75,6 +75,9 @@ export interface RrpSessionSummary {
   /** The durable user title (set by rename); displayTitle falls back to cwd. */
   title?: string
   parentId?: string
+  cardId?: string
+  cardName?: string
+  updatedAt?: string | number
   blank?: boolean
 }
 
