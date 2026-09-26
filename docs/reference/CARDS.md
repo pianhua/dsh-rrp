@@ -248,26 +248,42 @@ cards/<card-id>/
 `characters.米娅.affinity >= 40` 这类数值/布尔比较，不成立的面板直接不渲染。
 不要发明第二套条件语言。
 
-### 13.3 两个动作原语（硬红线）
+### 13.3 动作原语（硬红线，D25 修订）
 
-`buttonRow` 的按钮和 `app` 页面能做的**只有两件事**：
+`buttonRow` 的按钮和 `app` 页面能做的事分两类：
 
-- `correct_state`：走玩家矫正通道（`POST /dsh-rrp/world-state`），账本归因 **player**；
-- `ask_copilot`：打开月停并预填问题，**不自动发送**。
+**状态写（唯一通道）**：
+- `correct_state`：走玩家矫正通道（`POST /dsh-rrp/world-state`），账本归因 **player**；大 patch 客户端弹
+  宿主 `RiskConfirmation`。
 
-卡界面**永远开不出第三条写路径**。这是「卡可以任意花哨」与「D8 控制环/投影世界观不被绕过」能同时成立的唯一支点。
+**叙事动作（不过状态、不过模型）**：
+- `ask_copilot`：打开月停并预填问题，**不自动发送**；
+- `send_message`（代拟发言）：按卡内预写 `trigger` 模板**以玩家身份发送一条消息**——走宿主输入机
+  `setDraft+submit`，与玩家手打完全同权同归因；RP 设置「允许卡内代拟发言」默认开，玩家可关；
+- `draft_lore`：把一条设定集条目**暂存为草稿**，必须玩家在设定集页签过 D8 确认环才落盘（服务端
+  只进 PENDING，不过 LLM、不追加会话）。
 
-### 13.4 卡自带页面（L2）的安全模型
+卡界面**永远开不出绕过确认环的状态写路径**——这是「卡可以任意花哨」与「D8 控制环/投影世界观
+不被绕过」能同时成立的唯一支点。
 
-`sandbox="allow-scripts"`，**不给** `allow-same-origin`，再注入 `default-src 'none'` CSP：
+### 13.4 卡自带页面（L2）的安全模型（D25 修订）
 
-- 页面读不到宿主 DOM（真机实测 `SecurityError`）、出不了网络、弹不了窗、不能导航父页；
+`sandbox="allow-scripts"`，**不给** `allow-same-origin`，iframe `src` 指向插件只读路由（CSP `default-src 'self'`）：
+
+- 页面读不到宿主 DOM（真机实测 `SecurityError`）、出不了本路由（`connect-src 'self'`）、弹不了窗、不能导航父页；
 - 宿主侧连它的 `contentDocument` 也拿不到——隔离由浏览器执行，不靠约定；
-- 桥（`src/ui-bridge.ts`）：入向只有 `rrp:state`（世界状态只读快照 + 卡身份 + 最近正文尾段）；出向只有 `correct_state` / `ask_copilot` / `resize`（页面自报高度，宿主钳 80–4000px）；
+- `ui/` 为**多文件资产目录**（html/css/js/图片/字体，类型白名单，路径穿越防护），由
+  `/dsh-rrp/card-ui` 伺服，`Access-Control-Allow-Origin: *`（opaque origin 下 `@font-face`/fetch/ESM 依赖 CORS）；
+  **外链零放行**——资产必须本地化进卡包，个人单机离线可玩；
+- 桥（`src/ui-bridge.ts`，协议 v2）：入向只有 `rrp:state`（世界状态只读快照 + 卡身份 + 最近正文尾段），
+  `rrp:hello` 握手带版本号、父侧回能力集，v1 卡按旧语义兼容；出向四原语（`correct_state` /
+  `ask_copilot` / `send_message` / `draft_lore`）+ `resize`（页面自报高度，宿主钳 80–4000px）；
 - 入向消息必须 `event.source === frame.contentWindow` + 过 `parseUiCall` 白名单 + 20 次/秒限流；
-- **srcdoc 只算一次**，之后状态靠推送——Chronicler 每轮更新绝不重建 iframe，页面的滚动/草稿/动画不丢。
+- **页面只加载一次**（src 导航），之后状态靠推送——Chronicler 每轮更新绝不重建 iframe，
+  页面的滚动/草稿/动画不丢。
 
-页面里作者只用注入的 `window.rrp`：`onState(fn)` / `correctState(patch)` / `askCopilot(q)` / `resize()`。
+页面里作者只用注入的 `window.rrp`：`onState(fn)` / `correctState(patch)` / `askCopilot(q)` /
+`sendMessage(text)` / `draftLore(entry)` / `resize()`，另有官方 stage-kit（css+js runtime）可用。
 不要外链 CDN（CSP 会拦，且离线单机本就该自包含）。
 
 ### 13.5 与模型上下文的关系（重要）

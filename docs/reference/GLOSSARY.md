@@ -77,7 +77,11 @@
 | :--- | :--- | :--- | :--- |
 | **卡片展厅** | **Gallery** | 左侧栏的开卡入口：浏览卡包、覆写主角名、导入与开局（代码 `gallery-panel.tsx`） | `卡片商店`、`大厅` |
 | **舞台** | **Stage** | 卡包自带页面的渲染面（`ui/manifest.json` 声明式 UI + 沙箱卡页面），见 [DESIGN.md](../DESIGN.md) §2.4 | `卡界面弹窗`、`自定义面板` |
-| **卡包界面** | **Card UI** | 卡包 `ui/` 目录下的声明式 UI 资产与只读路由（`src/card-ui.ts` / `ui-schema.ts`） | `卡前端`、`卡 SPA` |
+| **卡包界面** | **Card UI** | 卡包 `ui/` 目录下的声明式 UI 资产、多文件静态资产与只读路由（`src/card-ui.ts` / `ui-schema.ts` / `card-ui-route.ts`） | `卡前端`、`卡 SPA` |
+| **代拟发言** | **Send Message** | 卡界面以玩家身份发送一条预写消息的叙事原语（`send_message`，经宿主输入机 `setDraft+submit`，账本归因 player，RP 设置可关闭，D25） | `注入`、`代打`、`自动发送` |
+| **舞台工具包** | **Stage Kit** | 官方提供给 L2 卡页面的 css+js runtime（主题 token 对齐宿主），插件路由 `/dsh-rrp/stage-kit/*` 伺服（D25） | `组件库`、`UI 框架` |
+| **舞台桥协议** | **UI Bridge Protocol** | 舞台 iframe 与插件之间的 postMessage 窄桥（v2：协议号+能力协商；入向状态推送，出向四原语+resize） | `桥接层`、`消息通道` |
+| **卡包资产** | **Card Assets** | 卡包 `ui/` 目录内经只读路由伺服的多文件静态资产（html/css/js/图片/字体，类型白名单，外链零放行，D25） | `资源目录`、`静态站` |
 | **导入（酒馆卡）** | **Card Import** | 一次性把酒馆 PNG / JSON 转成原生卡包（`src/card-import.ts` + `POST /dsh-rrp/cards/import`）；**运行时仍不兼容酒馆**（D14 例外，见 [HOST_ALIGNMENT.md](../HOST_ALIGNMENT.md) §3.1） | `兼容层`、`ST 模拟器` |
 | **导出（小说）** | **Novel Export** | 把一局转录导出为 `md`/`txt` 附件（`src/export-route.ts`，#31-C） | `下载器`、`爬虫` |
 

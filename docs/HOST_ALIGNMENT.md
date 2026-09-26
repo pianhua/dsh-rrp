@@ -24,7 +24,8 @@
 | **会话视图页签** | `conversation.view`（list / session） | `@deepseek-ai/dsh-client-ui-conversation` | 世界线、舞台都注册成会话页签；**两段式 `slots.inject` + disposer**，宿主未声明该槽时空转不炸 |
 | **投影推送给 UI** | `useProjection(key)` 标准 kit hook | `@deepseek-ai/dsh-api-session-controller` | 舞台/状态面板订阅投影即得实时更新，**不自建 SSE、不轮询** |
 | **聊天流插入位**（**已裁决不用**） | `conversation.chat.turnTail` / `assistant-actions` / `chat.node`（keyed，`ChatNodeDataMap` 可声明合并） | `@deepseek-ai/dsh-client-ui-chat` | 官方确有正文插入位；D21 已知情否决——聊天流内不放插件内容，界面走舞台页签 |
-| **沙箱执行** | 浏览器 `iframe sandbox` + CSP | 无宿主依赖 | 卡自带页面用 `allow-scripts`（**不给** `allow-same-origin`）+ 注入 `default-src 'none'`；隔离由浏览器保证，**不照抄酒馆的假 iframe 隔离** |
+| **沙箱执行** | 浏览器 `iframe sandbox` + CSP | 无宿主依赖 | 卡自带页面用 `allow-scripts`（**不给** `allow-same-origin`）+ CSP `default-src 'self'`（D25：多文件资产时代步放宽，外链仍零放行）；`ui/` 资产由插件只读路由伺服（类型白名单 + `ACAO:*`，opaque origin 下字体/fetch/ESM 依赖 CORS）；隔离由浏览器保证 |
+| **程序化发消息** | 会话输入机标准动作 | `dsh-client-ui-conversation` → `inputActions.setDraft/submit`（`contract/input.ts`） | 舞台「代拟发言」原语只走输入机（归因 player，RP 设置可关），**不绕过输入管线**（D25） |
 | **工作区导航** | 原生 Workspace 列表与会话归属 | `ctx.workspaces` / `ctx.sessions.create({ workspaceId })` | 展厅只选择宿主已有工作区；不创建 RP 工作目录、不把 Workspace 当状态库 |
 | **右侧栏** | 原生右侧栏 Tab | `ctx.sidebarRightTabs` / `ctx.sidebarRight` | WorldState 看板注册为原生 Tab，**不自绘面板** |
 | **会话真源** | 仅追加事件日志 | `@deepseek-ai/dsh-session` | 正文与分支以 Session 为唯一权威；`Session.fork` = 世界线分支 |

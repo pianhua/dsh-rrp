@@ -61,16 +61,21 @@
   与宿主原生导航保持同一观感；
 - 支持浏览原生卡包，预览开场白与人设，点击即可直接基于该卡包新建一个沉浸会话。
 
-### 2.4 舞台（Stage）：卡包自带界面（issue #18，2026-09-20）
+### 2.4 舞台（Stage）：卡包自带界面（issue #18，2026-09-20；v2 重做 2026-09-26，D25）
 - 注册为宿主会话视图页签（`conversation.view`，与「对话 / 轨迹 / 世界线」并列）；卡包在 `ui/manifest.json`
   声明面板，插件用**一个通用解释器**画出来；卡不声明则不占位；
 - **数据面**：只读消费世界状态投影（宿主推送，零轮询），因此界面天然随分支读档倒回，无需任何平行状态；
-- **写面硬约束**：卡界面只有两个动作原语——`correct_state`（走玩家矫正通道，账本归因 player）与
-  `ask_copilot`（预填月停、不自动发送）。**卡界面永远开不出第三条写路径**，D8 控制环与投影世界观不被绕过；
-- **两层表达力**：L1 声明式六组件（gauge / characterCard / relationTable / timeline / buttonRow / app），
-  显示条件复用技能那套 `when:` 语法与求值器（不开第二套语言）；L2 卡自带 `ui/*.html` 跑在
-  **真沙箱**（`allow-scripts` 不给 `allow-same-origin` + 注入 `default-src 'none'` CSP，实测父窗口与网络双不可达），
-  桥只给只读状态快照与上述两原语；
+- **写面**（D25 修订原「两原语」口径）：状态写唯一通道 `correct_state`（走玩家矫正通道，账本归因 player）；
+  叙事动作三原语——`ask_copilot`（预填月停、不自动发送）、`send_message`（代拟玩家发言，经宿主输入机
+  `setDraft+submit`，归因玩家，玩家可在 RP 设置关闭）、`draft_lore`（设定集草稿暂存，必须玩家过 D8
+  确认环才落盘）。**绕过确认环的状态写路径永远不存在**，投影世界观不被绕过；
+- **两层表达力**：L1 声明式组件（gauge / characterCard / relationTable / timeline / buttonRow / image /
+  progressRing / tagList / richText / app），显示条件复用技能那套 `when:` 语法与求值器（不开第二套语言）；
+  L2 卡自带 `ui/` **多文件资产**（html/css/js/图片/字体，类型白名单，外链零放行），跑在**真沙箱**
+  （`allow-scripts` 不给 `allow-same-origin` + CSP `default-src 'self'`，资产由插件只读路由伺服）；
+  官方 **stage-kit**（css+js runtime）保证卡页面观感与宿主一致；
+- **布局**：app 面板全幅优先，L1 面板收进侧栏抽屉；宿主 token 打底、卡包可声明主题变量；官方统一
+  空态/加载/失败三态；
 - **不进模型上下文**：界面是给玩家看的呈现，不是世界事实——完全不进会话载荷与 `renderCardContext`，
   因此对前缀缓存零影响；
 - 与 2.1 的分工：正文渲染仍完全交给宿主原生（9-18 裁决不变）。舞台是**插件自己的渲染面**，
