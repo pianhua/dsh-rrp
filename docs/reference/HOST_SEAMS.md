@@ -616,6 +616,18 @@ interface ILayout {
 
 ---
 
+## D14. 世界线 v2 真机验收暴露的宿主缺陷（0.1.6-alpha.2，2026-09-26 记录）
+
+**① `sessionQuery.readSession` 无法读取任何 seeded 会话**。fork 构造器会在切口处追加一条 `session/end-seed` 标记（core/session/src/index.ts:615-616），使落盘日志长度 = inheritedEventCount + 1；而 `Session.create` 的 snapshot 模式要求 `inheritedEventCount === log.length`（:608-610），于是**凡 `isSeeded` 会话（含全新 fork）readSession 必抛** `seeded session constructor seed must equal its inherited prefix`。真机三只 fork（新旧格式皆有）全部命中。影响：冷 fork 切口无法经宿主解析。**对策**：插件在 fork 时刻把观察到的精确切口落盘（`worldline-store` cuts 表，fork-marker 的 onCut）；readSession 路径保留为宿主修复后的兜底。
+
+**② storageDomain 同一 domain 不可并发打开两次**。第二次 `facility.open(spec)` 直接 fatal load failure：`domain 'dsh_rrp_worldlines' is already open`。**对策**：全插件共享一个 store handle（`index.ts` 打开一次，`registerWorldlineRoute` 增 `sharedStore` 形参；测试与降级宿主不传时路由自持）。
+
+**③ 持久化 `header.agentPreset` 不可靠**。画廊开局的主线落盘 preset 为 `"standard"`（rp preset 在 API 层生效，会话日志头未同步），仅 fork 子线正确落盘 `rp-<cardId>`。影响：冷会话卡归属不能依赖 preset 推断，否则冷主线整棵消失。**对策**：卡归属索引（live `rrpCard` 投影旁路缓存到 `worldline-store` cards 表；拓扑与真源不变，纯显示层缓存）。
+
+> 三条均为宿主侧缺陷或弱保证，插件侧只做**可重建的显示层缓存**兜底，不复制宿主真源；宿主升级后按 HOST_BASELINE 流程复验。
+
+---
+
 ## E. 一句话摘要
 
 - **最省事的可见化入口**：把纪事官产出写成**会话投影**（已有 ctx.sessionProjections + 右栏 tab 范式），或对**自定义会话事件**用 ctx.uiConversation.events.register + conversation.chat.node 注册一个正文卡片；「卡片展厅」最正统的落点是 **main 主区面板 + 同名 sidebar.panellist 导航**。

@@ -475,3 +475,23 @@
 - 已知遗留：主区世界状态页签在左侧栏折叠为图标轨时左侧被裁约一栏宽（宿主 slot 布局上下文，展开侧栏正常），记于票据 08 备查。
 - 最终质量门：format / typecheck / lint / Vitest 416 / build / git diff --check 全绿。未提交未推送，等所有者决策。
 - 左侧裁切修复（同日追加）：根因定位为世界状态工作区在窄容器下的横向溢出——`overflow-y:auto` 使 overflow-x 按规范计为 auto，焦点落到换行字段行右缘时浏览器自动持久横向滚动（scrollLeft），整面板呈现左侧裁切；flex 项默认 `min-width:auto` 加剧溢出。修复：`S.root` 补 `width:100%/minWidth:0`，`S.scroll` 显式 `overflowX:'hidden'`。内置浏览器真机 A/B 复验（图标轨/展开侧栏 × 右栏开合 × 字段聚焦）均渲染正常。质量门复跑全绿。
+
+
+### 世界线 v2 重做：研究、决策落盘与开工（2026-09-25，feat/worldline-v2）
+
+- 重做前双份勘察（源码 + 宿主 0.1.6-alpha.2 逐条核实）：现有实现确认 6 项结构性 bug——digest 500 上限与 fork 切口计算冲突、异步徽标糊尾节点、徽标只增不删、冷线挂父线尾部、「读档」只开会话末尾、V2 时间线零接入。宿主侧确认：无会话删除/回退 API（软归档为唯一清理）、无 fork 事件（`session/created` + `header.parentSession/isSeeded` 推断）、`sessionQuery.traceSession/readSession` 可拿冷线真实切口、`conversation.view` 可注册第三视图、宿主原生「轨迹」= 单会话执行轨迹（与世界线互补不替代）。
+- 决策落盘：DECISIONS.md 新增 **D24**（16 题拷问访谈全部按建议锁定：双栏视图替代 galgame SVG、拓扑与 digest 解耦、徽标全量重建 + `stateFoldSeq`/`summaryTurn` 对齐、时间线 provenance 接入、fork 切口标记走父线 `source.rrp.worldlineForkCut` 追加、冷线精确切口/位置未知诚实标注、读档诚实语义 = 查看该回合 + 从此分叉）；GLOSSARY §3 新增 分叉切口 / 节点徽标 / 从此分叉 / 位置未知。
+- 规格与票据：`.scratch/worldline-v2/spec.md`（契约到字段级）+ 票据 01（服务端数据层）/ 02（客户端双栏重写）/ 03（集成验收）。Ready-to-code gate 已过：无新事件类型（切口标记走既有 `user/message` source.rrp）、不自建分支库、不同步读日志、D21 各自渲染面、D10 拓扑只映射宿主 fork。
+- 契约类型已先落盘：`src/worldline-digest.ts`（v2 词汇：绝对回合计数 nextTurn/firstLocalTurn/forkCuts/meta/seedTurnsOf）、`src/worldline-tree.ts`（fact/node 增 seedKnown/headTurn/isHead/meta）、`src/state-payload.ts`（RrpStatePayload 增 worldlineForkCut）。发现并已纳入规格的关键护栏：transcript 投影 payload 分支对**任何** payload 消息推进 `lastStateSeq`，纯切口标记会误导 Chronicler 跳过未推演正文——改为仅 `worldState`/`summary` 键推进。
+- 分支 `feat/worldline-v2` 已从 main（a64b52a）切出，进入票据 01 实现。
+
+
+### 世界线 v2 一期交付与真机验收（2026-09-26，feat/worldline-v2）
+
+- 一期范围（D24）：数据三根支柱（拓扑与 digest 解耦 / 徽标按 `stateFoldSeq`·`storyTurn` 对齐 + 全量重建删除语义 / 时间线 provenance 接入节点）+ fork 切口标记（`source.rrp.worldlineForkCut` 追加父线，digest 上限保护切口节点）+ 冷线 `sessionQuery` 精确定位 + 客户端双栏视图（分支列表 + 虚拟化回合列 + 从此分叉确认层/重命名/收起确认与恢复/当前回合精确标记/投影订阅自动刷新）。galgame SVG 流程图及 layout/inspector 组件与对应测试已删。
+- 真机验收（宿主 0.1.6-alpha.2，host-runner 起 3099 + 内置浏览器，女仆大小姐新开局三轮真实游玩）逐项通过：徽标 + 归因行（状态推演·本线 17 项变化）自动落在正确回合；分叉确认层自动命名「·线N」（N=服务端真实子线数）、自定义命名、创建即打开、binding 就绪即改名（旧 8×400ms 轮询废除）；收起确认层（明示下游数）→ 已收起区 → 恢复；主线不误标位置未知；冷支线/切口/主线三类降级语义全部符合 D24。
+- 验收暴露并修复五个真 bug（全部含回归测试，全量 58 文件 / 445+ 用例待最终计数见质量门）：① `diffWorldState` 全局字段变更产出显式 `objectId: undefined` 触发宿主事件日志 serializability 拒绝，Chronicler 整轮失败；② Chronicler 省略空集合（globalFields/objectives 等）的回复无信封补全，一次引导重试不够——`repairChroniclerEnvelope` 确定性填充缺失集合，issue 列表同享修复；③ 折叠器把无父会话的主线也标 `位置未知`；④ 分叉确认层回合标签错用 `branch.latest` 而非选中节点；⑤ 宿主侧三连缺陷落盘 HOST_SEAMS D14——`readSession` 对一切 seeded 会话必抛（snapshot 不变量 vs end-seed 标记）、storageDomain 同 domain 不可二次打开（fatal）、持久化 `agentPreset` 不可靠（画廊主线落盘 "standard"）。
+- 对宿主缺陷的插件侧兜底（可重建显示层缓存，不复制宿主真源）：`worldline-store` 增 cards 表（live rrpCard 投影旁路缓存，救冷主线整棵消失）与 cuts 表（fork 时刻观察到的精确切口，fork-marker onCut 落盘；冷 fork 不再依赖坏掉的 readSession，全冷状态下切口已知的子线正确挂载且不标位置未知）。store 全插件共享单 handle（index.ts 打开一次，路由/监听共用）。
+- 工具链：`scripts/host-runner.mjs` 的 dsh 定位修复——dsh 包无 main/exports，`require.resolve` 裸包必失败，改为直接探测 `lib/bin.js`（仓库 node_modules → 全局 npm root）。
+- 质量门全绿（format/typecheck/lint/vitest/build/git diff --check）。票据 01/02/03 已闭环，`.scratch/worldline-v2/` 规格与票据保持未跟踪。
+- 已知遗留：cuts 表建立前 fork 的旧冷线仍「位置未知」（打开一次后卡归属入索引，属诚实降级）；宿主 readSession 修复后经宿主解析的路径已留好（cachedCut 优先、readSession 兜底）。运行中的宿主进程加载的是 prettier 重排前的等价构建，功能一致，下次重启自动生效。

@@ -1,40 +1,61 @@
-/**
- * dsh-rrp — the worldline save map (issue #28 & #37), a native `conversation.view`
- * tab next to 对话/轨迹.
- *
- * Renders an interactive Galgame-style branching flowchart with SVG Bezier curves,
- * node state badges, pan & zoom controls, and a timeline inspector drawer.
- * Connects directly to host Session.fork, uiWorkspace.openSession, and layout navigation.
- */
 import {
   Button,
   IconLoadingOutline16,
   IconRefreshOutline16,
-  IconSparkle16,
-  Pill,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
-import { RRP_ROUTES, routeUrl, type WorldlineTreeResponse } from '../route-contract.ts'
-import { branchTitle } from '../save-naming.ts'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
+import { WORLDLINE_DIGEST_KEY } from '../worldline-digest.ts'
+import {
+  RRP_ROUTES,
+  routeUrl,
+  type WorldlineHiddenResponse,
+  type WorldlineTreeResponse,
+} from '../route-contract.ts'
 import type { WorldlineNode, WorldlineTree } from '../worldline-tree.ts'
-import type { RrpClientContext, RrpUiWorkspaceService } from './context-types.ts'
-import { WorldlineFlowchart } from './components/worldline-flowchart.tsx'
+import type { RrpClientContext, RrpUiWorkspaceService, RrpUseProjection } from './context-types.ts'
+import { WorldlineBranchList } from './components/worldline-branch-list.tsx'
+import { WorldlineForkDialog } from './components/worldline-fork-dialog.tsx'
+import { WorldlineHideDialog } from './components/worldline-hide-dialog.tsx'
+import { WorldlineTurnRail } from './components/worldline-turn-rail.tsx'
+import {
+  branchTitleForCount,
+  directChildCount,
+  flattenWorldlineBranches,
+  type WorldlineBranch,
+} from './worldline-utils.ts'
 
 type Translate = (key: string) => string
 
-/** Everything the panel needs from the host wiring, built once at registration. */
+export interface WorldlineLoadResult {
+  trees: WorldlineTree[]
+  hidden: string[]
+}
+
 export interface WorldlineApi {
-  /** Fold the whole map: host lineage + per-session facts minus hidden lines. */
-  loadTrees(): Promise<WorldlineTree[]>
-  /** Download the session's whole story as clean prose (issue #31-C). */
+  loadTrees(): Promise<WorldlineLoadResult>
+  sessionSummaries(): Record<
+    string,
+    {
+      displayTitle?: string
+      title?: string
+      cardId?: string
+      cardName?: string
+      updatedAt?: string | number
+    }
+  >
   exportNovel(sessionId: string): Promise<void>
-  /** Jump the workspace view to a session and switch to Chat view (读档). */
   open(sessionId: string): void
-  /** Fork from one turn's player-message seq and open the child (重roll / 开辟新线). */
-  reroll(sessionId: string, atSeq: number, cardName: string): Promise<void>
-  /** Soft-archive a line and its subtree (收起); returns when persisted. */
+  fork(sessionId: string, atSeq: number, title: string): Promise<void>
   hide(sessionId: string): Promise<void>
-  /** Subscribe to roster churn (a new fork appearing refreshes the map). */
+  restore(sessionId: string): Promise<void>
+  rename(sessionId: string, title: string): Promise<void>
   subscribe(listener: () => void): () => void
 }
 
@@ -42,150 +63,246 @@ interface WorldlinePanelProps {
   t?: Translate
   sessionId?: string
   api?: WorldlineApi
+  useProjection?: RrpUseProjection
   openView?: (viewId: string) => void
 }
 
 function resolveFace<T>(target: unknown, name: string): T | undefined {
   try {
-    const rec = target as Record<string, unknown>
-    if (typeof (target as { get?(n: string): unknown }).get === 'function') {
-      const fromGet = (target as { get(n: string): unknown }).get(name)
-      if (fromGet !== undefined) return fromGet as T
+    const record = target as Record<string, unknown>
+    if (typeof (target as { get?(name: string): unknown }).get === 'function') {
+      const value = (target as { get(name: string): unknown }).get(name)
+      if (value !== undefined) return value as T
     }
-    return rec[name] as T | undefined
+    return record[name] as T | undefined
   } catch {
     return undefined
   }
 }
 
 function WorldlinePanel(props: WorldlinePanelProps): ReactNode {
-  const t: Translate = typeof props.t === 'function' ? props.t : (key) => key
+  const t = props.t ?? ((key: string) => key)
   const api = props.api
   const [trees, setTrees] = useState<WorldlineTree[]>([])
-  const [activeCardId, setActiveCardId] = useState<string | null>(null)
+  const [hiddenIds, setHiddenIds] = useState<string[]>([])
+  const [hiddenBranches, setHiddenBranches] = useState<WorldlineBranch[]>([])
+  const [selectedSessionId, setSelectedSessionId] = useState(props.sessionId)
+  const [forkTarget, setForkTarget] = useState<{ branch: WorldlineBranch; node: WorldlineNode }>()
+  const [hideTarget, setHideTarget] = useState<WorldlineBranch>()
   const [busy, setBusy] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [error, setError] = useState('')
+  const digest = props.useProjection?.(WORLDLINE_DIGEST_KEY)
+  const summaries = api?.sessionSummaries() ?? {}
 
-  const refresh = useCallback((): void => {
+  const refresh = useCallback(async (): Promise<void> => {
     if (api === undefined) return
     setBusy(true)
-    void api
-      .loadTrees()
-      .then((next) => {
-        setTrees(next)
-        setError('')
-        if (next.length > 0) {
-          setActiveCardId((prev) =>
-            prev !== null && next.some((tr) => tr.cardId === prev)
-              ? prev
-              : (next[0]?.cardId ?? null),
-          )
-        }
-      })
-      .catch((cause: unknown) => {
-        setError(String((cause as { message?: string })?.message ?? cause))
-      })
-      .finally(() => {
-        setBusy(false)
-      })
-  }, [api])
+    try {
+      const result = await api.loadTrees()
+      setTrees(result.trees)
+      setHiddenIds(result.hidden)
+      setError('')
+    } catch (cause) {
+      console.warn('[dsh-rrp] worldline refresh failed', cause)
+      setError(t('worldline.operationFailed'))
+    } finally {
+      setBusy(false)
+    }
+  }, [api, t])
+
+  useEffect(() => {
+    if (api === undefined) return
+    refresh()
+    return api.subscribe(() => refresh())
+  }, [api, refresh])
 
   useEffect(() => {
     refresh()
-    return api?.subscribe(refresh) ?? (() => {})
-  }, [refresh, api])
+  }, [digest, refresh])
 
-  if (api === undefined) {
-    return (
-      <div style={S.root}>
-        <div style={S.empty}>{t('worldline.unavailable')}</div>
-      </div>
-    )
+  useEffect(() => {
+    setSelectedSessionId(props.sessionId)
+  }, [props.sessionId])
+
+  const activityBySession = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(summaries).flatMap(([id, summary]) =>
+          summary.updatedAt === undefined ? [] : [[id, summary.updatedAt]],
+        ),
+      ),
+    [summaries, trees, digest],
+  )
+  const groups = useMemo(
+    () => flattenWorldlineBranches(trees, { activityBySession }),
+    [activityBySession, trees],
+  )
+  const allBranches = useMemo(() => groups.flatMap((group) => group.branches), [groups])
+  const selectedBranch = allBranches.find((branch) => branch.sessionId === selectedSessionId)
+  const branchCache = useMemo(
+    () => new Map(allBranches.map((branch) => [branch.sessionId, branch])),
+    [allBranches],
+  )
+
+  useEffect(() => {
+    setHiddenBranches((previous) => {
+      const next = new Map(previous.map((branch) => [branch.sessionId, branch]))
+      for (const branch of allBranches) next.set(branch.sessionId, branch)
+      for (const id of hiddenIds) {
+        if (next.has(id)) continue
+        const summary = summaries[id]
+        if (summary === undefined) continue
+        next.set(id, {
+          cardId: summary.cardId ?? 'unknown',
+          cardName: summary.cardName ?? t('worldline.unknownCard'),
+          sessionId: id,
+          title: summary.displayTitle ?? summary.title ?? id,
+          nodes: [],
+          descendantCount: 0,
+          cold: true,
+          pending: false,
+          activity: undefined,
+        })
+      }
+      return hiddenIds
+        .map((id) => next.get(id))
+        .filter((branch): branch is WorldlineBranch => branch !== undefined)
+    })
+  }, [allBranches, hiddenIds, summaries, t])
+
+  const runAction = (action: () => Promise<void>, after?: () => void): void => {
+    action()
+      .then(() => {
+        after?.()
+        return refresh()
+      })
+      .catch((cause: unknown) => {
+        console.warn('[dsh-rrp] worldline action failed', cause)
+        setError(t('worldline.operationFailed'))
+      })
   }
 
-  const activeTree = trees.find((tr) => tr.cardId === activeCardId) ?? trees[0]
-  const totalRoots = trees.reduce((sum, tree) => sum + tree.roots.length, 0)
+  const handleExport = (sessionId: string): void => {
+    if (api === undefined) return
+    setExporting(true)
+    api
+      .exportNovel(sessionId)
+      .catch((cause: unknown) => {
+        console.warn('[dsh-rrp] worldline export failed', cause)
+        setError(t('worldline.operationFailed'))
+      })
+      .finally(() => setExporting(false))
+  }
 
+  if (api === undefined) {
+    return <div style={S.empty}>{t('worldline.unavailable')}</div>
+  }
+
+  const open = (sessionId: string): void => {
+    setSelectedSessionId(sessionId)
+    api.open(sessionId)
+    props.openView?.('chat')
+  }
+  const forkDefaultTitle =
+    forkTarget === undefined
+      ? ''
+      : branchTitleForCount(
+          forkTarget.branch.title,
+          directChildCount(trees, forkTarget.branch.sessionId),
+        )
   return (
     <div style={S.root}>
       <header style={S.header}>
-        <span style={S.brand}>
-          <IconSparkle16 size={16} />
-          {t('worldline.title') ?? '世界线存档图'}
-        </span>
-
-        {/* Card switcher pills when multiple cards exist */}
-        {trees.length > 1 ? (
-          <div style={S.cardPills}>
-            {trees.map((tree) => (
-              <Pill
-                key={tree.cardId}
-                active={tree.cardId === activeCardId}
-                onClick={() => setActiveCardId(tree.cardId)}
-              >
-                {tree.cardName}
-              </Pill>
-            ))}
-          </div>
-        ) : null}
-
-        <span style={S.spacer} />
+        <strong style={S.title}>{t('worldline.title')}</strong>
         {busy ? <IconLoadingOutline16 size={14} /> : null}
-
-        {props.sessionId === undefined ? null : (
+        <span style={S.spacer} />
+        {props.sessionId ? (
           <Button
             size="sm"
             variant="ghost"
-            disabled={busy || exporting}
-            onClick={() => {
-              setExporting(true)
-              setError('')
-              void api
-                .exportNovel(props.sessionId as string)
-                .catch((cause: unknown) => {
-                  setError(String((cause as { message?: string })?.message ?? cause))
-                })
-                .finally(() => {
-                  setExporting(false)
-                })
-            }}
+            disabled={exporting}
+            onClick={() => handleExport(props.sessionId as string)}
           >
             {exporting ? t('worldline.exporting') : t('worldline.export')}
           </Button>
-        )}
-
+        ) : null}
         <Button
           size="sm"
           variant="ghost"
           icon={<IconRefreshOutline16 size={14} />}
-          onClick={refresh}
           aria-label={t('worldline.refresh')}
+          onClick={() => refresh()}
         />
       </header>
-
-      {error.length > 0 ? <div style={S.error}>{error}</div> : null}
-
-      {totalRoots === 0 && !busy && error.length === 0 ? (
-        <div style={S.empty}>{t('worldline.empty')}</div>
-      ) : activeTree !== undefined ? (
-        <WorldlineFlowchart
-          key={activeTree.cardId}
-          roots={activeTree.roots}
-          cardName={activeTree.cardName}
-          currentSessionId={props.sessionId}
-          onLoad={(id) => {
-            api.open(id)
-            props.openView?.('chat')
-          }}
-          onFork={(id, seq) => {
-            void api.reroll(id, seq, activeTree.cardName).then(refresh)
-          }}
-          onHide={(id) => {
-            void api.hide(id).then(refresh)
-          }}
+      {error ? <div style={S.error}>{error}</div> : null}
+      <div style={S.body}>
+        <WorldlineBranchList
+          groups={groups}
+          hidden={hiddenBranches}
+          selectedSessionId={selectedSessionId}
           t={t}
+          onSelect={(branch) => setSelectedSessionId(branch.sessionId)}
+          onOpen={open}
+          onRename={(sessionId, title) => runAction(() => api.rename(sessionId, title))}
+          onHide={(branch) => setHideTarget(branch)}
+          onRestore={(sessionId) => {
+            runAction(
+              () => api.restore(sessionId),
+              () => {
+                setHiddenBranches((previous) =>
+                  previous.filter((branch) => branch.sessionId !== sessionId),
+                )
+              },
+            )
+          }}
+          onExport={handleExport}
         />
+        <WorldlineTurnRail
+          branch={selectedBranch}
+          currentSessionId={props.sessionId}
+          t={t}
+          onFork={(branch, node) => setForkTarget({ branch, node })}
+        />
+      </div>
+      {forkTarget ? (
+        <WorldlineForkDialog
+          branch={forkTarget.branch}
+          atTurn={forkTarget.node.turn}
+          atSeq={forkTarget.node.seq}
+          defaultTitle={forkDefaultTitle}
+          t={t}
+          onCancel={() => setForkTarget(undefined)}
+          onConfirm={(title) => {
+            const target = forkTarget
+            setForkTarget(undefined)
+            runAction(() => api.fork(target.branch.sessionId, target.node.seq, title))
+          }}
+        />
+      ) : null}
+      {hideTarget ? (
+        <WorldlineHideDialog
+          branch={hideTarget}
+          t={t}
+          onCancel={() => setHideTarget(undefined)}
+          onConfirm={() => {
+            const target = hideTarget
+            setHideTarget(undefined)
+            setHiddenBranches((previous) => [
+              target,
+              ...previous.filter((branch) => branch.sessionId !== target.sessionId),
+            ])
+            runAction(
+              () => api.hide(target.sessionId),
+              () => {
+                if (selectedSessionId === target.sessionId) setSelectedSessionId(props.sessionId)
+              },
+            )
+          }}
+        />
+      ) : null}
+      {branchCache.size === 0 && !busy && !error ? (
+        <div style={S.empty}>{t('worldline.empty')}</div>
       ) : null}
     </div>
   )
@@ -195,6 +312,7 @@ const S: Record<string, CSSProperties> = {
   root: {
     height: '100%',
     width: '100%',
+    minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
     background: 'var(--dsw-alias-bg-base)',
@@ -202,78 +320,71 @@ const S: Record<string, CSSProperties> = {
     overflow: 'hidden',
   },
   header: {
+    flex: '0 0 auto',
     display: 'flex',
     alignItems: 'center',
     gap: 8,
     padding: '10px 14px',
     borderBottom: '1px solid var(--dsw-alias-border-l1)',
-    flex: '0 0 auto',
-    zIndex: 10,
-    background: 'var(--dsw-alias-bg-base)',
   },
-  brand: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 },
-  cardPills: { display: 'flex', alignItems: 'center', gap: 6 },
+  title: { fontSize: 14 },
   spacer: { flex: 1 },
-  error: { padding: '8px 14px', fontSize: 12, color: 'var(--dsw-alias-label-danger, #d5484f)' },
+  body: { flex: 1, minHeight: 0, display: 'flex' },
+  error: { padding: '7px 14px', fontSize: 11.5, color: 'var(--dsw-alias-label-danger)' },
   empty: {
-    padding: '40px 16px',
+    padding: 24,
     textAlign: 'center',
-    fontSize: 12.5,
     color: 'var(--dsw-alias-label-tertiary)',
+    fontSize: 12,
   },
 }
 
-/**
- * Register the worldline tab in the host's session-view tab strip.
- * @param ctx - the client context owning the registration.
- */
 export function registerWorldlineTab(ctx: RrpClientContext): void {
   const t = ctx.locale.bind('rrp') as Translate
   const sessions = ctx.sessions
-
-  /**
-   * Jump to a target session and return to the main Conversation view.
-   * Probes ctx.uiWorkspace, falling back to ctx.sessions.open if present.
-   */
   const openSession = (sessionId: string): void => {
-    const uiWorkspace = resolveFace<RrpUiWorkspaceService>(ctx, 'uiWorkspace')
-    if (typeof uiWorkspace?.openSession === 'function') {
-      uiWorkspace.openSession(sessionId)
-    } else if (typeof (sessions as unknown as { open?(id: string): void })?.open === 'function') {
-      ;(sessions as unknown as { open(id: string): void }).open(sessionId)
-    }
+    const workspace = resolveFace<RrpUiWorkspaceService>(ctx, 'uiWorkspace')
+    workspace?.openSession(sessionId)
     ctx.layout?.selectPanel(null)
   }
-
   const api: WorldlineApi = {
     async loadTrees() {
-      const response = await fetch(RRP_ROUTES.worldlineTree)
-      if (!response.ok) throw new Error('worldline route HTTP ' + String(response.status))
-      const body = (await response.json()) as WorldlineTreeResponse
+      const [treeResponse, hiddenResponse] = await Promise.all([
+        fetch(RRP_ROUTES.worldlineTree),
+        fetch(RRP_ROUTES.worldlineHidden),
+      ])
+      if (!treeResponse.ok) throw new Error('worldline tree ' + String(treeResponse.status))
+      if (!hiddenResponse.ok) throw new Error('worldline hidden ' + String(hiddenResponse.status))
+      const body = (await treeResponse.json()) as WorldlineTreeResponse
+      const hidden = (await hiddenResponse.json()) as WorldlineHiddenResponse
       const byId = sessions?.list?.getSnapshot().byId ?? {}
       const fill = (nodes: WorldlineNode[]): void => {
         for (const node of nodes) {
-          if (node.loaded !== false)
-            node.sessionTitle = byId[node.sessionId]?.displayTitle ?? node.sessionTitle
+          const summary = byId[node.sessionId]
+          if (node.loaded !== false && summary !== undefined) {
+            node.sessionTitle = summary.displayTitle ?? summary.title ?? node.sessionTitle
+          }
           fill(node.children)
         }
       }
       for (const tree of body.trees) fill(tree.roots)
-      return body.trees
+      return { trees: body.trees, hidden: hidden.hidden }
+    },
+    sessionSummaries() {
+      return sessions?.list?.getSnapshot().byId ?? {}
     },
     async exportNovel(sessionId) {
       const title = sessions?.list?.getSnapshot().byId[sessionId]?.displayTitle ?? ''
       const response = await fetch(
         routeUrl(RRP_ROUTES.novelExport, sessionId, { title, format: 'md' }),
       )
-      if (!response.ok) throw new Error('export HTTP ' + String(response.status))
+      if (!response.ok) throw new Error('export ' + String(response.status))
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
       try {
         const anchor = document.createElement('a')
         anchor.href = url
-        const safe = (title.length > 0 ? title : 'novel').replace(/[\\/:*?"<>|]/g, '_')
-        anchor.download = safe + '.md'
+        anchor.download = (title.length > 0 ? title : 'novel').replace(/[\\/:*?"<>|]/g, '_') + '.md'
         document.body.appendChild(anchor)
         anchor.click()
         anchor.remove()
@@ -281,47 +392,42 @@ export function registerWorldlineTab(ctx: RrpClientContext): void {
         URL.revokeObjectURL(url)
       }
     },
-    open(sessionId) {
-      openSession(sessionId)
-    },
-    async reroll(sessionId, atSeq, cardName) {
-      if (sessions?.fork === undefined) return
+    open: openSession,
+    async fork(sessionId, atSeq, title) {
+      if (sessions?.fork === undefined) throw new Error('fork unavailable')
       const childId = await sessions.fork({ sessionId, atSeq, increaseTitle: true })
       openSession(childId)
-      for (let attempt = 0; attempt < 8; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 400))
-        const binding = sessions.binding(childId)
-        if (binding !== undefined) {
-          const list = sessions.list?.getSnapshot()
-          const parent = list?.byId[sessionId]
-          const parentTitle = parent?.title ?? parent?.displayTitle ?? cardName
-          const siblings =
-            list === undefined
-              ? []
-              : list.ids
-                  .filter((id) => list.byId[id]?.parentId === sessionId)
-                  .map((id) => list.byId[id]?.title ?? list.byId[id]?.displayTitle ?? '')
-          try {
-            await binding.session.rename?.(branchTitle(parentTitle, siblings))
-          } catch {
-            /* title only */
-          }
-          break
-        }
+      const binding = sessions.binding(childId)
+      if (binding?.session.rename === undefined) throw new Error('new branch binding unavailable')
+      try {
+        await binding.session.rename(title)
+      } catch (cause) {
+        console.warn('[dsh-rrp] branch title could not be applied', cause)
       }
     },
     async hide(sessionId) {
-      await fetch(RRP_ROUTES.worldlineHidden, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sessionId, hidden: true }),
-      })
+      await setHidden(sessionId, true)
+    },
+    async restore(sessionId) {
+      await setHidden(sessionId, false)
+    },
+    async rename(sessionId, title) {
+      const binding = sessions?.binding(sessionId)
+      if (binding?.session.rename === undefined) throw new Error('branch binding unavailable')
+      await binding.session.rename(title)
     },
     subscribe(listener) {
       return sessions?.list?.subscribe(listener) ?? (() => {})
     },
   }
-
+  async function setHidden(sessionId: string, hidden: boolean): Promise<void> {
+    const response = await fetch(RRP_ROUTES.worldlineHidden, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId, hidden }),
+    })
+    if (!response.ok) throw new Error('worldline hidden ' + String(response.status))
+  }
   ctx.effect(() => {
     const dispose = ctx.slots.inject('conversation.view', () =>
       ctx.slots.register(
@@ -337,5 +443,5 @@ export function registerWorldlineTab(ctx: RrpClientContext): void {
       ),
     )
     return dispose
-  }, 'dsh-rrp: worldline map tab')
+  }, 'dsh-rrp: worldline tab')
 }

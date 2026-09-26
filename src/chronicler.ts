@@ -23,6 +23,7 @@ import {
   buildChroniclerPrompt,
   chroniclerReplySchema,
   parseChroniclerReply,
+  repairChroniclerEnvelope,
 } from './agents/chronicler.ts'
 import {
   type AgentsService,
@@ -60,7 +61,7 @@ const JOB_KIND = 'chronicler'
 function chroniclerReplyIssueList(text: string): string[] | undefined {
   const parsed = extractFirstJsonObject(text)
   if (parsed === undefined) return ['no JSON object found']
-  const result = chroniclerReplySchema.safeParse(parsed)
+  const result = chroniclerReplySchema.safeParse(repairChroniclerEnvelope(parsed))
   if (result.success) return undefined
   return result.error.issues.slice(0, 5).map((issue) => issue.path.join('.') + ': ' + issue.message)
 }

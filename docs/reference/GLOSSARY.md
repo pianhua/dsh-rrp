@@ -62,6 +62,10 @@
 | **主线** | **Main line**（代码 `save-naming.mainTitle`） | 一张卡下未经分叉、由开卡直接推进出的存档；命名「卡名·主线」「卡名·主线2」 | `主干`、`root`（仅代码内部） |
 | **卡工作区** | **Card Workspace** | 「一卡一区」的分组抽屉：宿主 workspace，路径 `<home>/.dsh-rrp/saves/<cardId>` | `目录`、`项目` |
 | **冷线节点** | **Cold (unloaded) node** | 已落盘但未加载的会话在世界线图上的占位节点 | `stub`+`skeleton`+`placeholder` 三词混用（保留 `stub` 为字段名，文档统一称冷线节点） |
+| **分叉切口** | **Fork Cut** | 子线自父线分叉的绝对回合位置；拓扑只由 `parentSession` + `inheritedEventCount` 推导，digest 回合上限不参与 | `seed index`、`切点序号` |
+| **节点徽标** | **Node Badge** | 回合节点上的状态徽标（地点/时间/好感前三/剧情罗盘一行）；按 `stateFoldSeq`/`summaryTurn` 对齐回合，全量重建、支持字段删除 | `状态水印`（旧实现用词）、`badge 水印` |
+| **从此分叉** | **Fork from here** | 世界线视图内从指定回合派生新支线的操作；宿主无 rewind，此为「读档」的诚实语义之一 | `重roll`、`回档`、`rewind` |
+| **位置未知** | **Unknown fork position** | 冷线或历史切口无法解析时的诚实标注（按谱系挂最近已知祖先），不再伪装挂在父线尾部 | `挂在末尾`、静默降级 |
 | **收起此线** | **Hide**（代码 `hidden`） | 软归档：地图连同其整棵子树不再显示，绝不删宿主会话 | `归档`、`删除`、`prune`（仅折叠内部用词） |
 | **开场白** | **Opening / First Message** | 卡包提供的开局正文 | `greeting`、`first_mes` |
 

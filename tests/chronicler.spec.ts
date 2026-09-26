@@ -91,6 +91,22 @@ describe('Chronicler v2 reply contract', () => {
     expect(parsed?.evidence).toEqual(['正文明确写出密道入口。'])
   })
 
+  it('fills omitted empty collections so a sparse model reply still validates', () => {
+    const sparse = structuredClone(NEXT) as unknown as Record<string, unknown>
+    delete sparse.globalFields
+    delete sparse.objectives
+    delete sparse.conflicts
+    delete sparse.cognition
+    delete sparse.relations
+    delete sparse.currentEvents
+    const parsed = parseChroniclerReply(
+      JSON.stringify({ state: sparse, changeSummary: '无实质变化。', evidence: [] }),
+    )
+    expect(parsed).toBeDefined()
+    expect(parsed!.state.objectives).toEqual([])
+    expect(parsed!.state.globalFields).toEqual({})
+  })
+
   it('coerces an invented field definition to undeclared instead of failing the snapshot', () => {
     const drifted = structuredClone(NEXT)
     ;(drifted.trackedObjects.mia as { fields: Record<string, unknown> }).fields.trust = {

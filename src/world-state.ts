@@ -517,10 +517,11 @@ function compareValue(
   if (!isObject(before) || !isObject(after) || Array.isArray(before) || Array.isArray(after)) {
     // The change record crosses the session event log, where an explicit
     // undefined side (added/deleted) fails the host's serializability check;
-    // the type already carries the direction, so omit the absent side.
+    // the type already carries the direction, so omit the absent side —
+    // objectId included (global-field changes have none).
     changes.push({
       type: changeType(before, after, path),
-      objectId,
+      ...(objectId === undefined ? {} : { objectId }),
       field: path,
       ...(before === undefined ? {} : { before }),
       ...(after === undefined ? {} : { after }),
