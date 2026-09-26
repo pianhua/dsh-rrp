@@ -495,3 +495,8 @@
 - 工具链：`scripts/host-runner.mjs` 的 dsh 定位修复——dsh 包无 main/exports，`require.resolve` 裸包必失败，改为直接探测 `lib/bin.js`（仓库 node_modules → 全局 npm root）。
 - 质量门全绿（format/typecheck/lint/vitest/build/git diff --check）。票据 01/02/03 已闭环，`.scratch/worldline-v2/` 规格与票据保持未跟踪。
 - 已知遗留：cuts 表建立前 fork 的旧冷线仍「位置未知」（打开一次后卡归属入索引，属诚实降级）；宿主 readSession 修复后经宿主解析的路径已留好（cachedCut 优先、readSession 兜底）。运行中的宿主进程加载的是 prettier 重排前的等价构建，功能一致，下次重启自动生效。
+
+
+### Worldline v2 合并入 main（2026-09-26）
+
+- `feat/worldline-v2`（6 提交：契约/D24 落盘、服务端数据层、客户端双栏、文档、真机热修、worklog）已推送并以 `--no-ff` 合并入 main（merge `71e6698`），推送后 main 与 origin 同步。合并树与过质量门的树逐字节一致（质量门：format/typecheck/lint/vitest 全绿/build/git diff --check）。`.scratch/worldline-v2/` 规格与票据保持未跟踪（仓库惯例）。
