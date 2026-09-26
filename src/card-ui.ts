@@ -11,12 +11,14 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { parseWhen, whenPathWarning } from './lore-condition.ts'
+import { validateLoreEntry } from './lore-state.ts'
 import type { WorldState } from './world-state.ts'
 import {
   UI_ACTION_KINDS,
   UI_BUTTON_LIMIT,
   UI_COMPONENT_KINDS,
   UI_PANEL_LIMIT,
+  type UiButtonDecl,
   type UiManifest,
   type UiPanelDecl,
 } from './ui-schema.ts'
@@ -30,6 +32,8 @@ const buttonSchema = z
     action: z.enum(UI_ACTION_KINDS),
     patch: z.record(z.string(), z.unknown()).optional(),
     question: z.string().min(1).optional(),
+    trigger: z.string().min(1).optional(),
+    entry: z.unknown().optional(),
   })
   .strict()
 
@@ -57,6 +61,7 @@ const manifestSchema = z
     title: z.string().optional(),
     layout: z.enum(['stack', 'grid']).optional(),
     panels: z.array(panelSchema).min(1).max(UI_PANEL_LIMIT),
+    assetRefs: z.array(z.string().min(1)).max(64).optional(),
   })
   .strict()
 
@@ -93,14 +98,15 @@ export function loadUiManifest(
 
   const locator = '卡「' + cardDir.split(/[\\/]/).pop() + '」'
   const panels: UiPanelDecl[] = []
-  const seen = new Set<string>()
+  const seenIds = new Set<string>()
+  const seenLabels = new Set<string>()
   for (const panel of parsed.data.panels) {
-    if (seen.has(panel.id))
+    if (seenIds.has(panel.id))
       return {
         kind: 'error',
         error: 'ui/' + UI_MANIFEST_FILE + '：panel id 重复「' + panel.id + '」',
       }
-    seen.add(panel.id)
+    seenIds.add(panel.id)
     if (panel.component === 'gauge' && panel.bind === undefined) {
       return {
         kind: 'error',
@@ -142,8 +148,76 @@ export function loadUiManifest(
         }
       }
     }
+    const buttons: UiButtonDecl[] = []
+    for (const button of panel.buttons ?? []) {
+      if (seenLabels.has(button.label)) {
+        return {
+          kind: 'error',
+          error: 'ui/' + UI_MANIFEST_FILE + '：按钮 label 重复「' + button.label + '」',
+        }
+      }
+      seenLabels.add(button.label)
+      if (button.action === 'correct_state') {
+        if (button.patch === undefined || typeof button.patch !== 'object' || button.patch === null)
+          return {
+            kind: 'error',
+            error:
+              'ui/' +
+              UI_MANIFEST_FILE +
+              '：按钮「' +
+              button.label +
+              '」的 correct_state 必须带 patch 对象',
+          }
+      } else if (button.action === 'ask_copilot') {
+        if (typeof button.question !== 'string' || button.question.length === 0)
+          return {
+            kind: 'error',
+            error:
+              'ui/' +
+              UI_MANIFEST_FILE +
+              '：按钮「' +
+              button.label +
+              '」的 ask_copilot 必须带 question',
+          }
+      } else if (button.action === 'send_message') {
+        if (typeof button.trigger !== 'string' || button.trigger.length === 0)
+          return {
+            kind: 'error',
+            error:
+              'ui/' +
+              UI_MANIFEST_FILE +
+              '：按钮「' +
+              button.label +
+              '」的 send_message 必须带 trigger',
+          }
+      } else if (button.action === 'draft_lore') {
+        const entry =
+          button.entry !== undefined && button.entry !== null && typeof button.entry === 'object'
+            ? (button.entry as Record<string, unknown>)
+            : undefined
+        const validated = validateLoreEntry(entry, [], [])
+        if (!validated.ok)
+          return {
+            kind: 'error',
+            error:
+              'ui/' +
+              UI_MANIFEST_FILE +
+              '：按钮「' +
+              button.label +
+              '」的 draft_lore entry 不合法：' +
+              validated.error,
+          }
+        buttons.push({
+          label: button.label,
+          action: button.action,
+          entry: validated.skill,
+        })
+        continue
+      }
+      buttons.push(button as UiButtonDecl)
+    }
     const { when: whenRaw, ...rest } = panel
-    const decl: UiPanelDecl = { ...rest }
+    const decl: UiPanelDecl = { ...rest, buttons }
     if (whenRaw !== undefined) {
       const condition = parseWhen(whenRaw, locator + ' ui 面板「' + panel.id + '」')
       if (condition instanceof Error)
@@ -157,6 +231,21 @@ export function loadUiManifest(
       if (warning !== undefined) console.warn('[dsh-rrp] ' + warning)
     }
     panels.push(decl)
+  }
+
+  if (parsed.data.assetRefs !== undefined) {
+    for (const ref of parsed.data.assetRefs) {
+      if (!isUiAssetName(ref))
+        return {
+          kind: 'error',
+          error: 'ui/' + UI_MANIFEST_FILE + '：assetRefs 包含非法路径「' + ref + '」',
+        }
+      if (!existsSync(join(cardDir, 'ui', ref)))
+        return {
+          kind: 'error',
+          error: 'ui/' + UI_MANIFEST_FILE + '：assetRefs 指向的文件不存在「' + ref + '」',
+        }
+    }
   }
 
   return {
@@ -173,4 +262,45 @@ export function loadUiManifest(
 /** A card-authored UI page name: a bare `*.html` inside `ui/`, nothing else. */
 export function isUiHtmlName(name: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.html$/.test(name)
+}
+
+const UI_ASSET_EXTENSIONS = new Set([
+  '.html',
+  '.css',
+  '.js',
+  '.mjs',
+  '.json',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.gif',
+  '.svg',
+  '.ico',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.mp3',
+])
+
+/** Whether a relative path stays inside the card's `ui/` directory. */
+function isSafeUiRelativePath(rel: string): boolean {
+  if (rel.length === 0) return false
+  if (rel.startsWith('/') || rel.includes('\\') || rel.includes(':')) return false
+  const normalized = rel.replace(/\\/g, '/')
+  for (const segment of normalized.split('/')) {
+    if (segment === '..' || segment === '' || segment.startsWith('.')) return false
+  }
+  if (normalized.includes('/../') || normalized.startsWith('../')) return false
+  return true
+}
+
+/**
+ * A card-authored UI asset path: a relative path under `ui/` with an allowed
+ * extension. Kept for the old bare-HTML call sites.
+ */
+export function isUiAssetName(name: string): boolean {
+  if (!isSafeUiRelativePath(name)) return false
+  const ext = ('.' + name.split('.').pop()?.toLowerCase()) as string
+  return UI_ASSET_EXTENSIONS.has(ext)
 }

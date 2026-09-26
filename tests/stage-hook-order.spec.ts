@@ -33,6 +33,7 @@ function renderElement(card: CardContext | null, prose: string): ReactElement {
     loadManifest: async () => (card === null ? null : MANIFEST),
     correctState: async () => {},
     askCopilot: () => {},
+    draftLore: async () => {},
     forget: () => {},
   }
   return createElement(StagePanel, {

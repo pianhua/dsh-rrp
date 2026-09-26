@@ -12,12 +12,15 @@ export interface RrpSettings {
   summaryEnabled: boolean
   /** Summarize every N completed turns (`/summary every N`). */
   summaryEveryTurns: number
+  /** Whether card apps may send messages on the player's behalf. */
+  allowSendMessage: boolean
 }
 
 /** Defaults used until a Session records its first explicit setting event. */
 export const DEFAULT_RRP_SETTINGS: Readonly<RrpSettings> = Object.freeze({
   summaryEnabled: true,
   summaryEveryTurns: 8,
+  allowSendMessage: true,
 })
 
 /** Clamp an arbitrary value to a legal cadence, falling back to the default. */
@@ -30,12 +33,18 @@ export function clampSummaryEveryTurns(value: unknown): number {
 /** Coerce an unknown projection value to the stable settings shape. */
 export function rrpSettingsOf(value: unknown): RrpSettings {
   const record = value as
-    { summaryEnabled?: unknown; summaryEveryTurns?: unknown } | null | undefined
+    | { summaryEnabled?: unknown; summaryEveryTurns?: unknown; allowSendMessage?: unknown }
+    | null
+    | undefined
   return {
     summaryEnabled:
       typeof record?.summaryEnabled === 'boolean'
         ? record.summaryEnabled
         : DEFAULT_RRP_SETTINGS.summaryEnabled,
     summaryEveryTurns: clampSummaryEveryTurns(record?.summaryEveryTurns),
+    allowSendMessage:
+      typeof record?.allowSendMessage === 'boolean'
+        ? record.allowSendMessage
+        : DEFAULT_RRP_SETTINGS.allowSendMessage,
   }
 }

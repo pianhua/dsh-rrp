@@ -263,7 +263,7 @@ describe('dsh-rrp client half', () => {
     expect(referenceConflictFromBody({ details: { references: [] } })).toBeUndefined()
   })
 
-  it('registers the Stage panel as a conversation view with the two-action API only', () => {
+  it('registers the Stage panel as a conversation view with the stage API surface', () => {
     const { ctx, bodies } = fakeContext()
     client.apply(ctx as never)
 
@@ -274,6 +274,7 @@ describe('dsh-rrp client half', () => {
     expect(Object.keys(injected.api ?? {}).sort()).toEqual([
       'askCopilot',
       'correctState',
+      'draftLore',
       'forget',
       'loadManifest',
     ])

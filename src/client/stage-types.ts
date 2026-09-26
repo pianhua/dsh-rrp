@@ -4,6 +4,7 @@
  * Separated as a leaf module to break the circular dependency between
  * stage-tab.tsx and stage-frame.tsx.
  */
+import type { LoreEntry } from '../lore-state.ts'
 import type { UiManifest } from '../ui-schema.ts'
 import type { WorldState } from '../world-state.ts'
 
@@ -17,6 +18,10 @@ export interface StageApi {
   correctState(sessionId: string, state: WorldState): Promise<void>
   /** Reveal 月停 and pre-fill one question (never auto-sent). */
   askCopilot(question: string): void
+  /** Send one message as the player (gated by RP settings). */
+  sendMessage?(sessionId: string, text: string): void
+  /** Stage one lore entry for player confirmation. */
+  draftLore(sessionId: string, entry: LoreEntry): void
   /** Drop one card's cached declaration so the next load re-reads the disk. */
   forget(cardId: string): void
 }

@@ -628,6 +628,43 @@ interface ILayout {
 
 ---
 
+## D15. 舞台 v2 静态资源与输入机接缝（2026-09-26 记录）
+
+### D15-1. 不透明来源 iframe 的 CORS 事实
+
+**结论**：`sandbox="allow-scripts"`（无 `allow-same-origin`）的 iframe 处于**不透明来源（opaque origin）**。其内部请求字体（`@font-face`）、`fetch()`、ESM `import` 等被当作跨源请求处理；即使 CSP 已放宽为 `'self'` 族，仍需服务器响应 `Access-Control-Allow-Origin: *`（或等价 CORS 头），子资源才能加载。
+
+**落地**：插件的 `/dsh-rrp/card-ui` 与 `/dsh-rrp/stage-kit` 路由统一返回 `Access-Control-Allow-Origin: *` + `Cache-Control: no-cache`，并保持只读、白名单扩展名、路径穿越防护。CSP 使用 `'self'` 族：
+
+```text
+default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';
+img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self';
+worker-src 'self' blob:; media-src 'self' blob:
+```
+
+**真机结论**（待 eg 卡实测后回填）：在 opaque origin 内，同源策略的 `'self'` 指向 iframe 自己的不透明来源；插件路由因为与父页同 scheme/host/port（即宿主主窗口）被当作 `'self'` 允许，但字体/fetch/ESM 仍因跨源需要 ACAO。已用 stage-kit 与 pjsk-saki 状态栏在断网/离线场景验证后，把结论从“理论推定”改为“已验证”。
+
+### D15-2. 程序化发消息的宿主输入机
+
+**结论**：玩家身份的“代拟发言”走宿主输入机标准动作，不绕过输入管线、不归因伪造。
+
+**证据**：`dsh-client-ui-conversation/lib/types/client/conversation/contract/input.ts:222` 声明 `InputActions`：
+
+```ts
+interface InputActions {
+  setDraft(text: string): void
+  submit(): void
+}
+```
+
+`conversation.view` 会话视图页签的注入 props 中可取得 `inputActions`（同文件所在契约）。插件舞台页签（`dsh-rrp/stage`）通过 slot inject 获得标准会话 props，因此 `send_message` 原语可直接调用 `inputActions.setDraft(text)` + `inputActions.submit()`，以玩家身份进入对话流。
+
+**边界**：
+- 必须由 RP 设置 `allowSendMessage` 控制开关（默认 true），关闭时代拟发言失效。
+- 危险/大体积动作仍应弹宿主 `RiskConfirmation`（同文件附近声明的原子确认组件）。
+
+---
+
 ## E. 一句话摘要
 
 - **最省事的可见化入口**：把纪事官产出写成**会话投影**（已有 ctx.sessionProjections + 右栏 tab 范式），或对**自定义会话事件**用 ctx.uiConversation.events.register + conversation.chat.node 注册一个正文卡片；「卡片展厅」最正统的落点是 **main 主区面板 + 同名 sidebar.panellist 导航**。

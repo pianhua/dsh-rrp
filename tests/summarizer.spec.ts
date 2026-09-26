@@ -374,7 +374,11 @@ describe('Summarizer toggle command', () => {
 
     const payload = (writes.get(first.id)?.[0]?.data as { source?: { rrp?: RrpStatePayload } })
       ?.source?.rrp
-    expect(payload?.settings).toEqual({ summaryEnabled: false, summaryEveryTurns: 8 })
+    expect(payload?.settings).toEqual({
+      summaryEnabled: false,
+      summaryEveryTurns: 8,
+      allowSendMessage: true,
+    })
 
     expect(definition?.handler({ rawInput: 'on', agent: { session: second } }).text).toContain(
       '开启',
@@ -383,7 +387,11 @@ describe('Summarizer toggle command', () => {
     const secondPayload = (
       writes.get(second.id)?.[0]?.data as { source?: { rrp?: RrpStatePayload } }
     )?.source?.rrp
-    expect(secondPayload?.settings).toEqual({ summaryEnabled: true, summaryEveryTurns: 8 })
+    expect(secondPayload?.settings).toEqual({
+      summaryEnabled: true,
+      summaryEveryTurns: 8,
+      allowSendMessage: true,
+    })
   })
 
   it('sets the cadence with /summary every N, clamped to the legal range', () => {
@@ -424,7 +432,11 @@ describe('Summarizer toggle command', () => {
     expect(reply?.kind).toBe('success')
     expect(reply?.text).toContain('5')
     const payload = (writes[0]?.data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp
-    expect(payload?.settings).toEqual({ summaryEnabled: true, summaryEveryTurns: 5 })
+    expect(payload?.settings).toEqual({
+      summaryEnabled: true,
+      summaryEveryTurns: 5,
+      allowSendMessage: true,
+    })
 
     // Out-of-range values clamp instead of failing. (Distinct session: the
     // publisher dedups same-render writes within one session.)

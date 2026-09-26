@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { isUiHtmlName, loadUiManifest, UI_MANIFEST_FILE } from '../src/card-ui.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { isUiAssetName, isUiHtmlName, loadUiManifest, UI_MANIFEST_FILE } from '../src/card-ui.ts'
 import { readCard, shippedCardRoot } from '../src/cards.ts'
 import { renderCardContext } from '../src/card-types.ts'
 import { registerCardUiRoute } from '../src/card-ui-route.ts'
@@ -191,6 +191,83 @@ describe('card UI manifest loader', () => {
       rmSync(card, { recursive: true, force: true })
     }
   })
+
+  it('validates the four action verbs and rejects duplicate labels', () => {
+    const manifest = {
+      version: 1,
+      panels: [
+        {
+          id: 'row',
+          component: 'buttonRow',
+          buttons: [
+            { label: 'A', action: 'ask_copilot', question: '?' },
+            { label: 'A', action: 'ask_copilot', question: '!' },
+          ],
+        },
+      ],
+    }
+    const card = cardDirWith(JSON.stringify(manifest))
+    try {
+      const loaded = loadUiManifest(card)
+      expect(loaded.kind).toBe('error')
+      if (loaded.kind === 'error') expect(loaded.error).toContain('label 重复')
+    } finally {
+      rmSync(card, { recursive: true, force: true })
+    }
+
+    const good = cardDirWith(
+      JSON.stringify({
+        version: 1,
+        panels: [
+          {
+            id: 'row',
+            component: 'buttonRow',
+            buttons: [
+              { label: 'send', action: 'send_message', trigger: '走吧' },
+              {
+                label: 'lore',
+                action: 'draft_lore',
+                entry: { name: 'x-lore', description: 'd', body: 'b' },
+              },
+            ],
+          },
+        ],
+      }),
+    )
+    try {
+      const loaded = loadUiManifest(good)
+      expect(loaded.kind).toBe('ok')
+      if (loaded.kind === 'ok') {
+        expect(loaded.manifest.panels[0]?.buttons).toHaveLength(2)
+        expect(loaded.manifest.panels[0]?.buttons?.[1]?.entry?.name).toBe('x-lore')
+      }
+    } finally {
+      rmSync(good, { recursive: true, force: true })
+    }
+  })
+
+  it('warns when a when: path is absent from the initial state', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const manifest = JSON.stringify({
+      version: 1,
+      panels: [
+        {
+          id: 'g',
+          component: 'gauge',
+          bind: 'globalFields.wealth.value',
+          when: 'globalFields.wealth.value >= 10',
+        },
+      ],
+    })
+    const card = cardDirWith(manifest)
+    try {
+      loadUiManifest(card, emptyWorldState())
+      expect(warn.mock.calls.some((args) => args.join(' ').includes('wealth'))).toBe(true)
+    } finally {
+      warn.mockRestore()
+      rmSync(card, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('card UI file guard', () => {
@@ -207,6 +284,23 @@ describe('card UI file guard', () => {
       'x.HTML',
     ]) {
       expect(isUiHtmlName(bad)).toBe(false)
+    }
+  })
+
+  it('accepts relative ui asset paths with whitelisted extensions', () => {
+    for (const ok of ['panel.html', 'css/style.css', 'app.mjs', 'assets/icon.webp', 'font.woff2']) {
+      expect(isUiAssetName(ok)).toBe(true)
+    }
+    for (const bad of [
+      '../style.css',
+      '/abs.css',
+      'style\\back.css',
+      'dir/../style.css',
+      'style.exe',
+      '.hidden.css',
+      '',
+    ]) {
+      expect(isUiAssetName(bad)).toBe(false)
     }
   })
 })
@@ -418,27 +512,40 @@ describe('/dsh-rrp/card-ui route', () => {
 
   interface FakeResponse {
     statusCode: number
+    headers: Record<string, string>
     contentType: string | undefined
     text: string | undefined
     setHeader(name: string, value: string): void
-    end(body?: string): void
+    getHeader(name: string): string | undefined
+    end(body?: string | Buffer): void
+  }
+
+  function normalizeHeader(name: string): string {
+    return name.toLowerCase()
   }
 
   function call(url: string): {
     status: number
+    headers: Record<string, string>
     contentType?: string
     text?: string
     body: CardUiResponse
   } {
     const res: FakeResponse = {
       statusCode: 0,
+      headers: {},
       contentType: undefined,
       text: undefined,
       setHeader(name, value) {
-        if (name === 'content-type') this.contentType = value
+        const key = normalizeHeader(name)
+        this.headers[key] = value
+        if (key === 'content-type') this.contentType = value
+      },
+      getHeader(name) {
+        return this.headers[normalizeHeader(name)]
       },
       end(body) {
-        this.text = body
+        this.text = typeof body === 'string' ? body : undefined
       },
     }
     routes.get(RRP_ROUTES.cardUi)?.({ method: 'GET', url }, res)
@@ -450,7 +557,13 @@ describe('/dsh-rrp/card-ui route', () => {
         parsed = {} as CardUiResponse
       }
     }
-    return { status: res.statusCode, contentType: res.contentType, text: res.text, body: parsed }
+    return {
+      status: res.statusCode,
+      headers: res.headers,
+      contentType: res.contentType,
+      text: res.text,
+      body: parsed,
+    }
   }
 
   beforeEach(() => {
@@ -460,9 +573,11 @@ describe('/dsh-rrp/card-ui route', () => {
     registerCardUiRoute(ctx)
     const card = join(home, '.dsh-rrp', 'cards', 'demo')
     mkdirSync(join(card, 'ui'), { recursive: true })
+    mkdirSync(join(card, 'ui', 'css'), { recursive: true })
     writeFileSync(join(card, 'card.md'), '---\nid: demo\nname: 示例卡\n---\n\n正文。\n')
     writeFileSync(join(card, 'ui', UI_MANIFEST_FILE), GOOD)
     writeFileSync(join(card, 'ui', 'panel.html'), '<b>hi</b>')
+    writeFileSync(join(card, 'ui', 'css', 'style.css'), 'body{color:red}')
   })
   afterEach(() => {
     if (originalHome === undefined) delete process.env.DSH_HOME
@@ -484,15 +599,65 @@ describe('/dsh-rrp/card-ui route', () => {
     )
     expect(call(RRP_ROUTES.cardUi + '?card=demo&file=..%2Fcard.md').status).toBe(400)
     expect(
-      call(RRP_ROUTES.cardUi + '?card=demo&file=' + encodeURIComponent('ui/panel.html')).status,
+      call(RRP_ROUTES.cardUi + '?card=demo&file=' + encodeURIComponent('../panel.html')).status,
     ).toBe(400)
-    expect(call(RRP_ROUTES.cardUi + '?card=demo&file=missing.html').status).toBe(404)
+    expect(
+      call(RRP_ROUTES.cardUi + '?card=demo&file=' + encodeURIComponent('/abs.html')).status,
+    ).toBe(400)
+    expect(
+      call(RRP_ROUTES.cardUi + '?card=demo&file=' + encodeURIComponent('missing.html')).status,
+    ).toBe(404)
+    expect(
+      call(RRP_ROUTES.cardUi + '?card=demo&file=' + encodeURIComponent('style.exe')).status,
+    ).toBe(400)
   })
 
   it('serves a card HTML page as text/html', () => {
     const res = call(RRP_ROUTES.cardUi + '?card=demo&file=panel.html')
     expect(res.status).toBe(200)
     expect(res.contentType).toContain('text/html')
+    expect(res.headers['access-control-allow-origin']).toBe('*')
+    expect(res.headers['cache-control']).toBe('no-cache')
+    expect(res.headers['etag']).toBeDefined()
     expect(res.text).toBe('<b>hi</b>')
+  })
+
+  it('serves nested ui assets with correct content types', () => {
+    const res = call(RRP_ROUTES.cardUi + '?card=demo&file=' + encodeURIComponent('css/style.css'))
+    expect(res.status).toBe(200)
+    expect(res.contentType).toContain('text/css')
+    expect(res.text).toBe('body{color:red}')
+  })
+
+  it('returns 304 when the ETag matches and 404 for directories', () => {
+    const first = call(RRP_ROUTES.cardUi + '?card=demo&file=panel.html')
+    expect(first.status).toBe(200)
+    const etag = first.headers['etag']
+    expect(etag).toBeDefined()
+    const res: FakeResponse = {
+      statusCode: 0,
+      headers: {},
+      contentType: undefined,
+      text: undefined,
+      setHeader(name, value) {
+        const key = normalizeHeader(name)
+        this.headers[key] = value
+        if (key === 'content-type') this.contentType = value
+      },
+      getHeader(name) {
+        return normalizeHeader(name) === 'if-none-match' ? etag : undefined
+      },
+      end(body) {
+        this.text = typeof body === 'string' ? body : undefined
+      },
+    }
+    routes.get(RRP_ROUTES.cardUi)?.(
+      { method: 'GET', url: RRP_ROUTES.cardUi + '?card=demo&file=panel.html' },
+      res,
+    )
+    expect(res.statusCode).toBe(304)
+
+    const dir = call(RRP_ROUTES.cardUi + '?card=demo&file=' + encodeURIComponent('css'))
+    expect(dir.status).toBe(404)
   })
 })

@@ -436,4 +436,33 @@ describe('lore route (D8)', () => {
     expect(payload.triggers).toEqual([])
     expect(payload.injectedChars).toBe(0)
   })
+
+  it('action:stage writes only to PENDING, without Scribe or sediment', async () => {
+    const host = fakeHost()
+    registerLoreRoute(host.ctx as never)
+
+    const stage = exchange('POST', '/dsh-rrp/lore', {
+      sessionId: 's1',
+      action: 'stage',
+      draft: DRAFT,
+    })
+    await host.route()!.handler(stage.req, stage.res)
+    expect(stage.res.statusCode).toBe(200)
+    expect(stage.res.payload).toEqual({ ok: true, pending: true, drafting: false })
+    expect(host.appended).toEqual([])
+
+    const listed = exchange('GET', '/dsh-rrp/lore?sessionId=s1')
+    await host.route()!.handler(listed.req, listed.res)
+    expect((listed.res.payload as { pending: unknown }).pending).toEqual(DRAFT)
+
+    const nonRp = fakeHost({ agentPreset: 'assistant' })
+    registerLoreRoute(nonRp.ctx as never)
+    const blocked = exchange('POST', '/dsh-rrp/lore', {
+      sessionId: 's1',
+      action: 'stage',
+      draft: DRAFT,
+    })
+    await nonRp.route()!.handler(blocked.req, blocked.res)
+    expect(blocked.res.statusCode).toBe(403)
+  })
 })

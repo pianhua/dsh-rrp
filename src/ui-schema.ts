@@ -17,6 +17,7 @@ import {
   type WhenCondition,
 } from './lore-condition.ts'
 import { applyWorldStatePatch } from './world-state-references.ts'
+import type { LoreEntry } from './lore-state.ts'
 import type { ObjectReference, TrackedObject, WorldState } from './world-state.ts'
 
 /** The closed interpreter set: five declarative panels, or one card-authored page. */
@@ -24,10 +25,10 @@ export type UiComponentKind =
   'gauge' | 'characterCard' | 'relationTable' | 'timeline' | 'buttonRow' | 'app'
 
 /**
- * The only two things card UI may ever do. Every button resolves to one of
- * these, so a card can never open a third write path around the control loop.
+ * The only things card UI may ever do. Every button resolves to one of these,
+ * so a card can never open a fifth write path around the control loop.
  */
-export type UiActionKind = 'correct_state' | 'ask_copilot'
+export type UiActionKind = 'correct_state' | 'ask_copilot' | 'send_message' | 'draft_lore'
 
 export const UI_COMPONENT_KINDS: readonly UiComponentKind[] = [
   'gauge',
@@ -39,7 +40,12 @@ export const UI_COMPONENT_KINDS: readonly UiComponentKind[] = [
 ]
 
 /** The closed action set, as a list so the manifest validator cannot drift. */
-export const UI_ACTION_KINDS: readonly UiActionKind[] = ['correct_state', 'ask_copilot']
+export const UI_ACTION_KINDS: readonly UiActionKind[] = [
+  'correct_state',
+  'ask_copilot',
+  'send_message',
+  'draft_lore',
+]
 
 /** One buttonRow entry. */
 export interface UiButtonDecl {
@@ -49,6 +55,10 @@ export interface UiButtonDecl {
   patch?: Record<string, unknown>
   /** `ask_copilot`: text pre-filled into the copilot input (never auto-sent). */
   question?: string
+  /** `send_message`: pre-written template sent as the player's own message. */
+  trigger?: string
+  /** `draft_lore`: a complete lore entry staged for player confirmation. */
+  entry?: LoreEntry
 }
 
 /** One panel as the host hands it to the client (`when` already parsed). */

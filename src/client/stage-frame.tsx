@@ -4,9 +4,9 @@
  *
  * `sandbox="allow-scripts"` with NO `allow-same-origin` puts the page in an
  * opaque origin: it can run its own JavaScript and it can reach nothing else —
- * not the host DOM, not the session, not the network (the CSP we inject allows
- * inline assets only). Everything crosses the one narrow bridge in
- * `src/ui-bridge.ts`.
+ * not the host DOM, not the session, not the network (the CSP we inject keeps
+ * everything inside the plugin route). Everything crosses the one narrow bridge
+ * in `src/ui-bridge.ts`.
  *
  * The srcdoc is computed once per page. State arrives as a pushed message, so a
  * Chronicler update never remounts the iframe and never loses the app's own
@@ -19,6 +19,7 @@ import {
   UI_BRIDGE_CSP,
   UI_BRIDGE_PROTOCOL,
   UI_BRIDGE_SHIM,
+  UI_BRIDGE_VERBS,
   parseUiCall,
   type UiPush,
 } from '../ui-bridge.ts'
@@ -88,8 +89,30 @@ export function StageFrame(props: StageFrameProps): ReactNode {
 
   const srcDoc = useMemo(() => (html === undefined ? undefined : assembleSandboxDoc(html)), [html])
 
-  // The bridge: parent → app pushes state; app → parent gets the two verbs.
+  // The bridge: parent → app pushes state; app → parent gets the four verbs.
   useEffect(() => {
+    const sendReady = (): void => {
+      const target = frame.current?.contentWindow
+      if (target === null || target === undefined) return
+      const message: UiPush = {
+        t: 'rrp:ready',
+        protocol: UI_BRIDGE_PROTOCOL,
+        verbs: [...UI_BRIDGE_VERBS],
+      }
+      target.postMessage(message, '*')
+    }
+    const pushState = (): void => {
+      const target = frame.current?.contentWindow
+      if (target === null || target === undefined) return
+      const message: UiPush = {
+        t: 'rrp:state',
+        protocol: UI_BRIDGE_PROTOCOL,
+        state: latest.state,
+        card: { id: latest.cardId, name: latest.cardName },
+        transcript: latest.transcript,
+      }
+      target.postMessage(message, '*')
+    }
     const onMessage = (event: MessageEvent): void => {
       const target = frame.current?.contentWindow
       if (target === null || target === undefined || event.source !== target) return
@@ -102,7 +125,8 @@ export function StageFrame(props: StageFrameProps): ReactNode {
       if (budget.current.left <= 0) return
       budget.current.left -= 1
       if (call.t === 'rrp:hello') {
-        push()
+        if (call.protocol === UI_BRIDGE_PROTOCOL) sendReady()
+        pushState()
         return
       }
       if (call.t === 'rrp:resize') {
@@ -115,22 +139,18 @@ export function StageFrame(props: StageFrameProps): ReactNode {
       }
       if (call.t === 'rrp:ask_copilot') {
         latest.api.askCopilot(call.question)
+        return
       }
-    }
-    const push = (): void => {
-      const target = frame.current?.contentWindow
-      if (target === null || target === undefined) return
-      const message: UiPush = {
-        t: 'rrp:state',
-        protocol: UI_BRIDGE_PROTOCOL,
-        state: latest.state,
-        card: { id: latest.cardId, name: latest.cardName },
-        transcript: latest.transcript,
+      if (call.t === 'rrp:send_message' && latest.api.sendMessage !== undefined) {
+        latest.api.sendMessage(latest.sessionId ?? '', call.text)
+        return
       }
-      target.postMessage(message, '*')
+      if (call.t === 'rrp:draft_lore' && latest.sessionId !== undefined) {
+        latest.api.draftLore(latest.sessionId, call.entry)
+      }
     }
     window.addEventListener('message', onMessage)
-    push()
+    pushState()
     return () => {
       window.removeEventListener('message', onMessage)
     }

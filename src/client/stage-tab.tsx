@@ -28,6 +28,7 @@ import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from '../worldline-digest.
 import { StageFrame } from './stage-frame.tsx'
 import { askCopilot } from './copilot-prefill.ts'
 import type { RrpClientContext, RrpUseProjection } from './context-types.ts'
+import type { LoreEntry } from '../lore-state.ts'
 import type { StageApi, Translate } from './stage-types.ts'
 
 export type { StageApi, Translate }
@@ -164,6 +165,10 @@ function ButtonRow(props: {
           )
         } else if (action === 'ask_copilot' && typeof payload === 'string') {
           props.api.askCopilot(payload)
+        } else if (action === 'draft_lore' && props.sessionId !== undefined) {
+          await props.api.draftLore(props.sessionId, payload as LoreEntry)
+        } else if (action === 'send_message' && props.api.sendMessage !== undefined) {
+          props.api.sendMessage(props.sessionId ?? '', payload as string)
         }
       } finally {
         setBusy('')
@@ -183,7 +188,13 @@ function ButtonRow(props: {
             void run(
               button.label,
               button.action,
-              button.action === 'correct_state' ? button.patch : button.question,
+              button.action === 'correct_state'
+                ? button.patch
+                : button.action === 'ask_copilot'
+                  ? button.question
+                  : button.action === 'send_message'
+                    ? button.trigger
+                    : button.entry,
             )
           }}
         >
@@ -362,6 +373,13 @@ export function registerStageTab(ctx: RrpClientContext): void {
     askCopilot(question) {
       askCopilot(question)
       sidebarRight?.openTab?.('dsh-rrp-copilot')
+    },
+    async draftLore(sessionId, entry) {
+      await fetch(RRP_ROUTES.lore, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId, action: 'stage', draft: entry }),
+      })
     },
     forget(cardId) {
       MANIFESTS.delete(cardId)

@@ -1,20 +1,21 @@
 /**
- * dsh-rrp — the card UI asset route (issue #18).
+ * dsh-rrp — the card UI asset route (issue #18, stage v2).
  *
- * Serves one card's validated UI declaration (`file=manifest.json`) and its
- * card-authored HTML pages (`file=<name>.html`) to the Stage panel. The card
- * pack lives outside the session workspace, so the host resource protocol
- * cannot reach it — this route is the deliberate, read-only door.
+ * Serves one card's validated UI declaration (`file=manifest.json`) and the
+ * whole `ui/` asset tree (html/css/js/images/fonts/audio) to the Stage panel.
+ * The card pack lives outside the session workspace, so the host resource
+ * protocol cannot reach it — this route is the deliberate, read-only door.
  *
- * Guards: canonical card id, user-root-then-shipped resolution, and a filename
- * that is either the fixed manifest or a bare `*.html` with no path separator.
- * Nothing else on disk is addressable, and nothing is ever written.
+ * Guards: canonical card id, user-root-then-shipped resolution, path traversal,
+ * extension whitelist, directory indexing prohibition, and per-file ETag. Every
+ * response carries `Access-Control-Allow-Origin: *` so opaque-origin iframes
+ * can load `@font-face`, fetch and ESM dependencies from the card's own files.
  */
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { cardDirOf, shippedCardRoot } from './cards.ts'
-import { isUiHtmlName, loadUiManifest, UI_MANIFEST_FILE } from './card-ui.ts'
+import { cardDirOf, readCard, shippedCardRoot } from './cards.ts'
+import { isUiAssetName, loadUiManifest, UI_MANIFEST_FILE } from './card-ui.ts'
 import { isCardId } from './preset-id.ts'
 import { RRP_ROUTES, type CardUiResponse } from './route-contract.ts'
 import { type RuntimeFaces, type WebServerService, queryOf, face, send } from './host-faces.ts'
@@ -24,6 +25,27 @@ const UI_PATH = RRP_ROUTES.cardUi
 /** One card HTML page, capped: a bespoke panel is a screen, not an application bundle. */
 const UI_HTML_MAX_BYTES = 256 * 1024
 
+const UI_ASSET_CONTENT_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.mp3': 'audio/mpeg',
+}
+
+const TEXT_ASSET_EXTENSIONS = new Set(['.html', '.css', '.js', '.mjs', '.json', '.svg'])
+
 /** The directory one card id resolves to (user copy wins), or undefined. */
 function resolveCardDir(card: string): string | undefined {
   if (!isCardId(card)) return undefined
@@ -31,6 +53,61 @@ function resolveCardDir(card: string): string | undefined {
   if (owned !== undefined) return owned
   const shipped = join(shippedCardRoot(), card)
   return existsSync(join(shipped, 'card.md')) ? shipped : undefined
+}
+
+function contentTypeOf(file: string): string {
+  const ext = ('.' + file.split('.').pop()?.toLowerCase()) as string
+  return UI_ASSET_CONTENT_TYPES[ext] ?? 'application/octet-stream'
+}
+
+function isTextAsset(file: string): boolean {
+  const ext = ('.' + file.split('.').pop()?.toLowerCase()) as string
+  return TEXT_ASSET_EXTENSIONS.has(ext)
+}
+
+function etagOf(stats: { mtime: Date; size: number }): string {
+  return 'W/"' + stats.mtime.getTime().toString(16) + '-' + String(stats.size) + '"'
+}
+
+function setCorsHeaders(res: { setHeader?(name: string, value: string): void }): void {
+  res.setHeader?.('Access-Control-Allow-Origin', '*')
+  res.setHeader?.('Cache-Control', 'no-cache')
+}
+
+/** Serve one on-disk asset with content-type, ETag, 304, and CORS. */
+function serveAsset(
+  res: {
+    statusCode: number
+    setHeader?(name: string, value: string): void
+    end(body?: string | Buffer): void
+  },
+  filePath: string,
+): void {
+  const stats = statSync(filePath)
+  if (stats.isDirectory()) {
+    res.statusCode = 404
+    res.end('not found')
+    return
+  }
+  const etag = etagOf(stats)
+  // res.getHeader is not in our narrow face, so read the raw object when present.
+  const ifNoneMatch =
+    'getHeader' in res &&
+    typeof (res as { getHeader?(name: string): unknown }).getHeader === 'function'
+      ? ((res as { getHeader?(name: string): unknown }).getHeader?.('if-none-match') as
+          string | undefined)
+      : undefined
+  if (ifNoneMatch === etag) {
+    res.statusCode = 304
+    res.end()
+    return
+  }
+  const file = filePath.split(/[\\/]/).pop() ?? ''
+  res.statusCode = 200
+  res.setHeader?.('content-type', contentTypeOf(file))
+  res.setHeader?.('ETag', etag)
+  const text = isTextAsset(file)
+  res.end(text ? readFileSync(filePath, 'utf8') : readFileSync(filePath))
 }
 
 /**
@@ -63,32 +140,32 @@ export function registerCardUiRoute(ctx: Context): void {
             send(res, 404, { error: 'unknown card' } satisfies CardUiResponse)
             return
           }
+          setCorsHeaders(res)
           if (file === UI_MANIFEST_FILE) {
-            const loaded = loadUiManifest(dir)
+            const initialState = readCard(card)?.initialState ?? null
+            const loaded = loadUiManifest(dir, initialState)
             if (loaded.kind === 'absent') send(res, 200, { absent: true } satisfies CardUiResponse)
             else if (loaded.kind === 'error')
               send(res, 422, { error: loaded.error } satisfies CardUiResponse)
             else send(res, 200, { manifest: loaded.manifest } satisfies CardUiResponse)
             return
           }
-          if (!isUiHtmlName(file)) {
+          if (!isUiAssetName(file)) {
             send(res, 400, {
-              error: '只接受 manifest.json 或 ui/ 下的 *.html',
+              error: '只接受 ui/ 目录下扩展名白名单内的相对路径',
             } satisfies CardUiResponse)
             return
           }
-          const page = join(dir, 'ui', file)
-          if (!existsSync(page)) {
+          const asset = join(dir, 'ui', file)
+          if (!existsSync(asset)) {
             send(res, 404, { error: 'unknown ui file' } satisfies CardUiResponse)
             return
           }
-          if (statSync(page).size > UI_HTML_MAX_BYTES) {
+          if (file.endsWith('.html') && statSync(asset).size > UI_HTML_MAX_BYTES) {
             send(res, 413, { error: 'ui 文件超过 256KB 上限' } satisfies CardUiResponse)
             return
           }
-          res.statusCode = 200
-          res.setHeader?.('content-type', 'text/html; charset=utf-8')
-          res.end(readFileSync(page, 'utf8'))
+          serveAsset(res, asset)
         } catch (error) {
           send(res, 500, { error: String(error) })
         }

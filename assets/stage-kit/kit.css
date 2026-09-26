@@ -1,0 +1,89 @@
+:root {
+  --rrp-stage-gap: 12px;
+  --rrp-panel-pad: 12px 14px;
+  --rrp-radius: 10px;
+}
+
+.rrp-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rrp-stage-gap);
+  padding: 14px 16px;
+  background: var(--dsw-alias-bg-base, transparent);
+  color: var(--dsw-alias-label-primary, inherit);
+  font-family: inherit;
+}
+
+.rrp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: var(--rrp-panel-pad);
+  border-radius: var(--rrp-radius);
+  border: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.2));
+  background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.05));
+}
+
+.rrp-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.rrp-hud-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.rrp-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.12));
+  color: var(--dsw-alias-label-secondary, inherit);
+}
+
+.rrp-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.25));
+  background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.08));
+  color: var(--dsw-alias-label-primary, inherit);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rrp-button:hover {
+  background: var(--dsw-alias-bg-hover, rgba(128, 128, 128, 0.14));
+}
+
+.rrp-button:active {
+  background: var(--dsw-alias-bg-pressed, rgba(128, 128, 128, 0.2));
+}
+
+.rrp-scroll {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.3))
+    var(--dsw-alias-bg-layer-1, transparent);
+}
+
+.rrp-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.rrp-scroll::-webkit-scrollbar-thumb {
+  background: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.3));
+  border-radius: 3px;
+}

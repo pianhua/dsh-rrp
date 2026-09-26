@@ -45,8 +45,9 @@ export interface RequestLike {
 export interface ResponseLike {
   statusCode: number
   setHeader?(name: string, value: string): void
+  getHeader?(name: string): string | number | string[] | undefined
   write?(chunk: string): unknown
-  end(body?: string): void
+  end(body?: string | Buffer | Uint8Array): void
 }
 
 /** Send one JSON response — the only body shape non-2xx routes may use. */

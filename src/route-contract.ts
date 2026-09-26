@@ -119,7 +119,7 @@ export interface CardOneResponse {
 }
 
 // ── /dsh-rrp/lore ───────────────────────────────────────────────────────────
-export type LoreAction = 'draft' | 'confirm' | 'discard' | 'manual'
+export type LoreAction = 'draft' | 'confirm' | 'discard' | 'manual' | 'stage'
 
 export interface LorePostRequest {
   sessionId: string

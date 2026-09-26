@@ -18,6 +18,7 @@ export const rrpSettingsSchema = z.object({
     .min(SUMMARY_EVERY_MIN)
     .max(SUMMARY_EVERY_MAX)
     .catch(DEFAULT_RRP_SETTINGS.summaryEveryTurns),
+  allowSendMessage: z.boolean().catch(DEFAULT_RRP_SETTINGS.allowSendMessage),
 })
 
 /** Fold the newest valid whole-value settings payload. */

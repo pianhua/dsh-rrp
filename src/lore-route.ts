@@ -206,6 +206,28 @@ export function registerLoreRoute(ctx: Context): void {
             return
           }
 
+          if (action === 'stage') {
+            const candidate = request.draft as Partial<LoreEntry> | undefined
+            if (candidate === undefined || candidate === null) {
+              send(res, 400, { error: '没有待暂存的草稿' })
+              return
+            }
+            const existing = currentLore(projections, session)
+            const result = validateLoreEntry(
+              candidate,
+              existing.map((skill) => skill.name),
+              reservedNames(projections, session),
+            )
+            if (!result.ok) {
+              send(res, 400, { error: result.error })
+              return
+            }
+            PENDING.set(sessionId, result.skill)
+            invalidateLore(sessionId)
+            send(res, 200, { ok: true, pending: true, drafting: false })
+            return
+          }
+
           if (action === 'confirm' || action === 'manual') {
             const candidate = (request.draft ?? PENDING.get(sessionId)) as
               Partial<LoreEntry> | undefined
