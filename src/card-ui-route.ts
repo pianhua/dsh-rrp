@@ -19,6 +19,7 @@ import { isUiAssetName, loadUiManifest, UI_MANIFEST_FILE } from './card-ui.ts'
 import { isCardId } from './preset-id.ts'
 import { RRP_ROUTES, type CardUiResponse } from './route-contract.ts'
 import { type RuntimeFaces, type WebServerService, queryOf, face, send } from './host-faces.ts'
+import { assembleSandboxDoc } from './ui-bridge.ts'
 
 const TAG = '[dsh-rrp]'
 const UI_PATH = RRP_ROUTES.cardUi
@@ -161,8 +162,29 @@ export function registerCardUiRoute(ctx: Context): void {
             send(res, 404, { error: 'unknown ui file' } satisfies CardUiResponse)
             return
           }
-          if (file.endsWith('.html') && statSync(asset).size > UI_HTML_MAX_BYTES) {
-            send(res, 413, { error: 'ui 文件超过 256KB 上限' } satisfies CardUiResponse)
+          if (file.endsWith('.html')) {
+            const stats = statSync(asset)
+            if (stats.size > UI_HTML_MAX_BYTES) {
+              send(res, 413, { error: 'ui 文件超过 256KB 上限' } satisfies CardUiResponse)
+              return
+            }
+            const etag = etagOf(stats)
+            const ifNoneMatch =
+              'getHeader' in res &&
+              typeof (res as { getHeader?(name: string): unknown }).getHeader === 'function'
+                ? ((res as { getHeader?(name: string): unknown }).getHeader?.('if-none-match') as
+                    string | undefined)
+                : undefined
+            if (ifNoneMatch === etag) {
+              res.statusCode = 304
+              res.end()
+              return
+            }
+            setCorsHeaders(res)
+            res.statusCode = 200
+            res.setHeader?.('content-type', 'text/html; charset=utf-8')
+            res.setHeader?.('ETag', etag)
+            res.end(assembleSandboxDoc(readFileSync(asset, 'utf8')))
             return
           }
           serveAsset(res, asset)

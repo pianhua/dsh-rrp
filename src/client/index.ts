@@ -25,6 +25,7 @@ export const name = 'dsh-rrp/client'
 export const inject = [
   'slots',
   'sidebarRightTabs',
+  'sidebarRight',
   'locale',
   'sessions',
   'remote',

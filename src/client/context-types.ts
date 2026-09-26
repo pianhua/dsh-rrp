@@ -48,6 +48,17 @@ export interface RrpSidebarRightTabsService {
   register(definition: RrpSidebarRightTabDefinition): () => void
 }
 
+/** The right-sidebar controller that opens one tab by its kind discriminator. */
+export interface RrpSidebarRightService {
+  openTab(kind: string): void
+}
+
+/** Subset of the host input-machine actions exposed to session-scope slot components. */
+export interface RrpInputActions {
+  setDraft(text: string): void
+  submit(): void
+}
+
 /** The client locale registry slice this plugin uses. */
 export interface RrpLocaleService {
   /** Per-locale dictionary registration (untyped external namespace form). */
@@ -154,6 +165,7 @@ export interface RrpUiWorkspaceService {
 export type RrpClientContext = CordisContext & {
   slots: RrpSlotsService
   sidebarRightTabs: RrpSidebarRightTabsService
+  sidebarRight: RrpSidebarRightService
   locale: RrpLocaleService
   /** Present whenever the session controller is loaded. */
   sessions?: RrpSessionsService

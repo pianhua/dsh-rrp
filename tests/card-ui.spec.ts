@@ -619,7 +619,9 @@ describe('/dsh-rrp/card-ui route', () => {
     expect(res.headers['access-control-allow-origin']).toBe('*')
     expect(res.headers['cache-control']).toBe('no-cache')
     expect(res.headers['etag']).toBeDefined()
-    expect(res.text).toBe('<b>hi</b>')
+    expect(res.text).toContain('<b>hi</b>')
+    expect(res.text).toContain('Content-Security-Policy')
+    expect(res.text).toContain('window.rrp')
   })
 
   it('serves nested ui assets with correct content types', () => {

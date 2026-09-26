@@ -23,12 +23,29 @@ function atom(tag: string, keep: readonly string[]) {
   }
 }
 
-export const Button = atom('button', ['disabled', 'title', 'aria-label', 'type'])
+export const Button = atom('button', ['disabled', 'title', 'aria-label', 'type', 'onClick'])
 export const Pill = atom('span', ['title', 'aria-label'])
 export const Input = atom('input', ['value', 'placeholder', 'disabled', 'type', 'aria-label'])
 export const StateDot = atom('span', ['title', 'aria-label'])
 export const DisclosureRow = atom('details', ['title', 'aria-label'])
 export const Tooltip = atom('span', ['title', 'aria-label'])
+
+/** Modal-like confirmation for risky writes; renders visibly only when open. */
+export function RiskConfirmation(props: {
+  open: boolean
+  title: string
+  description: string
+  children?: ReactNode
+}): ReactNode {
+  if (!props.open) return null
+  return createElement(
+    'div',
+    { 'data-risk-confirmation': '' },
+    props.title,
+    props.description,
+    props.children,
+  )
+}
 
 /** Icons carry no text; the tag name is enough to assert a control is present. */
 function icon(name: string) {

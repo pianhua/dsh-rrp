@@ -125,3 +125,13 @@ window.addEventListener('load',function(){setTimeout(function(){window.rrp.resiz
  */
 export const UI_BRIDGE_CSP =
   "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; media-src 'self' blob:"
+
+/** Put the CSP and the shim ahead of anything the card authored. */
+export function assembleSandboxDoc(html: string): string {
+  const head =
+    '<meta http-equiv="Content-Security-Policy" content="' + UI_BRIDGE_CSP + '">' + UI_BRIDGE_SHIM
+  const at = html.search(/<head[^>]*>/i)
+  if (at === -1) return head + html
+  const cut = html.indexOf('>', at) + 1
+  return html.slice(0, cut) + head + html.slice(cut)
+}

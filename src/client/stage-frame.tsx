@@ -4,27 +4,22 @@
  *
  * `sandbox="allow-scripts"` with NO `allow-same-origin` puts the page in an
  * opaque origin: it can run its own JavaScript and it can reach nothing else —
- * not the host DOM, not the session, not the network (the CSP we inject keeps
- * everything inside the plugin route). Everything crosses the one narrow bridge
- * in `src/ui-bridge.ts`.
+ * not the host DOM, not the session, not the network (the CSP injected by the
+ * card-ui route keeps everything inside the plugin route). Everything crosses
+ * the one narrow bridge in `src/ui-bridge.ts`.
  *
- * The srcdoc is computed once per page. State arrives as a pushed message, so a
- * Chronicler update never remounts the iframe and never loses the app's own
- * scroll position, form drafts, or animation.
+ * The iframe loads the card page by `src` so subresources (fonts, fetch, ESM)
+ * resolve against the plugin route with CORS. State arrives as pushed messages,
+ * so a Chronicler update never remounts the iframe and never loses the app's
+ * own scroll position, form drafts, or animation.
  */
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { RRP_ROUTES } from '../route-contract.ts'
 import type { WorldState } from '../world-state.ts'
-import {
-  UI_BRIDGE_CSP,
-  UI_BRIDGE_PROTOCOL,
-  UI_BRIDGE_SHIM,
-  UI_BRIDGE_VERBS,
-  parseUiCall,
-  type UiPush,
-} from '../ui-bridge.ts'
+import { UI_BRIDGE_PROTOCOL, UI_BRIDGE_VERBS, parseUiCall, type UiPush } from '../ui-bridge.ts'
 import { applyButtonPatch } from '../ui-schema.ts'
-import type { StageApi } from './stage-types.ts'
+import type { StageApi, Translate } from './stage-types.ts'
 
 /** Calls a card app may raise per second; a runaway page must not flood the ledger. */
 const CALLS_PER_SECOND = 20
@@ -38,56 +33,65 @@ interface StageFrameProps {
   transcript: string
   sessionId?: string
   api: StageApi
-  t: (key: string) => string
+  t: Translate
+  /** Notify the parent that a call failed so it can render the error card. */
+  onError?: (message: string) => void
 }
 
-/** Put the CSP and the shim ahead of anything the card authored. */
-export function assembleSandboxDoc(html: string): string {
-  const head =
-    '<meta http-equiv="Content-Security-Policy" content="' + UI_BRIDGE_CSP + '">' + UI_BRIDGE_SHIM
-  const at = html.search(/<head[^>]*>/i)
-  if (at === -1) return head + html
-  const cut = html.indexOf('>', at) + 1
-  return html.slice(0, cut) + head + html.slice(cut)
+function frameUrl(cardId: string, src: string): string {
+  return (
+    RRP_ROUTES.cardUi + '?card=' + encodeURIComponent(cardId) + '&file=' + encodeURIComponent(src)
+  )
 }
 
 export function StageFrame(props: StageFrameProps): ReactNode {
-  const [html, setHtml] = useState<string | undefined>(undefined)
+  const [url, setUrl] = useState<string | undefined>(undefined)
   const [failed, setFailed] = useState('')
   const [height, setHeight] = useState(320)
+  const [retry, setRetry] = useState(0)
   const frame = useRef<HTMLIFrameElement | null>(null)
   const budget = useRef({ at: Date.now(), left: CALLS_PER_SECOND })
-  const latest = props
+  const pendingPush = useRef<number | undefined>(undefined)
+  const latest = useRef(props)
+  latest.current = props
 
-  // One fetch per (card, page): the srcdoc below must stay byte-stable.
+  const report = (message: string): void => {
+    setFailed(message)
+    props.onError?.(message)
+  }
+
+  // Validate the card page once per (card, page, retry), then point the iframe
+  // at it. Network/non-2xx failures surface here instead of leaving a blank box.
   useEffect(() => {
     let alive = true
-    setHtml(undefined)
+    setUrl(undefined)
     setFailed('')
-    void fetch(
-      RRP_ROUTES.cardUi +
-        '?card=' +
-        encodeURIComponent(props.cardId) +
-        '&file=' +
-        encodeURIComponent(props.src),
-    )
+    setHeight(320)
+    const target = frameUrl(props.cardId, props.src)
+    fetch(target)
       .then(async (response) => {
-        if (!response.ok) setFailed(await response.text())
+        if (!response.ok) {
+          const body = await response.text().catch(() => '')
+          throw new Error(response.status + (body.length > 0 ? ' ' + body : ''))
+        }
         return response.text()
       })
-      .catch((error: unknown) => {
-        if (alive) setFailed(String(error))
-        return ''
+      .then((html) => {
+        if (!alive) return
+        // The route already injects CSP and the bridge shim; just confirm it.
+        if (!html.includes('rrp:hello')) {
+          throw new Error(props.t('stage.appMissingBridge'))
+        }
+        setUrl(target)
       })
-      .then((text) => {
-        if (alive && text.length > 0) setHtml(text)
+      .catch((error: unknown) => {
+        if (!alive) return
+        report(props.t('stage.appFailed') + ': ' + String(error))
       })
     return () => {
       alive = false
     }
-  }, [props.cardId, props.src])
-
-  const srcDoc = useMemo(() => (html === undefined ? undefined : assembleSandboxDoc(html)), [html])
+  }, [props.cardId, props.src, retry])
 
   // The bridge: parent → app pushes state; app → parent gets the four verbs.
   useEffect(() => {
@@ -101,17 +105,23 @@ export function StageFrame(props: StageFrameProps): ReactNode {
       }
       target.postMessage(message, '*')
     }
-    const pushState = (): void => {
+    const pushNow = (): void => {
+      pendingPush.current = undefined
       const target = frame.current?.contentWindow
       if (target === null || target === undefined) return
+      const { cardId, cardName, state, transcript } = latest.current
       const message: UiPush = {
         t: 'rrp:state',
         protocol: UI_BRIDGE_PROTOCOL,
-        state: latest.state,
-        card: { id: latest.cardId, name: latest.cardName },
-        transcript: latest.transcript,
+        state,
+        card: { id: cardId, name: cardName },
+        transcript,
       }
       target.postMessage(message, '*')
+    }
+    const pushState = (): void => {
+      if (pendingPush.current !== undefined) return
+      pendingPush.current = window.setTimeout(pushNow, 100)
     }
     const onMessage = (event: MessageEvent): void => {
       const target = frame.current?.contentWindow
@@ -125,44 +135,75 @@ export function StageFrame(props: StageFrameProps): ReactNode {
       if (budget.current.left <= 0) return
       budget.current.left -= 1
       if (call.t === 'rrp:hello') {
-        if (call.protocol === UI_BRIDGE_PROTOCOL) sendReady()
-        pushState()
+        sendReady()
+        pushNow()
         return
       }
       if (call.t === 'rrp:resize') {
         setHeight(call.height)
         return
       }
-      if (call.t === 'rrp:correct_state' && latest.sessionId !== undefined) {
-        void latest.api.correctState(latest.sessionId, applyButtonPatch(latest.state, call.patch))
+      const { sessionId, api } = latest.current
+      if (call.t === 'rrp:correct_state' && sessionId !== undefined) {
+        api
+          .correctState(sessionId, applyButtonPatch(latest.current.state, call.patch))
+          .catch((error: unknown) => {
+            report(latest.current.t('stage.correctStateFailed') + ': ' + String(error))
+          })
         return
       }
       if (call.t === 'rrp:ask_copilot') {
-        latest.api.askCopilot(call.question)
+        try {
+          api.askCopilot(call.question)
+        } catch (error: unknown) {
+          report(latest.current.t('stage.askCopilotFailed') + ': ' + String(error))
+        }
         return
       }
-      if (call.t === 'rrp:send_message' && latest.api.sendMessage !== undefined) {
-        latest.api.sendMessage(latest.sessionId ?? '', call.text)
+      if (call.t === 'rrp:send_message' && sessionId !== undefined) {
+        api.sendMessage(sessionId, call.text).catch((error: unknown) => {
+          report(latest.current.t('stage.sendMessageFailed') + ': ' + String(error))
+        })
         return
       }
-      if (call.t === 'rrp:draft_lore' && latest.sessionId !== undefined) {
-        latest.api.draftLore(latest.sessionId, call.entry)
+      if (call.t === 'rrp:draft_lore' && sessionId !== undefined) {
+        api.draftLore(sessionId, call.entry).catch((error: unknown) => {
+          report(latest.current.t('stage.draftLoreFailed') + ': ' + String(error))
+        })
       }
     }
     window.addEventListener('message', onMessage)
     pushState()
     return () => {
       window.removeEventListener('message', onMessage)
+      if (pendingPush.current !== undefined) {
+        window.clearTimeout(pendingPush.current)
+        pendingPush.current = undefined
+      }
     }
-  }, [props.state, props.transcript, props.cardId, props.cardName, srcDoc])
+  }, [props.sessionId, props.cardId, props.src, props.state, props.transcript, url])
 
-  if (failed.length > 0) return <div style={S.error}>{latest.t('stage.appFailed')}</div>
-  if (srcDoc === undefined) return <div style={S.pending}>{latest.t('stage.appLoading')}</div>
+  if (failed.length > 0) {
+    return (
+      <div style={S.error}>
+        <div>{props.t('stage.appFailed')}</div>
+        <div style={S.errorDetail}>{failed}</div>
+        <div>
+          <Button size="sm" variant="outline" onClick={() => setRetry((n) => n + 1)}>
+            {props.t('stage.retry')}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (url === undefined) return <div style={S.pending}>{props.t('stage.appLoading')}</div>
+
   return (
     <iframe
       ref={frame}
-      title={latest.cardName}
-      srcDoc={srcDoc}
+      title={props.cardName}
+      src={url}
       sandbox="allow-scripts"
       style={{ ...S.frame, height: String(height) + 'px' }}
     />
@@ -181,8 +222,12 @@ const S: Record<string, CSSProperties> = {
   error: {
     fontSize: '12px',
     lineHeight: 1.6,
-    padding: '8px 10px',
+    padding: '10px 12px',
     borderRadius: '8px',
     background: 'rgba(200,80,80,0.12)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
   },
+  errorDetail: { opacity: 0.72, whiteSpace: 'pre-wrap', wordBreak: 'break-word' },
 }

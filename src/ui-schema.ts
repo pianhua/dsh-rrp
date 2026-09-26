@@ -94,6 +94,8 @@ export interface UiManifest {
   title?: string
   layout: 'stack' | 'grid'
   panels: UiPanelDecl[]
+  /** Optional CSS variable overrides for the Stage chrome. */
+  theme?: Record<string, string>
 }
 
 /** Panels per card, capped: a HUD is a glance, not a second product. */

@@ -277,6 +277,7 @@ describe('dsh-rrp client half', () => {
       'draftLore',
       'forget',
       'loadManifest',
+      'sendMessage',
     ])
   })
 })

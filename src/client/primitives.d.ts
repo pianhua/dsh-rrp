@@ -112,6 +112,22 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     children: ReactElement
   }): ReactElement
 
+  /** Controlled acknowledgement dialog for risky writes. */
+  export function RiskConfirmation(props: {
+    open: boolean
+    title: string
+    description: string
+    acknowledgeLabel: string
+    cancelLabel: string
+    closeLabel: string
+    confirmLabel: string
+    acknowledged: boolean
+    disabled?: boolean
+    onAcknowledgedChange: (acknowledged: boolean) => void
+    onCancel: () => void
+    onConfirm: () => void
+  }): ReactElement
+
   export const IconArchiveOutline20: IconComponent
   export const IconChevronDownOutline14: IconComponent
   export const IconCheckOutline16: IconComponent
