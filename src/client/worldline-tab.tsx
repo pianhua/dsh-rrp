@@ -268,6 +268,7 @@ function WorldlinePanel(props: WorldlinePanelProps): ReactNode {
       {forkTarget ? (
         <WorldlineForkDialog
           branch={forkTarget.branch}
+          atTurn={forkTarget.node.turn}
           atSeq={forkTarget.node.seq}
           defaultTitle={forkDefaultTitle}
           t={t}

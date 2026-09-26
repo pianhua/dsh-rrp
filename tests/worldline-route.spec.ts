@@ -21,9 +21,9 @@ function fakeHost(
   sessions: Record<string, FakeSession>,
   sessionQuery?: unknown,
   brokenProjectionId?: string,
+  extra?: Record<string, unknown>,
 ) {
-  const list = Object.values(sessions)
-  const sessionsValue = { get: (id: string) => sessions[id], list: () => list }
+  const sessionsValue = { get: (id: string) => sessions[id], list: () => Object.values(sessions) }
   const projections = {
     stateOf: (session: unknown, key: string) => {
       const fake = session as FakeSession
@@ -52,10 +52,11 @@ function fakeHost(
           sessions: sessionsValue,
           sessionProjections: projections,
           sessionQuery,
+          ...extra,
         }) as Record<string, unknown>
       )[name],
   }
-  return { ctx, handlers }
+  return { ctx, handlers, sessions }
 }
 
 function turnOf(turn: number, seq: number) {
@@ -340,6 +341,90 @@ describe('cold skeleton facts (issue #29)', () => {
       ])
     const node = nodes(trees[0]?.roots ?? []).find((entry) => entry.sessionId === 'cold-invalid')
     expect(node?.seedKnown).toBe(false)
+  })
+
+  it('resolves a cold fork cut from the fork-time cache when readSession cannot (host seam defect)', async () => {
+    const tables = new Map<string, Map<string, unknown>>()
+    // Fork-time cache: 验收-style cut recorded when the fork happened live.
+    tables.set('cuts', new Map([['cold-cut', { parentId: 'm', turn: 2, at: '' }]]))
+    const query = {
+      listSessions: async () => [
+        {
+          header: { id: 'cold-cut', parentSession: 'm', agentPreset: 'rp-c1' },
+          live: false,
+          persisted: true,
+        },
+      ],
+      readTitleSnapshots: async () => [],
+      // The host defect: readSession rejects EVERY seeded session.
+      readSession: async () => {
+        throw new Error('seeded session constructor seed must equal its inherited prefix')
+      },
+    }
+    const host = fakeHost({ m: MAIN, b: BRANCH }, query, undefined, {
+      storageDomain: {
+        open: async () => ({
+          table: (name: string) => {
+            if (!tables.has(name)) tables.set(name, new Map())
+            const table = tables.get(name)!
+            return {
+              get: (key: string) => table.get(key),
+              put: async (key: string, value: unknown) => {
+                table.set(key, value)
+              },
+              delete: async (key: string) => table.delete(key),
+              keys: () => table.keys(),
+              entries: () => table.entries(),
+              size: table.size,
+            }
+          },
+          close: async () => {},
+        }),
+      },
+    })
+    registerWorldlineRoute(host.ctx as never)
+    const res = await call(host, RRP_ROUTES.worldlineTree)
+    const trees = (res.body as unknown as WorldlineTreeResponse).trees
+    const cut = trees[0]?.roots[0]?.children[0]
+    expect(cut?.turn).toBe(1)
+    const child = cut?.children.find((node) => node.sessionId === 'cold-cut')
+    expect(child?.seedKnown).toBe(true)
+    expect(child?.loaded).toBe(false)
+  })
+
+  it('rescues a cold main line with an unreliable persisted preset via the card index', async () => {
+    const query = fakeSessionQuery([
+      // The host persists "standard" for gallery-started mains (seen on
+      // 0.1.6-alpha.2): preset attribution fails, the card index must not.
+      { header: { id: 'wandering-main', agentPreset: 'standard' }, title: '出走的·主线' },
+    ])
+    const host = fakeHost(
+      {
+        m: MAIN,
+        b: BRANCH,
+        wandering: {
+          id: 'wandering-main',
+          header: {},
+          card: { id: 'c1', name: '雁门' },
+          digest: digestOf([turnOf(0, 1)], 0),
+        },
+      },
+      query,
+    )
+    registerWorldlineRoute(host.ctx as never)
+    // Phase 1: the session is live — its card enters the index as a side effect.
+    const liveRes = await call(host, RRP_ROUTES.worldlineTree)
+    const liveRoots = (liveRes.body as unknown as WorldlineTreeResponse).trees[0]?.roots ?? []
+    expect(liveRoots.some((node) => node.sessionId === 'wandering-main')).toBe(true)
+    // Phase 2: it goes cold — the index keeps it on its own card's map.
+    delete host.sessions.wandering
+    const coldRes = await call(host, RRP_ROUTES.worldlineTree)
+    const trees = (coldRes.body as unknown as WorldlineTreeResponse).trees
+    const stub = trees[0]?.roots.find((node) => node.sessionId === 'wandering-main')
+    expect(stub).toBeDefined()
+    expect(stub?.loaded).toBe(false)
+    expect(stub?.sessionTitle).toBe('出走的·主线')
+    expect(stub?.seedKnown).toBeUndefined()
   })
 
   it('ignores cold non-RP, subagent, and live sessions; degrades silently without the service', async () => {

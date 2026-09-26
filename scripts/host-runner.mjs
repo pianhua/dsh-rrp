@@ -58,22 +58,20 @@ function parseArgs() {
 
 /** Locate @deepseek-ai/dsh lib/bin.js directly to bypass cmd wrapper. */
 function resolveDshBin() {
+  // The dsh package ships no "main"/"exports" entry (bin-only ESM package), so
+  // require.resolve of the bare specifier fails even when installed. Resolve the
+  // bin subpath instead, checking the repo's own node_modules first, then the
+  // global npm root (NODE_PATH), so no local install is required.
+  const candidates = [join(repoRoot, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')]
   try {
-    const dshPkgPath = execSync('node -e "console.log(require.resolve(\'@deepseek-ai/dsh\'))"', {
-      encoding: 'utf8',
-      cwd: repoRoot,
-    }).trim()
-    const dshRoot = dirname(dshPkgPath)
-    const binJs = join(dshRoot, 'bin.js')
-    if (existsSync(binJs)) return binJs
+    const globalRoots = execSync('npm root -g', { encoding: 'utf8' }).trim()
+    if (globalRoots) candidates.push(join(globalRoots, '@deepseek-ai', 'dsh', 'lib', 'bin.js'))
   } catch {
-    // ignore
+    // ignore: global lookup is best-effort
   }
-
-  // Fallback to local node_modules
-  const localBin = join(repoRoot, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
-  if (existsSync(localBin)) return localBin
-
+  for (const binJs of candidates) {
+    if (existsSync(binJs)) return binJs
+  }
   return null
 }
 

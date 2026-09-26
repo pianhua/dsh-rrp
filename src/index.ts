@@ -19,6 +19,7 @@ import { registerCopilotRoute, forgetAllCopilot, forgetCopilot } from './copilot
 import { worldlineDigestProjection } from './projection/worldline-digest.ts'
 import { registerWorldlineRoute } from './worldline-route.ts'
 import { registerWorldlineForkMarker } from './worldline-fork-marker.ts'
+import { openWorldlineStore, type WorldlineStoreHandle } from './worldline-store.ts'
 import { registerLoreCommand, registerLoreRoute } from './lore-route.ts'
 import { registerLoreRuntime } from './lore-runtime.ts'
 import { registerChronicler, forgetAllInference, forgetInference } from './chronicler.ts'
@@ -216,11 +217,27 @@ export function apply(ctx: Context): void {
   // the soft-hide ledger; lineage itself stays the host's own sessions data.
   // No storageDomain precondition: the worldline store degrades to an
   // in-memory ledger when the domain service is absent (issue #36).
+  // ONE shared store for route + fork marker: the storage domain rejects a
+  // second concurrent open of the same domain (fatal load failure, seen on
+  // 0.1.6-alpha.2).
+  const worldlineStoreReady: Promise<WorldlineStoreHandle> = openWorldlineStore((name) =>
+    ctx.get(name),
+  ).then(({ handle }) => handle)
+  ctx.effect(() => () => {
+    void worldlineStoreReady.then((handle) => handle.close())
+  })
   ctx.inject(['webServer', 'sessions', 'sessionProjections'], (scoped: Context) => {
-    registerWorldlineRoute(scoped)
+    registerWorldlineRoute(scoped, worldlineStoreReady)
   })
   ctx.inject(['sessions', 'sessionProjections'], (scoped: Context) => {
-    registerWorldlineForkMarker(scoped)
+    // Fork-time cut cache: the host's readSession cannot read seeded sessions
+    // on 0.1.6-alpha.2, so the exact cut observed at fork time is persisted
+    // for cold positioning. Same store as the hide ledger; fire-and-forget.
+    registerWorldlineForkMarker(scoped, (childId, parentId, turn) => {
+      void worldlineStoreReady
+        .then((store) => store.setCut(childId, parentId, turn))
+        .catch(() => {})
+    })
   })
 
   // Summarizer: macro compass every N turns; the /summary command toggles it.

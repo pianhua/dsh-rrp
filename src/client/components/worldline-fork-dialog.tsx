@@ -4,6 +4,8 @@ import type { WorldlineBranch } from '../worldline-utils.ts'
 
 export interface WorldlineForkDialogProps {
   branch: WorldlineBranch
+  /** Selected turn (the fork point the label must name — NOT branch.latest). */
+  atTurn: number
   atSeq: number
   defaultTitle: string
   t: (key: string) => string
@@ -31,7 +33,7 @@ export function WorldlineForkDialog(props: WorldlineForkDialogProps): ReactNode 
           {props
             .t('worldline.forkConfirm')
             .replace('{branch}', props.branch.title)
-            .replace('{turn}', String(props.branch.latest?.turn ?? ''))
+            .replace('{turn}', String(props.atTurn))
             .replace('{seq}', String(props.atSeq))}
         </p>
         <label style={S.field}>

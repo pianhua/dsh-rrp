@@ -36,6 +36,9 @@ describe('worldline tree fold (issue #28)', () => {
     expect(trees).toHaveLength(1)
     expect(trees[0]?.roots).toHaveLength(1)
     expect(chain(trees[0]?.roots[0])).toEqual([0, 1, 2])
+    // A parentless main line roots its tree with an inherently known position:
+    // 位置未知 is only for forks whose cut cannot be resolved.
+    expect(trees[0]?.roots[0]?.seedKnown).toBeUndefined()
   })
 
   it('hangs a fork tail on the parent last inherited turn, never duplicating the prefix', () => {

@@ -212,6 +212,17 @@ export function repairChroniclerEnvelope(parsed: unknown): unknown {
       }
     }
   }
+  // Models drop keys for EMPTY collections (「没有就不写」). The schema requires
+  // the full v2 shape, so the envelope repair fills absent collections with
+  // their empty defaults — deterministic, and an omitted-empty never carries
+  // information the prior state didn't already imply.
+  record.trackedObjects ??= {}
+  record.globalFields ??= {}
+  record.objectives ??= []
+  record.conflicts ??= []
+  record.cognition ??= []
+  record.relations ??= []
+  record.currentEvents ??= []
   repairFieldRecord(record.globalFields)
   if (Array.isArray(record.objectives)) {
     for (const item of record.objectives) {

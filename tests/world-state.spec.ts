@@ -296,6 +296,18 @@ describe('WorldState v2 domain', () => {
     // The whole diff must survive the host's lossless JSON round-trip.
     expect(JSON.parse(JSON.stringify(diff))).toEqual(diff)
   })
+
+  it('omits objectId on global-field changes so the batch stays event-log safe', () => {
+    const before = state()
+    const after = structuredClone(before) as ReturnType<typeof state>
+    after.globalFields.weather = { ...after.globalFields.weather!, value: '晴' }
+    const change = diffWorldState(before, after).changes.find((entry) =>
+      entry.field?.startsWith('globalFields.'),
+    )
+    expect(change).toBeDefined()
+    expect('objectId' in (change as object)).toBe(false)
+    expect(JSON.parse(JSON.stringify(change))).toEqual(change)
+  })
 })
 
 describe('WorldState v2 projection', () => {

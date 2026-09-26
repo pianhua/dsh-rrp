@@ -167,6 +167,14 @@ export function foldWorldlineTrees(
     if (branch === undefined && stub === undefined) continue
     const node = branch?.head ?? stub!
     const parent = session.parentId === undefined ? undefined : byId.get(session.parentId)
+    // A session WITHOUT a parentId is a main line by birth: it roots its card's
+    // tree and its position is inherently known. 位置未知 is only for forks
+    // whose parent is missing from the map (or cross-card) — and for turn-zero
+    // forks, whose zero cut is exact by definition.
+    if (session.parentId === undefined) {
+      pushRoot(node, session)
+      continue
+    }
     if (
       parent === undefined ||
       pruned.has(parent.id) ||
@@ -203,7 +211,10 @@ export function foldWorldlineTrees(
       pruned,
     )
     if (ancestorTail !== undefined) {
-      markSeedUnknown(node)
+      // The cut is known but the parent's own turns are cold: the stub hangs
+      // under the parent stub, which IS the honest lineage position. Only a
+      // genuinely unresolved cut earns the 位置未知 badge.
+      if (session.seedKnown !== true) markSeedUnknown(node)
       ancestorTail.children.push(node)
     } else {
       markSeedUnknown(node)

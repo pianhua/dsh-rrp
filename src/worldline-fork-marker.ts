@@ -38,6 +38,8 @@ export interface WorldlineForkMarkerFaces {
   sessions: Pick<SessionsService, 'get'>
   projections: ProjectionsService
   publish?: typeof publishWorldlineForkCut
+  /** Observed with every published non-null cut: (childId, parentId, turn). */
+  onCut?: (childId: string, parentId: string, turn: number) => void
 }
 
 export function publishWorldlineForkMarker(
@@ -51,10 +53,15 @@ export function publishWorldlineForkMarker(
   const digest = faces.projections.stateOf(parent, WORLDLINE_DIGEST_KEY) as
     WorldlineDigest | undefined
   const turn = forkCutTurn(digest, validInheritedEventCount(child.inheritedEventCount))
-  return (faces.publish ?? publishWorldlineForkCut)(parent, child.id, turn)
+  const published = (faces.publish ?? publishWorldlineForkCut)(parent, child.id, turn)
+  if (published && turn !== null) faces.onCut?.(child.id, parentId, turn)
+  return published
 }
 
-export function registerWorldlineForkMarker(ctx: Context): void {
+export function registerWorldlineForkMarker(
+  ctx: Context,
+  onCut?: WorldlineForkMarkerFaces['onCut'],
+): void {
   const runtime = ctx as unknown as ListeningRuntimeFaces
   const sessions = face<SessionsService>(runtime, 'sessions')
   const projections = face<ProjectionsService>(runtime, 'sessionProjections')
@@ -65,7 +72,8 @@ export function registerWorldlineForkMarker(ctx: Context): void {
       try {
         const child = args[0] as ForkSession | undefined
         if (child === undefined || published.has(child.id) || !isWorldlineFork(child)) return
-        if (publishWorldlineForkMarker(child, { sessions, projections })) published.add(child.id)
+        if (publishWorldlineForkMarker(child, { sessions, projections, onCut }))
+          published.add(child.id)
       } catch (cause) {
         console.warn('[dsh-rrp] worldline fork marker failed: ' + String(cause))
       }
