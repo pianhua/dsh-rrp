@@ -21,9 +21,9 @@ const TAG = '[dsh-rrp]'
 
 // ── Webserver ───────────────────────────────────────────────────────────────
 
-/** One host-registered exact-path route. */
+/** One host-registered route. */
 export interface RouteSpec {
-  kind: 'exact'
+  kind: 'exact' | 'prefix'
   path: string
   handler: (req: RequestLike, res: ResponseLike) => void | Promise<void>
 }

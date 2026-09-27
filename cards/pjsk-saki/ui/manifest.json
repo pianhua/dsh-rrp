@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "title": "天马咲希 · 现场",
+  "layout": "grid",
+  "theme": {
+    "accent": "#FF6699",
+    "accent-soft": "#FFD9E8",
+    "ink": "#3A2E35",
+    "paper": "#FFF7FA"
+  },
+  "panels": [
+    {
+      "id": "status",
+      "component": "app",
+      "src": "status.html",
+      "span": 2,
+      "title": "现场状态栏"
+    },
+    {
+      "id": "verbs",
+      "component": "buttonRow",
+      "title": "原语测试条",
+      "span": 2,
+      "buttons": [
+        {
+          "label": "矫正：乐谱状态更新",
+          "action": "correct_state",
+          "patch": {
+            "globalFields": {
+              "saki_sheet_music": {
+                "type": "string",
+                "value": "（矫正通道测试）第三首歌乐谱已确认完好无损",
+                "definition": "card-defined",
+                "visibility": "player"
+              }
+            }
+          }
+        },
+        {
+          "label": "问月停：下一步做什么",
+          "action": "ask_copilot",
+          "question": "按当前世界状态和已发生的剧情，我和 Leo/need 的关系下一步该怎么推进？给我三条可选方向。"
+        },
+        {
+          "label": "代拟发言：问副歌",
+          "action": "send_message",
+          "trigger": "（我指着乐谱上副歌的旋律线）这一段……昨晚是你一个人写完的吗？"
+        },
+        {
+          "label": "起草设定：告示牌",
+          "action": "draft_lore",
+          "entry": {
+            "name": "park-notice-board",
+            "description": "咲希的第三首歌乐谱曾落在公园入口告示牌旁的草地上",
+            "body": "城市公园入口的告示牌。某个有风的午后，Leo/need 第三首歌的手写乐谱被吹到这里，撞在一个路人的鞋尖上——那是玩家与咲希的初见。"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ask",
+      "component": "buttonRow",
+      "title": "出戏求助",
+      "span": 2,
+      "buttons": [
+        {
+          "label": "现在该去哪条线",
+          "action": "ask_copilot",
+          "question": "以当前状态为准，五个团里哪条线与玩家目前的羁绊最值得推进？给出理由和开场建议。"
+        },
+        {
+          "label": "刚才剧情的音乐点",
+          "action": "ask_copilot",
+          "question": "回顾最近几回合，剧情里有哪些适合落在一首歌/一段旋律上的情感节点？帮我想一个 Live 或听歌的场景切入。"
+        }
+      ]
+    }
+  ],
+  "assetRefs": [
+    "css/status.css",
+    "js/status.js",
+    "assets/profile/ln/Ichika.webp",
+    "assets/profile/ln/Saki.webp",
+    "assets/profile/ln/Honami.webp",
+    "assets/profile/ln/Shiho.webp",
+    "assets/profile/mmj/Minori.webp",
+    "assets/profile/mmj/Haruka.webp",
+    "assets/profile/mmj/Airi.webp",
+    "assets/profile/mmj/Shizuku.webp",
+    "assets/profile/vbs/Kohane.webp",
+    "assets/profile/vbs/An.webp",
+    "assets/profile/vbs/Akito.webp",
+    "assets/profile/vbs/Toya.webp",
+    "assets/profile/ws/Tsukasa.webp",
+    "assets/profile/ws/Emu.webp",
+    "assets/profile/ws/Nene.webp",
+    "assets/profile/ws/Rui.webp",
+    "assets/profile/25/Kanade.webp",
+    "assets/profile/25/Mafuyu.webp",
+    "assets/profile/25/Ena.webp",
+    "assets/profile/25/Mizuki.webp",
+    "assets/logo/LN-Logo.png",
+    "assets/logo/MMJ-Logo.png",
+    "assets/logo/VBS-Logo.png",
+    "assets/logo/WS-Logo.png",
+    "assets/logo/25ji-Logo.png",
+    "assets/bg/pjsk-PC.jpg",
+    "assets/bg/pjsk-PC-2.png",
+    "assets/bg/pjsk-PC-5.png",
+    "assets/bg/pjsk-PC-9.png",
+    "assets/bg/pjsk-PC-14.png",
+    "assets/bg/pjsk-PC-20.png",
+    "assets/bg/pjsk-PC-26.png"
+  ]
+}

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>天马咲希 · 现场</title>
+    <link rel="stylesheet" href="css/status.css" />
+  </head>
+  <body>
+    <div id="bg-layer" aria-hidden="true"></div>
+    <div id="app">
+      <header id="hud-header">
+        <div class="hud-title">
+          <span class="hud-title-main">天马咲希 · 现场</span>
+          <span id="hud-scene" class="hud-scene">等待世界状态…</span>
+        </div>
+        <span id="hud-sync" class="hud-sync">连接中</span>
+      </header>
+      <main id="roster"></main>
+      <section id="vs-section">
+        <h2 class="section-title">VIRTUAL SINGER</h2>
+        <div id="vs-row"></div>
+      </section>
+    </div>
+    <div id="detail-pop" hidden>
+      <img id="detail-img" alt="" />
+      <div class="detail-body">
+        <div id="detail-name"></div>
+        <div id="detail-state"></div>
+        <div class="detail-actions">
+          <button id="detail-minus" type="button">好感 −5</button>
+          <span id="detail-affinity"></span>
+          <button id="detail-plus" type="button">好感 +5</button>
+        </div>
+        <div class="detail-hint">矫正走玩家矫正通道，账本归因 player</div>
+      </div>
+      <button id="detail-close" type="button" aria-label="关闭">×</button>
+    </div>
+    <script src="js/status.js"></script>
+  </body>
+</html>

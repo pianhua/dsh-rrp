@@ -82,6 +82,20 @@ describe('Chronicler v2 reply contract', () => {
     expect(prompt).toContain('外部引用')
     expect(prompt).toContain('没有明确解决证据就不要关闭')
     expect(prompt).toContain('我看见密道入口。')
+    expect(prompt).not.toContain('【卡包推演纪律')
+  })
+
+  it('inserts the card discipline note only when the pack ships one', () => {
+    const withNote = buildChroniclerPrompt({
+      prior: PRIOR,
+      transcript: '【玩家】\n闲聊。',
+      cardNote: 'affinity 只在剧情明确涉及时更新，幅度 ±1~5。',
+    })
+    expect(withNote).toContain('【卡包推演纪律')
+    expect(withNote).toContain('affinity 只在剧情明确涉及时更新')
+    expect(withNote.indexOf('【卡包推演纪律')).toBeLessThan(
+      withNote.indexOf('【此前的完整 WorldState v2】'),
+    )
   })
 
   it('normalizes a single-string evidence item to the v2 array shape', () => {

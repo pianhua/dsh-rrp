@@ -500,3 +500,14 @@
 ### Worldline v2 合并入 main（2026-09-26）
 
 - `feat/worldline-v2`（6 提交：契约/D24 落盘、服务端数据层、客户端双栏、文档、真机热修、worklog）已推送并以 `--no-ff` 合并入 main（merge `71e6698`），推送后 main 与 origin 同步。合并树与过质量门的树逐字节一致（质量门：format/typecheck/lint/vitest 全绿/build/git diff --check）。`.scratch/worldline-v2/` 规格与票据保持未跟踪（仓库惯例）。
+
+
+### 舞台 v2 一期实现（2026-09-27，feat/stage-v2）
+
+- 决策：D25（40 题拷问访谈全按建议）——舞台升级为「卡包前端应用平台」。多文件资产 + iframe src 化（CSP `default-src 'self'`，外链零放行）、桥协议 v2（版本握手+能力协商）、写面四原语（correct_state / ask_copilot / send_message 代拟发言走宿主输入机 / draft_lore 走 D8 确认环）、官方 stage-kit、app 全幅布局 + L1 抽屉、P0–P2 质量债清零。
+- 票据 01（addd696）：路由多文件白名单伺服 + stage-kit 路由、ui-schema 四动词校验、桥 v2、lore `stage` 暂存通道、RP 设置 `allowSendMessage`、HOST_SEAMS D15。
+- 票据 02（c2ce51c）：stage-tab/stage-frame 重写（src 化、三态、主题变量、抽屉布局、入口记忆、热重载修复脏读）、`inputActions` 接缝接线（宿主 `ui-conversation/apply.ts:220` provide 证实）、RiskConfirmation 大 patch 确认。
+- 票据 03（本次）：`cards/pjsk-saki/` 官方测试卡——eg.png（酒馆 pjsk 天马咲希前端卡）改编：多文件状态栏 HUD（26 角色槽位、立绘本地化 32 资产 16.7MB、幻灯片背景、拖拽、好感环、±5 矫正）、四原语测试条（manifest buttonRow）、chronicler.md 卡包推演纪律（新机制：卡包可选 chronicler.md 注入推演提示词）、8 个技能（世界观/五团/虚拟歌手/咲希）、咲希公园开局（改写自 eg alternate_greetings[3]）。
+- 关键修复（实现期发现）：① manifest zod 未保留 `theme` 字段（票据 02 客户端读不到）——补 schema+重建；② iframe src 用查询参数形态时相对资源无法解析——路由增 prefix 路径段形态 `/dsh-rrp/card-ui/<card>/<file>`，查询形态保留兼容。
+- 真机 e2e：待办（host-runner 重启 + 内置浏览器逐项过验收清单后回填结论）。
+- 质量门全绿（59 文件 / 465 用例）。`.scratch/stage-v2/` 规格与票据保持未跟踪。

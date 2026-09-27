@@ -57,6 +57,13 @@ const GOOD = JSON.stringify({
   ],
 })
 
+const THEMED = JSON.stringify({
+  version: 1,
+  title: '主题卡',
+  theme: { accent: '#FF6699', paper: '#FFF7FA' },
+  panels: [{ id: 'only', component: 'timeline', title: '此刻' }],
+})
+
 describe('card UI manifest loader', () => {
   let dir: string
   beforeEach(() => {
@@ -84,6 +91,18 @@ describe('card UI manifest loader', () => {
       expect(loaded.manifest.layout).toBe('stack')
       expect(loaded.manifest.panels).toHaveLength(3)
       expect(loaded.manifest.panels[1]?.when).toMatchObject({ op: '>=', value: 100 })
+    } finally {
+      rmSync(card, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps a declared theme so the Stage can inject --rrp-* variables', () => {
+    const card = cardDirWith(THEMED)
+    try {
+      const loaded = loadUiManifest(card)
+      expect(loaded.kind).toBe('ok')
+      if (loaded.kind !== 'ok') return
+      expect(loaded.manifest.theme).toEqual({ accent: '#FF6699', paper: '#FFF7FA' })
     } finally {
       rmSync(card, { recursive: true, force: true })
     }
@@ -429,7 +448,7 @@ describe('shipped card packs ship a valid UI', () => {
   // An official card with a broken manifest would log a warning on every boot
   // and show the player an empty Stage tab, so this is a release gate, not a
   // nicety: every bundled pack must validate, app pages included.
-  const SHIPPED_WITH_UI = ['maid-heiress', 'yanmen-inn']
+  const SHIPPED_WITH_UI = ['maid-heiress', 'yanmen-inn', 'pjsk-saki']
 
   for (const cardId of SHIPPED_WITH_UI) {
     it(cardId + ' declares a UI that loads clean', () => {
@@ -457,6 +476,24 @@ describe('shipped card packs ship a valid UI', () => {
     // The only remote URL in the file is the deliberate network probe.
     const remote = [...html.matchAll(/https?:\/\/[a-z0-9.-]+/gi)].map((m) => m[0])
     expect(remote).toEqual(['https://example.com'])
+  })
+
+  it('the pjsk status app ships multi-file, local-asset, and mvu-free', () => {
+    const dir = join(shippedCardRoot(), 'pjsk-saki', 'ui')
+    const html = readFileSync(join(dir, 'status.html'), 'utf8')
+    expect(html).toContain('js/status.js')
+    expect(html).not.toMatch(/https?:\/\//)
+    for (const file of ['css/status.css', 'js/status.js']) {
+      const text = readFileSync(join(dir, file), 'utf8')
+      expect(text).not.toMatch(/https?:\/\//)
+      expect(text).not.toContain('UpdateVariable')
+      expect(text.toLowerCase()).not.toContain('mvu')
+      // every referenced asset ships in the pack
+      for (const ref of text.matchAll(/assets\/[A-Za-z0-9._/-]+/g)) {
+        expect(existsSync(join(dir, ref[0])), ref[0] + ' referenced by ' + file).toBe(true)
+      }
+    }
+    expect(readFileSync(join(dir, 'js/status.js'), 'utf8')).toContain('window.rrp.onState')
   })
 })
 
@@ -549,6 +586,50 @@ describe('/dsh-rrp/card-ui route', () => {
       },
     }
     routes.get(RRP_ROUTES.cardUi)?.({ method: 'GET', url }, res)
+    let parsed = {} as CardUiResponse
+    if (res.text !== undefined) {
+      try {
+        parsed = JSON.parse(res.text) as CardUiResponse
+      } catch {
+        parsed = {} as CardUiResponse
+      }
+    }
+    return {
+      status: res.statusCode,
+      headers: res.headers,
+      contentType: res.contentType,
+      text: res.text,
+      body: parsed,
+    }
+  }
+
+  // The path-segment form (/dsh-rrp/card-ui/<card>/<file>) is what sandboxed
+  // pages load as their document URL, so relative assets resolve inside them.
+  function callPath(url: string): {
+    status: number
+    headers: Record<string, string>
+    contentType?: string
+    text?: string
+    body: CardUiResponse
+  } {
+    const res: FakeResponse = {
+      statusCode: 0,
+      headers: {},
+      contentType: undefined,
+      text: undefined,
+      setHeader(name, value) {
+        const key = normalizeHeader(name)
+        this.headers[key] = value
+        if (key === 'content-type') this.contentType = value
+      },
+      getHeader(name) {
+        return this.headers[normalizeHeader(name)]
+      },
+      end(body) {
+        this.text = typeof body === 'string' ? body : undefined
+      },
+    }
+    routes.get(RRP_ROUTES.cardUi + '/')?.({ method: 'GET', url }, res)
     let parsed = {} as CardUiResponse
     if (res.text !== undefined) {
       try {
@@ -661,5 +742,30 @@ describe('/dsh-rrp/card-ui route', () => {
 
     const dir = call(RRP_ROUTES.cardUi + '?card=demo&file=' + encodeURIComponent('css'))
     expect(dir.status).toBe(404)
+  })
+
+  it('path-segment form serves pages and nested assets for the iframe', () => {
+    const base = RRP_ROUTES.cardUi + '/demo'
+    const page = callPath(base + '/panel.html')
+    expect(page.status).toBe(200)
+    expect(page.contentType).toContain('text/html')
+    expect(page.text).toContain('Content-Security-Policy')
+    expect(page.text).toContain('window.rrp')
+
+    const css = callPath(base + '/css/style.css')
+    expect(css.status).toBe(200)
+    expect(css.contentType).toContain('text/css')
+    expect(css.text).toBe('body{color:red}')
+
+    const manifest = callPath(base)
+    expect(manifest.status).toBe(200)
+    expect((manifest.body as { manifest?: UiManifest }).manifest?.panels).toHaveLength(3)
+  })
+
+  it('path-segment form rejects traversal and unknown cards', () => {
+    expect(callPath(RRP_ROUTES.cardUi + '/nope/panel.html').status).toBe(404)
+    expect(callPath(RRP_ROUTES.cardUi + '/demo/..%2F..%2Fcard.md').status).toBe(400)
+    expect(callPath(RRP_ROUTES.cardUi + '/demo/%5C%5Cevil.html').status).toBe(400)
+    expect(callPath(RRP_ROUTES.cardUi + '/demo/missing.html').status).toBe(404)
   })
 })

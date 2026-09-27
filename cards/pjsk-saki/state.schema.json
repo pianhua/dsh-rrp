@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "fields": [
+    {
+      "id": "affinity",
+      "label": "好感",
+      "appliesTo": ["character"],
+      "type": "number",
+      "default": 0,
+      "min": -100,
+      "max": 100,
+      "order": 10,
+      "component": "gauge",
+      "visibility": "player"
+    },
+    {
+      "id": "condition",
+      "label": "当前状态",
+      "appliesTo": ["character"],
+      "type": "string",
+      "order": 20,
+      "component": "textarea",
+      "visibility": "player"
+    },
+    {
+      "id": "location",
+      "label": "地点",
+      "appliesTo": ["scene"],
+      "type": "string",
+      "order": 10,
+      "component": "text",
+      "visibility": "player"
+    },
+    {
+      "id": "time",
+      "label": "时间",
+      "appliesTo": ["scene"],
+      "type": "string",
+      "order": 20,
+      "component": "text",
+      "visibility": "player"
+    },
+    {
+      "id": "weather",
+      "label": "天气",
+      "appliesTo": ["scene"],
+      "type": "string",
+      "order": 30,
+      "component": "textarea",
+      "visibility": "player"
+    },
+    {
+      "id": "saki_sheet_music",
+      "label": "第三首歌乐谱下落",
+      "appliesTo": ["global"],
+      "type": "string",
+      "component": "textarea",
+      "visibility": "player"
+    },
+    {
+      "id": "sekai_seen",
+      "label": "玩家是否已见过 SEKAI",
+      "appliesTo": ["global"],
+      "type": "boolean",
+      "component": "toggle",
+      "visibility": "model"
+    }
+  ]
+}

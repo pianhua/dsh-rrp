@@ -18,7 +18,15 @@ import { cardDirOf, readCard, shippedCardRoot } from './cards.ts'
 import { isUiAssetName, loadUiManifest, UI_MANIFEST_FILE } from './card-ui.ts'
 import { isCardId } from './preset-id.ts'
 import { RRP_ROUTES, type CardUiResponse } from './route-contract.ts'
-import { type RuntimeFaces, type WebServerService, queryOf, face, send } from './host-faces.ts'
+import {
+  type RequestLike,
+  type ResponseLike,
+  type RuntimeFaces,
+  type WebServerService,
+  queryOf,
+  face,
+  send,
+} from './host-faces.ts'
 import { assembleSandboxDoc } from './ui-bridge.ts'
 
 const TAG = '[dsh-rrp]'
@@ -112,7 +120,81 @@ function serveAsset(
 }
 
 /**
- * Register the read-only card UI route.
+ * Serve one resolved (card, file) pair: the manifest, a wrapped HTML page, or
+ * a raw asset. Shared by the query-param and the path-segment route forms.
+ */
+function serveCardUi(res: ResponseLike, card: string, file: string): void {
+  const dir = resolveCardDir(card)
+  if (dir === undefined) {
+    send(res, 404, { error: 'unknown card' } satisfies CardUiResponse)
+    return
+  }
+  setCorsHeaders(res)
+  if (file === UI_MANIFEST_FILE) {
+    const initialState = readCard(card)?.initialState ?? null
+    const loaded = loadUiManifest(dir, initialState)
+    if (loaded.kind === 'absent') send(res, 200, { absent: true } satisfies CardUiResponse)
+    else if (loaded.kind === 'error')
+      send(res, 422, { error: loaded.error } satisfies CardUiResponse)
+    else send(res, 200, { manifest: loaded.manifest } satisfies CardUiResponse)
+    return
+  }
+  if (!isUiAssetName(file)) {
+    send(res, 400, {
+      error: '只接受 ui/ 目录下扩展名白名单内的相对路径',
+    } satisfies CardUiResponse)
+    return
+  }
+  const asset = join(dir, 'ui', file)
+  if (!existsSync(asset)) {
+    send(res, 404, { error: 'unknown ui file' } satisfies CardUiResponse)
+    return
+  }
+  if (file.endsWith('.html')) {
+    const stats = statSync(asset)
+    if (stats.size > UI_HTML_MAX_BYTES) {
+      send(res, 413, { error: 'ui 文件超过 256KB 上限' } satisfies CardUiResponse)
+      return
+    }
+    const etag = etagOf(stats)
+    const ifNoneMatch =
+      'getHeader' in res &&
+      typeof (res as { getHeader?(name: string): unknown }).getHeader === 'function'
+        ? ((res as { getHeader?(name: string): unknown }).getHeader?.('if-none-match') as
+            string | undefined)
+        : undefined
+    if (ifNoneMatch === etag) {
+      res.statusCode = 304
+      res.end()
+      return
+    }
+    setCorsHeaders(res)
+    res.statusCode = 200
+    res.setHeader?.('content-type', 'text/html; charset=utf-8')
+    res.setHeader?.('ETag', etag)
+    res.end(assembleSandboxDoc(readFileSync(asset, 'utf8')))
+    return
+  }
+  serveAsset(res, asset)
+}
+
+function methodGuarded(req: RequestLike, res: ResponseLike, run: () => void): void {
+  if (req.method !== undefined && req.method !== 'GET') {
+    send(res, 405, { error: 'method not allowed' })
+    return
+  }
+  try {
+    run()
+  } catch (error) {
+    send(res, 500, { error: String(error) })
+  }
+}
+
+/**
+ * Register the read-only card UI routes: the legacy query-param form
+ * (`/dsh-rrp/card-ui?card=&file=`) and the path-segment form
+ * (`/dsh-rrp/card-ui/<card>/<file>`) that sandboxed pages need so relative
+ * asset URLs resolve inside the iframe document.
  * @param ctx - the host context owning the registration.
  */
 export function registerCardUiRoute(ctx: Context): void {
@@ -124,76 +206,32 @@ export function registerCardUiRoute(ctx: Context): void {
   }
 
   ctx.effect(() => {
-    const dispose = webServer.register({
+    const disposeExact = webServer.register({
       kind: 'exact',
       path: UI_PATH,
-      handler: (req, res) => {
-        if (req.method !== undefined && req.method !== 'GET') {
-          send(res, 405, { error: 'method not allowed' })
-          return
-        }
-        try {
+      handler: (req, res) =>
+        methodGuarded(req, res, () => {
           const query = queryOf(req)
-          const card = query?.get('card') ?? ''
-          const file = query?.get('file') ?? UI_MANIFEST_FILE
-          const dir = resolveCardDir(card)
-          if (dir === undefined) {
-            send(res, 404, { error: 'unknown card' } satisfies CardUiResponse)
-            return
-          }
-          setCorsHeaders(res)
-          if (file === UI_MANIFEST_FILE) {
-            const initialState = readCard(card)?.initialState ?? null
-            const loaded = loadUiManifest(dir, initialState)
-            if (loaded.kind === 'absent') send(res, 200, { absent: true } satisfies CardUiResponse)
-            else if (loaded.kind === 'error')
-              send(res, 422, { error: loaded.error } satisfies CardUiResponse)
-            else send(res, 200, { manifest: loaded.manifest } satisfies CardUiResponse)
-            return
-          }
-          if (!isUiAssetName(file)) {
-            send(res, 400, {
-              error: '只接受 ui/ 目录下扩展名白名单内的相对路径',
-            } satisfies CardUiResponse)
-            return
-          }
-          const asset = join(dir, 'ui', file)
-          if (!existsSync(asset)) {
-            send(res, 404, { error: 'unknown ui file' } satisfies CardUiResponse)
-            return
-          }
-          if (file.endsWith('.html')) {
-            const stats = statSync(asset)
-            if (stats.size > UI_HTML_MAX_BYTES) {
-              send(res, 413, { error: 'ui 文件超过 256KB 上限' } satisfies CardUiResponse)
-              return
-            }
-            const etag = etagOf(stats)
-            const ifNoneMatch =
-              'getHeader' in res &&
-              typeof (res as { getHeader?(name: string): unknown }).getHeader === 'function'
-                ? ((res as { getHeader?(name: string): unknown }).getHeader?.('if-none-match') as
-                    string | undefined)
-                : undefined
-            if (ifNoneMatch === etag) {
-              res.statusCode = 304
-              res.end()
-              return
-            }
-            setCorsHeaders(res)
-            res.statusCode = 200
-            res.setHeader?.('content-type', 'text/html; charset=utf-8')
-            res.setHeader?.('ETag', etag)
-            res.end(assembleSandboxDoc(readFileSync(asset, 'utf8')))
-            return
-          }
-          serveAsset(res, asset)
-        } catch (error) {
-          send(res, 500, { error: String(error) })
-        }
-      },
+          serveCardUi(res, query?.get('card') ?? '', query?.get('file') ?? UI_MANIFEST_FILE)
+        }),
     })
-    console.log(TAG + ' card UI route armed at ' + UI_PATH)
-    return dispose
+    const disposePrefix = webServer.register({
+      kind: 'prefix',
+      path: UI_PATH + '/',
+      handler: (req, res) =>
+        methodGuarded(req, res, () => {
+          const pathname = new URL(req.url ?? '', 'http://localhost').pathname
+          const rest = decodeURIComponent(pathname.slice((UI_PATH + '/').length))
+          const slash = rest.indexOf('/')
+          const card = slash === -1 ? rest : rest.slice(0, slash)
+          const file = slash === -1 ? UI_MANIFEST_FILE : rest.slice(slash + 1)
+          serveCardUi(res, card, file)
+        }),
+    })
+    console.log(TAG + ' card UI route armed at ' + UI_PATH + ' (+ path form)')
+    return () => {
+      disposePrefix()
+      disposeExact()
+    }
   }, 'dsh-rrp: card UI route')
 }

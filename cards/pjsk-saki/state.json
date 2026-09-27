@@ -1,0 +1,101 @@
+{
+  "version": 2,
+  "trackedObjects": {
+    "saki": {
+      "id": "saki",
+      "kind": "character",
+      "name": "天马咲希",
+      "character": {
+        "emotionalState": "急切→失而复得的欣喜，对你充满感激与好奇",
+        "outfit": "浅黄色外套，制服裙，粉色挑染双马尾",
+        "affinity": 8,
+        "appearance": "粉色挑染的双马尾，笑容明亮得晃眼"
+      },
+      "fields": {
+        "condition": {
+          "type": "string",
+          "value": "为找回被风吹走的第三首歌乐谱而奔跑，此刻正向你道谢",
+          "definition": "card-defined",
+          "visibility": "player"
+        }
+      }
+    },
+    "ichika": {
+      "id": "ichika",
+      "kind": "character",
+      "name": "星乃一歌",
+      "character": {
+        "emotionalState": "沉稳，关心着慌乱的咲希",
+        "outfit": "宫益坂女子学园制服，手边放着吉他盒",
+        "affinity": 2,
+        "appearance": "深蓝色短发，抱着吉他的少女"
+      }
+    },
+    "park": {
+      "id": "park",
+      "kind": "scene",
+      "name": "城市公园 · 喷水池旁草地",
+      "fields": {
+        "location": {
+          "type": "string",
+          "value": "涩谷附近的城市公园，喷水池与榉树野餐垫",
+          "definition": "card-defined",
+          "visibility": "player"
+        },
+        "time": {
+          "type": "string",
+          "value": "午后",
+          "definition": "card-defined",
+          "visibility": "player"
+        },
+        "weather": {
+          "type": "string",
+          "value": "晴，阵风，阳光暖",
+          "definition": "card-defined",
+          "visibility": "player"
+        }
+      }
+    }
+  },
+  "globalFields": {
+    "saki_sheet_music": {
+      "type": "string",
+      "value": "咲希失而复得的第三首歌主旋律谱（手写原稿）",
+      "definition": "card-defined",
+      "visibility": "player"
+    },
+    "sekai_seen": {
+      "type": "boolean",
+      "value": false,
+      "definition": "card-defined",
+      "visibility": "model"
+    }
+  },
+  "objectives": [
+    {
+      "id": "obj-third-song",
+      "owners": [{ "objectId": "saki" }],
+      "desiredOutcome": "Leo/need 完成第三首歌的合练并在天台上完整演奏一遍",
+      "status": "active"
+    }
+  ],
+  "conflicts": [],
+  "cognition": [],
+  "relations": [
+    {
+      "id": "rel-ln-four",
+      "a": { "objectId": "saki" },
+      "b": { "objectId": "ichika" },
+      "labels": ["Leo/need 同伴"]
+    }
+  ],
+  "currentEvents": [
+    {
+      "id": "evt-sheet-music",
+      "type": "发现",
+      "fact": "你捡回了被风吹走的第三首歌乐谱，咲希欠你一份谢礼",
+      "relatedObjects": [{ "objectId": "saki" }],
+      "status": "active"
+    }
+  ]
+}

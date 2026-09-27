@@ -1,0 +1,302 @@
+/* 天马咲希 · 现场 — sekai 粉蓝主题，token 可被 manifest theme 的 --rrp-* 覆盖 */
+:root {
+  --accent: var(--rrp-accent, #ff6699);
+  --accent-soft: var(--rrp-accent-soft, #ffd9e8);
+  --ink: var(--rrp-ink, #3a2e35);
+  --paper: var(--rrp-paper, #fff7fa);
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family:
+    'Segoe UI',
+    'PingFang SC',
+    'Microsoft YaHei',
+    sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  min-height: 100vh;
+}
+#bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 1.6s ease;
+}
+#bg-layer.on {
+  opacity: 0.16;
+}
+#app {
+  position: relative;
+  z-index: 1;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 18px 20px 28px;
+}
+#hud-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--paper) 82%, transparent);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--accent-soft);
+  flex-wrap: wrap;
+}
+.hud-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hud-title-main {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.hud-title-main::before {
+  content: '♪ ';
+  color: var(--accent);
+}
+.hud-scene {
+  font-size: 12px;
+  opacity: 0.75;
+}
+.hud-sync {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.hud-sync.live {
+  background: var(--accent);
+  color: #fff;
+}
+.section-title {
+  font-size: 13px;
+  letter-spacing: 0.28em;
+  opacity: 0.6;
+  margin: 22px 4px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, var(--accent-soft), transparent);
+}
+.band-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 4px 10px;
+}
+.band-head img {
+  height: 26px;
+  width: auto;
+  object-fit: contain;
+}
+.band-head .band-name {
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.band-head .band-note {
+  font-size: 12px;
+  opacity: 0.6;
+}
+.member-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  cursor: grab;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 6px;
+}
+.member-grid.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+.member-card {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  border: 1px solid var(--accent-soft);
+  box-shadow: 0 2px 10px rgb(255 102 153 / 0.08);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.member-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgb(255 102 153 / 0.18);
+}
+.member-card.unfiled {
+  filter: saturate(0.2);
+  opacity: 0.62;
+}
+.member-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+.member-meta {
+  padding: 8px 10px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.member-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+.ring {
+  --p: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  background:
+    radial-gradient(closest-side, var(--paper) 74%, transparent 75% 100%),
+    conic-gradient(var(--accent) calc(var(--p) * 1%), var(--accent-soft) 0);
+}
+.member-note {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.45);
+  color: #fff;
+}
+#vs-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.vs-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-soft);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  font-size: 13px;
+}
+.vs-chip .dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+#detail-pop {
+  position: fixed;
+  z-index: 10;
+  right: 18px;
+  bottom: 18px;
+  width: min(320px, calc(100vw - 36px));
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--paper);
+  border: 1px solid var(--accent-soft);
+  box-shadow: 0 12px 40px rgb(58 46 53 / 0.25);
+}
+#detail-pop[hidden] {
+  display: none;
+}
+#detail-img {
+  width: 84px;
+  height: 84px;
+  border-radius: 12px;
+  object-fit: cover;
+  flex: none;
+}
+.detail-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#detail-name {
+  font-weight: 700;
+}
+#detail-state {
+  font-size: 12px;
+  opacity: 0.75;
+  min-height: 2.4em;
+}
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detail-actions button {
+  border: none;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.detail-actions button:hover {
+  background: var(--accent);
+  color: #fff;
+}
+#detail-affinity {
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 3.2em;
+  text-align: center;
+}
+.detail-hint {
+  font-size: 11px;
+  opacity: 0.55;
+}
+#detail-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: none;
+  background: none;
+  font-size: 16px;
+  cursor: pointer;
+  opacity: 0.5;
+}
+@media (max-width: 640px) {
+  #app {
+    padding: 12px 12px 20px;
+  }
+  .member-grid {
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  }
+}

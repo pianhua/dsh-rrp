@@ -13,10 +13,12 @@
  * can start background work.
  */
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity, renderActivityWorldStateDiff } from './activity.ts'
+import { cardDirOf } from './cards.ts'
+import { CARD_KEY, type CardContext } from './card-types.ts'
 import { extractFirstJsonObject } from './json-extract.ts'
 import {
   CHRONICLER_SYSTEM_PROMPT,
@@ -251,6 +253,24 @@ async function streamChroniclerText(
   return collectText(stream)
 }
 
+/**
+ * The active card pack's `chronicler.md` discipline note, when it ships one.
+ * Cards use it to scope state-folding habits (e.g. when an affinity field may
+ * move); absence is the normal case and never fails the pass.
+ */
+function cardNoteOf(faces: HostFaces, session: SessionLike): string | undefined {
+  try {
+    const card = faces.projections.stateOf(session, CARD_KEY) as CardContext | null
+    if (card === null) return undefined
+    const dir = cardDirOf(card.id)
+    if (dir === undefined) return undefined
+    const note = readFileSync(join(dir, 'chronicler.md'), 'utf8').trim()
+    return note.length === 0 ? undefined : note.slice(0, 2000)
+  } catch {
+    return undefined
+  }
+}
+
 /** One inference pass: prompt -> model -> parse -> append. */
 async function runInference(
   faces: HostFaces,
@@ -278,7 +298,11 @@ async function runInference(
       phase: 'started',
     })
 
-    const prompt = buildChroniclerPrompt({ prior, transcript })
+    const prompt = buildChroniclerPrompt({
+      prior,
+      transcript,
+      cardNote: cardNoteOf(faces, session),
+    })
     const userMessage = {
       id: randomUUID(),
       role: 'user' as const,

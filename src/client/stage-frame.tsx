@@ -39,8 +39,14 @@ interface StageFrameProps {
 }
 
 function frameUrl(cardId: string, src: string): string {
+  // Path-segment form: the served document must own its URL path so relative
+  // asset references (css/js/images) resolve inside the sandboxed iframe.
   return (
-    RRP_ROUTES.cardUi + '?card=' + encodeURIComponent(cardId) + '&file=' + encodeURIComponent(src)
+    RRP_ROUTES.cardUi +
+    '/' +
+    encodeURIComponent(cardId) +
+    '/' +
+    src.split('/').map(encodeURIComponent).join('/')
   )
 }
 

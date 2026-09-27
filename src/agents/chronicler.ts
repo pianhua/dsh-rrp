@@ -60,6 +60,8 @@ export const CHRONICLER_SYSTEM_PROMPT = [
 export interface ChroniclerPromptInput {
   prior: WorldState
   transcript: string
+  /** Optional card-pack discipline note (the pack's `chronicler.md`). */
+  cardNote?: string
 }
 
 export interface ChroniclerReply {
@@ -81,6 +83,9 @@ export function buildChroniclerPrompt(input: ChroniclerPromptInput): string {
     'currentEvents 元素：{"id":"…","type":"…","fact":"…","relatedObjects":[{"objectId":"mia"}],"status":"active"}',
     '对象字段：{"type":"number","value":6,"definition":"undeclared"}；外部引用：{"external":{"name":"客栈老板娘"}}',
     '',
+    ...(input.cardNote === undefined
+      ? []
+      : ['【卡包推演纪律（该卡 chronicler.md，优先级高于默认习惯）】', input.cardNote, '']),
     '【此前的完整 WorldState v2】',
     JSON.stringify(input.prior, null, 2),
     '',

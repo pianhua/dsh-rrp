@@ -60,6 +60,7 @@ const manifestSchema = z
     version: z.literal(1),
     title: z.string().optional(),
     layout: z.enum(['stack', 'grid']).optional(),
+    theme: z.record(z.string(), z.string()).optional(),
     panels: z.array(panelSchema).min(1).max(UI_PANEL_LIMIT),
     assetRefs: z.array(z.string().min(1)).max(64).optional(),
   })
@@ -254,6 +255,7 @@ export function loadUiManifest(
       version: 1,
       ...(parsed.data.title === undefined ? {} : { title: parsed.data.title }),
       layout: parsed.data.layout ?? 'stack',
+      ...(parsed.data.theme === undefined ? {} : { theme: parsed.data.theme }),
       panels,
     },
   }
