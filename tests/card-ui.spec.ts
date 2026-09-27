@@ -539,8 +539,12 @@ describe('/dsh-rrp/card-ui route', () => {
     get: (name: string) =>
       name === 'webServer'
         ? {
-            register: (route: { path: string; handler: (req: unknown, res: unknown) => void }) => {
-              routes.set(route.path, route.handler)
+            register: (route: {
+              kind: string
+              path: string
+              handler: (req: unknown, res: unknown) => void
+            }) => {
+              routes.set(route.kind + ' ' + route.path, route.handler)
               return () => undefined
             },
           }
@@ -585,7 +589,7 @@ describe('/dsh-rrp/card-ui route', () => {
         this.text = typeof body === 'string' ? body : undefined
       },
     }
-    routes.get(RRP_ROUTES.cardUi)?.({ method: 'GET', url }, res)
+    routes.get('exact ' + RRP_ROUTES.cardUi)?.({ method: 'GET', url }, res)
     let parsed = {} as CardUiResponse
     if (res.text !== undefined) {
       try {
@@ -629,7 +633,7 @@ describe('/dsh-rrp/card-ui route', () => {
         this.text = typeof body === 'string' ? body : undefined
       },
     }
-    routes.get(RRP_ROUTES.cardUi + '/')?.({ method: 'GET', url }, res)
+    routes.get('prefix ' + RRP_ROUTES.cardUi)?.({ method: 'GET', url }, res)
     let parsed = {} as CardUiResponse
     if (res.text !== undefined) {
       try {
@@ -734,7 +738,7 @@ describe('/dsh-rrp/card-ui route', () => {
         this.text = typeof body === 'string' ? body : undefined
       },
     }
-    routes.get(RRP_ROUTES.cardUi)?.(
+    routes.get('exact ' + RRP_ROUTES.cardUi)?.(
       { method: 'GET', url: RRP_ROUTES.cardUi + '?card=demo&file=panel.html' },
       res,
     )

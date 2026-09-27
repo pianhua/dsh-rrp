@@ -630,6 +630,12 @@ interface ILayout {
 
 ## D15. 舞台 v2 静态资源与输入机接缝（2026-09-26 记录）
 
+### D15-1a. 宿主 prefix 路由的尾斜杠约定（2026-09-27 真机踩坑）
+
+**结论**：宿主 webserver 的 prefix 匹配是 `pathname === prefix || pathname.startsWith(prefix + '/')`（`dsh-host-webserver` `match()`）。**注册 prefix 路径时不要带尾斜杠**：注册 `/x/y/` 时，子路径需以 `/x/y//` 开头才能命中（双斜杠），永远匹配不到；注册 `/x/y` 则 `/x/y/…` 正常命中，裸路径 `/x/y` 由 exact 表优先接住，两表互不冲突。
+
+**落地**：`card-ui-route.ts` 的 path-segment 形态注册为 `prefix /dsh-rrp/card-ui`（无尾斜杠），查询参数形态继续走 `exact /dsh-rrp/card-ui`。
+
 ### D15-1. 不透明来源 iframe 的 CORS 事实
 
 **结论**：`sandbox="allow-scripts"`（无 `allow-same-origin`）的 iframe 处于**不透明来源（opaque origin）**。其内部请求字体（`@font-face`）、`fetch()`、ESM `import` 等被当作跨源请求处理；即使 CSP 已放宽为 `'self'` 族，仍需服务器响应 `Access-Control-Allow-Origin: *`（或等价 CORS 头），子资源才能加载。

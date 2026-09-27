@@ -215,9 +215,11 @@ export function registerCardUiRoute(ctx: Context): void {
           serveCardUi(res, query?.get('card') ?? '', query?.get('file') ?? UI_MANIFEST_FILE)
         }),
     })
+    // Prefix form: the host matches `${path}/…`, so the path itself carries no
+    // trailing slash (the exact table above still wins for the bare path).
     const disposePrefix = webServer.register({
       kind: 'prefix',
-      path: UI_PATH + '/',
+      path: UI_PATH,
       handler: (req, res) =>
         methodGuarded(req, res, () => {
           const pathname = new URL(req.url ?? '', 'http://localhost').pathname
