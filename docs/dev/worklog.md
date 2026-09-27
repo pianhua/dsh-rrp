@@ -515,7 +515,7 @@
 
 ### 舞台 v2 真机验收与矫正热修（2026-09-27，feat/stage-v2）
 
-- 接手基线：`HEAD=ac1aa88`，分支 `feat/stage-v2`，已从 `origin/main` 前进 5 个提交；宿主以 Node `24.16.0` / pnpm `10.14.0` 在 3099 端口运行。未推送、未合并。
+- 接手基线：`HEAD=ac1aa88`，分支 `feat/stage-v2`，已从 `origin/main` 前进 5 个提交；宿主以 Node `24.16.0` / pnpm `10.14.0` 在 3099 端口运行。修复提交 `e653237` 已推送并快进合并至 `main`。
 - 真机验收（重启宿主加载最新 bundle，PJSK 测试卡主线5）：舞台 HUD 与本地多文件资源正常；`ask_copilot` 正确预填月停问题且不自动发送；`draft_lore` 经过确认层后进入待确认区 `park-notice-board`；`correct_state` 写入 activity `added:globalFields.saki_sheet_music`，并在世界状态页签可读到矫正值。
 - 根因与修复：玩家投影附带 UI 专用 `visibilityNotices`，`applyButtonPatch` 将其交给严格 `WorldState` 校验后静默回退原状态。现先剥离该 UI 字段再合并补丁；无效补丁仍返回原对象以保持既有语义。新增 `StagePanel` correct_state 回归测试。
 - `send_message` 尚未点击：它会通过宿主输入机真实提交玩家消息并可能触发 Author/LLM，需要所有者在验收前明确授权。
