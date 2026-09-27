@@ -11,6 +11,8 @@ export interface ImportedCardSource {
   firstMessage: string
   tags: string[]
   creator?: string
+  /** Original PNG bytes, present only for PNG imports. */
+  coverPng?: Buffer
 }
 
 /** Expand the two tavern placeholders our model does not know. */
@@ -131,7 +133,7 @@ export function importCardFromPng(buffer: Buffer): ImportedCardSource | undefine
     }
     if (jsonText === undefined) continue
     const source = importCardFromJson(jsonText)
-    if (source !== undefined) return source
+    if (source !== undefined) return { ...source, coverPng: buffer }
   }
   return undefined
 }

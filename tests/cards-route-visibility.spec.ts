@@ -91,4 +91,69 @@ describe('card detail route visibility boundary', () => {
       rmSync(home, { recursive: true, force: true })
     }
   })
+
+  it('exposes legal covers in list and detail responses and omits invalid ones', async () => {
+    const previousHome = process.env.DSH_HOME
+    const home = mkdtempSync(join(tmpdir(), 'dsh-rrp-cover-route-'))
+    try {
+      process.env.DSH_HOME = home
+      const root = join(home, '.dsh-rrp', 'cards')
+      const legal = join(root, 'cover-route')
+      const invalid = join(root, 'invalid-cover-route')
+      const plain = join(root, 'plain-route')
+      mkdirSync(join(legal, 'ui', 'assets'), { recursive: true })
+      mkdirSync(join(invalid, 'ui', 'assets'), { recursive: true })
+      mkdirSync(plain, { recursive: true })
+      writeFileSync(join(legal, 'ui', 'assets', 'cover.png'), 'image')
+      writeFileSync(join(invalid, 'ui', 'assets', 'cover.txt'), 'image')
+      writeFileSync(
+        join(legal, 'card.md'),
+        '---\nid: cover-route\nname: 有封面\ncover: assets/cover.png\n---\n\n核心',
+      )
+      writeFileSync(
+        join(invalid, 'card.md'),
+        '---\nid: invalid-cover-route\nname: 非法封面\ncover: assets/cover.txt\n---\n\n核心',
+      )
+      writeFileSync(join(plain, 'card.md'), '---\nid: plain-route\nname: 无封面\n---\n\n核心')
+
+      const testHost = host()
+      registerCardsRoute(testHost.ctx as never)
+      const listResponse = {
+        statusCode: 0,
+        body: '',
+        end(body?: string) {
+          this.body = body ?? ''
+        },
+      }
+      const listRoute = testHost.routes.get('/dsh-rrp/cards')!
+      await listRoute.handler({ method: 'GET', url: '/dsh-rrp/cards' }, listResponse)
+      const listed = JSON.parse(listResponse.body) as {
+        cards: Array<{ id: string; cover?: string }>
+      }
+      expect(listed.cards.find((card) => card.id === 'cover-route')?.cover).toBe('assets/cover.png')
+      expect(listed.cards.find((card) => card.id === 'invalid-cover-route')).not.toHaveProperty(
+        'cover',
+      )
+      expect(listed.cards.find((card) => card.id === 'plain-route')).not.toHaveProperty('cover')
+
+      const oneRoute = testHost.routes.get('/dsh-rrp/cards/one')!
+      for (const id of ['cover-route', 'invalid-cover-route', 'plain-route']) {
+        const response = {
+          statusCode: 0,
+          body: '',
+          end(body?: string) {
+            this.body = body ?? ''
+          },
+        }
+        await oneRoute.handler({ method: 'GET', url: '/dsh-rrp/cards/one?id=' + id }, response)
+        const detail = JSON.parse(response.body) as { card: { meta: { cover?: string } } }
+        if (id === 'cover-route') expect(detail.card.meta.cover).toBe('assets/cover.png')
+        else expect(detail.card.meta).not.toHaveProperty('cover')
+      }
+    } finally {
+      if (previousHome === undefined) delete process.env.DSH_HOME
+      else process.env.DSH_HOME = previousHome
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
 })

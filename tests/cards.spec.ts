@@ -82,6 +82,77 @@ describe('card manifest', () => {
   })
 })
 
+describe('card cover frontmatter', () => {
+  let cardDir: string
+
+  beforeEach(() => {
+    cardDir = mkdtempSync(join(tmpdir(), 'dsh-rrp-cover-'))
+  })
+
+  afterEach(() => {
+    rmSync(cardDir, { recursive: true, force: true })
+  })
+
+  const markdown = (cover?: string) =>
+    '---\nid: cover-card\nname: 封面卡\n' +
+    (cover === undefined ? '' : 'cover: ' + cover + '\n') +
+    '---\n\n核心。'
+
+  it('keeps a legal ui-relative image cover declaration', () => {
+    mkdirSync(join(cardDir, 'ui', 'assets'), { recursive: true })
+    writeFileSync(join(cardDir, 'ui', 'assets', 'cover.webp'), 'image')
+
+    expect(parseCardMarkdown(markdown('assets/cover.webp'), cardDir)?.meta.cover).toBe(
+      'assets/cover.webp',
+    )
+  })
+
+  it('warns and omits a cover with a disallowed extension', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const parsed = parseCardMarkdown(markdown('assets/cover.txt'), cardDir)
+      expect(parsed?.meta.cover).toBeUndefined()
+      expect(warnSpy).toHaveBeenCalled()
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('warns and omits path-traversing and absolute covers', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      for (const cover of ['../cover.png', '/cover.png', 'C:/cover.png']) {
+        const parsed = parseCardMarkdown(markdown(cover), cardDir)
+        expect(parsed?.meta.cover).toBeUndefined()
+      }
+      expect(warnSpy).toHaveBeenCalledTimes(3)
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('warns and omits a cover whose file is missing', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const parsed = parseCardMarkdown(markdown('assets/missing.png'), cardDir)
+      expect(parsed?.meta.cover).toBeUndefined()
+      expect(warnSpy).toHaveBeenCalled()
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('leaves cover unset when frontmatter does not declare one', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(parseCardMarkdown(markdown(), cardDir)?.meta.cover).toBeUndefined()
+      expect(warnSpy).not.toHaveBeenCalled()
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+})
+
 describe('the shipped test card', () => {
   let home: string
   let previous: string | undefined

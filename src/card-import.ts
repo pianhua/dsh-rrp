@@ -52,6 +52,7 @@ export function writeImportedCard(
   if (id === undefined) return undefined
   const dir = join(cardRoots(home)[0] as string, id)
   mkdirSync(join(dir, 'openings'), { recursive: true })
+  if (source.coverPng !== undefined) mkdirSync(join(dir, 'ui', 'assets'), { recursive: true })
 
   const frontmatter: Record<string, unknown> = {
     id,
@@ -60,6 +61,7 @@ export function writeImportedCard(
   }
   if (source.tags.length > 0) frontmatter.tags = source.tags
   if (source.creator !== undefined) frontmatter.author = source.creator
+  if (source.coverPng !== undefined) frontmatter.cover = 'assets/cover.png'
   const summary =
     source.worldCore
       .split('\n')
@@ -74,6 +76,9 @@ export function writeImportedCard(
     '\n---\n\n' +
     (source.worldCore.length > 0 ? source.worldCore + '\n' : '')
   writeFileSync(join(dir, 'card.md'), cardMd, 'utf8')
+  if (source.coverPng !== undefined) {
+    writeFileSync(join(dir, 'ui', 'assets', 'cover.png'), source.coverPng)
+  }
   if (source.firstMessage.length > 0) {
     writeFileSync(join(dir, 'openings', 'default.md'), source.firstMessage + '\n', 'utf8')
   }

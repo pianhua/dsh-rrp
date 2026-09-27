@@ -23,6 +23,8 @@ export interface CardMeta {
   opening: string
   version?: string
   author?: string
+  /** Relative path inside the card's `ui/` directory. */
+  cover?: string
   player?: CardPlayer
 }
 

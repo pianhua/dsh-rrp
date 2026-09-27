@@ -266,17 +266,15 @@ export function isUiHtmlName(name: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.html$/.test(name)
 }
 
+export const UI_IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif'])
+
 const UI_ASSET_EXTENSIONS = new Set([
   '.html',
   '.css',
   '.js',
   '.mjs',
   '.json',
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.webp',
-  '.gif',
+  ...UI_IMAGE_EXTENSIONS,
   '.svg',
   '.ico',
   '.woff',
@@ -305,4 +303,11 @@ export function isUiAssetName(name: string): boolean {
   if (!isSafeUiRelativePath(name)) return false
   const ext = ('.' + name.split('.').pop()?.toLowerCase()) as string
   return UI_ASSET_EXTENSIONS.has(ext)
+}
+
+/** A card cover path: a safe relative image path under `ui/`. */
+export function isUiImageName(name: string): boolean {
+  if (!isSafeUiRelativePath(name)) return false
+  const ext = ('.' + name.split('.').pop()?.toLowerCase()) as string
+  return UI_IMAGE_EXTENSIONS.has(ext)
 }
