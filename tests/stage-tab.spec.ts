@@ -162,6 +162,81 @@ describe('StagePanel states', () => {
     expect(inputActions.setDraft).toHaveBeenCalledWith('hi')
     expect(inputActions.submit).toHaveBeenCalled()
   })
+
+  it('wires correct_state to the host correction API with the merged state', async () => {
+    const correctState = vi.fn(async () => {})
+    const manifest = {
+      version: 1 as const,
+      layout: 'stack' as const,
+      panels: [
+        {
+          id: 'b',
+          component: 'buttonRow' as const,
+          buttons: [
+            {
+              label: '矫正',
+              action: 'correct_state' as const,
+              patch: {
+                globalFields: {
+                  x: {
+                    type: 'number',
+                    value: 9,
+                    definition: 'card-defined' as const,
+                    visibility: 'player' as const,
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ],
+    }
+    const api: StageApi = {
+      loadManifest: async () => manifest,
+      correctState,
+      askCopilot: () => {},
+      sendMessage: async () => {},
+      draftLore: async () => {},
+      forget: () => {},
+    }
+    const projections: Record<string, unknown> = {
+      [CARD_KEY]: CARD,
+      [WORLD_STATE_KEY]: {
+        ...emptyWorldState(),
+        globalFields: {
+          x: { type: 'number', value: 5, definition: 'card-defined' as const },
+        },
+      },
+      [WORLDLINE_DIGEST_KEY]: { turns: [] },
+      [RRP_SETTINGS_KEY]: { allowSendMessage: true },
+    }
+    await act(async () =>
+      root?.render(
+        createElement(StagePanel, {
+          t: (key: string) => key,
+          sessionId: 'session-1',
+          api,
+          useProjection: (key: string) => projections[key],
+        }),
+      ),
+    )
+    await flushEffects()
+    const button = Array.from(container?.querySelectorAll('button') ?? []).find(
+      (entry) => entry.textContent === '矫正',
+    ) as HTMLButtonElement | undefined
+    expect(button).toBeDefined()
+    expect(button?.disabled).toBe(false)
+    await act(async () => button?.click())
+    await flushEffects()
+    expect(correctState).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({
+        globalFields: {
+          x: expect.objectContaining({ value: 9 }),
+        },
+      }),
+    )
+  })
 })
 
 describe('StagePanel bridge v2', () => {

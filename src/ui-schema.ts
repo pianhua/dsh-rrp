@@ -180,6 +180,11 @@ export function readReferenceName(reference: ObjectReference, state: WorldState)
 
 /** Apply a v2 button patch through the same safe write semantics as correction. */
 export function applyButtonPatch(state: WorldState, patch: Record<string, unknown>): WorldState {
-  const result = applyWorldStatePatch(state, patch)
+  // The player projection carries this UI-only notice list alongside the
+  // core snapshot. Strip it before the strict WorldState validator sees the
+  // candidate; the correction route accepts only the core snapshot shape.
+  const core = { ...state } as WorldState & { visibilityNotices?: unknown }
+  delete core.visibilityNotices
+  const result = applyWorldStatePatch(core, patch)
   return result.ok ? result.state : state
 }
