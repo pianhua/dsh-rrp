@@ -213,6 +213,34 @@ describe('writeImportedCard (issue #31 P1-D)', () => {
     expect(pack?.openings[0]?.body).toContain('提着裙摆行礼')
   })
 
+  it('writes the original PNG bytes as the imported cover and declares it', () => {
+    const png = pngWith([
+      'ccv3',
+      gzipSync(
+        Buffer.from(JSON.stringify({ spec: 'chara_card_v3', data: { ...V2, name: 'PNG Cover' } })),
+      ).toString('base64'),
+    ])
+    const source = importCardFromPng(png)!
+    const written = writeImportedCard(source, home)
+    const cardDir = join(home, '.dsh-rrp', 'cards', written!.id)
+
+    expect(readFileSync(join(cardDir, 'ui', 'assets', 'cover.png'))).toEqual(png)
+    expect(readFileSync(join(cardDir, 'card.md'), 'utf8')).toContain('cover: assets/cover.png')
+    expect(readCard(written!.id, home)?.meta.cover).toBe('assets/cover.png')
+  })
+
+  it('does not create a cover for JSON imports', () => {
+    const source = importCardFromJson(
+      JSON.stringify({ spec: 'chara_card_v3', data: { ...V2, name: 'JSON Cover' } }),
+    )!
+    const written = writeImportedCard(source, home)
+    const cardDir = join(home, '.dsh-rrp', 'cards', written!.id)
+
+    expect(existsSync(join(cardDir, 'ui', 'assets', 'cover.png'))).toBe(false)
+    expect(readFileSync(join(cardDir, 'card.md'), 'utf8')).not.toContain('cover:')
+    expect(readCard(written!.id, home)?.meta.cover).toBeUndefined()
+  })
+
   it('allocates a fresh id on name collisions', () => {
     const source = normalizeCharacterCard(V2)!
     const second = writeImportedCard(source, home)

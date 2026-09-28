@@ -520,3 +520,24 @@
 - 根因与修复：玩家投影附带 UI 专用 `visibilityNotices`，`applyButtonPatch` 将其交给严格 `WorldState` 校验后静默回退原状态。现先剥离该 UI 字段再合并补丁；无效补丁仍返回原对象以保持既有语义。新增 `StagePanel` correct_state 回归测试。
 - `send_message` 尚未点击：它会通过宿主输入机真实提交玩家消息并可能触发 Author/LLM，需要所有者在验收前明确授权。
 - 质量门：`format:check`、`typecheck`、`lint`、Vitest `59` 文件 / `466` 用例、`build`、`git diff --check` 全部通过。`.scratch/stage-v2/` 规格与票据保持未跟踪。
+
+
+### 展厅 v2 重做：拷问确认、决策与规格落盘（2026-09-27，gallery-v2）
+
+- 需求：展厅整体重做（15 题拷问确认）。一期 = 纯视觉与信息架构 + 封面（立绘）管道；续玩入口/卡管理/主角编辑区二期以后单独立票。
+- 决策落盘：DECISIONS.md 新增 **D26**（封面网格墙 + 详情滑出面板；主角名覆写 #25 与自设人设 P1-B 从展厅与开局流移除，`player` 字段局内编辑保留；封面声明式 `cover` 字段 + 酒馆 PNG 自动抽取 + 渐变回退；宿主原子/token 硬约束）；**D14 修订**（卡包完全自有格式，酒馆仅为一次性导入转译来源，不跟踪版本不回导）——HOST_ALIGNMENT §3.1「张力待拍板」同步关闭，GLOSSARY 新增「封面」、更新「卡片展厅 / 导入」条目。
+- 规格与票据：`.scratch/gallery-v2/spec.md`（含 ST 勘察落地设计参数：竖版 2:3 封面、网格态信息降噪、低成本 hover/选中、搜索默认收起）+ 票据 01（封面管道，ready-for-agent）→ 02（客户端重做）→ 03（内置浏览器真机验收，截图归档）。
+- 编码前冲突检查：无未解决冲突（零新路由——封面复用 card-ui 路由；不破 D21/Host-First/locale 红线）。
+- Ready-to-code gate：通过。基线 `main`（与 origin 同步，工作树干净），分支策略 = 从 main 切 `feat/gallery-v2`，验收后 `--no-ff` 合并（所有者拍板观感后）。
+- 未开始实现；视觉参照 SillyTavern 角色选择界面（本地只读勘察，仅借鉴设计不复制代码）。
+
+
+### 展厅 v2 一期交付与真机验收（2026-09-28，feat/gallery-v2）
+
+- 票据 01（`3c8a959`）：封面管道——card.md `cover` 字段（校验/穿越防护/白名单，非法回退不阻断）、`CardMeta.cover`、酒馆 PNG 导入自动抽立绘存 `ui/assets/cover.png`、38 定向用例通过。
+- 票据 02（`a8bccae`）：gallery-panel 重写——封面网格墙 + 右侧滑出详情（Hero→开场白→技能→玩家角色只读→开始条）、搜索默认收起、Esc 关闭、渐变占位升级、onerror 回退；移除主角名覆写（#25）/自设人设（P1-B），`withPlayerPersona` 导出删除，`player` 字段局内编辑保留；locale 键重排（ZH/EN，守卫测试全绿）。全量 60 文件 / 482 用例 + typecheck/lint/build 全绿。
+- 票据 03：内置浏览器真机验收 10/10 PASS（DEF-02 报告 + 6 张截图归档 dsh-rrp-test-report/）：网格/详情层级/只读提示/搜索/刷新保留选中/**封面端到端**（PNG 导入→落盘→路由 200→网格真图）/开局流（建会话→跳转→开场白→主线3 自动命名）/双主题。
+- 已知边界（宿主缺陷）：窄窗（≤520px）图标轨点展厅不切换主区面板（注册代码与 v1 相同，宿主 0.1.6-alpha.2 行为）——记 HOST_SEAMS 候选，不做插件补偿。
+- 环境副作用：验收开局会话「雪夜雁门客栈·主线3」保留（无 LLM 调用）；探针卡 g2 已删；主题已恢复深色。
+- 决策落盘已提交：`docs/reference/DECISIONS.md`（D14 修订 + D26）、`GLOSSARY.md`（封面/卡片展厅/导入条目）、`HOST_ALIGNMENT.md`（§3.1 张力关闭）。
+- 质量门复跑全绿后随上述文档一起提交。**未合并 main**：等所有者真机玩一圈拍板观感后 `--no-ff` 合并（D26 决策 7）。

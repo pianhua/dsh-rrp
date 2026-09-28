@@ -25,7 +25,14 @@ function atom(tag: string, keep: readonly string[]) {
 
 export const Button = atom('button', ['disabled', 'title', 'aria-label', 'type', 'onClick'])
 export const Pill = atom('span', ['title', 'aria-label'])
-export const Input = atom('input', ['value', 'placeholder', 'disabled', 'type', 'aria-label'])
+export const Input = atom('input', [
+  'value',
+  'placeholder',
+  'disabled',
+  'type',
+  'aria-label',
+  'onChange',
+])
 export const StateDot = atom('span', ['title', 'aria-label'])
 export const DisclosureRow = atom('details', ['title', 'aria-label'])
 export const Tooltip = atom('span', ['title', 'aria-label'])

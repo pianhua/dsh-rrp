@@ -24,6 +24,7 @@ import {
 } from './lore-condition.ts'
 import { worldStateSchema } from './projection/world-state.ts'
 import { readCardStateSchema } from './card-state-schema.ts'
+import { isUiImageName } from './card-ui.ts'
 import type { WorldState } from './world-state.ts'
 
 const TAG = '[dsh-rrp]'
@@ -149,10 +150,12 @@ export function parseFrontmatter(raw: string): { data: Frontmatter; body: string
 /**
  * Parse one `card.md`.
  * @param raw - the file text.
+ * @param cardDir - the card directory, used to validate an optional cover asset.
  * @returns metadata + persona + world core, or undefined when invalid.
  */
 export function parseCardMarkdown(
   raw: string,
+  cardDir?: string,
 ): { meta: CardMeta; persona: string; worldCore: string } | undefined {
   const parsed = parseFrontmatter(raw)
   if (parsed === undefined) return undefined
@@ -165,6 +168,19 @@ export function parseCardMarkdown(
     name,
     tags: asArray(parsed.data.tags),
     opening: asString(parsed.data.opening) ?? 'default',
+  }
+  const cover = parsed.data.cover
+  if (cover !== undefined) {
+    const invalid =
+      typeof cover !== 'string'
+        ? '必须是字符串'
+        : !isUiImageName(cover)
+          ? '必须是 ui/ 下扩展名白名单内的相对图片路径'
+          : cardDir === undefined || !existsSync(join(cardDir, 'ui', cover))
+            ? '指向的文件不存在'
+            : undefined
+    if (invalid === undefined) meta.cover = cover as string
+    else console.warn(TAG + ' 卡「' + id + '」cover 无效：' + invalid)
   }
   const summary = asString(parsed.data.summary)
   if (summary !== undefined) meta.summary = summary
@@ -283,7 +299,7 @@ export function listCards(home: string = harnessHome()): CardMeta[] {
       const file = join(root, entry.name, 'card.md')
       if (!existsSync(file)) continue
       try {
-        const parsed = parseCardMarkdown(readFileSync(file, 'utf8'))
+        const parsed = parseCardMarkdown(readFileSync(file, 'utf8'), join(root, entry.name))
         if (parsed === undefined || parsed.meta.id !== entry.name || seen.has(parsed.meta.id))
           continue
         seen.add(parsed.meta.id)
@@ -309,7 +325,7 @@ export function readCard(id: string, home: string = harnessHome()): CardPack | u
     const file = join(dir, 'card.md')
     if (!existsSync(file)) continue
     try {
-      const parsed = parseCardMarkdown(readFileSync(file, 'utf8'))
+      const parsed = parseCardMarkdown(readFileSync(file, 'utf8'), dir)
       if (parsed === undefined || parsed.meta.id !== id) continue
       const initialState = readInitialState(dir)
       return {
