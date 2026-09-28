@@ -640,28 +640,3 @@ export function renderWorldState(
 ): string {
   return renderWorldStateForAudience(state, audience)
 }
-
-/** Keep the player's self-authored persona as an ordinary tracked-object field. */
-export function withPlayerPersona(state: WorldState | null, persona: string): WorldState | null {
-  const text = persona.trim()
-  if (text.length === 0) return state
-  const base = state ?? emptyWorldState()
-  const prior = base.trackedObjects.player
-  const player: TrackedObject = prior ?? {
-    id: 'player',
-    kind: 'character',
-    name: '玩家',
-    isPlayer: true,
-    fields: {},
-  }
-  return {
-    ...base,
-    trackedObjects: {
-      ...base.trackedObjects,
-      player: {
-        ...player,
-        fields: { ...player.fields, persona: createDynamicField('string', text) },
-      },
-    },
-  }
-}
