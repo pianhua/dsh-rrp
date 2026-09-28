@@ -541,3 +541,10 @@
 - 环境副作用：验收开局会话「雪夜雁门客栈·主线3」保留（无 LLM 调用）；探针卡 g2 已删；主题已恢复深色。
 - 决策落盘已提交：`docs/reference/DECISIONS.md`（D14 修订 + D26）、`GLOSSARY.md`（封面/卡片展厅/导入条目）、`HOST_ALIGNMENT.md`（§3.1 张力关闭）。
 - 质量门复跑全绿后随上述文档一起提交。**未合并 main**：等所有者真机玩一圈拍板观感后 `--no-ff` 合并（D26 决策 7）。
+
+
+### 展厅 v2 合并入 main（2026-09-28）
+
+- 所有者真机观感拍板通过 → `feat/gallery-v2`（3 提交）推送并以 `--no-ff` 合并入 main（merge `04864dc`），推送后 main 与 origin 同步。合并树质量门复跑全绿（format/typecheck/lint/Vitest 482/build/git diff --check）。
+- `.scratch/gallery-v2/` 规格与票据保持未跟踪（仓库惯例）；DEF-02 报告与截图在本地归档 `dsh-rrp-test-report/`（不入库）。
+- 遗留挂账：#25 / P1-B 的 GitHub issue 可由所有者决定是否关闭并标注「被 D26 取代」；窄窗宿主边界记 HOST_SEAMS 候选待升级宿主时复核。
