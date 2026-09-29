@@ -98,9 +98,15 @@ describe('card start route', () => {
     await host.route()!.handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    // Facts context first (a known user/message carrying the state in its source),
-    // then the valid opening turn LAST so the live follow stream ends on it.
+    // Surface head turn 1 first (V4 protected-head invariant), then the facts
+    // context (a known user/message carrying the state in its source), then
+    // the valid opening turn LAST so the live follow stream ends on it.
     expect(host.appended.map((entry) => entry.type)).toEqual([
+      'turn/start',
+      'step/start',
+      'system/message',
+      'step/end',
+      'turn/end',
       'user/message',
       'turn/start',
       'step/start',
@@ -108,8 +114,8 @@ describe('card start route', () => {
       'step/end',
       'turn/end',
     ])
-    expect(payloadOf(host.appended[0]?.data)?.worldState).toEqual(STATE)
-    expect(payloadOf(host.appended[0]?.data)?.worldStateTimelineBatch).toEqual({
+    expect(payloadOf(host.appended[5]?.data)?.worldState).toEqual(STATE)
+    expect(payloadOf(host.appended[5]?.data)?.worldStateTimelineBatch).toEqual({
       kind: 'baseline',
       snapshot: 'initial-state',
       provenance: expect.objectContaining({ actor: 'initial-state' }),
@@ -120,22 +126,28 @@ describe('card start route', () => {
     expect(activity.entries.map((entry) => entry.phase)).toEqual(['committed'])
     expect(activity.entries[0]?.actor).toBe('card')
 
-    const data = host.appended[3]?.data as {
+    const data = host.appended[8]?.data as {
       turn: number
       step: number
       message: { role: string; content: Array<{ text: string }> }
       stream: unknown[]
     }
-    expect(host.appended[1]?.data).toEqual({ turn: 1 })
-    expect(host.appended[2]?.data).toEqual({ turn: 1, step: 1 })
-    expect(data.turn).toBe(1)
+    // Head turn 1.
+    expect(host.appended[0]?.data).toEqual({ turn: 1 })
+    expect(host.appended[1]?.data).toEqual({ turn: 1, step: 1 })
+    const head = host.appended[2]?.data as { message: { role: string } }
+    expect(head.message.role).toBe('system')
+    // Opening turn 2.
+    expect(host.appended[6]?.data).toEqual({ turn: 2 })
+    expect(host.appended[7]?.data).toEqual({ turn: 2, step: 1 })
+    expect(data.turn).toBe(2)
     expect(data.step).toBe(1)
     expect(data.message.role).toBe('assistant')
     expect(data.message.content[0]?.text).toBe(OPENING)
     expect(data.stream).toEqual([])
-    expect(host.appended[4]?.data).toEqual({ turn: 1, step: 1 })
-    expect(host.appended[5]?.data).toEqual({ turn: 1, reason: { kind: 'completed' } })
-    expect(host.appended[3]?.intent).toEqual({ surfaceOp: 'append' })
+    expect(host.appended[9]?.data).toEqual({ turn: 2, step: 1 })
+    expect(host.appended[10]?.data).toEqual({ turn: 2, reason: { kind: 'completed' } })
+    expect(host.appended[8]?.intent).toEqual({ surfaceOp: 'append' })
   })
 
   it('falls back to a plugin notice when the assistant shape is rejected', async () => {
@@ -150,10 +162,17 @@ describe('card start route', () => {
     expect(host.appended.map((entry) => entry.type)).toEqual([
       'turn/start',
       'step/start',
+      'system/message',
+      'step/end',
+      'turn/end',
+      'turn/start',
+      'step/start',
+      'step/end',
+      'turn/end',
       'user/message',
     ])
     // user/message data IS the UserMessage.
-    const data = host.appended[2]?.data as { source: { kind: string; form?: string } }
+    const data = host.appended[9]?.data as { source: { kind: string; form?: string } }
     expect(data.source.kind).toBe('rrp')
     expect(data.source.form).toBe('notice')
   })
@@ -207,8 +226,8 @@ describe('card start route', () => {
     })
     await host.route()!.handler(req, res)
     expect(res.statusCode).toBe(200)
-    expect(host.appended[0]?.type).toBe('user/message')
-    expect(payloadOf(host.appended[0]?.data)?.card).toEqual({
+    expect(host.appended[5]?.type).toBe('user/message')
+    expect(payloadOf(host.appended[5]?.data)?.card).toEqual({
       id: 'c1',
       name: '测试卡',
       persona: 'P',
@@ -235,7 +254,7 @@ describe('card start route', () => {
     await host.route()!.handler(req, res)
     expect(res.statusCode).toBe(200)
     // The durable card context carries the effective (overridden) player.
-    expect(payloadOf(host.appended[0]?.data)?.card).toEqual({
+    expect(payloadOf(host.appended[5]?.data)?.card).toEqual({
       id: 'c1',
       name: '测试卡',
       persona: 'P',
@@ -243,7 +262,7 @@ describe('card start route', () => {
       player: { name: '林小满', description: '独行旅人' },
     })
     // The logged opening is final text — interpolation happened BEFORE the append.
-    const data = host.appended[3]?.data as { message: { content: Array<{ text: string }> } }
+    const data = host.appended[8]?.data as { message: { content: Array<{ text: string }> } }
     expect(data.message.content[0]?.text).toBe('林小满推开阁楼的门，独行旅人般的沉默。')
   })
 
@@ -326,7 +345,14 @@ describe('card start route', () => {
     const { req, res } = exchange({ sessionId: 's1', state: STATE, opening: OPENING })
     await host.route()!.handler(req, res)
     expect(res.statusCode).toBe(500)
-    expect(host.appended).toEqual([])
+    // Only the surface head turn landed; no context publish, no opening.
+    expect(host.appended.map((entry) => entry.type)).toEqual([
+      'turn/start',
+      'step/start',
+      'system/message',
+      'step/end',
+      'turn/end',
+    ])
     expect(readActivity('s1').entries).toEqual([])
   })
 })
