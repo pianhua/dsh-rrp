@@ -3,8 +3,8 @@
  */
 import {
   Button,
-  IconPlusOutline16,
-  IconTrashOutline16,
+  IconPlusOutlineRegular,
+  IconTrashOutlineRegular,
   Input,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -39,7 +39,7 @@ export function DynamicFieldEditor(props: {
           <Button
             variant="ghost"
             size="sm"
-            icon={<IconTrashOutline16 size={14} />}
+            icon={<IconTrashOutlineRegular size={14} />}
             disabled={disabled}
             onClick={onDelete}
           />
@@ -248,7 +248,7 @@ export function DynamicFieldsSection(props: {
         <Button
           variant="ghost"
           size="sm"
-          icon={<IconPlusOutline16 size={16} />}
+          icon={<IconPlusOutlineRegular size={16} />}
           disabled={isInferring}
           onClick={() => setShowAddField(true)}
           style={{ marginBottom: 12 }}

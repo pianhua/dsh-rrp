@@ -7,13 +7,13 @@
  */
 import {
   Button,
-  IconArchiveOutline20,
-  IconLoadingOutline16,
-  IconPlayOutline16,
-  IconRefreshOutline16,
-  IconSearchOutline16,
-  IconSkillOutline16,
-  IconUserOutline16,
+  IconArchiveOutlineMedium,
+  IconLoadingOutlineRegular,
+  IconPlayOutlineRegular,
+  IconRefreshOutlineRegular,
+  IconSearchOutlineRegular,
+  IconSkillOutlineRegular,
+  IconUserOutlineRegular,
   Input,
   Pill,
   StateDot,
@@ -307,7 +307,7 @@ export function GalleryPanel(props: GalleryPanelProps): ReactNode {
       <header style={S.header}>
         <span style={S.brand}>
           <span style={S.brandIcon}>
-            <IconArchiveOutline20 size={18} />
+            <IconArchiveOutlineMedium size={18} />
           </span>
           <span style={S.brandText}>{t('gallery.title')}</span>
           {cards === null ? null : <Pill>{String(cards.length)}</Pill>}
@@ -317,7 +317,7 @@ export function GalleryPanel(props: GalleryPanelProps): ReactNode {
           <span style={S.search}>
             <Input
               autoFocus
-              icon={<IconSearchOutline16 size={16} />}
+              icon={<IconSearchOutlineRegular size={16} />}
               placeholder={t('gallery.search')}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -329,7 +329,7 @@ export function GalleryPanel(props: GalleryPanelProps): ReactNode {
             <Button
               variant="ghost"
               size="sm"
-              icon={<IconSearchOutline16 size={16} />}
+              icon={<IconSearchOutlineRegular size={16} />}
               onClick={() => setSearchOpen(true)}
               aria-label={t('gallery.search')}
             />
@@ -339,7 +339,7 @@ export function GalleryPanel(props: GalleryPanelProps): ReactNode {
           <Button
             variant="ghost"
             size="sm"
-            icon={<IconRefreshOutline16 size={16} />}
+            icon={<IconRefreshOutlineRegular size={16} />}
             onClick={refresh}
             aria-label={t('gallery.reload')}
           />
@@ -374,7 +374,7 @@ export function GalleryPanel(props: GalleryPanelProps): ReactNode {
           ) : filtered.length === 0 ? (
             <div style={S.empty}>
               <span style={S.emptyIcon}>
-                <IconArchiveOutline20 size={30} />
+                <IconArchiveOutlineMedium size={30} />
               </span>
               <span>{cards.length === 0 ? t('gallery.empty') : t('gallery.nomatch')}</span>
             </div>
@@ -480,7 +480,7 @@ export function GalleryPanel(props: GalleryPanelProps): ReactNode {
 
               <section style={S.section}>
                 <span style={S.sectionIcon}>
-                  <IconSkillOutline16 size={16} />
+                  <IconSkillOutlineRegular size={16} />
                 </span>
                 <span style={S.sectionTitle}>{t('gallery.skills')}</span>
                 <Pill>{String(selected.skills.length)}</Pill>
@@ -503,7 +503,7 @@ export function GalleryPanel(props: GalleryPanelProps): ReactNode {
               <section style={S.playerSection}>
                 <div style={S.section}>
                   <span style={S.sectionIcon}>
-                    <IconUserOutline16 size={16} />
+                    <IconUserOutlineRegular size={16} />
                   </span>
                   <span style={S.sectionTitle}>{t('gallery.player')}</span>
                 </div>
@@ -525,7 +525,13 @@ export function GalleryPanel(props: GalleryPanelProps): ReactNode {
               </span>
               <Button
                 variant="primary"
-                icon={busy ? <IconLoadingOutline16 size={16} /> : <IconPlayOutline16 size={16} />}
+                icon={
+                  busy ? (
+                    <IconLoadingOutlineRegular size={16} />
+                  ) : (
+                    <IconPlayOutlineRegular size={16} />
+                  )
+                }
                 disabled={busy}
                 onClick={() => begin(selected)}
               >
@@ -772,7 +778,7 @@ function GalleryGlyph(props: { size?: number; active?: boolean }): ReactNode {
       aria-hidden="true"
       style={{ display: 'inline-flex', opacity: props.active === false ? 0.7 : 1 }}
     >
-      <IconArchiveOutline20 size={size} />
+      <IconArchiveOutlineMedium size={size} />
     </span>
   )
 }

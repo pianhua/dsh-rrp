@@ -10,7 +10,7 @@
  */
 import {
   Button,
-  IconRefreshOutline16,
+  IconRefreshOutlineRegular,
   Pill,
   RiskConfirmation,
   Tooltip,
@@ -566,7 +566,7 @@ export function StagePanel(props: StagePanelProps): ReactNode {
       <div style={S.head}>
         <span style={S.headTitle}>{manifest?.title ?? card.name}</span>
         <Button size="sm" variant="ghost" title={t('stage.reload')} onClick={reload}>
-          <IconRefreshOutline16 />
+          <IconRefreshOutlineRegular />
         </Button>
       </div>
 

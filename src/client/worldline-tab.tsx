@@ -1,7 +1,7 @@
 import {
   Button,
-  IconLoadingOutline16,
-  IconRefreshOutline16,
+  IconLoadingOutlineRegular,
+  IconRefreshOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   useCallback,
@@ -215,7 +215,7 @@ function WorldlinePanel(props: WorldlinePanelProps): ReactNode {
     <div style={S.root}>
       <header style={S.header}>
         <strong style={S.title}>{t('worldline.title')}</strong>
-        {busy ? <IconLoadingOutline16 size={14} /> : null}
+        {busy ? <IconLoadingOutlineRegular size={14} /> : null}
         <span style={S.spacer} />
         {props.sessionId ? (
           <Button
@@ -230,7 +230,7 @@ function WorldlinePanel(props: WorldlinePanelProps): ReactNode {
         <Button
           size="sm"
           variant="ghost"
-          icon={<IconRefreshOutline16 size={14} />}
+          icon={<IconRefreshOutlineRegular size={14} />}
           aria-label={t('worldline.refresh')}
           onClick={() => refresh()}
         />

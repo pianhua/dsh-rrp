@@ -16,10 +16,10 @@
  */
 import {
   Button,
-  IconCheckOutline16,
-  IconLoadingOutline16,
-  IconSparkle16,
-  IconTrashOutline16,
+  IconCheckOutlineRegular,
+  IconLoadingOutlineRegular,
+  IconSparkleRegular,
+  IconTrashOutlineRegular,
   Input,
   Pill,
   StateDot,
@@ -292,7 +292,9 @@ function LorePanel(props: LorePanelProps): ReactNode {
           </span>
           <Button
             variant="primary"
-            icon={drafting ? <IconLoadingOutline16 size={16} /> : <IconSparkle16 size={16} />}
+            icon={
+              drafting ? <IconLoadingOutlineRegular size={16} /> : <IconSparkleRegular size={16} />
+            }
             disabled={busy || drafting}
             onClick={() => {
               setStatus('')
@@ -316,7 +318,7 @@ function LorePanel(props: LorePanelProps): ReactNode {
               <Button
                 variant="primary"
                 size="sm"
-                icon={<IconCheckOutline16 size={16} />}
+                icon={<IconCheckOutlineRegular size={16} />}
                 disabled={busy}
                 onClick={() => {
                   setStatus('')
@@ -359,7 +361,7 @@ function LorePanel(props: LorePanelProps): ReactNode {
                 <Button
                   variant="ghost"
                   size="sm"
-                  icon={<IconTrashOutline16 size={16} />}
+                  icon={<IconTrashOutlineRegular size={16} />}
                   aria-label={t('lore.delete')}
                   disabled={busy}
                   onClick={() => remove(skill.name)}

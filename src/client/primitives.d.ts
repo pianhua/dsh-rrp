@@ -128,18 +128,18 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     onConfirm: () => void
   }): ReactElement
 
-  export const IconArchiveOutline20: IconComponent
-  export const IconChevronDownOutline14: IconComponent
-  export const IconCheckOutline16: IconComponent
-  export const IconEditOutline16: IconComponent
-  export const IconLoadingOutline16: IconComponent
-  export const IconPlayOutline16: IconComponent
-  export const IconPlusOutline16: IconComponent
-  export const IconRefreshOutline16: IconComponent
-  export const IconSearchOutline16: IconComponent
-  export const IconSkillOutline16: IconComponent
-  export const IconSparkle16: IconComponent
-  export const IconTrashOutline16: IconComponent
-  export const IconUserOutline16: IconComponent
-  export const IconWarningOutline16: IconComponent
+  export const IconArchiveOutlineMedium: IconComponent
+  export const IconChevronDownOutlineRegular: IconComponent
+  export const IconCheckOutlineRegular: IconComponent
+  export const IconEditOutlineRegular: IconComponent
+  export const IconLoadingOutlineRegular: IconComponent
+  export const IconPlayOutlineRegular: IconComponent
+  export const IconPlusOutlineRegular: IconComponent
+  export const IconRefreshOutlineRegular: IconComponent
+  export const IconSearchOutlineRegular: IconComponent
+  export const IconSkillOutlineRegular: IconComponent
+  export const IconSparkleRegular: IconComponent
+  export const IconTrashOutlineRegular: IconComponent
+  export const IconUserOutlineRegular: IconComponent
+  export const IconWarningOutlineRegular: IconComponent
 }

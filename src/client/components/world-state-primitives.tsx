@@ -3,8 +3,8 @@
  */
 import {
   Button,
-  IconPlusOutline16,
-  IconTrashOutline16,
+  IconPlusOutlineRegular,
+  IconTrashOutlineRegular,
   Input,
   Pill,
   Tooltip,
@@ -403,7 +403,7 @@ export function SectionHead(props: {
       <Button
         variant="ghost"
         size="sm"
-        icon={<IconPlusOutline16 size={16} />}
+        icon={<IconPlusOutlineRegular size={16} />}
         disabled={props.disabled}
         onClick={props.onAdd}
       >
@@ -424,7 +424,7 @@ export function RemoveButton(props: {
       <Button
         variant="ghost"
         size="sm"
-        icon={<IconTrashOutline16 size={16} />}
+        icon={<IconTrashOutlineRegular size={16} />}
         aria-label={props.label}
         disabled={props.disabled}
         onClick={props.onClick}
