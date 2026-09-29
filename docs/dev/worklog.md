@@ -559,3 +559,9 @@
 - 宿主缺陷对账：seeded readSession **已修复**（cuts 缓存保守保留）；storageDomain single-open **未修复**（共享 handle 保留）；header.agentPreset 语义明确为创建时 preset（cards 缓存保留）；窄窗 panellist 切换**已修复**（未回归验证）。
 - **未验证**（所有者指示停止真实消息验证）：LLM 回合与 Chronicler 推演落账、世界状态页签对冷会话空白（疑似 0.1.6 既有边界，非本期回归，待下次复核）。
 - 质量门全绿；分支待所有者拍板后合并。
+
+
+### 宿主升级合并入 main（2026-09-29）
+
+- `feat/host-0.2.0-upgrade`（10 提交）推送并以 `--no-ff` 合并入 main（merge `b11d9ab`），推送后 main 与 origin 同步。合并树质量门复跑全绿。
+- 一次性修复脚本已对真实数据执行完毕（31 日志 / 19 修复 / .bak 保留）；脚本按设计退役，不再常规运行。
