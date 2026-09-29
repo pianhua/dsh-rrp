@@ -142,6 +142,7 @@ describe('dsh-rrp client half', () => {
   it('creates the session inside the card workspace ensured by the host route', async () => {
     const { ctx, bodies } = fakeContext()
     const creates: Array<Record<string, unknown>> = []
+    const selections: Array<[string, string]> = []
     Object.assign(ctx, {
       get: () => undefined,
       sessions: {
@@ -152,7 +153,14 @@ describe('dsh-rrp client half', () => {
         open() {},
         binding: () => ({ session: { async rename() {} } }),
       },
-      remote: { agentPresets: { select: async () => ({ ok: true }) } },
+      remote: {
+        agentPresets: {
+          select: async (sessionId: string, presetId: string) => {
+            selections.push([sessionId, presetId])
+            return { ok: true as const, value: presetId }
+          },
+        },
+      },
       layout: { selectPanel() {} },
     })
     vi.stubGlobal(
@@ -172,6 +180,7 @@ describe('dsh-rrp client half', () => {
     expect(injected.workspaces).toBeUndefined()
     expect((await injected.start?.(CARD))?.ok).toBe(true)
     expect(creates).toEqual([{ workspaceId: 'ws-1' }])
+    expect(selections).toEqual([['session-1', 'rp-demo-card']])
   })
 
   it('keeps gallery start available when the workspace ensure fails (degraded fallback)', async () => {
@@ -187,7 +196,7 @@ describe('dsh-rrp client half', () => {
         open() {},
         binding: () => ({ session: { async rename() {} } }),
       },
-      remote: { agentPresets: { select: async () => ({ ok: true }) } },
+      remote: { agentPresets: { select: async () => ({ ok: true, value: 'rp-demo-card' }) } },
       layout: { selectPanel() {} },
     })
     vi.stubGlobal(
@@ -222,7 +231,7 @@ describe('dsh-rrp client half', () => {
         open() {},
         binding: () => ({ session: { async rename() {} } }),
       },
-      remote: { agentPresets: { select: async () => ({ ok: true }) } },
+      remote: { agentPresets: { select: async () => ({ ok: true, value: 'rp-demo-card' }) } },
       layout: { selectPanel() {} },
     })
     vi.stubGlobal(

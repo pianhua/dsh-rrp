@@ -1,7 +1,7 @@
 /**
  * dsh-rrp — host half.
  *
- * The host half materializes the RP preset family, registers the eight pure
+ * The host half registers the RP preset family, registers the eight pure
  * Session projections, and wires the DSH-native routes/jobs/agent scopes used
  * by the card, WorldState, summary, and lore flows.
  *
@@ -26,7 +26,13 @@ import { registerLoreRuntime } from './lore-runtime.ts'
 import { registerChronicler, forgetAllInference, forgetInference } from './chronicler.ts'
 import { registerCorrectionRoute } from './correction.ts'
 import { registerWorldStateTimelineRoute } from './world-state-timeline-route.ts'
-import { PRESET_ID, cleanupPreset, materializePreset } from './preset.ts'
+import {
+  PRESET_ID,
+  activatePresetFamily,
+  cleanupLegacyPresetCopies,
+  cleanupPreset,
+  type AgentPresetsRegistry,
+} from './preset.ts'
 import { presetIdForCard } from './preset-id.ts'
 import { cardProjection } from './projection/card.ts'
 import { summaryProjection } from './projection/summary.ts'
@@ -61,7 +67,7 @@ interface AgentPresetRow {
   name?: string
   broken?: string
 }
-interface AgentPresetsService {
+interface AgentPresetsService extends AgentPresetsRegistry {
   resolve(id?: string): Promise<AgentPresetRow>
   standingKeyFor(id?: string): Promise<unknown>
 }
@@ -88,19 +94,8 @@ interface SessionProjectionsService {
 
 /** Plugin body. Every registration is a reversible effect. */
 export function apply(ctx: Context): void {
-  const outcome = materializePreset()
-  if (outcome.action === 'left-user') {
-    console.warn(`${TAG} RP preset at ${outcome.dir} was edited or is foreign; left untouched`)
-  } else {
-    console.log(`${TAG} RP preset ${outcome.action} at ${outcome.dir}`)
-  }
-
-  ctx.effect(() => {
-    return () => {
-      const result = cleanupPreset()
-      if (result !== 'absent') console.log(`${TAG} RP preset cleanup: ${result}`)
-    }
-  }, 'dsh-rrp: RP preset ownership')
+  const legacy = cleanupLegacyPresetCopies()
+  if (legacy !== 'absent') console.log(`${TAG} legacy RP preset cleanup: ${legacy}`)
 
   // Optional capability: `ctx.inject` defers registration until the registry
   // exists and ties the registration to this plugin's lifetime.
@@ -136,9 +131,22 @@ export function apply(ctx: Context): void {
     }
   }, 'dsh-rrp: projection registrations')
 
-  // Roster probe: deferred until agent-presets activates, disposed with this fiber.
+  // Register the RP family only after the host registry activates. Card routes
+  // call ensureCardPreset through the active family when packs appear later.
   ctx.inject(['agentPresets'], (scoped: Context) => {
-    void verifyPreset(scoped)
+    const readable = scoped as unknown as { get(name: string): unknown }
+    const registry = readable.get('agentPresets') as AgentPresetsService | undefined
+    if (registry === undefined) return
+    const family = activatePresetFamily(registry)
+    void family.ready.then(() => verifyPreset(scoped))
+    scoped.effect(
+      () => () => {
+        void cleanupPreset(family).then((result) => {
+          if (result !== 'absent') console.log(`${TAG} RP preset cleanup: ${result}`)
+        })
+      },
+      'dsh-rrp: RP preset registrations',
+    )
   })
 
   // Chronicler: armed only when every host seam it needs is present.
@@ -346,6 +354,12 @@ async function verifyPreset(ctx: Context): Promise<void> {
   try {
     const readable = ctx as unknown as { get(name: string): unknown }
     const presets = readable.get('agentPresets') as AgentPresetsService
+    const roster = await presets.list()
+    const rosterIds = new Set(roster.map((row) => row.id))
+    if (!rosterIds.has(PRESET_ID)) {
+      console.warn(`${TAG} RP mode '${PRESET_ID}' is missing from the agent preset roster`)
+      return
+    }
     const preset = await presets.resolve(PRESET_ID)
     if (preset.broken !== undefined) {
       console.warn(`${TAG} RP mode '${PRESET_ID}' is broken: ${preset.broken}`)
@@ -363,6 +377,12 @@ async function verifyPreset(ctx: Context): Promise<void> {
       console.log(`${TAG} RP skills visible (${base.length}): ${skillNames(base)}`)
       for (const meta of listCards()) {
         const cardPresetId = presetIdForCard(meta.id)
+        if (!rosterIds.has(cardPresetId)) {
+          console.warn(
+            `${TAG} card preset '${cardPresetId}' is missing from the agent preset roster`,
+          )
+          continue
+        }
         try {
           const cardPreset = await presets.resolve(cardPresetId)
           if (cardPreset.broken !== undefined) {

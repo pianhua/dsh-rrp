@@ -200,12 +200,7 @@ describe('writeImportedCard (issue #31 P1-D)', () => {
     expect(pack?.dir).toBe(join(home, '.dsh-rrp', 'cards', first!.id))
     expect(pack?.meta.name).toBe('Mia the Maid')
     expect(pack?.meta.tags).toEqual(['女仆', '大小姐'])
-    const presetDir = join(home, '.agent-presets', 'rp-mia-the-maid')
-    expect(existsSync(join(presetDir, 'agent.cordis.yml'))).toBe(true)
-    expect(readFileSync(join(presetDir, 'agent.cordis.yml'), 'utf8')).not.toContain(
-      '__DSH_RRP_SKILL_DIR__',
-    )
-    expect(existsSync(join(presetDir, '.dsh-rrp.json'))).toBe(true)
+    expect(existsSync(join(home, '.agent-presets', 'rp-mia-the-maid'))).toBe(false)
     expect(pack?.persona).toContain('倔强、细心')
     expect(pack?.worldCore).toContain('落难贵族之女')
     expect(pack?.openings).toHaveLength(1)

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -15,12 +15,9 @@ import { listProposals, stageProposal } from '../src/steward-proposals.ts'
 import { publishState } from '../src/state-publisher.ts'
 import { emptyWorldState } from '../src/world-state.ts'
 import * as rrp from '../src/index.ts'
+import { registerPresetFamily } from '../src/preset.ts'
 
-/**
- * The mandatory HMR-safety check: mounting then disposing the fiber must leave
- * no residue behind. Stage 2 adds file materialization, so the test points
- * DSH_HOME at a throwaway directory and asserts the preset is cleaned up.
- */
+/** The mandatory HMR-safety check: every registry contribution disposes cleanly. */
 describe('dsh-rrp host half', () => {
   let home: string
   let previousHome: string | undefined
@@ -289,32 +286,42 @@ describe('dsh-rrp host half', () => {
     writeCard('alpha', 'alpha-lore')
     writeCard('beta', 'beta-lore')
 
-    const ctx = new Context()
-    const fiber = await ctx.plugin(rrp)
+    const definitions = new Map<string, { id: string; plugins: readonly unknown[] }>()
+    const family = registerPresetFamily(
+      {
+        register(definition) {
+          definitions.set(definition.id, definition)
+          return Promise.resolve(async () => {
+            definitions.delete(definition.id)
+          })
+        },
+      },
+      home,
+    )
     try {
-      const alphaDir = join(home, '.agent-presets', 'rp-alpha')
-      const betaDir = join(home, '.agent-presets', 'rp-beta')
+      await family.ready
+      const alpha = definitions.get('rp-alpha')
+      const beta = definitions.get('rp-beta')
+      const base = definitions.get('rp')
+      expect(alpha).toBeDefined()
+      expect(beta).toBeDefined()
+      expect(base).toBeDefined()
 
-      // Each card preset points at its own skills root...
-      expect(readFileSync(join(alphaDir, 'agent.cordis.yml'), 'utf8')).toContain(
-        join(alphaDir, 'skills'),
-      )
-      expect(readFileSync(join(betaDir, 'agent.cordis.yml'), 'utf8')).toContain(
-        join(betaDir, 'skills'),
-      )
-
-      // ...holds only its own bundle...
-      expect(existsSync(join(alphaDir, 'skills', 'alpha-lore', 'SKILL.md'))).toBe(true)
-      expect(existsSync(join(alphaDir, 'skills', 'beta-lore', 'SKILL.md'))).toBe(false)
-      expect(existsSync(join(betaDir, 'skills', 'beta-lore', 'SKILL.md'))).toBe(true)
-      expect(existsSync(join(betaDir, 'skills', 'alpha-lore', 'SKILL.md'))).toBe(false)
-
-      // ...and the base RP preset carries neither card's lore.
-      const baseDir = join(home, '.agent-presets', 'rp')
-      expect(existsSync(join(baseDir, 'skills', 'alpha-lore'))).toBe(false)
-      expect(existsSync(join(baseDir, 'skills', 'beta-lore'))).toBe(false)
+      const skillRoot = (definition: { plugins: readonly unknown[] }): Record<string, unknown> => {
+        const filesystem = definition.plugins.find(
+          (row) => (row as { id?: string }).id === 'skill-filesystem',
+        ) as { config?: Record<string, unknown> }
+        return filesystem.config ?? {}
+      }
+      expect(skillRoot(alpha!).customSkillDirs).toEqual([
+        join(home, '.dsh-rrp', 'cards', 'alpha', 'skills'),
+      ])
+      expect(skillRoot(beta!).customSkillDirs).toEqual([
+        join(home, '.dsh-rrp', 'cards', 'beta', 'skills'),
+      ])
+      expect(skillRoot(base!).customSkillDirs).toBeUndefined()
     } finally {
-      await fiber.dispose()
+      await family.dispose()
     }
   })
 })
