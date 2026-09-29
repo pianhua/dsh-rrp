@@ -548,3 +548,14 @@
 - 所有者真机观感拍板通过 → `feat/gallery-v2`（3 提交）推送并以 `--no-ff` 合并入 main（merge `04864dc`），推送后 main 与 origin 同步。合并树质量门复跑全绿（format/typecheck/lint/Vitest 482/build/git diff --check）。
 - `.scratch/gallery-v2/` 规格与票据保持未跟踪（仓库惯例）；DEF-02 报告与截图在本地归档 `dsh-rrp-test-report/`（不入库）。
 - 遗留挂账：#25 / P1-B 的 GitHub issue 可由所有者决定是否关闭并标注「被 D26 取代」；窄窗宿主边界记 HOST_SEAMS 候选待升级宿主时复核。
+
+
+### 宿主升级 0.1.6-alpha.2 → 0.2.0-rc.1 适配（2026-09-29，feat/host-0.2.0-upgrade）
+
+- 三路源码审计（服务端接缝/客户端接缝/已知缺陷复核）后实施五必修项：M1 source 寄生面 V4 迁移（写 `{kind:'rrp'}`，读三形态兼容，历史 V3 迁移产物 `{kind:'plugin:dsh-rrp'}` 可读）；M2 jobs API 重写（owner: SessionId、run(JobHandle)）；M3 preset 机制重写（`.agent-presets` 目录扫描已被宿主删除，改运行时 `ctx.agentPresets.register` 注册 rp 家族 + 串行队列动态增删 + 遗留目录一次性清理）；M4 客户端 Icon 改名 Regular/Medium（9 文件含 primitives.d.ts 与 stub）；M5 fork OPEN_TURN 删除适配（折叠器 message 驱动不受影响 + 2 回归测试）。
+- 真机验收连环暴露四层 V4 校验缺口（写时 turn 序号从 1 递增、迁移期 turn/step 匹配、seeded 头与 end-seed 一致、surface 首事件必须 system 受保护头），逐一修复：`start.ts` 开局先写头回合 turn1（system 头经 `@deepseek-ai/dsh-system-prompt` 归属）+ 开场白 turn2 + 降级闭回合；新增一次性 `scripts/repair-v3-openings.mjs`（dry-run/--apply/.bak；31 个 V3 日志修复 19 个：开场包回合 + turn 重编号 + seed 头对齐 + surface 头插入；12 个纯宿主日志本就合规）。
+- 修复预设探测（0.2.0 registry 无 standingKeyFor，改 list+resolve 组合健康探测）。
+- 真机结论（内置浏览器 + host-runner 0.2.0-rc.1）：宿主零报错挂载全部路由与 7 投影；`RP mode 'rp' composed and ready`；**全部 19 个受损历史会话恢复可加载**（主线正文渲染、fork 子线冷读正文、世界线树标题折叠正确、卡归属投影正常）；新开局 V4 原生写入成功（opening=assistant、侧栏「N 个后台任务」= M2 生效）。验收会话「雪夜雁门客栈·主线」保留。
+- 宿主缺陷对账：seeded readSession **已修复**（cuts 缓存保守保留）；storageDomain single-open **未修复**（共享 handle 保留）；header.agentPreset 语义明确为创建时 preset（cards 缓存保留）；窄窗 panellist 切换**已修复**（未回归验证）。
+- **未验证**（所有者指示停止真实消息验证）：LLM 回合与 Chronicler 推演落账、世界状态页签对冷会话空白（疑似 0.1.6 既有边界，非本期回归，待下次复核）。
+- 质量门全绿；分支待所有者拍板后合并。

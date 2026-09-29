@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { latestTurnTranscriptOf, transcriptOf } from '../src/transcript-reader.ts'
+import {
+  latestTurnTranscriptOf,
+  pendingTranscriptOf,
+  transcriptOf,
+} from '../src/transcript-reader.ts'
 import { renderTriggerBlock } from '../src/lore-condition.ts'
 import { rrpStateMessage } from '../src/state-payload.ts'
 import { emptyWorldState, renderWorldState } from '../src/world-state.ts'
@@ -138,5 +142,39 @@ describe('Chronicler transcript selection', () => {
     ])
     const slice = projections.stateOf(SESSION, 'rrpTranscript') as { lastStateSeq: number }
     expect(slice.lastStateSeq).toBe(-1)
+  })
+
+  it('ignores fork synthetic closers between inherited and local prose', () => {
+    const projections = fakeProjections([
+      { type: 'user/message', data: text('父线行动') },
+      { type: 'assistant/message', data: text('父线叙述') },
+      {
+        type: 'user/message',
+        data: rrpStateMessage('fold', '', {
+          worldState: emptyWorldState(),
+          stateFoldSeq: 1,
+        }),
+      },
+      { type: 'session/end-seed', data: { inherited: true } },
+      { type: 'turn/end', data: { reason: { kind: 'forked' } } },
+      { type: 'user/message', data: text('子线行动') },
+      { type: 'assistant/message', data: text('子线叙述') },
+    ])
+
+    const slice = projections.stateOf(SESSION, 'rrpTranscript') as {
+      entries: Array<{ seq: number; role: string; text: string }>
+    }
+    expect(slice.entries).toEqual([
+      { seq: 0, role: 'user', text: '父线行动' },
+      { seq: 1, role: 'assistant', text: '父线叙述' },
+      { seq: 5, role: 'user', text: '子线行动' },
+      { seq: 6, role: 'assistant', text: '子线叙述' },
+    ])
+    expect(latestTurnTranscriptOf(projections, SESSION)).toBe(
+      '【玩家】\n子线行动\n\n【叙述】\n子线叙述',
+    )
+    expect(pendingTranscriptOf(projections, SESSION, 6)).toBe(
+      '【玩家】\n子线行动\n\n【叙述】\n子线叙述',
+    )
   })
 })

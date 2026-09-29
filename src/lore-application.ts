@@ -75,13 +75,12 @@ export function scheduleLoreDraft(
     target: 'lore',
     phase: 'started',
   })
-  const owner = faces.agents.get(session.id)
   try {
     faces.jobs.start({
       kind: 'scribe',
       label: '知识起草 Scribe · ' + session.id.slice(0, 8),
-      ...(owner === undefined ? {} : { owner }),
-      run: () => {
+      owner: session.id,
+      run: (_job) => {
         const controller = new AbortController()
         let cancelled = false
         const done = runDraft(
@@ -154,7 +153,7 @@ async function runDraft(
               text: buildScribePrompt({ topic, transcript, worldState, cardBaseline, existing }),
             },
           ],
-          source: { kind: 'plugin', plugin: 'dsh-rrp' },
+          source: { kind: 'rrp' },
         },
       ],
       sessionId: session.id,

@@ -1,89 +1,220 @@
 /**
- * dsh-rrp — the RP mode presets (materialization + ownership).
+ * dsh-rrp — the RP mode presets.
  *
- * A DSH "mode" is an agent preset: a directory holding `agent.cordis.yml` that
- * the agent-presets roster mounts once per process and every session naming it
- * joins. We ship the base mode inside this package (`presets/rp/`) and
- * materialize it into the harness-home user preset root
- * (`<dshHome>/.agent-presets/<id>/`), which `@deepseek-ai/dsh-agent-presets`
- * scans by default.
- *
- * Card skills are SCOPED BY PRESET: the base `rp` preset carries no card lore,
- * and each card gets a derived `rp-<card-id>` preset whose own `skills/` root
- * holds only that card's bundles (see ./preset-id.ts). Mounting every card into
- * one shared root would leak one card's world knowledge into every session.
- * The base skills/ root DOES carry the steward bundles (issue #33: the Copilot's
- * project-maintenance knowledge — engine overview, card spec, decision red
- * lines); they ship in presets/rp/skills/ and are therefore inherited by every
- * card preset too (the card preset is a superset of the base source).
- * The composition carries a `bundledSkillDir` placeholder that materialization
- * replaces with the copy's absolute `skills/` path.
- *
- * Ownership: a marker records the hash of every file we wrote. We refresh only
- * our own unmodified copy; a user-edited preset is never overwritten, and
- * dispose removes directories only while they are still our unmodified copy —
- * and only on uninstall, never on a reload/restart.
+ * DSH 0.2 registers agent presets directly with the host registry. The base RP
+ * composition uses the package's bundled skills, while each card preset adds
+ * that card's skills as a separate filesystem root so card knowledge stays
+ * scoped without copying files into the host preset directory.
  */
 import { createHash } from 'node:crypto'
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { listCards, mountSkillsForCard } from './cards.ts'
+import { parse as parseYaml } from 'yaml'
+import { listCards, readCard } from './cards.ts'
 import { AUTHOR_SYSTEM_PROMPT } from './agents/author.ts'
 import { harnessHome } from './home.ts'
 import { BASE_PRESET_ID, belongsToRpPreset, isCardId, presetIdForCard } from './preset-id.ts'
 
-/** Base preset id, also the directory name; must satisfy the roster's PRESET_ID. */
+/** Base preset id, also the default mode for cardless sessions. */
 export const PRESET_ID = BASE_PRESET_ID
 
-/** Ownership marker written beside the materialized copy. */
 const MARKER_FILE = '.dsh-rrp.json'
 const MANAGED_BY = 'dsh-rrp'
-
-/** Composition file, and the tokens replaced at materialization time. */
-const COMPOSITION_FILE = 'agent.cordis.yml'
-const SKILL_DIR_TOKEN = '__DSH_RRP_SKILL_DIR__'
-/** Author system prompt placeholder — single source: src/agents/author.ts (issue #32). */
-const AUTHOR_PROMPT_TOKEN = '__DSH_RRP_AUTHOR_PROMPT__'
-/** Block-scalar indent of `prefix:` inside the composition (two past `config:`). */
-const AUTHOR_PROMPT_INDENT = '      '
-
-/** Render the Author prompt as a YAML block-scalar body.
- * The token's own line already carries the 6-space indent in the template, so
- * only continuation lines (index > 0) are indented; blank lines stay bare. */
-function authorPromptBlock(): string {
-  return AUTHOR_SYSTEM_PROMPT.split('\n')
-    .map((line, index) => (index > 0 && line.length > 0 ? AUTHOR_PROMPT_INDENT + line : line))
-    .join('\n')
-}
-
-/** The shipped preset source (resolved against the bundled lib/index.js). */
 const SOURCE_DIR = fileURLToPath(new URL('../presets/rp/', import.meta.url))
+const COMPOSITION_FILE = join(SOURCE_DIR, 'agent.cordis.yml')
+const SKILL_DIR_TOKEN = '__DSH_RRP_SKILL_DIR__'
+const AUTHOR_PROMPT_TOKEN = '__DSH_RRP_AUTHOR_PROMPT__'
+const BUNDLED_SKILLS_DIR = join(SOURCE_DIR, 'skills')
 
-/** This package's own manifest, used to tell a reload from an uninstall. */
-const PACKAGE_MANIFEST = fileURLToPath(new URL('../package.json', import.meta.url))
-
-/** The user preset directory for one preset id. */
-export function presetDir(home: string = harnessHome(), id: string = PRESET_ID): string {
-  return join(home, '.agent-presets', id)
+/** A Cordis plugin row accepted by the host preset registry. */
+export interface PresetPluginRow {
+  readonly id?: string
+  readonly name: string
+  readonly config?: Record<string, unknown>
+  readonly disabled?: unknown
 }
 
-/** Outcome of one materialization pass. */
-export interface MaterializeOutcome {
-  /** Absolute preset directory. */
-  dir: string
-  /** `created` on first write, `refreshed` on our own copy, `left-user` when foreign/edited. */
-  action: 'created' | 'refreshed' | 'left-user'
-  /** Per-card preset outcomes when the base was materialized as a family. */
-  cards?: MaterializeOutcome[]
+/** The part of the host registry used by this plugin. */
+export interface AgentPresetsRegistry {
+  register(definition: PresetDefinition): Promise<() => Promise<void>>
+  list(): Promise<readonly { id: string; broken?: string }[]>
+  resolve(id?: string): Promise<{ id: string; name?: string; broken?: string }>
+  standingKeyFor(id?: string): Promise<unknown>
+}
+
+/** Registration-only face used by the dynamic family controller. */
+type PresetRegistryRegistration = Pick<AgentPresetsRegistry, 'register'>
+
+/** Runtime definition submitted to `ctx.agentPresets.register`. */
+export interface PresetDefinition {
+  readonly id: string
+  readonly name?: string
+  readonly description?: string
+  readonly order?: number
+  readonly plugins: readonly PresetPluginRow[]
+}
+
+/** Outcome of one legacy preset-directory cleanup pass. */
+export type LegacyCleanupOutcome = 'removed' | 'left-user' | 'absent'
+
+/** Runtime family registration and its dynamic card-preset operations. */
+export interface PresetFamilyRegistration {
+  readonly ready: Promise<void>
+  ensureCardPreset(cardId: string): Promise<'created' | 'exists' | 'left-user' | undefined>
+  dispose(): Promise<void>
+}
+
+/** Build the RP composition for the base preset or one card. */
+export function presetDefinitionForCard(
+  cardId?: string,
+  home: string = harnessHome(),
+): PresetDefinition {
+  const card = cardId === undefined ? undefined : readCard(cardId, home)
+  const cardSkills = card === undefined ? undefined : join(card.dir, 'skills')
+  const parsed = parseYaml(readFileSync(COMPOSITION_FILE, 'utf8')) as unknown
+  if (!Array.isArray(parsed))
+    throw new Error(`dsh-rrp: invalid RP composition at ${COMPOSITION_FILE}`)
+
+  const plugins = parsed.map((row): PresetPluginRow => {
+    if (typeof row !== 'object' || row === null || Array.isArray(row)) {
+      throw new Error(`dsh-rrp: invalid RP plugin row in ${COMPOSITION_FILE}`)
+    }
+    const source = row as {
+      id?: string
+      name?: string
+      config?: Record<string, unknown>
+      disabled?: unknown
+    }
+    if (typeof source.name !== 'string' || source.name.length === 0) {
+      throw new Error(`dsh-rrp: RP plugin row has no name in ${COMPOSITION_FILE}`)
+    }
+    const config = source.config === undefined ? undefined : { ...source.config }
+    if (config !== undefined) {
+      if (config.bundledSkillDir === SKILL_DIR_TOKEN) config.bundledSkillDir = BUNDLED_SKILLS_DIR
+      if (config.prefix === AUTHOR_PROMPT_TOKEN) config.prefix = AUTHOR_SYSTEM_PROMPT
+      if (source.id === 'skill-filesystem' && cardSkills !== undefined && existsSync(cardSkills)) {
+        config.customSkillDirs = [cardSkills]
+      }
+    }
+    return {
+      ...(source.id === undefined ? {} : { id: source.id }),
+      name: source.name,
+      ...(config === undefined ? {} : { config }),
+      ...(source.disabled === undefined ? {} : { disabled: source.disabled }),
+    }
+  })
+
+  return {
+    id: cardId === undefined ? PRESET_ID : presetIdForCard(cardId),
+    name: cardId === undefined ? 'DSH-Chronicle RP' : card?.meta.name,
+    plugins,
+  }
+}
+
+/** Serialize family mutations so late card imports cannot race selection. */
+class PresetFamily implements PresetFamilyRegistration {
+  readonly ready: Promise<void>
+  private readonly disposers = new Map<string, () => Promise<void>>()
+  private queue: Promise<void> = Promise.resolve()
+  private disposed = false
+
+  constructor(
+    private readonly registry: PresetRegistryRegistration,
+    private readonly home: string,
+  ) {
+    this.ready = this.enqueue(async () => {
+      await this.register(presetDefinitionForCard(undefined, this.home))
+      await this.syncCards()
+    })
+  }
+
+  ensureCardPreset(cardId: string): Promise<'created' | 'exists' | 'left-user' | undefined> {
+    if (!isCardId(cardId)) return Promise.resolve(undefined)
+    return this.enqueue(async () => {
+      if (this.disposed) return undefined
+      const id = presetIdForCard(cardId)
+      const existed = this.disposers.has(id)
+      await this.syncCards()
+      return this.disposers.has(id) ? (existed ? 'exists' : 'created') : undefined
+    })
+  }
+
+  dispose(): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.disposed) return
+      this.disposed = true
+      const entries = [...this.disposers.entries()].reverse()
+      this.disposers.clear()
+      for (const [, dispose] of entries) await dispose()
+    })
+  }
+
+  private enqueue<Value>(operation: () => Promise<Value>): Promise<Value> {
+    const result = this.queue.then(operation)
+    this.queue = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return result
+  }
+
+  private async register(definition: PresetDefinition): Promise<'created' | 'exists'> {
+    if (this.disposers.has(definition.id)) return 'exists'
+    const dispose = await this.registry.register(definition)
+    this.disposers.set(definition.id, dispose)
+    return 'created'
+  }
+
+  private async syncCards(): Promise<void> {
+    const visible = new Set(listCards(this.home).map((meta) => presetIdForCard(meta.id)))
+    for (const [id, dispose] of [...this.disposers]) {
+      if (id === PRESET_ID || visible.has(id)) continue
+      this.disposers.delete(id)
+      await dispose()
+    }
+    for (const meta of listCards(this.home)) {
+      await this.register(presetDefinitionForCard(meta.id, this.home))
+    }
+  }
+}
+
+/** Register the base and currently visible card presets with the host registry. */
+export function registerPresetFamily(
+  registry: PresetRegistryRegistration,
+  home: string = harnessHome(),
+): PresetFamilyRegistration {
+  return new PresetFamily(registry, home)
+}
+
+let activeFamily: PresetFamilyRegistration | undefined
+
+/** Install the family used by card routes and imports for late card changes. */
+export function activatePresetFamily(
+  registry: PresetRegistryRegistration,
+  home: string = harnessHome(),
+): PresetFamilyRegistration {
+  activeFamily = registerPresetFamily(registry, home)
+  return activeFamily
+}
+
+/** Register a card preset after a card was imported or discovered. */
+export function ensureCardPreset(
+  cardId: string,
+  _home?: string,
+): Promise<'created' | 'exists' | 'left-user' | undefined> {
+  return activeFamily?.ensureCardPreset(cardId) ?? Promise.resolve(undefined)
+}
+
+/** Dispose one host registration family, defaulting to the active family. */
+export async function cleanupPreset(
+  target?: PresetFamilyRegistration,
+): Promise<'disposed' | 'absent'> {
+  const family = target ?? activeFamily
+  if (family === undefined) return 'absent'
+  if (activeFamily === family) activeFamily = undefined
+  await family.dispose()
+  return 'disposed'
 }
 
 /** Every file under `root` as sorted POSIX relative paths. */
@@ -91,7 +222,13 @@ function walkFiles(root: string): string[] {
   const out: string[] = []
   const visit = (base: string): void => {
     const abs = base === '' ? root : join(root, base)
-    for (const entry of readdirSync(abs, { withFileTypes: true })) {
+    let entries
+    try {
+      entries = readdirSync(abs, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
       const rel = base === '' ? entry.name : `${base}/${entry.name}`
       if (entry.isDirectory()) visit(rel)
       else if (entry.isFile()) out.push(rel)
@@ -101,164 +238,77 @@ function walkFiles(root: string): string[] {
   return out.sort()
 }
 
-/** Content hashes of every managed file (the marker itself excluded). */
+/** Content hashes recorded by the old materializer, excluding its marker. */
 function contentHashes(dir: string): Record<string, string> {
   const out: Record<string, string> = {}
-  if (!existsSync(dir)) return out
   for (const rel of walkFiles(dir)) {
     if (rel === MARKER_FILE) continue
-    out[rel] = createHash('sha256')
-      .update(readFileSync(join(dir, rel)))
-      .digest('hex')
+    try {
+      out[rel] = createHash('sha256')
+        .update(readFileSync(join(dir, rel)))
+        .digest('hex')
+    } catch {
+      return {}
+    }
   }
   return out
 }
 
-/** Parse our ownership marker, or undefined when absent/foreign. */
-function readMarker(dir: string): { files?: Record<string, string> } | undefined {
+/** Parse a legacy dsh-rrp marker, or undefined when it is absent/foreign. */
+function readMarker(dir: string): { files: Record<string, string> } | undefined {
   try {
     const parsed = JSON.parse(readFileSync(join(dir, MARKER_FILE), 'utf8')) as {
       managedBy?: string
       files?: Record<string, string>
     }
-    if (parsed.managedBy === MANAGED_BY && parsed.files !== undefined) return parsed
+    if (parsed.managedBy === MANAGED_BY && parsed.files !== undefined)
+      return { files: parsed.files }
   } catch {
-    /* absent or unreadable → not ours */
+    return undefined
   }
   return undefined
 }
 
-/** Whether `dir` is our materialization and still byte-identical to it. */
-function isOursUnmodified(dir: string): boolean {
+/** Whether a legacy copy is still byte-identical to the plugin's materialization. */
+function isLegacyCopyUnmodified(dir: string): boolean {
   const marker = readMarker(dir)
   if (marker === undefined) return false
-  const recorded = marker.files ?? {}
   const current = contentHashes(dir)
-  const keys = Object.keys(recorded)
-  if (keys.length !== Object.keys(current).length) return false
-  return keys.every((key) => current[key] === recorded[key])
+  const keys = Object.keys(marker.files)
+  return (
+    keys.length === Object.keys(current).length &&
+    keys.every((key) => current[key] === marker.files[key])
+  )
 }
 
-/**
- * Materialize (or refresh) ONE preset directory, templating the composition
- * with the copy's own skills path and, for a card preset, mounting only that
- * card's world-knowledge bundles.
- */
-function materializeOne(
-  dir: string,
-  cardId: string | undefined,
-  home: string | undefined,
-): MaterializeOutcome {
-  const sourceComposition = join(SOURCE_DIR, COMPOSITION_FILE)
-  if (!existsSync(sourceComposition)) {
-    throw new Error(`dsh-rrp: shipped RP preset missing at ${SOURCE_DIR} — rebuild before linking`)
-  }
-
-  const existed = existsSync(dir)
-  if (existed && !isOursUnmodified(dir)) return { dir, action: 'left-user' }
-
-  rmSync(dir, { recursive: true, force: true })
-  mkdirSync(dir, { recursive: true })
-  cpSync(SOURCE_DIR, dir, { recursive: true, force: true })
-  if (cardId !== undefined) mountSkillsForCard(dir, cardId, home)
-
-  const templated = readFileSync(sourceComposition, 'utf8')
-    .replaceAll(SKILL_DIR_TOKEN, join(dir, 'skills'))
-    .replace(AUTHOR_PROMPT_TOKEN, authorPromptBlock())
-  writeFileSync(join(dir, COMPOSITION_FILE), templated)
-
-  const marker = { managedBy: MANAGED_BY, files: contentHashes(dir) }
-  writeFileSync(join(dir, MARKER_FILE), JSON.stringify(marker, null, 2) + '\n')
-  return { dir, action: existed ? 'refreshed' : 'created' }
-}
-
-/**
- * Materialize one card's preset when it is missing — a card dropped into
- * `cards/` after the plugin booted has no `rp-<card-id>` preset yet, and the
- * gallery's start flow (`agentPresets.select`) needs it to exist. Called from
- * the read-only cards route so discovery of a new card makes it startable
- * without a plugin reload. Existing presets are left untouched (user edits
- * win; stale own-copies refresh at the next boot).
- * @param cardId - the card's canonical id.
- * @param home - harness home override; defaults to DSH_HOME or ~/.dsh.
- * @returns the materialization action (`exists` when already materialized),
- *   or undefined for an illegal id.
- */
-export function ensureCardPreset(
-  cardId: string,
-  home?: string,
-): MaterializeOutcome['action'] | 'exists' | undefined {
-  if (!isCardId(cardId)) return undefined
-  const dir = presetDir(home, presetIdForCard(cardId))
-  if (existsSync(dir)) {
-    return isOursUnmodified(dir) ? 'exists' : 'left-user'
-  }
-  return materializeOne(dir, cardId, home).action
-}
-
-/**
- * Materialize the base RP preset plus one scoped preset per visible card.
- * @param home - harness home override; defaults to DSH_HOME or ~/.dsh.
- * @returns the base outcome (with each card preset outcome in `cards`).
- * @throws when the shipped source is missing (a build/package error).
- */
-export function materializePreset(home?: string): MaterializeOutcome {
-  const base = materializeOne(presetDir(home), undefined, home)
-  const cards: MaterializeOutcome[] = []
-  for (const meta of listCards(home)) {
-    cards.push(materializeOne(presetDir(home, presetIdForCard(meta.id)), meta.id, home))
-  }
-  return { ...base, cards }
-}
-
-/**
- * Dispose-time cleanup, mirroring the community preset-materializer pattern:
- * a session records the preset id it was composed from, so presets must keep
- * resolving across a reload, restart, or update. Only a vanished package
- * (an uninstall) removes our unmodified copies.
- * @param home - harness home override; defaults to DSH_HOME or ~/.dsh.
- * @returns `kept-installed`, `removed`, `left-user`, or `absent`.
- */
-export function cleanupPreset(
-  home?: string,
-): 'kept-installed' | 'removed' | 'left-user' | 'absent' {
-  if (existsSync(PACKAGE_MANIFEST)) return 'kept-installed'
-  return removeAllPresets(home)
-}
-
-/**
- * Remove the base materialization, unless the user edited or replaced it.
- * @param home - harness home override; defaults to DSH_HOME or ~/.dsh.
- * @returns `removed`, `left-user`, or `absent`.
- */
-export function removePreset(home?: string): 'removed' | 'left-user' | 'absent' {
-  const dir = presetDir(home)
-  if (!existsSync(dir)) return 'absent'
-  if (!isOursUnmodified(dir)) return 'left-user'
-  rmSync(dir, { recursive: true, force: true })
-  return 'removed'
-}
-
-/**
- * Remove every unmodified RP-family preset (base + card presets).
- * @param home - harness home override; defaults to DSH_HOME or ~/.dsh.
- * @returns `removed` when any were removed, `left-user` when one was edited, else `absent`.
- */
-export function removeAllPresets(home?: string): 'removed' | 'left-user' | 'absent' {
-  const root = join(home ?? harnessHome(), '.agent-presets')
+/** Remove unmodified RP-family directories left by pre-0.2.0 releases. */
+export function cleanupLegacyPresetCopies(home: string = harnessHome()): LegacyCleanupOutcome {
+  const root = join(home, '.agent-presets')
   if (!existsSync(root)) return 'absent'
-  let sawAny = false
+  let sawFamily = false
+  let removed = false
   let leftUser = false
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
+  let entries
+  try {
+    entries = readdirSync(root, { withFileTypes: true })
+  } catch {
+    return 'absent'
+  }
+  for (const entry of entries) {
     if (!entry.isDirectory() || !belongsToRpPreset(entry.name)) continue
-    sawAny = true
+    sawFamily = true
     const dir = join(root, entry.name)
-    if (!isOursUnmodified(dir)) {
+    if (!isLegacyCopyUnmodified(dir)) {
       leftUser = true
       continue
     }
-    rmSync(dir, { recursive: true, force: true })
+    try {
+      rmSync(dir, { recursive: true, force: true })
+      removed = true
+    } catch {
+      leftUser = true
+    }
   }
-  if (!sawAny) return 'absent'
-  return leftUser ? 'left-user' : 'removed'
+  if (leftUser) return 'left-user'
+  return sawFamily && removed ? 'removed' : sawFamily ? 'left-user' : 'absent'
 }

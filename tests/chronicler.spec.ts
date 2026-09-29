@@ -6,6 +6,12 @@ import { forgetState } from '../src/state-publisher.ts'
 import { emptyWorldState, type WorldState } from '../src/world-state.ts'
 import { transcriptProjections } from './stubs/transcript-projections.ts'
 
+type JobHandle = {
+  readonly id: string
+  append(text: string, options?: { channel?: string; gapBefore?: true }): void
+  updateProgress(line: string): void
+}
+
 const PRIOR: WorldState = {
   ...emptyWorldState(),
   trackedObjects: {
@@ -205,7 +211,8 @@ function fakeHost(
   let started:
     | {
         kind: string
-        run(): { cancel(reason?: string): void; done: Promise<{ status: string }> }
+        owner?: string
+        run(job: JobHandle): { cancel(reason?: string): void; done: Promise<{ status: string }> }
       }
     | undefined
 
@@ -276,9 +283,12 @@ describe('Chronicler v2 runner', () => {
       data: { reason: { kind: 'completed' } },
     })
 
-    const outcome = await host.started()!.run().done
+    expect(host.started()!.owner).toBe(host.session.id)
+    const outcome = await host.started()!.run({ id: 'job-1', append() {}, updateProgress() {} })
+      .done
     expect(outcome.status).toBe('completed')
     const stateMessage = host.appended.find((entry) => entry.type === 'user/message')
+    expect((stateMessage?.data as { source?: { kind?: string } }).source?.kind).toBe('rrp')
     const payload = payloadOf(stateMessage?.data)
     expect(payload?.worldState).toEqual(NEXT)
     expect(payload?.stateFoldSeq).toBe(1)
@@ -342,7 +352,8 @@ describe('Chronicler v2 runner', () => {
       data: { reason: { kind: 'completed' } },
     })
 
-    const outcome = await host.started()!.run().done
+    const outcome = await host.started()!.run({ id: 'job-1', append() {}, updateProgress() {} })
+      .done
     expect(outcome.status).toBe('completed')
     expect(calls).toBe(2)
     expect(host.appended.some((entry) => entry.type === 'user/message')).toBe(true)
@@ -358,7 +369,9 @@ describe('Chronicler v2 runner', () => {
       type: 'turn/end',
       data: { reason: { kind: 'completed' } },
     })
-    expect((await host.started()!.run().done).status).toBe('completed')
+    expect(
+      (await host.started()!.run({ id: 'job-1', append() {}, updateProgress() {} }).done).status,
+    ).toBe('completed')
     expect(host.appended.filter((entry) => entry.type === 'user/message')).toHaveLength(0)
   })
 
@@ -375,7 +388,9 @@ describe('Chronicler v2 runner', () => {
       type: 'turn/end',
       data: { reason: { kind: 'completed' } },
     })
-    expect((await host.started()!.run().done).status).toBe('failed')
+    expect(
+      (await host.started()!.run({ id: 'job-1', append() {}, updateProgress() {} }).done).status,
+    ).toBe('failed')
     expect(host.appended.filter((entry) => entry.type === 'user/message')).toHaveLength(0)
     expect(payloadOf(host.appended[0]?.data)?.worldStateTimelineBatch).toBeUndefined()
   })
@@ -398,7 +413,7 @@ describe('Chronicler v2 runner', () => {
       type: 'turn/end',
       data: { reason: { kind: 'completed' } },
     })
-    const hooks = host.started()!.run()
+    const hooks = host.started()!.run({ id: 'job-1', append() {}, updateProgress() {} })
     hooks.cancel()
     release()
     expect((await hooks.done).status).toBe('killed')

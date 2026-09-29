@@ -10,10 +10,10 @@
 import {
   Button,
   DisclosureRow,
-  IconEditOutline16,
-  IconLoadingOutline16,
-  IconRefreshOutline16,
-  IconTrashOutline16,
+  IconEditOutlineRegular,
+  IconLoadingOutlineRegular,
+  IconRefreshOutlineRegular,
+  IconTrashOutlineRegular,
   Input,
   MarkdownText,
   StateDot,
@@ -412,7 +412,7 @@ function CopilotPanel(props: CopilotPanelProps) {
     return (
       <div key={proposal.id} style={S.proposal}>
         <DisclosureRow
-          icon={<IconEditOutline16 />}
+          icon={<IconEditOutlineRegular />}
           title={title}
           open={open}
           expandable={true}
@@ -525,11 +525,11 @@ function CopilotPanel(props: CopilotPanelProps) {
           style={clearArmed ? { color: 'var(--dsw-alias-label-danger, #d5484f)' } : undefined}
           title={clearArmed ? t('copilot.clearConfirmTitle') : undefined}
         >
-          <IconTrashOutline16 />
+          <IconTrashOutlineRegular />
           {clearArmed ? <span style={{ marginLeft: 4 }}>{t('copilot.clearConfirm')}</span> : null}
         </Button>
         <Button size="sm" variant="ghost" disabled={busy} onClick={() => void load()}>
-          <IconRefreshOutline16 />
+          <IconRefreshOutlineRegular />
         </Button>
       </div>
       <div style={S.scroll} ref={scrollRef}>
@@ -589,7 +589,7 @@ function CopilotPanel(props: CopilotPanelProps) {
           disabled={busy || input.trim().length === 0}
           onClick={() => void send()}
         >
-          {busy ? <IconLoadingOutline16 /> : t('copilot.send')}
+          {busy ? <IconLoadingOutlineRegular /> : t('copilot.send')}
         </Button>
       </div>
     </div>

@@ -42,12 +42,36 @@ describe('external read contract', () => {
       worldState: state,
       worldStateTimelineBatch,
     })
+    expect((message.source as { kind?: string }).kind).toBe('rrp')
     const payload = rrpPayloadOf({ type: 'user/message', data: message })
     expect(payload?.worldState).toEqual(state)
     expect(payload?.worldStateTimelineBatch).toEqual(worldStateTimelineBatch)
     // A plain user message carries no payload: extensions can rely on this.
     expect(
       rrpPayloadOf({ type: 'user/message', data: { id: 'x', role: 'user', content: [] } }),
+    ).toBeUndefined()
+  })
+
+  it('accepts new and both migrated legacy source forms', () => {
+    const payload = { summary: null }
+    for (const source of [
+      { kind: 'rrp', rrp: payload },
+      { kind: 'plugin:dsh-rrp', rrp: payload },
+      { kind: 'plugin', plugin: 'dsh-rrp', rrp: payload },
+    ]) {
+      expect(rrpPayloadOf({ type: 'user/message', data: { source } })).toEqual(payload)
+    }
+    expect(
+      rrpPayloadOf({
+        type: 'user/message',
+        data: { source: { kind: 'plugin:dsh-rrp', rrp: null } },
+      }),
+    ).toBeUndefined()
+    expect(
+      rrpPayloadOf({
+        type: 'user/message',
+        data: { source: { kind: 'plugin:other', rrp: payload } },
+      }),
     ).toBeUndefined()
   })
 

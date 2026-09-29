@@ -29,7 +29,7 @@ function notice(seq: number, text: string) {
     seq,
     data: {
       content: [{ type: 'text', text }],
-      source: { kind: 'plugin', plugin: 'dsh-rrp', form: 'notice' },
+      source: { kind: 'plugin:dsh-rrp', form: 'notice' },
     },
   }
 }
@@ -162,6 +162,26 @@ describe('worldline digest fold (v2)', () => {
       apply(marker, stateEvent(3, undefined, { worldlineForkCut: { child: 'd', turn: null } })),
     ).toBe(marker)
     expect(apply(base, { type: 'turn/end', seq: 2, data: {} })).toBe(base)
+  })
+
+  it('does not allocate a ghost turn for a fork synthetic closer', () => {
+    let state = worldlineDigestProjection.init({}, 2) as WorldlineDigest
+    state = apply(state, player(0, '父线行动'))
+    state = apply(state, assistant(1, '父线叙述'))
+    state = apply(state, { type: 'session/end-seed', seq: 2, data: { inherited: true } })
+    state = apply(state, {
+      type: 'turn/end',
+      seq: 3,
+      data: { reason: { kind: 'forked' } },
+    })
+    state = apply(state, player(4, '子线行动'))
+
+    expect(state.turns.map((entry) => [entry.turn, entry.seq, entry.player])).toEqual([
+      [0, 0, '父线行动'],
+      [1, 4, '子线行动'],
+    ])
+    expect(state.nextTurn).toBe(2)
+    expect(state.firstLocalTurn).toBe(1)
   })
 
   it('skips notices, reminders, and empty player messages', () => {

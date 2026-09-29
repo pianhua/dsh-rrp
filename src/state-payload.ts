@@ -26,7 +26,7 @@ import type { WorldStateTimelineBatch } from './world-state-timeline.ts'
 /** The plugin identity stamped on every context message we own. */
 export const RRP_PLUGIN = 'dsh-rrp'
 
-/** The structured payload carried in a plugin message's `source.rrp`. */
+/** The structured payload carried in an RRP message's `source.rrp`. */
 export interface RrpStatePayload {
   /** Active card setting (session-constant). */
   card?: CardContext
@@ -58,8 +58,28 @@ export interface RrpStatePayload {
   worldlineForkCut?: { child: string; turn: number } | { child: string; turn: null }
 }
 
+/** Local structural mirror of the host's producer-owned message source seam. */
+const LEGACY_PLUGIN_KIND = 'plugin'
+type RrpMessageSource =
+  | { kind: 'rrp'; rrp?: unknown; plugin?: never }
+  | { kind: 'plugin:dsh-rrp'; rrp?: unknown; plugin?: never }
+  | { kind: typeof LEGACY_PLUGIN_KIND; plugin?: unknown; rrp?: unknown }
+  | { kind?: unknown; plugin?: unknown; rrp?: unknown }
+
+function rrpSourceOf(event: PayloadEventLike | undefined): RrpMessageSource | undefined {
+  return (event?.data as { source?: RrpMessageSource } | undefined)?.source
+}
+
+function isRrpSource(source: RrpMessageSource | undefined): boolean {
+  return (
+    source?.kind === 'rrp' ||
+    source?.kind === 'plugin:dsh-rrp' ||
+    (source?.kind === LEGACY_PLUGIN_KIND && source.plugin === RRP_PLUGIN)
+  )
+}
+
 /**
- * Build one plugin `user/message` value carrying both the model-facing text
+ * Build one RRP `user/message` value carrying both the model-facing text
  * and the structured payload.
  * @param id - message id (host writers pass a UUID; tests may pass a literal).
  * @param text - the model-facing content text.
@@ -75,7 +95,7 @@ export function rrpStateMessage(
     id,
     role: 'user',
     content: [{ type: 'text', text }],
-    source: { kind: 'plugin', plugin: RRP_PLUGIN, rrp: payload },
+    source: { kind: 'rrp', rrp: payload },
   }
 }
 
@@ -88,17 +108,14 @@ export interface PayloadEventLike {
 /**
  * Extract our structured payload from one logged event.
  * @param event - any logged event.
- * @returns the payload when the event is one of our plugin `user/message`
+ * @returns the payload when the event is one of our RRP `user/message`
  *   context messages, else undefined.
  */
 export function rrpPayloadOf(event: PayloadEventLike | undefined): RrpStatePayload | undefined {
   if (event?.type !== 'user/message') return undefined
-  const data = event.data as
-    { source?: { kind?: unknown; plugin?: unknown; rrp?: unknown } } | undefined
-  const source = data?.source
-  if (source === undefined || source.kind !== 'plugin' || source.plugin !== RRP_PLUGIN)
-    return undefined
-  const payload = source.rrp
+  const source = rrpSourceOf(event)
+  if (!isRrpSource(source)) return undefined
+  const payload = source?.rrp
   if (payload === null || typeof payload !== 'object') return undefined
   return payload as RrpStatePayload
 }
@@ -126,8 +143,7 @@ export function isHostReminder(text: string): boolean {
  * reader (the transcript fold, the worldline digest, novel export) skips them.
  */
 export function isPluginNotice(event: PayloadEventLike | undefined): boolean {
-  const source = (event?.data as { source?: { kind?: unknown } } | undefined)?.source
-  return source?.kind === 'plugin' && rrpPayloadOf(event) === undefined
+  return isRrpSource(rrpSourceOf(event)) && rrpPayloadOf(event) === undefined
 }
 
 /**

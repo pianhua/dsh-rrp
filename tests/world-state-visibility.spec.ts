@@ -121,7 +121,7 @@ describe('WorldState visibility boundaries', () => {
     expect(
       worldStateProjection.apply(emptyWorldState(), {
         type: 'user/message',
-        data: { source: { kind: 'plugin', plugin: 'dsh-rrp', rrp: { worldState: current } } },
+        data: { source: { kind: 'plugin:dsh-rrp', rrp: { worldState: current } } },
       }),
     ).toEqual(current)
   })

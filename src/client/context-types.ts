@@ -110,14 +110,15 @@ export interface RrpSessionsService {
   fork?(opts: { sessionId: string; atSeq?: number; increaseTitle?: boolean }): Promise<string>
 }
 
+/** Remote result returned by the host gateway for a successful or refused call. */
+export type RrpRemoteResult<Value> =
+  { ok: true; value: Value } | { ok: false; error: { message?: string } }
+
 /** Remote RPC face (subset of dsh-api-remotes). */
 export interface RrpRemoteService {
   /** Host-side preset roster commands. */
   agentPresets: {
-    select(
-      sessionId: string,
-      presetId: string,
-    ): Promise<{ ok: boolean; error?: { message?: string } }>
+    select(sessionId: string, presetId: string): Promise<RrpRemoteResult<string>>
   }
 }
 

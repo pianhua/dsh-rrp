@@ -194,13 +194,24 @@ export interface LlmService {
   stream(options: Record<string, unknown>): AsyncIterable<StreamChunkLike>
 }
 
+export interface JobHandleLike {
+  readonly id: string
+  append(text: string, options?: { channel?: string; gapBefore?: true }): void
+  updateProgress(line: string): void
+}
+
 export interface JobHooksLike {
   cancel(reason?: string): void
   done: Promise<{ status: string }>
 }
 
 export interface JobsService {
-  start(spec: { kind: string; label: string; owner?: unknown; run(): JobHooksLike }): string
+  start(spec: {
+    kind: string
+    label: string
+    owner?: string
+    run(job: JobHandleLike): JobHooksLike
+  }): string
 }
 
 /**

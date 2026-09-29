@@ -16,7 +16,7 @@ describe('novel prose extraction (issue #31-C)', () => {
         type: 'user/message',
         seq: 2,
         data: {
-          source: { kind: 'plugin', plugin: 'dsh-rrp', rrp: { worldState: { scene: {} } } },
+          source: { kind: 'plugin:dsh-rrp', rrp: { worldState: { scene: {} } } },
           content: [{ type: 'text', text: 'state write' }],
         },
       },
@@ -26,7 +26,7 @@ describe('novel prose extraction (issue #31-C)', () => {
         type: 'user/message',
         seq: 4,
         data: {
-          source: { kind: 'plugin', plugin: 'dsh-rrp' },
+          source: { kind: 'plugin:dsh-rrp' },
           content: [{ type: 'text', text: '开局提示' }],
         },
       },

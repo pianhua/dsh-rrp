@@ -165,7 +165,6 @@ function scheduleSummary(faces: HostFaces, session: SessionLike, turn: number): 
     console.log(TAG + ' Summarizer busy for ' + session.id + '; deferred turn ' + turn)
     return true
   }
-  const owner = faces.agents.get(session.id)
   const route = routeOf(faces.agents, session.id)
   if (route === undefined) {
     console.warn(TAG + ' Summarizer skipped ' + session.id + ': no provider/model route')
@@ -176,8 +175,8 @@ function scheduleSummary(faces: HostFaces, session: SessionLike, turn: number): 
     faces.jobs.start({
       kind: JOB_KIND,
       label: '剧情脉络 Summarizer · 第 ' + turn + ' 轮',
-      ...(owner === undefined ? {} : { owner }),
-      run: () => {
+      owner: session.id,
+      run: (_job) => {
         const controller = new AbortController()
         let cancelled = false
         const done = runSummary(
@@ -255,7 +254,7 @@ async function runSummary(
           id: randomUUID(),
           role: 'user',
           content: [{ type: 'text', text: buildSummarizerPrompt(transcript) }],
-          source: { kind: 'plugin', plugin: 'dsh-rrp' },
+          source: { kind: 'rrp' },
         },
       ],
       sessionId: session.id,

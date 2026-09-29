@@ -1,19 +1,22 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { parse as parseYaml } from 'yaml'
 import { AUTHOR_SYSTEM_PROMPT } from '../src/agents/author.ts'
 import {
   PRESET_ID,
-  ensureCardPreset,
-  materializePreset,
-  presetDir,
-  removeAllPresets,
-  removePreset,
+  activatePresetFamily,
+  cleanupLegacyPresetCopies,
+  cleanupPreset,
+  presetDefinitionForCard,
+  registerPresetFamily,
 } from '../src/preset.ts'
 
 const homes: string[] = []
+
+afterEach(() => {
+  for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true })
+})
 
 function tempHome(): string {
   const home = mkdtempSync(join(tmpdir(), 'dsh-rrp-preset-'))
@@ -21,101 +24,106 @@ function tempHome(): string {
   return home
 }
 
-afterEach(() => {
-  for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true })
+function fakeRegistry() {
+  const definitions = new Map<string, { id: string; plugins: readonly unknown[] }>()
+  return {
+    definitions,
+    register(definition: { id: string; plugins: readonly unknown[] }) {
+      definitions.set(definition.id, definition)
+      return Promise.resolve(async () => {
+        definitions.delete(definition.id)
+      })
+    },
+  }
+}
+
+describe('RP preset registry definitions', () => {
+  it('preserves the shipped composition semantics without writing a preset directory', () => {
+    const definition = presetDefinitionForCard()
+    const persona = definition.plugins.find((row) => row.id === 'persona')
+    const filesystem = definition.plugins.find((row) => row.id === 'skill-filesystem')
+
+    expect(PRESET_ID).toBe('rp')
+    expect(persona).toMatchObject({
+      name: '@deepseek-ai/dsh-persona',
+      config: {
+        complete: true,
+        includeRuntimeContext: false,
+        prefix: AUTHOR_SYSTEM_PROMPT,
+      },
+    })
+    expect(filesystem).toMatchObject({
+      name: '@deepseek-ai/dsh-skill-filesystem',
+      config: { bundledSkillDir: expect.stringContaining(join('presets', 'rp', 'skills')) },
+    })
+    expect(definition.plugins.map((row) => row.name)).toEqual([
+      '@deepseek-ai/dsh-persona',
+      '@deepseek-ai/dsh-skill-filesystem',
+      '@deepseek-ai/dsh-tool-skill',
+    ])
+  })
+
+  it('adds only the selected card skill root while retaining bundled steward skills', () => {
+    const definition = presetDefinitionForCard('maid-heiress')
+    const filesystem = definition.plugins.find((row) => row.id === 'skill-filesystem')
+    const config = filesystem?.config as { bundledSkillDir?: string; customSkillDirs?: string[] }
+
+    expect(config.bundledSkillDir).toContain(join('presets', 'rp', 'skills'))
+    expect(config.customSkillDirs).toEqual([
+      expect.stringContaining(join('cards', 'maid-heiress', 'skills')),
+    ])
+  })
 })
 
-describe('RP preset materialization', () => {
-  it('writes the shipped preset and its skill bundles into the user root', () => {
+describe('RP preset registration', () => {
+  it('registers the base and visible card presets, then disposes every registration', async () => {
     const home = tempHome()
-    const outcome = materializePreset(home)
+    const registry = fakeRegistry()
+    const family = registerPresetFamily(registry, home)
+    await family.ready
 
-    expect(outcome.action).toBe('created')
-    expect(outcome.dir).toBe(presetDir(home))
-    expect(PRESET_ID).toBe('rp')
+    expect([...registry.definitions.keys()]).toContain('rp')
+    expect([...registry.definitions.keys()]).toContain('rp-maid-heiress')
 
-    const composition = readFileSync(join(outcome.dir, 'agent.cordis.yml'), 'utf8')
-    expect(composition).toContain('@deepseek-ai/dsh-persona')
-    expect(composition).toContain('@deepseek-ai/dsh-skill-filesystem')
-    expect(composition).toContain('@deepseek-ai/dsh-tool-skill')
-    expect(composition).not.toContain('__DSH_RRP_SKILL_DIR__')
-    expect(composition).toContain(join(outcome.dir, 'skills'))
-    // Issue #32: the Author prompt token is replaced with the real system prompt.
-    expect(composition).not.toContain('__DSH_RRP_AUTHOR_PROMPT__')
-    expect(composition).toContain('You are the Author Agent of DSH-Chronicle')
-    expect(composition).toContain('## Output Discipline')
-    expect(composition).toContain(AUTHOR_SYSTEM_PROMPT.split('\n')[0])
-    // The materialized YAML must parse, and the deployed prefix must be
-    // byte-identical to the single-source constant (issue #32).
-    const doc = parseYaml(composition) as Array<{ id: string; config?: { prefix?: string } }>
-    const persona = doc.find((entry) => entry.id === 'persona')
-    expect(persona?.config?.prefix).toBe(AUTHOR_SYSTEM_PROMPT)
-    expect(existsSync(join(outcome.dir, 'preset.yml'))).toBe(true)
-    expect(existsSync(join(outcome.dir, 'skills'))).toBe(true)
-    // Issue #33: the steward bundles ship in the base skills root and are
-    // therefore present in every materialized preset (base + card presets).
-    for (const steward of ['steward-project', 'steward-cards', 'steward-decisions']) {
-      expect(existsSync(join(outcome.dir, 'skills', steward, 'SKILL.md'))).toBe(true)
-    }
-
-    expect(removePreset(home)).toBe('removed')
-    expect(existsSync(outcome.dir)).toBe(false)
+    await family.dispose()
+    expect(registry.definitions).toHaveLength(0)
   })
 
-  it('refreshes its own unmodified copy but never a user edit', () => {
+  it('registers a card added after plugin activation and disposes a removed card', async () => {
     const home = tempHome()
-    materializePreset(home)
-    expect(materializePreset(home).action).toBe('refreshed')
+    const registry = fakeRegistry()
+    const family = registerPresetFamily(registry, home)
+    await family.ready
 
-    const target = join(presetDir(home), 'agent.cordis.yml')
-    writeFileSync(target, readFileSync(target, 'utf8') + '\n# user edit\n')
+    const cardDir = join(home, '.dsh-rrp', 'cards', 'late-card')
+    mkdirSync(join(cardDir, 'skills'), { recursive: true })
+    writeFileSync(join(cardDir, 'card.md'), '---\nid: late-card\nname: Late Card\n---\n')
+    await family.ensureCardPreset('late-card')
+    expect(registry.definitions.has('rp-late-card')).toBe(true)
 
-    expect(materializePreset(home).action).toBe('left-user')
-    expect(removePreset(home)).toBe('left-user')
-    expect(existsSync(target)).toBe(true)
+    rmSync(cardDir, { recursive: true, force: true })
+    await family.ensureCardPreset('maid-heiress')
+    expect(registry.definitions.has('rp-late-card')).toBe(false)
   })
 
-  it("materializes one scoped preset per card with only that card's skills", () => {
+  it('cleanupPreset disposes the active family registration', async () => {
     const home = tempHome()
-    const outcome = materializePreset(home)
+    const registry = fakeRegistry()
+    const family = activatePresetFamily(registry, home)
+    await family.ready
 
-    const card = outcome.cards?.find((entry) => entry.dir === presetDir(home, 'rp-maid-heiress'))
-    expect(card).toBeDefined()
-    // The card preset's composition points at its OWN skills root...
-    const composition = readFileSync(join(card!.dir, 'agent.cordis.yml'), 'utf8')
-    expect(composition).toContain(join(card!.dir, 'skills'))
-    // ...which holds this card's bundles...
-    expect(existsSync(join(card!.dir, 'skills', 'mia', 'SKILL.md'))).toBe(true)
-    expect(existsSync(join(card!.dir, 'skills', 'world-setting', 'SKILL.md'))).toBe(true)
-    // ...and the base preset carries NO card lore.
-    expect(existsSync(join(outcome.dir, 'skills', 'mia'))).toBe(false)
-
-    // Uninstall-style cleanup removes the whole family.
-    expect(removeAllPresets(home)).toBe('removed')
-    expect(existsSync(card!.dir)).toBe(false)
+    await expect(cleanupPreset()).resolves.toBe('disposed')
+    expect(registry.definitions).toHaveLength(0)
   })
+})
 
-  it('is a no-op when nothing was materialized', () => {
+describe('legacy preset cleanup', () => {
+  it('removes only unmodified RP-family copies with the dsh-rrp marker', () => {
     const home = tempHome()
-    expect(removePreset(home)).toBe('absent')
-  })
-
-  it('ensureCardPreset materializes a missing card preset on demand', () => {
-    const home = tempHome()
-    const dir = presetDir(home, 'rp-maid-heiress')
-    expect(existsSync(dir)).toBe(false)
-
-    expect(ensureCardPreset('maid-heiress', home)).toBe('created')
-    expect(existsSync(dir)).toBe(true)
-    expect(existsSync(join(dir, 'skills', 'mia', 'SKILL.md'))).toBe(true)
-
-    // Second call is a no-op; user-edited presets are left alone.
-    expect(ensureCardPreset('maid-heiress', home)).toBe('exists')
-    const composition = join(dir, 'agent.cordis.yml')
-    writeFileSync(composition, readFileSync(composition, 'utf8') + '\n# user edit\n')
-    expect(ensureCardPreset('maid-heiress', home)).toBe('left-user')
-
-    // Illegal ids never touch the filesystem.
-    expect(ensureCardPreset('../escape', home)).toBeUndefined()
+    const legacy = join(home, '.agent-presets', 'rp')
+    mkdirSync(legacy, { recursive: true })
+    writeFileSync(join(legacy, '.dsh-rrp.json'), JSON.stringify({ managedBy: 'other', files: {} }))
+    expect(cleanupLegacyPresetCopies(home)).toBe('left-user')
+    expect(existsSync(legacy)).toBe(true)
   })
 })

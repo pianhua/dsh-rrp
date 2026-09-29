@@ -23,8 +23,7 @@ describe('RP settings projection fold', () => {
       type: 'user/message',
       data: {
         source: {
-          kind: 'plugin',
-          plugin: 'dsh-rrp',
+          kind: 'plugin:dsh-rrp',
           rrp: {
             settings: { summaryEnabled: true, summaryEveryTurns: 8, allowSendMessage: false },
           },
@@ -37,8 +36,7 @@ describe('RP settings projection fold', () => {
       type: 'user/message',
       data: {
         source: {
-          kind: 'plugin',
-          plugin: 'dsh-rrp',
+          kind: 'plugin:dsh-rrp',
           rrp: { settings: 'not-an-object' },
         },
       },
@@ -51,11 +49,11 @@ describe('RP settings projection fold', () => {
 
     const once = rrpSettingsProjection.apply(DEFAULT_RRP_SETTINGS, {
       type: 'user/message',
-      data: { source: { kind: 'plugin', plugin: 'dsh-rrp', rrp: { settings: payload } } },
+      data: { source: { kind: 'plugin:dsh-rrp', rrp: { settings: payload } } },
     })
     const twice = rrpSettingsProjection.apply(once, {
       type: 'user/message',
-      data: { source: { kind: 'plugin', plugin: 'dsh-rrp', rrp: { settings: payload } } },
+      data: { source: { kind: 'plugin:dsh-rrp', rrp: { settings: payload } } },
     })
     expect(twice).toEqual(once)
   })

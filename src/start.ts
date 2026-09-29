@@ -68,15 +68,37 @@ function parseCardContext(value: unknown): CardContext | undefined {
 }
 
 /**
+ * V4 surface invariant: the first surface event of a session must be a
+ * system/message (the protected head later host prompts may replace). Our
+ * card/facts context appends precede any host request, so the head turn is
+ * established first; turn 1 is the head, the opening becomes turn 2.
+ */
+const HEAD_TEXT = '【DSH-Chronicle】RP 会话：正文由 Author 执笔，设定由卡包与技能按世界状态注入。'
+
+function appendSurfaceHead(session: SessionLike): void {
+  const message = {
+    id: randomUUID(),
+    role: 'system',
+    content: [{ type: 'text', text: HEAD_TEXT }],
+    source: { kind: 'system-prompt' },
+  }
+  session.append('turn/start', { turn: 1 })
+  session.append('step/start', { turn: 1, step: 1 })
+  session.append('system/message', { turn: 1, step: 1, message }, { surfaceOp: 'append' })
+  session.append('step/end', { turn: 1, step: 1 })
+  session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+}
+
+/**
  * Append the opening. Prefers a real assistant message; degrades to a plugin
- * notice when the host rejects the assistant shape.
+ * notice when the host rejects the assistant shape. The opening is turn 2 —
+ * turn 1 is the surface head (see appendSurfaceHead).
  * @returns which form landed.
  */
 function appendOpening(
   session: SessionLike,
   text: string,
   route: { provider: string; model: string } | undefined,
-  lastTurn: number,
 ): 'assistant' | 'notice' | 'none' {
   if (route !== undefined) {
     try {
@@ -86,14 +108,26 @@ function appendOpening(
         content: [{ type: 'text', text }],
         source: { kind: 'model', provider: route.provider, model: route.model },
       }
+      session.append('turn/start', { turn: 2 })
+      session.append('step/start', { turn: 2, step: 1 })
       session.append(
         'assistant/message',
-        { turn: lastTurn, step: 0, message, stream: [] },
+        { turn: 2, step: 1, message, stream: [] },
         { surfaceOp: 'append' },
       )
+      session.append('step/end', { turn: 2, step: 1 })
+      session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
       return 'assistant'
     } catch (error) {
       console.warn(TAG + ' assistant opening rejected; falling back to a notice:', error)
+      // The turn/step opens above are already durable; close them so the
+      // fallback notice does not leave an open turn behind.
+      try {
+        session.append('step/end', { turn: 2, step: 1 })
+        session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+      } catch {
+        /* closing the orphaned turn is best-effort */
+      }
     }
   }
   try {
@@ -101,7 +135,7 @@ function appendOpening(
       id: randomUUID(),
       role: 'user',
       content: [{ type: 'text', text }],
-      source: { kind: 'plugin', plugin: 'dsh-rrp', form: 'notice', summary: '序章' },
+      source: { kind: 'rrp', form: 'notice', summary: '序章' },
     }
     // `user/message` data IS the UserMessage (no `{turn,step,message}` wrapper).
     session.append('user/message', message, { surfaceOp: 'append' })
@@ -200,7 +234,11 @@ export function registerStartRoute(ctx: Context): void {
                 origin: 'local',
               }
 
-        // Publish the durable context FIRST (card lane + facts lane).
+        // Surface head FIRST: V4 requires the first surface event to be a
+        // system/message; the card/facts appends below precede any host request.
+        appendSurfaceHead(session)
+
+        // Publish the durable context (card lane + facts lane).
         if (card !== undefined || state !== undefined) {
           const published = publishState(session, projections, {
             ...(card === undefined ? {} : { card }),
@@ -226,11 +264,8 @@ export function registerStartRoute(ctx: Context): void {
         // Opening LAST: the live follow stream then ends on the opening line.
         let openingWritten: 'assistant' | 'notice' | 'none' = 'none'
         if (typeof request.opening === 'string' && request.opening.trim().length > 0) {
-          const boundary = projections.stateOf(session, 'turnBoundary') as
-            { lastTurn?: number } | undefined
-          const lastTurn = boundary?.lastTurn ?? 0
           const opening = interpolateCardText(request.opening.trim(), card?.player)
-          openingWritten = appendOpening(session, opening, routeOf(agents, session.id), lastTurn)
+          openingWritten = appendOpening(session, opening, routeOf(agents, session.id))
         }
 
         console.log(
