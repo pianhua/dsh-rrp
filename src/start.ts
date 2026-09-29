@@ -101,7 +101,7 @@ function appendOpening(
       id: randomUUID(),
       role: 'user',
       content: [{ type: 'text', text }],
-      source: { kind: 'plugin', plugin: 'dsh-rrp', form: 'notice', summary: '序章' },
+      source: { kind: 'rrp', form: 'notice', summary: '序章' },
     }
     // `user/message` data IS the UserMessage (no `{turn,step,message}` wrapper).
     session.append('user/message', message, { surfaceOp: 'append' })

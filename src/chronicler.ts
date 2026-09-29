@@ -172,7 +172,6 @@ function scheduleInference(faces: HostFaces, session: SessionLike, throughSeq?: 
     )
     return
   }
-  const owner = faces.agents.get(session.id)
   const route = routeOf(faces.agents, session.id)
   if (route === undefined) {
     console.warn(TAG + ' Chronicler skipped ' + session.id + ': no provider/model route')
@@ -186,8 +185,8 @@ function scheduleInference(faces: HostFaces, session: SessionLike, throughSeq?: 
     faces.jobs.start({
       kind: JOB_KIND,
       label: '状态推演 Chronicler · ' + session.id.slice(0, 8),
-      ...(owner === undefined ? {} : { owner }),
-      run: () => {
+      owner: session.id,
+      run: (_job) => {
         const controller = new AbortController()
         let cancelled = false
         const done = runInference(faces, session, route, controller.signal, () => cancelled, target)
@@ -307,7 +306,7 @@ async function runInference(
       id: randomUUID(),
       role: 'user' as const,
       content: [{ type: 'text' as const, text: prompt }],
-      source: { kind: 'plugin' as const, plugin: 'dsh-rrp' },
+      source: { kind: 'rrp' as const },
     }
     const text = await streamChroniclerText(faces, session, route, signal, [userMessage])
     if (isCancelled()) {
@@ -350,7 +349,7 @@ async function runInference(
               '\n请输出修正后的完整 JSON 对象（只输出 JSON，不要解释，不要 Markdown）：{"state":完整WorldState,"changeSummary":"…","evidence":[…]}。',
           },
         ],
-        source: { kind: 'plugin' as const, plugin: 'dsh-rrp' },
+        source: { kind: 'rrp' as const },
       }
       const assistantMessage = {
         id: randomUUID(),

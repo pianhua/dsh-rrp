@@ -28,7 +28,7 @@ export const loreChangeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('remove'), name: nameSchema }),
 ])
 
-/** Fold dynamic lore from known plugin message payloads. */
+/** Fold dynamic lore from known RRP message payloads. */
 export const loreProjection = {
   key: RRP_LORE_KEY,
   stateSchema: uniqueEntries,

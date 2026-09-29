@@ -617,7 +617,7 @@ export function registerCopilotRoute(ctx: Context): void {
             id: randomUUID(),
             role: turn.role === 'player' ? 'user' : 'assistant',
             content: [{ type: 'text', text: turn.text }],
-            source: { kind: 'plugin', plugin: 'dsh-rrp' },
+            source: { kind: 'rrp' },
           }))
           const stream = llm.stream({
             provider: route.provider,
@@ -629,7 +629,7 @@ export function registerCopilotRoute(ctx: Context): void {
                 id: randomUUID(),
                 role: 'user',
                 content: [{ type: 'text', text: prompt }],
-                source: { kind: 'plugin', plugin: 'dsh-rrp' },
+                source: { kind: 'rrp' },
               },
             ],
             sessionId,

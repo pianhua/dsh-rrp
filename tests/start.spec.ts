@@ -133,7 +133,7 @@ describe('card start route', () => {
     expect(host.appended.map((entry) => entry.type)).toEqual(['user/message'])
     // user/message data IS the UserMessage.
     const data = host.appended[0]?.data as { source: { kind: string; form?: string } }
-    expect(data.source.kind).toBe('plugin')
+    expect(data.source.kind).toBe('rrp')
     expect(data.source.form).toBe('notice')
   })
 

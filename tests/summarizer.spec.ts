@@ -5,6 +5,12 @@ import { RRP_SETTINGS_KEY } from '../src/settings.ts'
 import type { RrpStatePayload } from '../src/state-payload.ts'
 import { transcriptProjections } from './stubs/transcript-projections.ts'
 
+type JobHandle = {
+  readonly id: string
+  append(text: string, options?: { channel?: string; gapBefore?: true }): void
+  updateProgress(line: string): void
+}
+
 const VALID = {
   goal: '逃离塞北',
   conflict: '商队被人盯上',
@@ -146,8 +152,7 @@ describe('Summarizer trigger', () => {
         data: {
           content: [{ type: 'text', text: '【剧情脉络】更新' }],
           source: {
-            kind: 'plugin',
-            plugin: 'dsh-rrp',
+            kind: 'plugin:dsh-rrp',
             rrp: {
               summary: VALID,
               summaryTurn: 8,
@@ -210,8 +215,10 @@ describe('Summarizer concurrency (issue #20)', () => {
       },
     }
     const jobs = {
-      start(spec: { run(): { cancel(): void; done: Promise<{ status: string }> } }) {
-        doneness.push(spec.run().done)
+      start(spec: { run(job: JobHandle): { cancel(): void; done: Promise<{ status: string }> } }) {
+        doneness.push(
+          spec.run({ id: 'job-' + doneness.length, append() {}, updateProgress() {} }).done,
+        )
         return 'race-job-' + doneness.length
       },
     }
@@ -294,8 +301,7 @@ describe('Summarizer concurrency (issue #20)', () => {
         data: {
           content: [{ type: 'text', text: '【剧情脉络】更新' }],
           source: {
-            kind: 'plugin',
-            plugin: 'dsh-rrp',
+            kind: 'plugin:dsh-rrp',
             rrp: {
               summary: VALID,
               summaryTurn: 16,

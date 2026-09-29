@@ -10,6 +10,12 @@ import { TRANSCRIPT_KEY, emptyTranscriptSlice } from '../src/transcript.ts'
 import { createDynamicField, emptyWorldState, type WorldState } from '../src/world-state.ts'
 import { transcriptProjections } from './stubs/transcript-projections.ts'
 
+type JobHandle = {
+  readonly id: string
+  append(text: string, options?: { channel?: string; gapBefore?: true }): void
+  updateProgress(line: string): void
+}
+
 /** Minimal fake host with synchronous projection folding, like Session.append. */
 function fakeHost(opts?: {
   agentPreset?: string
@@ -180,7 +186,7 @@ describe('lore route (D8)', () => {
     type JobStartSpec = {
       kind: string
       label: string
-      run(): { cancel(reason?: string): void; done: Promise<{ status: string }> }
+      run(job: JobHandle): { cancel(reason?: string): void; done: Promise<{ status: string }> }
     }
     const jobs: JobStartSpec[] = []
     const transcript = {
@@ -218,7 +224,7 @@ describe('lore route (D8)', () => {
     await host.route()!.handler(duplicate.req, duplicate.res)
     expect(jobs).toHaveLength(1)
 
-    const started = jobs[0]!.run()
+    const started = jobs[0]!.run({ id: 'job-1', append() {}, updateProgress() {} })
     expect(await started.done).toEqual({ status: 'completed' })
     const staged = exchange('GET', '/dsh-rrp/lore?sessionId=s1')
     await host.route()!.handler(staged.req, staged.res)
@@ -243,7 +249,7 @@ describe('lore route (D8)', () => {
     type JobStartSpec = {
       kind: string
       label: string
-      run(): { cancel(reason?: string): void; done: Promise<{ status: string }> }
+      run(job: JobHandle): { cancel(reason?: string): void; done: Promise<{ status: string }> }
     }
     type Invocation = {
       rawInput: string
@@ -271,7 +277,7 @@ describe('lore route (D8)', () => {
       }),
     ).toMatchObject({ kind: 'success' })
     expect(jobs.map((job) => job.kind)).toEqual(['scribe'])
-    const started = jobs[0]!.run()
+    const started = jobs[0]!.run({ id: 'job-1', append() {}, updateProgress() {} })
     expect(await started.done).toEqual({ status: 'completed' })
   })
 
@@ -279,7 +285,7 @@ describe('lore route (D8)', () => {
     type JobStartSpec = {
       kind: string
       label: string
-      run(): { cancel(reason?: string): void; done: Promise<{ status: string }> }
+      run(job: JobHandle): { cancel(reason?: string): void; done: Promise<{ status: string }> }
     }
     const jobs: JobStartSpec[] = []
     let streamStarted!: () => void
@@ -311,7 +317,7 @@ describe('lore route (D8)', () => {
     const requestDraft = exchange('POST', '/dsh-rrp/lore', { sessionId: 's1', action: 'draft' })
     await host.route()!.handler(requestDraft.req, requestDraft.res)
 
-    const running = jobs[0]!.run()
+    const running = jobs[0]!.run({ id: 'job-1', append() {}, updateProgress() {} })
     await enteredStream
     running.cancel()
     expect(await running.done).toEqual({ status: 'killed' })
