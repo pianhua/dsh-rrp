@@ -69,12 +69,6 @@ interface AgentPresetRow {
 }
 interface AgentPresetsService extends AgentPresetsRegistry {
   resolve(id?: string): Promise<AgentPresetRow>
-  standingKeyFor(id?: string): Promise<unknown>
-}
-
-/** Structural face of the host skill registry, for one scoped catalog read. */
-interface SkillsService {
-  list(options: { scope: unknown }): Promise<Array<{ name: string }>>
 }
 
 /** Structural face of the session-projection registry. */
@@ -343,13 +337,7 @@ export function extractSessionId(arg: unknown): string | undefined {
   return undefined
 }
 
-/** Comma-joined skill names, or `(none)`. */
-function skillNames(catalog: Array<{ name: string }>): string {
-  const names = catalog.map((entry) => entry.name).join(', ')
-  return names.length > 0 ? names : '(none)'
-}
-
-/** Probe the roster: the RP preset must be discoverable and composable. */
+/** Probe the roster: the RP preset family must be discoverable and composable. */
 async function verifyPreset(ctx: Context): Promise<void> {
   try {
     const readable = ctx as unknown as { get(name: string): unknown }
@@ -365,38 +353,24 @@ async function verifyPreset(ctx: Context): Promise<void> {
       console.warn(`${TAG} RP mode '${PRESET_ID}' is broken: ${preset.broken}`)
       return
     }
-    const scope = await presets.standingKeyFor(PRESET_ID)
     console.log(`${TAG} RP mode '${preset.name ?? PRESET_ID}' composed and ready`)
 
-    // Verify each preset's scope discovers exactly the bundles it should: the
-    // base RP mode carries no card lore, and each card preset carries only its
-    // own (the isolation the scoped-preset design exists for).
-    const skills = readable.get('skills') as SkillsService | undefined
-    if (skills !== undefined) {
-      const base = await skills.list({ scope })
-      console.log(`${TAG} RP skills visible (${base.length}): ${skillNames(base)}`)
-      for (const meta of listCards()) {
-        const cardPresetId = presetIdForCard(meta.id)
-        if (!rosterIds.has(cardPresetId)) {
-          console.warn(
-            `${TAG} card preset '${cardPresetId}' is missing from the agent preset roster`,
-          )
-          continue
+    // Per-card composition health. The skill isolation itself (base carries no
+    // card lore, each card preset carries only its own skill root) is a property
+    // of our preset definitions, locked by the preset unit tests.
+    for (const meta of listCards()) {
+      const cardPresetId = presetIdForCard(meta.id)
+      if (!rosterIds.has(cardPresetId)) {
+        console.warn(`${TAG} card preset '${cardPresetId}' is missing from the agent preset roster`)
+        continue
+      }
+      try {
+        const cardPreset = await presets.resolve(cardPresetId)
+        if (cardPreset.broken !== undefined) {
+          console.warn(`${TAG} card preset '${cardPresetId}' is broken: ${cardPreset.broken}`)
         }
-        try {
-          const cardPreset = await presets.resolve(cardPresetId)
-          if (cardPreset.broken !== undefined) {
-            console.warn(`${TAG} card preset '${cardPresetId}' is broken: ${cardPreset.broken}`)
-            continue
-          }
-          const cardScope = await presets.standingKeyFor(cardPresetId)
-          const catalog = await skills.list({ scope: cardScope })
-          console.log(
-            `${TAG} card preset '${cardPresetId}' skills (${catalog.length}): ${skillNames(catalog)}`,
-          )
-        } catch (error) {
-          console.warn(`${TAG} card preset '${cardPresetId}' verification failed:`, error)
-        }
+      } catch (error) {
+        console.warn(`${TAG} card preset '${cardPresetId}' verification failed:`, error)
       }
     }
   } catch (error) {
