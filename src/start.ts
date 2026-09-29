@@ -76,7 +76,6 @@ function appendOpening(
   session: SessionLike,
   text: string,
   route: { provider: string; model: string } | undefined,
-  lastTurn: number,
 ): 'assistant' | 'notice' | 'none' {
   if (route !== undefined) {
     try {
@@ -86,9 +85,17 @@ function appendOpening(
         content: [{ type: 'text', text }],
         source: { kind: 'model', provider: route.provider, model: route.model },
       }
+      session.append('turn/start', { turn: 1 }, { surfaceOp: 'append' })
+      session.append('step/start', { turn: 1, step: 1 }, { surfaceOp: 'append' })
       session.append(
         'assistant/message',
-        { turn: lastTurn, step: 0, message, stream: [] },
+        { turn: 1, step: 1, message, stream: [] },
+        { surfaceOp: 'append' },
+      )
+      session.append('step/end', { turn: 1, step: 1 }, { surfaceOp: 'append' })
+      session.append(
+        'turn/end',
+        { turn: 1, reason: { kind: 'completed' } },
         { surfaceOp: 'append' },
       )
       return 'assistant'
@@ -226,11 +233,8 @@ export function registerStartRoute(ctx: Context): void {
         // Opening LAST: the live follow stream then ends on the opening line.
         let openingWritten: 'assistant' | 'notice' | 'none' = 'none'
         if (typeof request.opening === 'string' && request.opening.trim().length > 0) {
-          const boundary = projections.stateOf(session, 'turnBoundary') as
-            { lastTurn?: number } | undefined
-          const lastTurn = boundary?.lastTurn ?? 0
           const opening = interpolateCardText(request.opening.trim(), card?.player)
-          openingWritten = appendOpening(session, opening, routeOf(agents, session.id), lastTurn)
+          openingWritten = appendOpening(session, opening, routeOf(agents, session.id))
         }
 
         console.log(
