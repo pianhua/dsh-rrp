@@ -212,7 +212,10 @@ function ensureSurfaceHead(events) {
   const headTurn = [
     insertedEvent('turn/start', { turn: 1 }, adjacent),
     insertedEvent('step/start', { turn: 1, step: 1 }, adjacent),
-    { ...insertedEvent('system/message', { turn: 1, step: 1, message: headMessage }, adjacent), surfaceOp: 'append' },
+    {
+      ...insertedEvent('system/message', { turn: 1, step: 1, message: headMessage }, adjacent),
+      surfaceOp: 'append',
+    },
     insertedEvent('step/end', { turn: 1, step: 1 }, adjacent),
     insertedEvent('turn/end', { turn: 1, reason: { kind: 'completed' } }, adjacent),
   ]
@@ -236,9 +239,7 @@ function normalizeEventLines(text) {
 
 function rewriteSeedMarkers(header, events) {
   let changed = 0
-  const hasMarker = events.some(
-    (event) => isEvent(event) && event.type === 'session/end-seed',
-  )
+  const hasMarker = events.some((event) => isEvent(event) && event.type === 'session/end-seed')
   if (!hasMarker) return 0
   // The V4 migrator refuses an inherited end-seed in a header that claims
   // unseeded (migration.ts), and 0.1.6 wrote isSeeded:false on some forked
@@ -406,7 +407,12 @@ function repairFile(path) {
   const body = events.map((event) => JSON.stringify(event)).join('\n')
   return {
     kind: 'repair',
-    label: result.kind === 'repair' ? result.label + (headInsertions > 0 ? '+head' : '') : headInsertions > 0 ? 'head-only' : 'seed-only',
+    label:
+      result.kind === 'repair'
+        ? result.label + (headInsertions > 0 ? '+head' : '')
+        : headInsertions > 0
+          ? 'head-only'
+          : 'seed-only',
     insertions,
     before,
     after: events.length,
