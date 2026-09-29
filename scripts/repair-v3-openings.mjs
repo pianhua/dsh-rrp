@@ -21,6 +21,7 @@
  * run and the repaired sessions, then retire this script; it is not a runtime
  * migration layer.
  */
+import { randomUUID } from 'node:crypto'
 import { copyFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -147,6 +148,78 @@ function insertedEvent(type, data, adjacent) {
   }
 }
 
+// V4 surface invariant (migrator foldSurface): the first surface event must be
+// a system/message — it becomes the protected head that later host system
+// prompts may replace. dsh-rrp logs start with plugin user/message context, so
+// the head turn is prepended and every existing turn number shifts by one.
+const SURFACE_EVENT_TYPES = new Set([
+  'system/message',
+  'developer/message',
+  'user/message',
+  'assistant/message',
+  'tool/result',
+])
+
+const HEAD_TEXT = '【DSH-Chronicle】RP 会话：正文由 Author 执笔，设定由卡包与技能按世界状态注入。'
+
+// The V3 codec requires a plugin source on system/message, and the v3→v4
+// migrator only lifts `@deepseek-ai/dsh-system-prompt` (role system) to the
+// V4 `system-prompt` kind that V4 load validation demands. The protected head
+// must therefore be attributed to the host's system-prompt producer.
+const HEAD_SOURCE = { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' }
+
+// Earlier head insertions used the V4 source shape (or our own plugin name) and
+// missed the surfaceOp marker, all of which the codecs refuse. Normalize our
+// head system messages to the one shape both eras accept.
+function rewriteV4StyleSystemSources(events) {
+  let changed = 0
+  for (const event of events) {
+    if (event.type !== 'system/message') continue
+    const message = event.data?.message
+    const source = message?.source
+    const ours =
+      source?.kind === 'system-prompt' ||
+      (source?.kind === 'plugin' && source?.plugin === 'dsh-rrp')
+    if (source !== undefined && source !== null && ours) {
+      message.source = { ...HEAD_SOURCE }
+      changed += 1
+    }
+    if (event.surfaceOp === undefined) {
+      event.surfaceOp = 'append'
+      changed += 1
+    }
+  }
+  return changed
+}
+
+function ensureSurfaceHead(events) {
+  const firstSurfaceIndex = events.findIndex(
+    (event) => isEvent(event) && SURFACE_EVENT_TYPES.has(event.type),
+  )
+  if (firstSurfaceIndex === -1) return 0
+  if (events[firstSurfaceIndex].type === 'system/message') return 0
+  for (const event of events) {
+    if (!hasTurnData(event)) continue
+    event.data.turn += 1
+  }
+  const adjacent = events[firstSurfaceIndex]
+  const headMessage = {
+    id: randomUUID(),
+    role: 'system',
+    content: [{ type: 'text', text: HEAD_TEXT }],
+    source: { ...HEAD_SOURCE },
+  }
+  const headTurn = [
+    insertedEvent('turn/start', { turn: 1 }, adjacent),
+    insertedEvent('step/start', { turn: 1, step: 1 }, adjacent),
+    { ...insertedEvent('system/message', { turn: 1, step: 1, message: headMessage }, adjacent), surfaceOp: 'append' },
+    insertedEvent('step/end', { turn: 1, step: 1 }, adjacent),
+    insertedEvent('turn/end', { turn: 1, reason: { kind: 'completed' } }, adjacent),
+  ]
+  events.splice(firstSurfaceIndex, 0, ...headTurn)
+  return headTurn.length
+}
+
 function normalizeEventLines(text) {
   const lines = text.split('\n')
   const headerLine = lines.shift() ?? ''
@@ -161,15 +234,20 @@ function normalizeEventLines(text) {
   return { header: JSON.parse(headerLine), events }
 }
 
-function seeded(header, events) {
-  return (
-    header.isSeeded === true ||
-    events.some((event) => isEvent(event) && event.type === 'session/end-seed')
-  )
-}
-
-function rewriteSeedMarkers(events) {
+function rewriteSeedMarkers(header, events) {
   let changed = 0
+  const hasMarker = events.some(
+    (event) => isEvent(event) && event.type === 'session/end-seed',
+  )
+  if (!hasMarker) return 0
+  // The V4 migrator refuses an inherited end-seed in a header that claims
+  // unseeded (migration.ts), and 0.1.6 wrote isSeeded:false on some forked
+  // logs that do carry the marker. The marker is the ground truth: align the
+  // header instead of leaving the log unloadable.
+  if (header.isSeeded !== true) {
+    header.isSeeded = true
+    changed += 1
+  }
   for (const event of events) {
     if (event.type !== 'session/end-seed') continue
     if (JSON.stringify(event.data) === JSON.stringify({ inherited: true })) continue
@@ -301,19 +379,41 @@ function repairFile(path) {
   const text = decode(path)
   const { header, events } = normalizeEventLines(text)
   const before = events.length
+  // Seed-marker/header integrity runs for every log, including ones whose
+  // turn structure needs no repair (0.1.6 seeded-header bug).
+  const seedChanges = rewriteSeedMarkers(header, events)
+  const sourceChanges = rewriteV4StyleSystemSources(events)
   const result = openingRepair(events)
-  if (result.kind === 'skip') {
+  const headInsertions = ensureSurfaceHead(events)
+  if (result.kind === 'skip' && seedChanges === 0 && sourceChanges === 0 && headInsertions === 0) {
     return { kind: 'skip', reason: result.reason, before, after: before, text }
   }
-  result.seedChanges = seeded(header, events) ? rewriteSeedMarkers(events) : 0
+  const insertions = [
+    ...(result.kind === 'repair' ? result.insertions : []),
+    ...(headInsertions > 0 ? ['surface-head turn(1)'] : []),
+  ]
+  const turnMap =
+    result.kind === 'repair'
+      ? result.turnMap + (headInsertions > 0 ? '; head→+1' : '')
+      : [
+          seedChanges > 0 ? 'seed-header' : '',
+          sourceChanges > 0 ? 'system-source' : '',
+          headInsertions > 0 ? 'head→+1' : '',
+        ]
+          .filter((part) => part.length > 0)
+          .join('; ')
   for (let index = 0; index < events.length; index += 1) events[index].seq = index
   const body = events.map((event) => JSON.stringify(event)).join('\n')
-  const nextText = JSON.stringify(header) + '\n' + (body.length === 0 ? '' : body + '\n')
   return {
-    ...result,
+    kind: 'repair',
+    label: result.kind === 'repair' ? result.label + (headInsertions > 0 ? '+head' : '') : headInsertions > 0 ? 'head-only' : 'seed-only',
+    insertions,
     before,
     after: events.length,
-    text: nextText,
+    seedChanges,
+    sourceChanges,
+    turnMap,
+    text: JSON.stringify(header) + '\n' + (body.length === 0 ? '' : body + '\n'),
   }
 }
 
@@ -397,6 +497,7 @@ for (const file of sessionFiles(root, args.onlyWorkspace)) {
       '→' +
       String(result.after) +
       (result.seedChanges > 0 ? '; end-seed data→{inherited:true}' : '') +
+      (result.sourceChanges > 0 ? '; system source→plugin' : '') +
       ']',
   )
   if (args.apply) {
