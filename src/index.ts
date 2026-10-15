@@ -16,6 +16,8 @@ import { registerCardUiRoute } from './card-ui-route.ts'
 import { registerCardWorkspaceRoute } from './card-workspace-route.ts'
 import { registerStageKitRoute } from './stage-kit-route.ts'
 import { registerExportRoute } from './export-route.ts'
+import { registerRecallRoute } from './recall-route.ts'
+import { forgetRecall, forgetAllRecall } from './recall.ts'
 import { registerCopilotRoute, forgetAllCopilot, forgetCopilot } from './copilot.ts'
 import { worldlineDigestProjection } from './projection/worldline-digest.ts'
 import { registerWorldlineRoute } from './worldline-route.ts'
@@ -176,6 +178,11 @@ export function apply(ctx: Context): void {
     registerExportRoute(scoped)
   })
 
+  // History recall (issue #38): 2-stage active recall route and host tool.
+  ctx.inject(['webServer'], (scoped: Context) => {
+    registerRecallRoute(scoped)
+  })
+
   // Activity ledger: the right-sidebar panel polls this host-side, in-memory
   // ledger (it is player-facing and must never enter the session log/model).
   ctx.inject(['webServer'], (scoped: Context) => {
@@ -241,11 +248,17 @@ export function apply(ctx: Context): void {
     // Fork-time cut cache: the host's readSession cannot read seeded sessions
     // on 0.1.6-alpha.2, so the exact cut observed at fork time is persisted
     // for cold positioning. Same store as the hide ledger; fire-and-forget.
-    registerWorldlineForkMarker(scoped, (childId, parentId, turn) => {
-      void worldlineStoreReady
-        .then((store) => store.setCut(childId, parentId, turn))
-        .catch(() => {})
-    })
+    registerWorldlineForkMarker(
+      scoped,
+      (childId, parentId, turn) => {
+        void worldlineStoreReady
+          .then((store) => store.setCut(childId, parentId, turn))
+          .catch(() => {})
+      },
+      (childId) => {
+        cleanupSession(childId)
+      },
+    )
   })
 
   // Summarizer: macro compass every N turns; the /summary command toggles it.
@@ -299,6 +312,7 @@ export function cleanupSession(sessionId: string): void {
   forgetInference(sessionId)
   forgetCopilot(sessionId)
   forgetProposals(sessionId)
+  forgetRecall(sessionId)
 }
 
 /**
@@ -314,6 +328,7 @@ export function cleanupAllSessions(): void {
   forgetAllInference()
   forgetAllCopilot()
   forgetAllProposals()
+  forgetAllRecall()
 }
 
 /** Resolve a Session id from an event payload. */

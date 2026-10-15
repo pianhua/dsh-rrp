@@ -36,6 +36,7 @@ export const RRP_ROUTES = {
   cardUi: '/dsh-rrp/card-ui',
   novelExport: '/dsh-rrp/export/novel',
   cardWorkspace: '/dsh-rrp/card-workspace',
+  recall: '/dsh-rrp/recall',
 } as const
 
 // ── Shared JSON vocabulary ──────────────────────────────────────────────────
@@ -360,4 +361,25 @@ export function drainSse(buffer: string, onEvent: (event: string, data: unknown)
     }
   }
   return rest
+}
+
+// ── /dsh-rrp/recall (issue #38 active history recall) ───────────────────────
+export interface RecallRequest {
+  sessionId: string
+  query?: string
+  turn?: number
+  radius?: number
+  limit?: number
+}
+
+export interface RecallResponse {
+  ok: boolean
+  notice: string
+  found: boolean
+  mode: 'search' | 'read'
+  query: string
+  requestedTurn: number
+  matches: Array<{ turn: number; excerpt: string }>
+  rounds: Array<{ turn: number; player: string; prose: string }>
+  rendered: string
 }

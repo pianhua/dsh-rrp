@@ -17,6 +17,7 @@ import {
 import { listProposals, stageProposal } from '../src/steward-proposals.ts'
 import { publishState } from '../src/state-publisher.ts'
 import { emptyWorldState } from '../src/world-state.ts'
+import { recallScopeOf, setRecallCooldowns, recallCooldownsOf } from '../src/recall.ts'
 import * as rrp from '../src/index.ts'
 
 function seedSessionScopedCaches(sessionId: string) {
@@ -30,6 +31,8 @@ function seedSessionScopedCaches(sessionId: string) {
   stageLoreDraftForTesting(sessionId, { name: 'draft', description: 'd', body: 'b' })
   DRAFTING.add(sessionId)
   stageProposal(sessionId, { kind: 'doc-note', title: 'note', body: 'b' })
+  recallScopeOf(sessionId).calls = 3
+  setRecallCooldowns(sessionId, [{ turn: 1, hash: 'h', atTurn: 1 }])
 
   const stateWrites: unknown[] = []
   const session = {
@@ -200,6 +203,8 @@ describe('cleanupSession (P0-4 memory leak cleanup)', () => {
     expect(DRAFTING.has(sessionId)).toBe(false)
     expect(getLastSummarizedTurn(sessionId)).toBeUndefined()
     expect(listProposals(sessionId)).toEqual([])
+    expect(recallScopeOf(sessionId).calls).toBe(0)
+    expect(recallCooldownsOf(sessionId)).toEqual([])
     publishState(stateSession, projections, { worldState })
     expect(stateWrites).toHaveLength(2)
     inferenceListeners.get('session/event')?.(inferenceSession, completedTurn)
