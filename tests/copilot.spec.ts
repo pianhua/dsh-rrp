@@ -78,6 +78,21 @@ describe('copilot agent (prompt + action parsing)', () => {
     expect(prompt).toContain('（剧情脉络未开启或尚未产出）')
   })
 
+  it('includes recalled history block when recall text is provided', () => {
+    const prompt = buildCopilotPrompt({
+      question: '之前我们在旧神庙找到了什么？',
+      card: '',
+      worldState: '',
+      summary: '',
+      lore: '',
+      transcript: '',
+      recall: '[第 3 轮回忆]\n在旧神庙找到了青铜钥匙。',
+    })
+    expect(prompt).toContain('【历史回忆】')
+    expect(prompt).toContain('在旧神庙找到了青铜钥匙。')
+    expect(prompt.indexOf('【历史回忆】')).toBeLessThan(prompt.indexOf('【剧情记录】'))
+  })
+
   it('re-reads the card block from disk instead of the start-time snapshot (issue #34)', () => {
     const home = mkdtempSync(join(tmpdir(), 'rrp-copilot-live-'))
     const dir = join(home, '.dsh-rrp', 'cards', 'live-card')

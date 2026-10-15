@@ -73,6 +73,26 @@ describe('Chronicler v2 reply contract', () => {
     expect(parsed?.evidence).toEqual(['正文写明米娅放下了手里的刀。', '正文写明玩家看见密道入口。'])
   })
 
+  it('parses an incremental patch reply and validates schema', () => {
+    const patch = {
+      trackedObjects: {
+        mia: {
+          character: { emotionalState: '放松' },
+        },
+      },
+    }
+    const parsed = parseChroniclerReply(
+      JSON.stringify({
+        patch,
+        changeSummary: '米娅放松了戒备。',
+        evidence: ['放下武器'],
+      }),
+    )
+    expect(parsed?.patch).toEqual(patch)
+    expect(parsed?.changeSummary).toBe('米娅放松了戒备。')
+    expect(parsed?.evidence).toEqual(['放下武器'])
+  })
+
   it('rejects the removed v1 shape and malformed v2 snapshots', () => {
     expect(
       parseChroniclerReply(JSON.stringify({ characters: {}, inventory: {}, scene: {}, flags: {} })),
@@ -309,6 +329,38 @@ describe('Chronicler v2 runner', () => {
         origin: 'local',
       }),
     )
+    expect(readActivity('chronicler-v2-session').entries.at(-1)?.phase).toBe('committed')
+  })
+
+  it('accepts and applies an incremental patch reply in runner', async () => {
+    forgetState('chronicler-v2-session')
+    forgetActivity('chronicler-v2-session')
+    forgetInference('chronicler-v2-session')
+    const patchReply = JSON.stringify({
+      patch: {
+        trackedObjects: {
+          mia: {
+            character: { emotionalState: '放松' },
+          },
+        },
+      },
+      changeSummary: '米娅放松了。',
+      evidence: ['放下刀'],
+    })
+    const host = fakeHost(PRIOR, patchReply)
+    registerChronicler(host.ctx as never, 'rp')
+    host.listeners.get('session/event')?.(host.session, {
+      type: 'turn/end',
+      data: { reason: { kind: 'completed' } },
+    })
+
+    const outcome = await host.started()!.run({ id: 'job-1', append() {}, updateProgress() {} }).done
+    expect(outcome.status).toBe('completed')
+    const stateMessage = host.appended.find((entry) => entry.type === 'user/message')
+    const payload = payloadOf(stateMessage?.data)
+    expect(
+      (payload?.worldState as WorldState)?.trackedObjects?.mia?.character?.emotionalState,
+    ).toBe('放松')
     expect(readActivity('chronicler-v2-session').entries.at(-1)?.phase).toBe('committed')
   })
 

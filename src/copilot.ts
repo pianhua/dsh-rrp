@@ -57,6 +57,8 @@ import {
   listProposals,
   stageProposal,
 } from './steward-proposals.ts'
+import { termsOf, recallHistory } from './recall.ts'
+import { fetchSessionRounds } from './recall-route.ts'
 import {
   COPILOT_NO_MODEL_ROUTE,
   COPILOT_SSE,
@@ -601,6 +603,30 @@ export function registerCopilotRoute(ctx: Context): void {
           const card = projections.stateOf(session, CARD_KEY) as CardContext | null | undefined
           const summaryValue = projections.stateOf(session, SUMMARY_KEY)
           const lore = loreEntriesOf(projections.stateOf(session, RRP_LORE_KEY))
+
+          let recallText = ''
+          try {
+            const persistence = runtime.get('sessionPersistence') as never
+            const rounds = await fetchSessionRounds(sessionId, session, projections, persistence)
+            if (rounds.length > 0) {
+              const queryTerms = termsOf(message)
+              if (queryTerms.length > 0) {
+                const recallRes = recallHistory({
+                  rounds,
+                  query: queryTerms.join(' '),
+                  limit: 3,
+                })
+                if (recallRes.found && recallRes.matches.length > 0) {
+                  recallText = recallRes.matches
+                    .map((m) => `[第 ${m.turn} 轮回忆]\n${m.excerpt}`)
+                    .join('\n\n')
+                }
+              }
+            }
+          } catch {
+            // Degrade gracefully if recall fails
+          }
+
           const prompt = buildCopilotPrompt({
             question: message,
             card: card === null || card === undefined ? '' : liveCardContextText(card),
@@ -611,6 +637,7 @@ export function registerCopilotRoute(ctx: Context): void {
                 : renderMacroSummary(summaryValue as Parameters<typeof renderMacroSummary>[0]),
             lore: lore.map((skill) => '- ' + skill.name + '：' + skill.description).join('\n'),
             transcript: transcriptOf(projections, session),
+            recall: recallText,
           })
 
           const historyMessages = store0.turns.slice(-HISTORY_FEED, -1).map((turn) => ({

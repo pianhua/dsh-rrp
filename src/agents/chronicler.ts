@@ -18,11 +18,15 @@ const evidenceSchema = z.preprocess(
 
 export const chroniclerReplySchema = z
   .object({
-    state: worldStateSchema,
+    state: worldStateSchema.optional(),
+    patch: z.record(z.string(), z.unknown()).optional(),
     changeSummary: z.string(),
     evidence: evidenceSchema,
   })
   .strict()
+  .refine((data) => data.state !== undefined || data.patch !== undefined, {
+    message: 'Chronicler must provide either state or patch',
+  })
 
 /** The Chronicler's persona and rules. */
 export const CHRONICLER_SYSTEM_PROMPT = [
@@ -49,12 +53,13 @@ export const CHRONICLER_SYSTEM_PROMPT = [
   '',
   '【输出契约】',
   '- 只输出一个 JSON 对象，不要 Markdown、解释或推理过程。',
-  '- 对象必须包含 state（完整 WorldState v2）、changeSummary（面向玩家的变更摘要，简短且不泄密）和 evidence（面向玩家可读的明确证据数组；无变化时可为空数组）。',
-  '- state 必须包含 version、trackedObjects、globalFields、objectives、conflicts、cognition、relations、currentEvents 七个完整字段。',
-  '- state 内每个字段的 definition 只可能是 "card-defined"（卡包声明）或 "undeclared"（运行时新建）；你新建的字段一律写 "undeclared"。',
+  '- 对象可采用两种格式之一：',
+  '  1. 完整状态：{"state": 完整WorldState v2, "changeSummary": "…", "evidence": ["…"]}',
+  '  2. 增量补丁：{"patch": 增量补丁, "changeSummary": "…", "evidence": ["…"]}（patch 仅包含有变更的 trackedObjects/globalFields/objectives/conflicts/cognition/relations/currentEvents，未变化的对象不必重复输出）。',
+  '- 无论采用哪种形式，字段 definition 只可能是 "card-defined"（卡包声明）或 "undeclared"（运行时新建）；你新建的字段一律写 "undeclared"。',
   '- changeSummary 不得泄露 hidden/model 保护内容，不得包含模型内部推理。',
   '',
-  '输出前逐项自检：① state 是完整 v2 切面；② 每个变化都能回指本轮明确剧情证据；③ 没有无必要新对象/字段；④ 没有玩家行动、对白或内心；⑤ 未提及的目标/矛盾/事件没有被自动关闭；⑥ 摘要和证据没有越过秘密揭示规则。',
+  '输出前逐项自检：① state 是完整 v2 切面或 patch 仅包含真实变更；② 每个变化都能回指本轮明确剧情证据；③ 没有无必要新对象/字段；④ 没有玩家行动、对白或内心；⑤ 未提及的目标/矛盾/事件没有被自动关闭；⑥ 摘要和证据没有越过秘密揭示规则。',
 ].join('\n')
 
 export interface ChroniclerPromptInput {
@@ -65,14 +70,15 @@ export interface ChroniclerPromptInput {
 }
 
 export interface ChroniclerReply {
-  state: WorldState
+  state?: WorldState
+  patch?: Record<string, unknown>
   changeSummary: string
   evidence: string[]
 }
 
 export function buildChroniclerPrompt(input: ChroniclerPromptInput): string {
   return [
-    '任务：根据本轮明确剧情证据更新 WorldState v2，输出完整 state 以及面向玩家的变更摘要和证据。',
+    '任务：根据本轮明确剧情证据更新 WorldState v2，输出完整 state 或增量 patch，以及面向玩家的变更摘要和证据。',
     '不要记录玩家行动、对白或内心；没有明确解决证据就不要关闭目标、矛盾或事件。',
     '',
     '【v2 结构样例（键名与取值必须完全一致，照抄此形状）】',
@@ -92,7 +98,7 @@ export function buildChroniclerPrompt(input: ChroniclerPromptInput): string {
     '【本轮明确剧情证据】',
     input.transcript,
     '',
-    '只输出 JSON：{"state":完整WorldState,"changeSummary":"…","evidence":["…"]}。临时对象优先使用外部引用。',
+    '只输出 JSON：{"state":完整WorldState,"changeSummary":"…","evidence":["…"]} 或 {"patch":增量补丁,"changeSummary":"…","evidence":["…"]}。临时对象优先使用外部引用。',
   ].join('\n')
 }
 
@@ -199,7 +205,23 @@ function repairReferences(record: Record<string, unknown>): void {
 
 export function repairChroniclerEnvelope(parsed: unknown): unknown {
   if (parsed === null || typeof parsed !== 'object') return parsed
-  const state = (parsed as Record<string, unknown>).state
+  const envelope = parsed as Record<string, unknown>
+  if (envelope.patch !== undefined && envelope.patch !== null && typeof envelope.patch === 'object') {
+    const patchObj = envelope.patch as Record<string, unknown>
+    if (patchObj.trackedObjects && typeof patchObj.trackedObjects === 'object') {
+      for (const object of Object.values(patchObj.trackedObjects as Record<string, unknown>)) {
+        if (object && typeof object === 'object') {
+          const objectRecord = object as Record<string, unknown>
+          repairFieldRecord(objectRecord.fields)
+        }
+      }
+    }
+    if (patchObj.globalFields && typeof patchObj.globalFields === 'object') {
+      repairFieldRecord(patchObj.globalFields)
+    }
+    return parsed
+  }
+  const state = envelope.state
   if (state === null || typeof state !== 'object') return parsed
   const record = state as Record<string, unknown>
   const objects = record.trackedObjects

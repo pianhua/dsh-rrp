@@ -55,6 +55,7 @@ import {
   type WorldState,
 } from './world-state.ts'
 import { sanitizePlayerText, sanitizeWorldStateDiff } from './world-state-visibility.ts'
+import { applyWorldStatePatch } from './world-state-references.ts'
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'chronicler'
@@ -456,7 +457,21 @@ async function runInference(
       return { status: 'stale' }
     }
 
-    const diff = diffWorldState(prior, reply.state)
+    let nextState: WorldState
+    if (reply.patch !== undefined) {
+      const applied = applyWorldStatePatch(prior, reply.patch, { allowHiddenContent: true })
+      if (!applied.ok) {
+        console.warn(TAG + ' Chronicler patch failed to apply: ' + applied.message)
+        return { status: 'failed' }
+      }
+      nextState = applied.state
+    } else if (reply.state !== undefined) {
+      nextState = reply.state
+    } else {
+      return { status: 'failed' }
+    }
+
+    const diff = diffWorldState(prior, nextState)
     if (diff.changes.length === 0) {
       // No-op inference is activity only: it must not advance the durable prose
       // cursor or create a WorldState timeline event.
@@ -479,14 +494,14 @@ async function runInference(
       typeof turnBoundary?.lastTurn === 'number' && Number.isInteger(turnBoundary.lastTurn)
         ? turnBoundary.lastTurn
         : undefined
-    const playerSafeDiff = sanitizeWorldStateDiff(diff, prior, reply.state)
+    const playerSafeDiff = sanitizeWorldStateDiff(diff, prior, nextState)
     const evidenceParts = [
       ...(reply.changeSummary === undefined
         ? []
-        : [sanitizePlayerText(reply.changeSummary, prior, reply.state)]),
+        : [sanitizePlayerText(reply.changeSummary, prior, nextState)]),
       ...(reply.evidence === undefined || reply.evidence.length === 0
         ? []
-        : ['证据：' + sanitizePlayerText(reply.evidence.join('；'), prior, reply.state)]),
+        : ['证据：' + sanitizePlayerText(reply.evidence.join('；'), prior, nextState)]),
     ]
     const timelineBatch: WorldStateTimelineChangeBatch = {
       kind: 'changes',
@@ -504,7 +519,7 @@ async function runInference(
     // snapshot. Failed/cancelled/no-op paths never reach this publisher call.
     if (
       !publishState(session, faces.projections, {
-        worldState: reply.state,
+        worldState: nextState,
         stateFoldSeq: throughSeq,
         worldStateTimelineBatch: timelineBatch,
       })

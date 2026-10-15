@@ -112,6 +112,8 @@ export interface CopilotPromptInput {
   lore: string
   /** Recent prose, already tail-capped by the caller. */
   transcript: string
+  /** Optional historical facts retrieved via active recall engine. */
+  recall?: string
 }
 
 /**
@@ -125,6 +127,9 @@ export function buildCopilotPrompt(input: CopilotPromptInput): string {
     '【剧情脉络】\n' +
       (input.summary.trim().length > 0 ? input.summary : '（剧情脉络未开启或尚未产出）'),
     '【已有设定集】\n' + (input.lore.trim().length > 0 ? input.lore : '（暂无）'),
+    ...(input.recall && input.recall.trim().length > 0
+      ? ['【历史回忆】\n' + input.recall.trim()]
+      : []),
     '【剧情记录】\n' + (input.transcript.trim().length > 0 ? input.transcript : '（暂无剧情）'),
     '【玩家】\n' + input.question,
   ]
