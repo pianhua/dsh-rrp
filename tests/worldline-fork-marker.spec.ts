@@ -112,4 +112,17 @@ describe('worldline fork marker', () => {
     })
     expect(called).toBe(false)
   })
+
+  it('calls onFork with childId to purge lingering state on fork', () => {
+    const parent = session('parent')
+    const child = session('child', { parentSession: 'parent', isSeeded: true })
+    const purged: string[] = []
+    publishWorldlineForkMarker(child, {
+      sessions: { get: () => parent },
+      projections: { stateOf: () => undefined } as never,
+      publish: () => true,
+      onFork: (childId) => purged.push(childId),
+    })
+    expect(purged).toEqual(['child'])
+  })
 })

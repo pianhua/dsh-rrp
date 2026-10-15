@@ -40,6 +40,8 @@ export interface WorldlineForkMarkerFaces {
   publish?: typeof publishWorldlineForkCut
   /** Observed with every published non-null cut: (childId, parentId, turn). */
   onCut?: (childId: string, parentId: string, turn: number) => void
+  /** Called when a child session is detected as a fork, to purge any inherited or stale in-flight state. */
+  onFork?: (childId: string) => void
 }
 
 export function publishWorldlineForkMarker(
@@ -47,6 +49,7 @@ export function publishWorldlineForkMarker(
   faces: WorldlineForkMarkerFaces,
 ): boolean {
   if (!isWorldlineFork(child)) return false
+  faces.onFork?.(child.id)
   const parentId = child.header!.parentSession!
   const parent = faces.sessions.get(parentId) as ForkSession | undefined
   if (parent === undefined) return false
@@ -61,6 +64,7 @@ export function publishWorldlineForkMarker(
 export function registerWorldlineForkMarker(
   ctx: Context,
   onCut?: WorldlineForkMarkerFaces['onCut'],
+  onFork?: WorldlineForkMarkerFaces['onFork'],
 ): void {
   const runtime = ctx as unknown as ListeningRuntimeFaces
   const sessions = face<SessionsService>(runtime, 'sessions')
@@ -72,7 +76,7 @@ export function registerWorldlineForkMarker(
       try {
         const child = args[0] as ForkSession | undefined
         if (child === undefined || published.has(child.id) || !isWorldlineFork(child)) return
-        if (publishWorldlineForkMarker(child, { sessions, projections, onCut }))
+        if (publishWorldlineForkMarker(child, { sessions, projections, onCut, onFork }))
           published.add(child.id)
       } catch (cause) {
         console.warn('[dsh-rrp] worldline fork marker failed: ' + String(cause))

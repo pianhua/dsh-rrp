@@ -262,7 +262,7 @@ function fakeHost(
       return () => {}
     },
   }
-  return { ctx, session, listeners, appended, started: () => started }
+  return { ctx, session, listeners, appended, events, started: () => started }
 }
 
 const payloadOf = (data: unknown) =>
@@ -419,4 +419,76 @@ describe('Chronicler v2 runner', () => {
     expect((await hooks.done).status).toBe('killed')
     expect(host.appended.filter((entry) => entry.type === 'user/message')).toHaveLength(0)
   })
+
+  it('discards inference when prose was rolled back before throughSeq', async () => {
+    forgetState('chronicler-v2-session')
+    forgetActivity('chronicler-v2-session')
+    forgetInference('chronicler-v2-session')
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const host = fakeHost(PRIOR, rawReply(NEXT), {
+      llm: {
+        async *stream() {
+          await gate
+          yield { type: 'text-delta', text: rawReply(NEXT, { changeSummary: '米娅放松了。', evidence: ['放下刀'] }) }
+        },
+      },
+    })
+    registerChronicler(host.ctx as never, 'rp')
+    host.listeners.get('session/event')?.(host.session, {
+      type: 'turn/end',
+      data: { reason: { kind: 'completed' } },
+    })
+
+    const runPromise = host.started()!.run({ id: 'job-1', append() {}, updateProgress() {} }).done
+    // Simulate rollback by clearing messages in events before LLM finishes
+    host.events.length = 0
+    release()
+
+    const outcome = await runPromise
+    expect(outcome.status).toBe('stale')
+    expect(host.appended.filter((entry) => entry.type === 'user/message')).toHaveLength(0)
+    const log = readActivity('chronicler-v2-session')
+    expect(log.entries[log.entries.length - 1]?.phase).toBe('stale')
+  })
+
+  it('discards inference when a racing fold has already passed throughSeq', async () => {
+    forgetState('chronicler-v2-session')
+    forgetActivity('chronicler-v2-session')
+    forgetInference('chronicler-v2-session')
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const host = fakeHost(PRIOR, rawReply(NEXT), {
+      llm: {
+        async *stream() {
+          await gate
+          yield { type: 'text-delta', text: rawReply(NEXT, { changeSummary: '米娅放松了。', evidence: ['放下刀'] }) }
+        },
+      },
+    })
+    registerChronicler(host.ctx as never, 'rp')
+    host.listeners.get('session/event')?.(host.session, {
+      type: 'turn/end',
+      data: { reason: { kind: 'completed' } },
+    })
+
+    const runPromise = host.started()!.run({ id: 'job-1', append() {}, updateProgress() {} }).done
+    // Simulate racing fold that already published up to seq 10
+    host.events.push({
+      type: 'user/message',
+      data: { source: { kind: 'rrp', rrp: { worldState: NEXT, stateFoldSeq: 10 } } },
+    })
+    release()
+
+    const outcome = await runPromise
+    expect(outcome.status).toBe('stale')
+    expect(host.appended.filter((entry) => entry.type === 'user/message')).toHaveLength(0)
+    const log = readActivity('chronicler-v2-session')
+    expect(log.entries[log.entries.length - 1]?.phase).toBe('stale')
+  })
 })
+

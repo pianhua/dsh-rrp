@@ -45,7 +45,7 @@ import {
 } from './host-faces.ts'
 import { matchesPreset } from './preset-id.ts'
 import { publishState } from './state-publisher.ts'
-import { pendingTranscriptOf, proseHeadSeqOf } from './transcript-reader.ts'
+import { pendingTranscriptOf, proseHeadSeqOf, transcriptSliceOf } from './transcript-reader.ts'
 import { type WorldStateTimelineChangeBatch } from './world-state-timeline.ts'
 import {
   WORLD_STATE_KEY,
@@ -423,6 +423,34 @@ async function runInference(
       console.log(
         TAG +
           ' Chronicler result discarded (player corrected); queued a covering rerun for session ' +
+          session.id,
+      )
+      return { status: 'stale' }
+    }
+
+    // Guard against prose rollback or racing folds: if the session rolled back
+    // (head seq < throughSeq) or another pass already folded this boundary
+    // (lastFoldSeq >= throughSeq), this inference result is stale.
+    const slice = transcriptSliceOf(faces.projections, session)
+    const currentHeadSeq = proseHeadSeqOf(faces.projections, session)
+    if (currentHeadSeq < throughSeq || slice.lastFoldSeq >= throughSeq) {
+      recordActivity(session.id, {
+        id: activityId,
+        at: nowIso(),
+        actor: 'chronicler',
+        target: 'world-state',
+        phase: 'stale',
+        detailKey: 'detail.staleDiscarded',
+      })
+      console.log(
+        TAG +
+          ' Chronicler result stale (prose moved or already folded: head=' +
+          String(currentHeadSeq) +
+          ', lastFold=' +
+          String(slice.lastFoldSeq) +
+          ', target=' +
+          String(throughSeq) +
+          ') for session ' +
           session.id,
       )
       return { status: 'stale' }
