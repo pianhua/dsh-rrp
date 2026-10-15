@@ -10,10 +10,20 @@
 | 项 | 值 |
 | :--- | :--- |
 | 安装宿主 | `@deepseek-ai/dsh@0.2.0-rc.1`（npm 全局，`dsh --version` 核验） |
+| 开发宿主 | `~/.dsh-rrp/host/node_modules/@deepseek-ai/dsh`（npm 平铺树，`host-runner` 优先解析；安装：`npm install --prefix ~/.dsh-rrp/host @deepseek-ai/dsh@0.2.0-rc.1`） |
 | 源码克隆 | 每台机器的本地 `deepseek-harness` checkout，tag `dsh-v0.2.0-rc.1`（commit `4878cdabd8`） |
 | 索引 | codegraph（仅索引宿主克隆；`codegraph telemetry off` 已执行） |
 | peerDependencies | 9 个 `dsh-*` peer 全部 `^0.2.0-rc.1`（dev 实装同版） |
 | 升级日期 | 2026-09-29 |
+
+> 为什么开发宿主装在 `~/.dsh-rrp/host` 而不是全局或仓库顶层：全局版本可能超前于基线；仓库顶层用 pnpm 装 dsh 会与 9 个 `dsh-*` dev 包产生二次解析宇宙，真机出现过 `dsh-tool-pwsh`/`dsh-tool-fs` 因 `dsh-sandbox` 导出版本错位而 "never started" 的故障（2026-10-13 实测）。npm 平铺树与发布形态一致，可复现。
+
+## 未升级发现（0.2.1-alpha.1，2026-10-13 实测，暂不升级）
+
+| 现象 | 影响 | 处置 |
+| :--- | :--- | :--- |
+| 失败回合（如 MISSING_CREDENTIAL 中止）写入的会话日志，重启后被 0.2.0 格式校验器拒绝（`turn/start does not open the expected turn`），0.2.1 自身读旧档则正常 | 升级前必须修：失败路径的日志写形态与新版校验器不一致 | 升级流程中复现并修复，补一条失败回合重启加载的验收 |
+| DSH 0.2.x 在 Windows 上监听端口被 netstat 报为 PID 0（`Get-NetTCPConnection` 同样查不到属主） | 依赖端口→PID 的工具全部失灵 | `host-runner` 已改用进程命令行扫描识别（2026-10-13） |
 
 源码克隆与安装版本必须**严格同 tag**。升级宿主后第一件事：在克隆里 `git fetch && git checkout dsh-v<新版本>`，然后更新上表。
 

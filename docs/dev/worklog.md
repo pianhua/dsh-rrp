@@ -1,5 +1,23 @@
 # WORKLOG.md — 工作区状态盘点（追加式，最新在上）
 
+## 2026-10-13 · 第一阶段改造：开发环境打通 + 后台错误透传
+
+### 已完成
+- **宿主基线落地运行**：按 HOST_BASELINE 的 0.2.0-rc.1 安装专用宿主到本机 `~/.dsh-rrp/host`（npm 平铺树，避免顶层 pnpm 装 dsh 造成的 dsh-sandbox 版本错位）；`host-runner.mjs` 的 `resolveDshBin()` 解析顺序改为 仓库本地 → `~/.dsh-rrp/host` → 全局。
+- **host-runner 进程识别修复**（闭环 2026-09-25 记录的 "启动器未能生成可验证 runner 状态" 问题）：DSH 0.2.x 在 Windows 上监听端口被 netstat 报为 PID 0，端口→PID 映射不可靠；改为扫描进程命令行中的精确 `--profile <p> --port <n>` 对（Windows 用 PowerShell CIM，Linux 用 ps），保留 state 的 PID+创建时间复核；无 state 时精确 argv 匹配也可管理进程。start/stop/status 全链路实测通过。
+- **后台智体错误透传**：`collectText()` 原先忽略流式 `finish` 错误块，模型调用失败（如 MISSING_CREDENTIAL）被误报为 "EMPTY reply"。现在遇到 `error`/`aborted` finish 直接抛出真实原因（含 code 与 message），Chronicler/Summarizer/Scribe/月停四个后台智体同时受益；真机日志已验证输出 `LLM stream failed (error, MISSING_CREDENTIAL): llm-deepseek: no API key …`。
+- 单元测试新增 5 例（collectText 成功拼接 / error finish 嵌套与扁平两种形状 / aborted / 空成功流）。
+
+### 验证
+- 全量质量门：typecheck、lint、format:check、Vitest 60 文件 / 489 用例、build 全部通过。
+- 真机：rp-dev profile 下开局「雪夜雁门客栈」「女仆大小姐」均成功建会话、写开场白、触发 Chronicler；旧存档重启后可正常加载。
+
+### 未完成/下一步
+- **真实游玩闭环待玩家配置模型密钥**：会话内报 `MISSING_CREDENTIAL`，需在 设置 → 模型（Models）页写入 DEEPSEEK_API_KEY（credentials service），或在启动环境中 export 该变量。配好后：发消息 → Author 出正文 → Chronicler 结算 → 世界状态页签可见更新。
+- **E2E 自动玩局（Playwright + 固定模型输出）未开始**：需先摸清宿主 Models 设置存储/API 以注入 stub 模型路由；计划在密钥真机验证后动工。
+- **宿主 0.2.1-alpha.1 发现两个升级阻塞问题**（详见 docs/reference/HOST_BASELINE.md 未升级发现节）：失败回合会把会话写成 0.2.0 校验器无法加载的格式；netstat 端口归属丢失。升级宿主前先解决。
+- 未提交；待用户确认后按功能点拆提交。
+
 ## 2026-09-25 · WorldState v2 Phase 6/7/9 UI、可见性与消费者迁移
 
 ### 已完成

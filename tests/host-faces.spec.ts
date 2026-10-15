@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_JSON_BODY_LIMIT,
+  collectText,
   readJsonBody,
   RequestBodyTooLargeError,
   readBody,
@@ -77,5 +78,78 @@ describe('bounded JSON request bodies', () => {
 
     await expect(readBody(req, { maxBytes: 5 })).rejects.toBeInstanceOf(RequestBodyTooLargeError)
     expect(req.readCount).toBe(2)
+  })
+})
+
+describe('collectText', () => {
+  async function* streamOf(chunks: unknown[]) {
+    for (const chunk of chunks) yield chunk
+  }
+
+  it('concatenates text-delta chunks across a successful stream', async () => {
+    const text = await collectText(
+      streamOf([
+        { type: 'block-start', index: 0, blockType: 'text' },
+        { type: 'text-delta', index: 0, text: '你好' },
+        { type: 'text-delta', index: 0, text: '，世界' },
+        { type: 'finish', reason: { kind: 'stop' } },
+      ]) as AsyncIterable<never>,
+    )
+
+    expect(text).toBe('你好，世界')
+  })
+
+  it('throws with the real cause instead of returning an empty string on an error finish', async () => {
+    await expect(
+      collectText(
+        streamOf([
+          {
+            type: 'finish',
+            reason: {
+              kind: 'error',
+              failure: {
+                code: 'MISSING_CREDENTIAL',
+                message: 'llm-deepseek: no API key for provider route "deepseek-official"',
+              },
+            },
+          },
+        ]) as AsyncIterable<never>,
+      ),
+    ).rejects.toThrow(/MISSING_CREDENTIAL.*no API key/s)
+  })
+
+  it('also accepts failure details flattened onto the reason', async () => {
+    await expect(
+      collectText(
+        streamOf([
+          {
+            type: 'finish',
+            reason: { kind: 'error', code: 'MISSING_CREDENTIAL', message: 'no API key' },
+          },
+        ]) as AsyncIterable<never>,
+      ),
+    ).rejects.toThrow(/MISSING_CREDENTIAL/)
+  })
+
+  it('throws on an aborted finish as well', async () => {
+    await expect(
+      collectText(
+        streamOf([
+          { type: 'text-delta', index: 0, text: 'partial' },
+          {
+            type: 'finish',
+            reason: { kind: 'aborted', failure: { code: 'ABORTED', message: 'cancelled' } },
+          },
+        ]) as AsyncIterable<never>,
+      ),
+    ).rejects.toThrow(/aborted.*cancelled/s)
+  })
+
+  it('still returns an empty string for a clean stream with no text', async () => {
+    const text = await collectText(
+      streamOf([{ type: 'finish', reason: { kind: 'stop' } }]) as AsyncIterable<never>,
+    )
+
+    expect(text).toBe('')
   })
 })

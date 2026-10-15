@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url'
 import {
   decidePortOwnership,
   matchesRunnerArguments,
+  parsePosixCommandLine,
   parseWindowsCommandLine,
 } from './host-runner-ownership.mjs'
 
@@ -60,9 +61,29 @@ function parseArgs() {
 function resolveDshBin() {
   // The dsh package ships no "main"/"exports" entry (bin-only ESM package), so
   // require.resolve of the bare specifier fails even when installed. Resolve the
-  // bin subpath instead, checking the repo's own node_modules first, then the
-  // global npm root (NODE_PATH), so no local install is required.
+  // bin subpath instead, checking candidates in order:
+  //   1. the repo's own node_modules (if a local dev install exists),
+  //   2. the dedicated pinned host at ~/.dsh-rrp/host (self-consistent npm tree
+  //      matching HOST_BASELINE.md; install with:
+  //      npm install --prefix ~/.dsh-rrp/host @deepseek-ai/dsh@<baseline>),
+  //   3. the global npm install (any version — last resort).
   const candidates = [join(repoRoot, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')]
+  try {
+    candidates.push(
+      join(
+        process.env.USERPROFILE ?? process.env.HOME ?? '',
+        '.dsh-rrp',
+        'host',
+        'node_modules',
+        '@deepseek-ai',
+        'dsh',
+        'lib',
+        'bin.js',
+      ),
+    )
+  } catch {
+    // ignore: no home directory to probe
+  }
   try {
     const globalRoots = execSync('npm root -g', { encoding: 'utf8' }).trim()
     if (globalRoots) candidates.push(join(globalRoots, '@deepseek-ai', 'dsh', 'lib', 'bin.js'))
@@ -75,34 +96,78 @@ function resolveDshBin() {
   return null
 }
 
-/** Check if a port has a listening process. Returns PID or null. */
-function findPidOnPort(port) {
+/**
+ * Locate DSH runner processes whose command line carries the exact
+ * `--profile <profile> --port <port>` pair, by scanning process command
+ * lines instead of asking the OS which process owns the listening socket.
+ *
+ * Why not netstat/lsof: since DSH 0.2.x the web listener on Windows is
+ * reported by netstat as PID 0 (unattributable), so port→PID mapping is
+ * unreliable. The command line is the trustworthy identity: we only ever
+ * stop a process whose argv matches exactly, and the ownership module
+ * additionally re-checks PID + creation time against the recorded state.
+ */
+function findRunnerProcesses(port, profile) {
+  const candidates = []
   if (process.platform === 'win32') {
+    let rows
     try {
-      const output = execSync(`netstat -ano -p tcp | findstr :${port}`, {
-        encoding: 'utf8',
-        shell: 'cmd.exe',
-      })
-      const lines = output.split('\n')
-      for (const line of lines) {
-        if (line.includes('LISTENING')) {
-          const parts = line.trim().split(/\s+/)
-          const pid = parseInt(parts[parts.length - 1], 10)
-          if (!isNaN(pid) && pid > 0) return pid
-        }
+      const script =
+        "Get-CimInstance Win32_Process -Filter \"Name='node.exe' AND CommandLine LIKE '%bin.js%'\" " +
+        '| Select-Object ProcessId, CommandLine | ConvertTo-Json -Compress'
+      const raw = execFileSync(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-Command', script],
+        {
+          encoding: 'utf8',
+          windowsHide: true,
+        },
+      )
+      rows = raw.trim() ? JSON.parse(raw) : []
+      if (!Array.isArray(rows)) rows = [rows]
+    } catch {
+      return []
+    }
+    for (const row of rows) {
+      const pid = Number(row.ProcessId)
+      if (!isPositivePid(pid) || typeof row.CommandLine !== 'string') continue
+      const argv = parseWindowsCommandLine(row.CommandLine)
+      if (matchesRunnerArguments(argv, port, profile)) {
+        const info = readProcessInfo(pid)
+        if (info !== null) candidates.push(info)
       }
-    } catch {
-      // ignore
     }
-  } else {
-    try {
-      const output = execSync(`lsof -t -i:${port}`, { encoding: 'utf8' }).trim()
-      if (output) return parseInt(output.split('\n')[0], 10)
-    } catch {
-      // ignore
-    }
+    return candidates
   }
-  return null
+
+  try {
+    const output = execFileSync('ps', ['-eo', 'pid=,args='], { encoding: 'utf8' })
+    for (const line of output.split('\n')) {
+      if (!line.includes('bin.js')) continue
+      const trimmed = line.trim()
+      const space = trimmed.indexOf(' ')
+      if (space < 0) continue
+      const pid = parseInt(trimmed.slice(0, space), 10)
+      if (!isPositivePid(pid)) continue
+      const argv = parsePosixCommandLine(trimmed.slice(space + 1))
+      if (!matchesRunnerArguments(argv, port, profile)) continue
+      const info = readProcessInfo(pid)
+      if (info !== null) candidates.push(info)
+    }
+  } catch {
+    // ignore
+  }
+  return candidates
+}
+
+/** True when something answers HTTP on the port, whatever process it is. */
+async function portAlive(port) {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/`, { method: 'GET' })
+    return res.status > 0
+  } catch {
+    return false
+  }
 }
 
 function parseCreationDate(raw) {
@@ -185,14 +250,31 @@ function readState() {
   }
 }
 
-function portOwnership(port) {
+/**
+ * Classify the port: 'idle' (nothing there), 'owned' (a runner process whose
+ * identity verifies against recorded state), or 'conflict' (something
+ * responds that we cannot prove is ours — never kill those).
+ */
+async function portOwnership(port, profile) {
   const state = readState()
-  const listenerPid = findPidOnPort(port)
-  const processInfo = state && isPositivePid(state.pid) ? readProcessInfo(state.pid) : null
-  const decision = decidePortOwnership(state, processInfo, listenerPid, port)
-  if (decision === 'idle') return { kind: 'idle', state }
+  const effectiveProfile = state?.profile ?? profile
+  const candidates = findRunnerProcesses(port, effectiveProfile)
+  const runnerPid = candidates.length > 0 ? candidates[0].pid : null
+  const processInfo = runnerPid !== null ? candidates[0] : null
+  // A runner process whose exact argv matches is safe to manage even when no
+  // recorded state exists (e.g. an earlier crashed runner): the dedicated
+  // dev port/profile makes a foreign exact-match process implausible. PID
+  // reuse protection still applies whenever state was recorded.
+  if (state === null && runnerPid !== null) {
+    return { kind: 'owned', state: null, pid: runnerPid, unverified: true }
+  }
+  const decision = decidePortOwnership(state, processInfo, runnerPid, port)
+  if (decision === 'idle') {
+    if ((await portAlive(port)) && runnerPid === null) return { kind: 'conflict', state }
+    return { kind: 'idle', state }
+  }
   if (decision === 'owned') return { kind: 'owned', state, pid: state.pid }
-  return { kind: 'conflict', state, listenerPid }
+  return { kind: 'conflict', state, listenerPid: runnerPid }
 }
 
 function killPid(pid) {
@@ -225,9 +307,9 @@ function getCleanEnv() {
   return cleanEnv
 }
 
-async function stopHost(port) {
+async function stopHost(port, profile) {
   console.log(`[host-runner] Stopping DSH host on port ${port}...`)
-  const ownership = portOwnership(port)
+  const ownership = await portOwnership(port, profile)
   if (ownership.kind === 'idle') {
     if (ownership.state) rmSync(stateFile, { force: true })
     console.log(`[host-runner] Port ${port} is idle; stale runner state removed.`)
@@ -235,14 +317,14 @@ async function stopHost(port) {
   }
   if (ownership.kind === 'conflict') {
     console.error(
-      `[host-runner] Refusing to stop PID ${ownership.listenerPid} on port ${port}: process ownership could not be verified. Stop it manually if appropriate, then retry.`,
+      `[host-runner] Refusing to stop on port ${port}: no verified runner process, but something may still be answering. Stop it manually if appropriate, then retry.`,
     )
     process.exitCode = 1
     return
   }
 
   console.log(`[host-runner] Stopping verified runner process ${ownership.pid}...`)
-  const confirmed = portOwnership(port)
+  const confirmed = await portOwnership(port, profile)
   if (confirmed.kind !== 'owned' || confirmed.pid !== ownership.pid) {
     console.error(`[host-runner] Process identity changed before stop; refusing to signal any PID.`)
     process.exitCode = 1
@@ -255,7 +337,8 @@ async function stopHost(port) {
   }
 
   for (let i = 0; i < 30; i++) {
-    if (!findPidOnPort(port)) {
+    const gone = findRunnerProcesses(port, profile).length === 0 && !(await portAlive(port))
+    if (gone) {
       rmSync(stateFile, { force: true })
       console.log(`[host-runner] Host on port ${port} stopped cleanly.`)
       return
@@ -270,7 +353,7 @@ async function stopHost(port) {
 }
 
 async function startHost(port, profile) {
-  const ownership = portOwnership(port)
+  const ownership = await portOwnership(port, profile)
   if (ownership.kind === 'owned') {
     console.log(`[host-runner] Found verified runner process ${ownership.pid}; stopping it first.`)
     await stopHost(port)
@@ -326,22 +409,19 @@ async function startHost(port, profile) {
   const hostPid = child.pid
   console.log(`[host-runner] Background process spawned with PID ${hostPid}. Waiting for boot...`)
 
-  // 3. Poll for the port listener and capture an OS process identity.
+  // 3. Poll for a runner process with the expected identity.
   let ownedProcess = null
-  for (let i = 0; i < 50; i++) {
-    const listenerPid = findPidOnPort(port)
-    if (listenerPid !== null) {
-      const candidate = readProcessInfo(listenerPid)
-      if (candidate && matchesRunnerArguments(candidate.argv, port, profile)) {
-        ownedProcess = candidate
-        break
-      }
+  for (let i = 0; i < 75; i++) {
+    const candidates = findRunnerProcesses(port, profile)
+    if (candidates.length > 0) {
+      ownedProcess = candidates[0]
+      break
     }
     await new Promise((r) => setTimeout(r, 200))
   }
   if (ownedProcess === null) {
     console.error(
-      `[host-runner] Could not verify DSH process ownership on port ${port}; leaving any listener untouched.`,
+      `[host-runner] Could not verify a DSH runner process for --profile ${profile} --port ${port}; leaving any listener untouched.`,
     )
     process.exitCode = 1
     return
@@ -435,13 +515,12 @@ async function startHost(port, profile) {
   console.log(`======================================================\n`)
 }
 
-async function statusHost(port) {
-  const ownership = portOwnership(port)
-  const pid = findPidOnPort(port)
+async function statusHost(port, profile) {
+  const ownership = await portOwnership(port, profile)
   const state = readState()
 
   if (ownership.kind === 'idle') {
-    console.log(`[host-runner] Port ${port}: IDLE (no process listening)`)
+    console.log(`[host-runner] Port ${port}: IDLE (no verified runner process)`)
     if (state) {
       console.log(`[host-runner] Cleaning stale state file...`)
       try {
@@ -454,12 +533,14 @@ async function statusHost(port) {
   }
 
   if (ownership.kind === 'conflict') {
-    console.log(`[host-runner] Port ${port}: CONFLICT (unverified PID ${pid} listening)`)
+    console.log(`[host-runner] Port ${port}: CONFLICT (no verified runner process)`)
     console.log(
-      `  * Note: PID ${pid} is running without verified runner metadata. Stop it manually if appropriate.`,
+      `  * Note: something may still answer on this port without verified runner metadata. Stop it manually if appropriate.`,
     )
   } else {
-    console.log(`[host-runner] Port ${port}: ACTIVE (PID: ${pid}, verified runner process)`)
+    console.log(
+      `[host-runner] Port ${port}: ACTIVE (PID: ${ownership.pid}, verified runner process)`,
+    )
     if (state?.tokenUrl) {
       console.log(`  * Token URL : ${state.tokenUrl}`)
       console.log(`  * Started At: ${state.startedAt}`)
@@ -484,10 +565,10 @@ async function main() {
       await startHost(port, profile)
       break
     case 'stop':
-      await stopHost(port)
+      await stopHost(port, profile)
       break
     case 'status':
-      await statusHost(port)
+      await statusHost(port, profile)
       break
     default:
       console.log(

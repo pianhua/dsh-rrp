@@ -188,6 +188,18 @@ export interface AgentsService {
 export interface StreamChunkLike {
   type?: string
   text?: string
+  /**
+   * Terminal `finish` chunk carries the outcome; `error`/`aborted` mean the
+   * model call failed (the host normalizes adapter throws into this chunk
+   * instead of throwing), so consumers must not read an empty success.
+   * The host nests the details under `failure` (`{kind, failure:{message, code}}`).
+   */
+  reason?: {
+    kind?: string
+    message?: string
+    code?: string
+    failure?: { message?: string; code?: string }
+  }
 }
 
 export interface LlmService {
@@ -292,6 +304,16 @@ export async function collectText(stream: AsyncIterable<StreamChunkLike>): Promi
   let text = ''
   for await (const chunk of stream) {
     if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') text += chunk.text
+    if (chunk?.type === 'finish') {
+      const kind = chunk.reason?.kind
+      if (kind === 'error' || kind === 'aborted') {
+        const failure = chunk.reason?.failure ?? chunk.reason
+        const code = failure?.code ?? 'UNKNOWN'
+        const message = failure?.message ?? 'no failure detail'
+        console.warn(TAG + ' LLM stream finished with ' + kind + ' (' + code + '): ' + message)
+        throw new Error('LLM stream failed (' + kind + ', ' + code + '): ' + message)
+      }
+    }
   }
   return text
 }

@@ -12,6 +12,7 @@
 | :--- | :--- |
 | `dsh` CLI | 0.1.6-alpha.2 |
 | 宿主包（`@deepseek-ai/dsh-*`） | 0.1.6-alpha.2（嵌在全局 dsh 安装内，非顶层包） |
+| 开发宿主（host-runner 实际拉起） | `~/.dsh-rrp/host` 下按 HOST_BASELINE 钉死的版本（npm 平铺树；安装与原因见 [`reference/HOST_BASELINE.md`](reference/HOST_BASELINE.md)） |
 | Node.js | `.node-version` 固定为 `24.16.0` |
 | 包管理器 | `package.json` 固定为 `pnpm@10.14.0` |
 | 构建 | tsdown 0.23.0 + TypeScript 5.9 |
