@@ -5,6 +5,15 @@
 >
 > 附录：[`2026-09`](./worklog/2026-09.md) — WorldState v2、架构重构、世界线 v2、舞台 v2、展厅 v2、宿主 0.2.0 适配
 
+## 2026-10-16 · 向 dsh-tavern 靠齐：B0 仓库腐肉 + B1 P0 上下文浪费
+
+**方向修正**：用户要求向 dsh-tavern 的工程规范靠齐。勘察**推翻了前提的一半**——它没有 eslint / prettier / husky / commitlint，CI 里连 E2E 都不跑，所以靠齐 ≠ 加工具链。它真正的规范性在三件事：① 打在 `LlmAdapter` 边界的可重复模型桩（只换 `stream()`，工具/存储/HTTP/Chromium 全真；桩输出由「最新用户消息中的标记词」驱动，零 fixture；配负向对照证明测试真会失败）；② 产物漂移 `--check` 门禁；③ `docs/releases/vX.Y.md` 记录该版本全量回归数字。**我们已比它强**：eslint+prettier+hygiene+tests 三层 CI、`files` 白名单发布面。**明确不移植**（ADR 0015）：多 OS/多 Node CI 矩阵、安装器链、CDN purge、Pages 手册站、issue 模板、付费真模型 `testsets/`；`_Avoid_` 术语表它自己也没机器强制，不补。
+
+- **B0**：核实 10 个非 main 分支全部已并入 main（`--no-merged` 为空），删 9 个（`fix_two_issues` 被 `.gemini` 下 worktree 占用故保留）；移除 2 个已合并 worktree + prune 1 个失效注册 + 清掉 `.worktrees/` 内 1928 条 pnpm 悬空链接残骸（Windows 长路径：`rm -rf`、PowerShell 均失败，`cmd /c rmdir /s /q` 相对路径成功）。
+- **B1**（`82ddf5e`）：`publishState` 元数据短路原本只覆盖 `sediment`，`timelineMoved`/`foldMoved` 且 facts 指纹未变时仍逐字节重发整份快照。追加保留（游标与批次必须挂模型可见消息），改发一行零数值面包屑。失败测试先行两例，全量 63 文件 / 519 用例通过。
+
+**待决**：B2 用户已裁决「让生产真正消费契约层」——`AgentPromptContract` 五个对象生产零调用、只被 `tests/unit/agents-contract.spec.ts:26-32` 消费，横跨 5 模块需先出规格；B3 门禁扫源码（hygiene 目前不碰 `src/`；M1 易变后置 / V4 受保护头顺序 / 铁律一全是注释级；41 处 `as unknown as` + 12 处 `as never`；18 个 `src/client/**` 零测试引用；CI 不跑 `docs:build`；版本卡 `0.1.0` 无发布证据）；B4 主线 = 移植 adapter 边界桩做真机可重复玩局 E2E，属新子系统，先 spec + tickets。
+
 ## 2026-10-16 · 文档验真与工程化收尾（依赖对齐 / ADR 复审 / tests 分层）
 
 用户在 P0–P3 后提出一个更根本的质疑：**早期决策可能有误判，很多文档可能已经不具备真实性**。
