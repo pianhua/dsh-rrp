@@ -57,7 +57,7 @@ export const CHRONICLER_SYSTEM_PROMPT = [
   '  1. 完整状态：{"state": 完整WorldState v2, "changeSummary": "…", "evidence": ["…"]}',
   '  2. 增量补丁：{"patch": 增量补丁, "changeSummary": "…", "evidence": ["…"]}（patch 仅包含有变更的 trackedObjects/globalFields/objectives/conflicts/cognition/relations/currentEvents，未变化的对象不必重复输出）。',
   '- 无论采用哪种形式，字段 definition 只可能是 "card-defined"（卡包声明）或 "undeclared"（运行时新建）；你新建的字段一律写 "undeclared"。',
-  '- changeSummary 不得泄露 hidden/model 保护内容，不得包含模型内部推理。',
+  '- changeSummary 为面向玩家的变更摘要（简短且不泄露 hidden/model 保护内容），不得包含模型内部推理。',
   '',
   '输出前逐项自检：① state 是完整 v2 切面或 patch 仅包含真实变更；② 每个变化都能回指本轮明确剧情证据；③ 没有无必要新对象/字段；④ 没有玩家行动、对白或内心；⑤ 未提及的目标/矛盾/事件没有被自动关闭；⑥ 摘要和证据没有越过秘密揭示规则。',
 ].join('\n')

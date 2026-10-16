@@ -62,7 +62,7 @@ describe('WorldState v2 normalization', () => {
       },
     }
     const parsed = parseChroniclerReply(JSON.stringify({ state, changeSummary: '', evidence: [] }))
-    expect(parsed?.state.trackedObjects.mia?.character?.affinity).toBe(8)
+    expect(parsed?.state?.trackedObjects.mia?.character?.affinity).toBe(8)
     expect(parsed?.state).not.toHaveProperty('characters')
   })
 })

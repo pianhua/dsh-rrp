@@ -143,8 +143,8 @@ describe('Chronicler v2 reply contract', () => {
       JSON.stringify({ state: sparse, changeSummary: '无实质变化。', evidence: [] }),
     )
     expect(parsed).toBeDefined()
-    expect(parsed!.state.objectives).toEqual([])
-    expect(parsed!.state.globalFields).toEqual({})
+    expect(parsed!.state!.objectives).toEqual([])
+    expect(parsed!.state!.globalFields).toEqual({})
   })
 
   it('coerces an invented field definition to undeclared instead of failing the snapshot', () => {
@@ -163,10 +163,10 @@ describe('Chronicler v2 reply contract', () => {
     )
     expect(parsed).toBeDefined()
     expect(
-      (parsed!.state.trackedObjects.mia as { fields: Record<string, { definition: string }> })
+      (parsed!.state!.trackedObjects.mia as { fields: Record<string, { definition: string }> })
         .fields.trust?.definition,
     ).toBe('undeclared')
-    expect(parsed!.state.globalFields.mood?.definition).toBe('undeclared')
+    expect(parsed!.state!.globalFields.mood?.definition).toBe('undeclared')
   })
 
   it('repairs bare-name references to objectId or external references', () => {
@@ -186,7 +186,7 @@ describe('Chronicler v2 reply contract', () => {
       rawReply(drifted, { changeSummary: '矛盾出现。', evidence: [] }),
     )
     expect(parsed).toBeDefined()
-    expect(parsed!.state.conflicts[0]?.parties).toEqual([
+    expect(parsed!.state!.conflicts[0]?.parties).toEqual([
       { objectId: 'mia' },
       { external: { name: '客栈老板娘' } },
     ])
@@ -211,7 +211,7 @@ describe('Chronicler v2 reply contract', () => {
     )
     const parsed = parseChroniclerReply(reply)
     expect(parsed).toBeDefined()
-    const mia = parsed!.state.trackedObjects.mia as {
+    const mia = parsed!.state!.trackedObjects.mia as {
       character?: { affinity?: number }
       fields: Record<string, { value: number; min?: number }>
     }
