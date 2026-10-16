@@ -354,7 +354,8 @@ describe('Chronicler v2 runner', () => {
       data: { reason: { kind: 'completed' } },
     })
 
-    const outcome = await host.started()!.run({ id: 'job-1', append() {}, updateProgress() {} }).done
+    const outcome = await host.started()!.run({ id: 'job-1', append() {}, updateProgress() {} })
+      .done
     expect(outcome.status).toBe('completed')
     const stateMessage = host.appended.find((entry) => entry.type === 'user/message')
     const payload = payloadOf(stateMessage?.data)
@@ -484,7 +485,10 @@ describe('Chronicler v2 runner', () => {
       llm: {
         async *stream() {
           await gate
-          yield { type: 'text-delta', text: rawReply(NEXT, { changeSummary: '米娅放松了。', evidence: ['放下刀'] }) }
+          yield {
+            type: 'text-delta',
+            text: rawReply(NEXT, { changeSummary: '米娅放松了。', evidence: ['放下刀'] }),
+          }
         },
       },
     })
@@ -518,7 +522,10 @@ describe('Chronicler v2 runner', () => {
       llm: {
         async *stream() {
           await gate
-          yield { type: 'text-delta', text: rawReply(NEXT, { changeSummary: '米娅放松了。', evidence: ['放下刀'] }) }
+          yield {
+            type: 'text-delta',
+            text: rawReply(NEXT, { changeSummary: '米娅放松了。', evidence: ['放下刀'] }),
+          }
         },
       },
     })
@@ -543,4 +550,3 @@ describe('Chronicler v2 runner', () => {
     expect(log.entries[log.entries.length - 1]?.phase).toBe('stale')
   })
 })
-

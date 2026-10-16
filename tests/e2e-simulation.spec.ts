@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { emptyWorldState, diffWorldState, type WorldState } from '../src/world-state.ts'
-import {
-  applyWorldStatePatch,
-} from '../src/world-state-references.ts'
-import {
-  type WorldStateTimelineBatch,
-} from '../src/world-state-timeline.ts'
+import { applyWorldStatePatch } from '../src/world-state-references.ts'
+import { type WorldStateTimelineBatch } from '../src/world-state-timeline.ts'
 import { worldStateProjection } from '../src/projection/world-state.ts'
 import { worldStateTimelineProjection } from '../src/projection/world-state-timeline.ts'
 import { worldlineDigestProjection } from '../src/projection/worldline-digest.ts'
@@ -150,9 +146,7 @@ describe('End-to-End Multi-Turn Simulation (dsh-rrp)', () => {
     events.push(stateMsg(5, turn1State, turn1Batch))
 
     // --- Turn 2: Player Observes Mia -> Chronicler Incremental Patch Fold ---
-    events.push(
-      playerMsg(6, '我坐在壁炉旁烤火，注意到米娅腰间挂着一枚雕刻着飞鹰图腾的古老护符。'),
-    )
+    events.push(playerMsg(6, '我坐在壁炉旁烤火，注意到米娅腰间挂着一枚雕刻着飞鹰图腾的古老护符。'))
     events.push(
       assistantMsg(
         7,
@@ -209,9 +203,7 @@ describe('End-to-End Multi-Turn Simulation (dsh-rrp)', () => {
     events.push(stateMsg(8, turn2State, turn2Batch))
 
     // --- Turn 3: Player Talks to Mia -> Background Lore Unveiled ---
-    events.push(
-      playerMsg(9, '我递给米娅一杯热燕麦酒，温和询问关于飞鹰图腾与失踪导师的传闻。'),
-    )
+    events.push(playerMsg(9, '我递给米娅一杯热燕麦酒，温和询问关于飞鹰图腾与失踪导师的传闻。'))
     events.push(
       assistantMsg(
         10,
@@ -521,7 +513,8 @@ describe('End-to-End Multi-Turn Simulation (dsh-rrp)', () => {
   })
 
   it('injects recalled facts into Copilot prompt and guarantees KV prefix cache stability', () => {
-    const recalledSnippet = '[第 2 轮回忆]\n发现米娅戴着刻有飞鹰图腾的古老护符。\n\n[第 3 轮回忆]\n米娅透露导师雷蒙德在古遗迹调查暗蚀核心后失踪。'
+    const recalledSnippet =
+      '[第 2 轮回忆]\n发现米娅戴着刻有飞鹰图腾的古老护符。\n\n[第 3 轮回忆]\n米娅透露导师雷蒙德在古遗迹调查暗蚀核心后失踪。'
 
     const prompt = buildCopilotPrompt({
       question: '米娅的导师叫什么名字？护符有什么线索？',
@@ -562,22 +555,19 @@ describe('End-to-End Multi-Turn Simulation (dsh-rrp)', () => {
     const proseHeadSeqRollback = 3
     const liveFoldSeq0 = 2
 
-    const isStaleRollback =
-      proseHeadSeqRollback < throughSeq || liveFoldSeq0 >= throughSeq
+    const isStaleRollback = proseHeadSeqRollback < throughSeq || liveFoldSeq0 >= throughSeq
     expect(isStaleRollback).toBe(true)
 
     // 2. Racing fold case: liveFoldSeq >= throughSeq
     const proseHeadSeqNormal = 6
     const liveFoldSeqRacing = 5
 
-    const isStaleRacing =
-      proseHeadSeqNormal < throughSeq || liveFoldSeqRacing >= throughSeq
+    const isStaleRacing = proseHeadSeqNormal < throughSeq || liveFoldSeqRacing >= throughSeq
     expect(isStaleRacing).toBe(true)
 
     // 3. Normal valid case: proseHeadSeq >= throughSeq && liveFoldSeq < throughSeq
     const liveFoldSeqNormal = 4
-    const isStaleNormal =
-      proseHeadSeqNormal < throughSeq || liveFoldSeqNormal >= throughSeq
+    const isStaleNormal = proseHeadSeqNormal < throughSeq || liveFoldSeqNormal >= throughSeq
     expect(isStaleNormal).toBe(false)
   })
 })

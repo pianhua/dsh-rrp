@@ -206,7 +206,11 @@ function repairReferences(record: Record<string, unknown>): void {
 export function repairChroniclerEnvelope(parsed: unknown): unknown {
   if (parsed === null || typeof parsed !== 'object') return parsed
   const envelope = parsed as Record<string, unknown>
-  if (envelope.patch !== undefined && envelope.patch !== null && typeof envelope.patch === 'object') {
+  if (
+    envelope.patch !== undefined &&
+    envelope.patch !== null &&
+    typeof envelope.patch === 'object'
+  ) {
     const patchObj = envelope.patch as Record<string, unknown>
     if (patchObj.trackedObjects && typeof patchObj.trackedObjects === 'object') {
       for (const object of Object.values(patchObj.trackedObjects as Record<string, unknown>)) {

@@ -140,13 +140,15 @@ describe('recall route & tool (issue #38)', () => {
     const ctx = {
       effect: (fn: () => (() => void) | void) => fn(),
       get: (name: string) =>
-        (({
-          webServer,
-          sessionPersistence: persistence,
-          sessions,
-          sessionProjections: projections,
-          tools,
-        }) as Record<string, unknown>)[name],
+        (
+          ({
+            webServer,
+            sessionPersistence: persistence,
+            sessions,
+            sessionProjections: projections,
+            tools,
+          }) as Record<string, unknown>
+        )[name],
     }
     return { ctx, handlers, registeredTools, closes: () => closes }
   }
@@ -266,10 +268,7 @@ describe('recall route & tool (issue #38)', () => {
   })
 
   it('registers tool rrp_recall_history on host tools service', async () => {
-    const events = [
-      userMessage('钥匙藏在老树下'),
-      assistantMessage('记下了，老树下有铜钥匙'),
-    ]
+    const events = [userMessage('钥匙藏在老树下'), assistantMessage('记下了，老树下有铜钥匙')]
     const host = fakeHost(events)
     registerRecallRoute(host.ctx as never)
 

@@ -113,7 +113,9 @@ export function WorldlineTurnRail(props: WorldlineTurnRailProps): ReactNode {
                       <span style={S.detailHint}>{props.t('worldline.fullTextHint')}</span>
                     </div>
                   ) : null}
-                  {selected && node.seq >= 0 && (node.proseExcerpt.trim().length > 0 || node.turn === 0) ? (
+                  {selected &&
+                  node.seq >= 0 &&
+                  (node.proseExcerpt.trim().length > 0 || node.turn === 0) ? (
                     <Button
                       size="sm"
                       variant="primary"

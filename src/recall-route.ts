@@ -77,7 +77,8 @@ export async function fetchSessionRounds(
 
   if (session !== undefined && projections !== undefined) {
     try {
-      const digest = projections.stateOf(session, WORLDLINE_DIGEST_KEY) as WorldlineDigest | undefined
+      const digest = projections.stateOf(session, WORLDLINE_DIGEST_KEY) as
+        WorldlineDigest | undefined
       if (digest && Array.isArray(digest.turns)) {
         return digest.turns.map((t) => ({
           turn: t.turn,
@@ -106,27 +107,27 @@ export function registerRecallRoute(ctx: Context): void {
     return
   }
 
-type RecallOutcome =
-  | {
-      ok: true
-      status: 200
-      body: {
+  type RecallOutcome =
+    | {
         ok: true
-        notice: string
-        found: boolean
-        mode: 'search' | 'read'
-        query: string
-        requestedTurn: number
-        matches: Array<{ turn: number; excerpt: string }>
-        rounds: Array<{ turn: number; player: string; prose: string }>
-        rendered: string
+        status: 200
+        body: {
+          ok: true
+          notice: string
+          found: boolean
+          mode: 'search' | 'read'
+          query: string
+          requestedTurn: number
+          matches: Array<{ turn: number; excerpt: string }>
+          rounds: Array<{ turn: number; player: string; prose: string }>
+          rendered: string
+        }
       }
-    }
-  | {
-      ok: false
-      status: 400 | 403 | 404
-      error: string
-    }
+    | {
+        ok: false
+        status: 400 | 403 | 404
+        error: string
+      }
 
   const executeRecall = async (
     sessionId: string,
@@ -233,7 +234,9 @@ type RecallOutcome =
               additionalProperties: false,
               properties: { report: { type: 'string', required: true } },
             },
-            render: (_args: unknown, value: { report: string }) => [{ type: 'text', text: value.report }],
+            render: (_args: unknown, value: { report: string }) => [
+              { type: 'text', text: value.report },
+            ],
           },
           isConcurrencySafe: () => true,
           execute: async (
@@ -253,8 +256,7 @@ type RecallOutcome =
             } catch (error) {
               return {
                 report:
-                  '【历史回忆资料】\n' +
-                  (error instanceof Error ? error.message : String(error)),
+                  '【历史回忆资料】\n' + (error instanceof Error ? error.message : String(error)),
               }
             }
           },

@@ -98,7 +98,11 @@ export interface RecallInput {
 }
 
 function str(value: unknown): string {
-  return typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value)
+  return typeof value === 'string'
+    ? value
+    : value === undefined || value === null
+      ? ''
+      : String(value)
 }
 
 function clampInteger(value: unknown, fallback: number, minimum: number, maximum: number): number {
@@ -112,7 +116,13 @@ function searchable(value: string): string {
 }
 
 export function termsOf(query: string): string[] {
-  return Array.from(new Set(str(query).toLocaleLowerCase().match(/[\p{L}\p{N}_]+/gu) || []))
+  return Array.from(
+    new Set(
+      str(query)
+        .toLocaleLowerCase()
+        .match(/[\p{L}\p{N}_]+/gu) || [],
+    ),
+  )
 }
 
 export function excerpt(text: string, terms: readonly string[], maximum = 240): string {
@@ -135,8 +145,14 @@ export function roundSignature(round: RecallRound): string {
     .digest('hex')
 }
 
-function scoreRound(round: RecallRound, query: string, terms: readonly string[]): { score: number; text: string } | null {
-  const text = (round.player ? '【玩家】\n' + round.player + '\n' : '') + (round.prose ? '【正文】\n' + round.prose : '')
+function scoreRound(
+  round: RecallRound,
+  query: string,
+  terms: readonly string[],
+): { score: number; text: string } | null {
+  const text =
+    (round.player ? '【玩家】\n' + round.player + '\n' : '') +
+    (round.prose ? '【正文】\n' + round.prose : '')
   const normalized = searchable(text)
   const full = searchable(query)
   let score = full !== '' && normalized.includes(full) ? 1000 : 0
@@ -153,7 +169,9 @@ export function createRecallScope(): RecallScopeState {
   return { calls: 0, rounds: new Set(), searches: new Set() }
 }
 
-export function recallHistory(input: RecallInput): RecallResult & { newCooldowns?: RecallCooldown[] } {
+export function recallHistory(
+  input: RecallInput,
+): RecallResult & { newCooldowns?: RecallCooldown[] } {
   const query = str(input.query).trim()
   const hasQuery = query !== ''
   const hasTurn = input.turn !== undefined && input.turn !== null
@@ -164,7 +182,9 @@ export function recallHistory(input: RecallInput): RecallResult & { newCooldowns
   const rounds = [...input.rounds].sort((a, b) => a.turn - b.turn)
   const currentTurn = input.currentTurn ?? rounds.reduce((max, r) => Math.max(max, r.turn), 0)
   const cooldowns = Array.isArray(input.cooldowns)
-    ? input.cooldowns.filter((item) => currentTurn >= item.atTurn && currentTurn - item.atTurn <= 10)
+    ? input.cooldowns.filter(
+        (item) => currentTurn >= item.atTurn && currentTurn - item.atTurn <= 10,
+      )
     : []
 
   const isCooling = (r: RecallRound): boolean =>
@@ -184,7 +204,8 @@ export function recallHistory(input: RecallInput): RecallResult & { newCooldowns
   if (scope && scope.calls++ >= 6) {
     return {
       ...base,
-      notice: '本次生成的历史召回预算已用尽。请使用已经返回的资料继续当前任务，不要再调用历史召回。',
+      notice:
+        '本次生成的历史召回预算已用尽。请使用已经返回的资料继续当前任务，不要再调用历史召回。',
     }
   }
 
@@ -248,17 +269,21 @@ export function recallHistory(input: RecallInput): RecallResult & { newCooldowns
     ...base,
     found: selected.some((r) => r.turn === requested),
     rounds: fresh,
-    notice: cooled.length > 0
-      ? '第 ' + cooled.map((r) => r.turn).join('、') + ' 轮已召回，处于 10 轮冷却期；请使用已有资料继续任务。'
-      : fresh.length < selected.length
-        ? '重叠轮次已读取，本次只补充未返回的正文。请使用之前的资料，不要重复召回。'
-        : '',
+    notice:
+      cooled.length > 0
+        ? '第 ' +
+          cooled.map((r) => r.turn).join('、') +
+          ' 轮已召回，处于 10 轮冷却期；请使用已有资料继续任务。'
+        : fresh.length < selected.length
+          ? '重叠轮次已读取，本次只补充未返回的正文。请使用之前的资料，不要重复召回。'
+          : '',
     ...(newCooldowns !== undefined ? { newCooldowns } : {}),
   }
 }
 
 export function renderRecall(value: RecallResult): string {
-  let warning = '【历史回忆资料】\n以下是已经发生的历史，只用于确认和回忆；不得当作当前场景继续输出，不得重复演绎。'
+  let warning =
+    '【历史回忆资料】\n以下是已经发生的历史，只用于确认和回忆；不得当作当前场景继续输出，不得重复演绎。'
   if (value.notice) warning += '\n\n' + value.notice
   if (value.notice && value.rounds.length === 0 && value.matches.length === 0) return warning
   if (!value.found) return warning + '\n\n没有找到相关历史正文。'
