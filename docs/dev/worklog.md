@@ -1,5 +1,17 @@
 # WORKLOG.md — 工作区状态盘点（追加式，最新在上）
 
+## 2026-10-16 · 仓库收口：质量门复校 + 本机票据与验收证据归仓
+
+### 已完成
+- **质量门复校（更正上一条记录）**：`pnpm run format:check` 实际**未通过**——`src/agents/chronicler.ts`、`src/recall.ts`、`src/recall-route.ts`、`src/client/components/worldline-turn-rail.tsx` 及对应 4 个测试文件不合 Prettier；2026-10-16 条目所记"全量质量门 format 零警告"不成立（那批提交跳过了 format）。已用 `prettier --write` 修正，纯重排无语义变更，提交 `26008aa`。
+- **归仓本机未跟踪资产**：`.scratch/{gallery-v2,host-020-upgrade,stage-v2,world-state-v2,worldline-v2}` 的规格与票据 markdown（24 文件，`52b9e70`）；`dsh-rrp-test-report/DEF02_GALLERY_V2_ACCEPTANCE.md` + 10 张真机证据截图（`ae7e857`）。`.scratch/dsh-host.json`、`.scratch/logs/`、`*.log` 仍由 `.gitignore` 排除，handoff 文档只记凭据存放路径不含值。
+- **复验**：`format:check` / `typecheck` / `lint` 全零告警，Vitest 63 文件 / 517 用例通过（~6.8s），`git diff --check` 干净，工作区无未跟踪残留。
+
+### 待决
+- **main 领先 origin/main 10 个提交，未推送**（等用户明示）。
+- **移植清单剩余项**：P0 只剩 #4「Playwright 真实玩局 E2E」——现有 `tests/e2e-simulation.spec.ts` 是进程内管线模拟，不驱动浏览器；P1 #5–#8（稳定前缀快照、卡提示变更检测、当轮生效注入、种子对话轨迹）与 P2 #9–#10（词汇表瘦身、流程一页纸纪律）全部未动。
+- **真实游玩闭环仍需模型密钥**（设置 → 模型写 `DEEPSEEK_API_KEY`），宿主 0.2.1-alpha.1 的两个升级阻塞项未解（详见 `docs/reference/HOST_BASELINE.md`）。
+
 ## 2026-10-16 · 借鉴 dsh-tavern 成熟机制的架构演进与全链路闭环
 
 ### 已完成
