@@ -21,6 +21,9 @@ function fakeSession(id: string) {
 const payloadOf = (data: unknown): RrpStatePayload | undefined =>
   (data as { source?: { rrp?: RrpStatePayload } })?.source?.rrp
 
+const textOf = (data: unknown): string =>
+  (data as { content?: Array<{ text?: string }> })?.content?.[0]?.text ?? ''
+
 const state = (location: string): WorldState => ({
   ...emptyWorldState(),
   trackedObjects: {
@@ -143,5 +146,40 @@ describe('WorldState v2 durable publisher', () => {
     forgetState(session.id)
     publishState(session, { stateOf: () => undefined }, { worldState: state('门口') })
     expect(appended).toHaveLength(2)
+  })
+
+  it('books a fold-only cursor advance without re-sending the full snapshot', () => {
+    const current = state('客栈')
+    const projections = {
+      stateOf: (_session: unknown, key: string) => (key === 'rrpWorldState' ? current : undefined),
+    }
+    const { session, appended } = fakeSession('publisher-v2-fold-only')
+    publishState(session, projections, { worldState: current, stateFoldSeq: 5 })
+    publishState(session, projections, { stateFoldSeq: 6 })
+    expect(appended).toHaveLength(2)
+    const first = textOf(appended[0]?.data)
+    const second = textOf(appended[1]?.data)
+    expect(second).not.toBe(first)
+    expect(second.split('\n')).toHaveLength(1)
+    expect(payloadOf(appended[1]?.data)?.stateFoldSeq).toBe(6)
+    expect(payloadOf(appended[1]?.data)?.worldState).toEqual(current)
+  })
+
+  it('books a timeline-only advance without re-sending the full snapshot', () => {
+    const current = state('客栈')
+    const { session, appended } = fakeSession('publisher-v2-timeline-only')
+    publishState(session, { stateOf: () => undefined }, { worldState: current })
+    publishState(
+      session,
+      { stateOf: () => undefined },
+      { worldState: current, worldStateTimelineBatch: batch },
+    )
+    expect(appended).toHaveLength(2)
+    const first = textOf(appended[0]?.data)
+    const second = textOf(appended[1]?.data)
+    expect(second).not.toBe(first)
+    expect(second.split('\n')).toHaveLength(1)
+    expect(payloadOf(appended[1]?.data)?.worldStateTimelineBatch).toEqual(batch)
+    expect(payloadOf(appended[1]?.data)?.worldState).toEqual(current)
   })
 })

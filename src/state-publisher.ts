@@ -50,6 +50,9 @@ const TAG = '[dsh-rrp]'
 /** Model-facing breadcrumb for metadata-only facts publishes (see publishState). */
 const LORE_ONLY_NOTICE = '【dsh-rrp】世界知识条目已更新（内容经系统技能注入，上文状态未变）。'
 
+/** Byte-stable so a bookkeeping-only publish never breaks the prefix cache. */
+const METADATA_ONLY_NOTICE = '【dsh-rrp】状态账本有新记录，当前世界状态与上文完整快照一致。'
+
 /** Compatibility names backed by the shared host faces. */
 export type StateSession = SessionLike
 export type StateProjections = ProjectionsService
@@ -329,13 +332,17 @@ export function publishState(
         retained.factsFingerprint !== fingerprint ||
         foldMoved
       ) {
-        // Metadata-only publish (e.g. a confirmed lore entry whose state text is
-        // unchanged): keep the model-visible content to one breadcrumb line
-        // instead of re-rendering the full state — the lore data itself
-        // rides the hidden source.rrp payload and reaches the model via skills.
+        // Metadata-only publish (lore sediment confirmed, a new timeline batch, or a
+        // fold-cursor advance): the append itself is required, because the cursor and
+        // the batch must travel on a model-visible message. But re-sending a snapshot
+        // the model already has verbatim is pure token waste — keep it to one
+        // breadcrumb line. Reaching this block with an unchanged fingerprint implies
+        // the trigger was one of those three, never a state change.
         const text =
-          patch.sediment !== undefined && retained.factsFingerprint === fingerprint
-            ? LORE_ONLY_NOTICE
+          retained.factsFingerprint === fingerprint
+            ? patch.sediment !== undefined
+              ? LORE_ONLY_NOTICE
+              : METADATA_ONLY_NOTICE
             : factsText
         appendLane(session, text, {
           ...(state === undefined ? {} : { worldState: state }),
