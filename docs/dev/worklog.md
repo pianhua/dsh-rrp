@@ -1,5 +1,26 @@
 # WORKLOG.md — 工作区状态盘点（追加式，最新在上）
 
+## 2026-10-16 · 借鉴 dsh-tavern 成熟机制的架构演进与全链路闭环
+
+### 已完成
+- **并发与版本安全锁（Phase 0）**：
+  - `src/chronicler.ts`：实现回滚检测（`proseHeadSeq < throughSeq`）与并发抢跑折叠锁（`liveFoldSeq >= throughSeq`），过期/抢跑推演自动丢弃（`status: 'cancelled'`），杜绝旧轮次推演覆盖新世界状态。
+  - `src/client/components/worldline-turn-rail.tsx`：引入未完结回合分叉守卫（`canFork = node.proseExcerpt.trim().length > 0 || node.turn === 0`），禁止对正文为空或推演未就绪节点创建分叉。
+  - `src/worldline-fork-marker.ts`：分叉标记触发 `onFork(child.id)` 回调，即刻调用 `cleanupSession(childId)`，清理子会话旧缓存与在途推演。
+- **两阶段主动历史召回引擎（Phase 1）**：
+  - `src/recall.ts`：实现两阶段渐进揭示历史召回引擎。Stage 1 关键词精准/重叠搜索（query ≤240 字符，按相关度与时效排序并截取上下文摘要）；Stage 2 深度轮次读取（turn 深度读取，支持 radius 0-3 上下文展开）。内置单作用域 6 次调用预算硬顶、10 回合冷却与完全重复检索去重；输出内置反幻觉警告（“严格基于回忆片断回答，不得当作当前场景继续输出”）。
+  - `src/recall-route.ts`：挂载 HTTP 路由 `POST /dsh-rrp/recall`，并在宿主具备 `ctx.tools` 时原生注册 Cordis 工具 `rrp_recall_history`。
+  - `presets/rp/skills/recall-history/SKILL.md`：编写标准回忆技能规范。
+- **增量状态推演与月停回忆注入（Phase 2）**：
+  - `src/agents/chronicler.ts` & `src/chronicler.ts`：`chroniclerReplySchema` 升级支持 `state` 完整切面或 `patch` 增量补丁；Chronicler runner 自动通过 `applyWorldStatePatch` 增量合并变更并校验 schema，降低模型输出 token 与上下文消耗。
+  - `src/agents/copilot.ts` & `src/copilot.ts`：Copilot 自动提取玩家问题关键词并执行主动回忆检索，格式化为 `【历史回忆】` 注入 Prompt。稳定上下文（卡包设定、世界状态、已有设定集）位于 Prompt 前部，动态回忆与玩家输入置于后部，严格保障大模型 KV Prefix Cache 稳定性。
+- **全链路多轮交互自动化模拟测试（Phase 3）**：
+  - `tests/e2e-simulation.spec.ts`：构建 5 回合多轮叙事 E2E 模拟测试，完整覆盖开局准备、正文生成、Chronicler 完整状态折叠、增量 Patch 补丁折叠、时间线事件批次追踪、未完结分叉守卫、分支子会话隔离与缓存清理、主动历史召回与反幻觉校验、Copilot Prompt 前缀缓存排布验证，以及并发回滚锁断言。
+
+### 验证
+- **全量质量门**：`pnpm run typecheck`（TypeScript 5.9）零错误；`pnpm run lint`（ESLint）零警告；Vitest 全量 63 个测试套件 / 517 个测试用例 100% 通过（总运行耗时 ~9.5s）。
+- **提交闭环**：按功能点分为 5 个原子 commit 独立提交，无无关杂质。
+
 ## 2026-10-13 · 第一阶段改造：开发环境打通 + 后台错误透传
 
 ### 已完成
