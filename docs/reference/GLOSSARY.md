@@ -47,7 +47,7 @@
 | **状态推演** | **State Inference** | Chronicler 根据剧情明确证据判断「什么该记录、什么该更正」的过程 | `事实提取`、`ChangeSet 提取` |
 
 > ⚠️ **重点**：`玩家仲裁 / Arbitration / 解绑` 这一整套词汇是旧项目「锁思维」的遗留，**已废弃**。  
-> 现在是 D6 决策的「自然时序矫正」：覆盖 → 下一轮消费。详见 [`DECISIONS.md`](DECISIONS.md#d6--玩家矫正是自然时序无锁重要)。
+> 现在是 D6 决策的「自然时序矫正」：覆盖 → 下一轮消费。详见 [`../adr/0006-player-correction-is-lock-free.md`](../adr/0006-player-correction-is-lock-free.md)。
 
 ---
 

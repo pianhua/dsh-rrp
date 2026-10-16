@@ -10,7 +10,7 @@
 每个新任务先完成以下动作，完成后才进入任务档位判断：
 
 1. 查看 `git status --short --branch`、近期提交和当前工作日志。
-2. 读取 `AGENTS.md`、本文件、`docs/reference/GLOSSARY.md`、`docs/reference/DECISIONS.md`；涉及宿主时再读 `docs/HOST_ALIGNMENT.md` 与 `docs/dev/host-seams.md`。
+2. 读取 `AGENTS.md`、本文件、[`CONTEXT.md`](../../CONTEXT.md)、`docs/reference/GLOSSARY.md`、`docs/adr/`；涉及宿主时再读 `docs/HOST_ALIGNMENT.md` 与 `docs/dev/host-seams.md`。
 3. 把当前目标写成一句用户可验证的结果，并列出未知事实、待决选择和不能触碰的范围。
 4. 已确认的术语、决策、规格和待决事项立即写入对应文件；不把上下文记忆当作持久记录。
 
@@ -33,7 +33,7 @@ Matt Skills 是日常主流程。Superpowers 只在新子系统启动、隔离�
 
 需求澄清前，把核心名词逐一对照 `docs/reference/GLOSSARY.md`：确认定义、范围、拥有者、生命周期和容易误解的相邻概念。前十个问题优先用于术语统一；同一概念的不同说法先归并，真正不同的概念才分别命名。
 
-如果新概念确实缺失：先提出标准名和至少一个反例，得到确认后写入术语表，再继续需求边界。涉及硬取舍时同时检查 `DECISIONS.md`，不要在规格里悄悄推翻已有决策。
+如果新概念确实缺失：先提出标准名和至少一个反例，得到确认后写入术语表，再继续需求边界。涉及硬取舍时同时检查 [`docs/adr/`](../adr/)，不要在规格里悄悄推翻已有决策。
 
 ## 3. 拷问节奏「30 + 20」
 
@@ -51,9 +51,13 @@ Matt Skills 是日常主流程。Superpowers 只在新子系统启动、隔离�
 | Matt 实现票据 | `.scratch/<feature-slug>/issues/<NN>-<slug>.md` |
 | 既有设计计划与历史方案 | `docs/plans/`（不与新票据重复维护） |
 | 术语 | `docs/reference/GLOSSARY.md` |
-| 产品或架构决策 | `docs/reference/DECISIONS.md` |
+| 产品或架构决策 | `docs/adr/`（一条决策一篇，见其 README 的决策纪律） |
 | 工作区盘点、轮次结论、待决事项 | `docs/dev/worklog.md`，追加且带日期 |
-| 真机缺陷与抽查结论 | `dsh-rrp-test-report/`，DEF 编号连续 |
+| 真机缺陷与抽查结论 | `docs/reference/acceptance/<FEATURE>_ACCEPTANCE.md`，DEF 编号连续，截图存同目录 `screenshots/` |
+
+验收档案**一个功能一份文件**。同一功能的复验、回归、重测一律覆盖更新原文件并追加「复验轮次」小节，
+不再新增 `R2`/`R3`/`ROUND-N` 平行文件——被取代的中间轮次不构成独立结论，留着只会让后来者在
+六个 `TEST_REPORT_R*.md` 里猜哪份有效。真机证据截图随报告同目录存放，报告用相对路径引用。
 
 规格和票据先写用户可验证的行为、阻塞关系、范围与验收条件，再写实现提示。不要在多个文件复制同一条规则；需要共享时使用指针。
 
@@ -64,7 +68,7 @@ Matt Skills 是日常主流程。Superpowers 只在新子系统启动、隔离�
 - `AGENTS.md`
 - `docs/DESIGN.md`
 - `docs/HOST_ALIGNMENT.md`
-- `docs/reference/DECISIONS.md`、`GLOSSARY.md`、`HOST_SEAMS.md`、`HOST_BASELINE.md`
+- `docs/adr/`、`docs/reference/GLOSSARY.md`、`HOST_SEAMS.md`、`HOST_BASELINE.md`
 - `docs/dev/architecture.md`、`docs/dev/routes.md`
 
 把冲突写成清单，说明冲突双方、影响和需要谁决定；先解决清单，再动 `src/`、`tests/` 或构建配置。宿主能力问题先查证据链，优先接入宿主已有 seam。

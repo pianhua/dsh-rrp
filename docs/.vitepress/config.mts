@@ -4,7 +4,21 @@ export default defineConfig({
   lang: 'zh-CN',
   title: 'DSH-Chronicle',
   description: '挂在 DeepSeek Harness 上的原生单机沉浸式角色扮演插件——动态世界模拟与交互小说引擎。',
-  srcExclude: ['reference/**', 'plans/**', 'DESIGN.md', 'HOST_ALIGNMENT.md', 'DEVELOPMENT.md'],
+  // 排除在发布站点之外的内部文档：参考资料、计划、协作契约、
+  // 工作流与工作日志。构建后的页面集合与下方 sidebar 导航严格一致——
+  // 不在 sidebar 里的文档一律排除，避免产生无人可达的 orphan page。
+  srcExclude: [
+    'reference/**',
+    'adr/**',
+    'plans/**',
+    'agents/**',
+    'dev/workflow.md',
+    'dev/worklog.md',
+    'dev/worklog/**',
+    'DESIGN.md',
+    'HOST_ALIGNMENT.md',
+    'DEVELOPMENT.md',
+  ],
   themeConfig: {
     nav: [
       { text: '玩家手册', link: '/guide/getting-started' },

@@ -38,7 +38,7 @@
 - **2026-09-18 裁决**：自定义正文排版/沉浸视图已撤回（同「不覆盖宿主主题」一条理由）——正文渲染完全交给 DSH 宿主原生实现，插件不做任何对话区样式注入；流式输出观感以宿主为准。曾实现的 `story-view.tsx` 沉浸视图已删除，不再恢复。
 - **2026-09-20 再确认（D21）**：#18 勘察时发现宿主另有官方聊天插入位（`conversation.chat.turnTail` /
   `assistant-actions` / 可声明合并的 `chat.node`），「每轮末尾加一行 HUD」技术上做得到——
-  **知情后仍选择不用**。聊天流内不放任何插件内容，界面一律走 §2.4 舞台；重开须先修改 DECISIONS.md D21。
+  **知情后仍选择不用**。聊天流内不放任何插件内容，界面一律走 §2.4 舞台；重开须先修改 [`docs/adr/0021-no-plugin-content-in-chat-flow.md`](adr/0021-no-plugin-content-in-chat-flow.md)。
 
 ### 2.2 右侧栏（DSH sidebarRight）：动态世界看板
 - 注册为 DSH 原生右侧栏的一个常驻 Tab：**【世界状态 (WorldState)】**；
@@ -85,7 +85,7 @@
 
 ## 3. 三智体权能分立矩阵
 
-> **术语**：本节矩阵只讲**叙事核心三智体**（Author 叙事执笔 / Chronicler 状态推演 / Summarizer 剧情脉络）。全仓另有 **Scribe**（设定集起草）与 **Copilot 月停**（玩家私属幕僚）两个辅助智体，合共 **5 智体**；Scribe 与月停不在本矩阵的轮次主链上，见 [D18](reference/DECISIONS.md) 与 [`docs/dev/architecture.md`](dev/architecture.md)。
+> **术语**：本节矩阵只讲**叙事核心三智体**（Author 叙事执笔 / Chronicler 状态推演 / Summarizer 剧情脉络）。全仓另有 **Scribe**（设定集起草）与 **Copilot 月停**（玩家私属幕僚）两个辅助智体，合共 **5 智体**；Scribe 与月停不在本矩阵的轮次主链上，见 [ADR 0018](adr/0018-unified-agent-prompt-contract.md) 与 [`docs/dev/architecture.md`](dev/architecture.md)。
 
 ```text
 玩家行动输入 (Player Action)

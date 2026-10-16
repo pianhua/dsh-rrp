@@ -51,7 +51,7 @@
 
 ## 收尾
 
-- `DECISIONS.md` D17；GLOSSARY 登记「条件注入 | Conditional Injection」
+- [`docs/adr/0017-conditional-injection-v1.md`](../adr/0017-conditional-injection-v1.md)；GLOSSARY 登记「条件注入 | Conditional Injection」
 - 真机验证并入下一轮抽查 T37（刷好感跨档 → 口吻变化 + 生效中标 + 仪表段；矫正降档 → 撤销句）
 - 回退：单提交 revert；`when` 可选，旧卡零影响
 

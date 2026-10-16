@@ -77,6 +77,6 @@ src/
 
 ## 延伸阅读（仓库内）
 
-`docs/DESIGN.md`（产品规格）· `docs/HOST_ALIGNMENT.md`（宿主映射红线）· `docs/DEVELOPMENT.md`（开发循环）· `docs/reference/DECISIONS.md`（D1-D22 决策理由）。
+`docs/DESIGN.md`（产品规格）· `docs/HOST_ALIGNMENT.md`（宿主映射红线）· `docs/DEVELOPMENT.md`（开发循环）· `docs/adr/`（D1–D27 决策记录，一条一篇）。
 
-> 上述 `docs/reference/**`（含 `DECISIONS.md`）与 `DESIGN.md`/`HOST_ALIGNMENT.md`/`DEVELOPMENT.md` 是**仓库内路径**：它们在本地工作区与克隆里可读，但被 `docs/.vitepress/config.mts` 的 `srcExclude` 排除在发布站点之外，站点上不可达。
+> 上述 `docs/reference/**`、`docs/adr/**`、`docs/plans/**`、`docs/agents/**` 与 `DESIGN.md`/`HOST_ALIGNMENT.md`/`DEVELOPMENT.md` 是**仓库内路径**：它们在本地工作区与克隆里可读，但被 `docs/.vitepress/config.mts` 的 `srcExclude` 排除在发布站点之外，站点上不可达。
