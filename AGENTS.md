@@ -32,8 +32,12 @@
 改完必须全绿，CI 跑的是同一组：
 
 ```sh
-pnpm run format:check && pnpm run typecheck && pnpm run lint && pnpm test
+pnpm run check:hygiene && pnpm run format:check && pnpm run typecheck && pnpm run lint && pnpm test
 ```
+
+`check:hygiene` 是**仓库卫生门禁**：根目录与 `docs/` 分类白名单、文档体积上限、ADR 编号连续性与状态栏、
+验收报告命名、站点页面与 sidebar 一致性、本地相对链接有效。六项各对应一条已经付出过代价的真实教训，
+不靠自觉——CI 也会跑它。
 
 发布前再加 `pnpm run build`。
 

@@ -5,6 +5,25 @@
 >
 > 附录：[`2026-09`](./worklog/2026-09.md) — WorldState v2、架构重构、世界线 v2、舞台 v2、展厅 v2、宿主 0.2.0 适配
 
+## 2026-10-16 · 工程纪律重整 P3：机器门禁 + 收尾
+
+前三阶段立的规矩全靠人自觉。这次把它们写成脚本，接进 CI——**这是唯一能让纪律不被时间冲掉的一步**。
+
+- **新增 [`scripts/check-repo-hygiene.mjs`](../../scripts/check-repo-hygiene.mjs)**，六项检查，每项都对应一条已经付出过代价的真实教训，不是预防性设计：
+  1. **根目录白名单**——`dsh-rrp-test-report/` 曾在根目录堆到 81 个文件；
+  2. **`docs/` 一级目录白名单**——防止 `docs/qgraphflow/` 这类外部工具产物重新长进来；
+  3. **文档体积上限**——`worklog.md` 曾长到 74KB 单文件，`AGENTS.md` 曾 13KB（现限 24/8KB，ADR 单篇限 16KB；勘察证据与卡包规范豁免）；
+  4. **ADR 结构完整性**——编号从 0001 连续不留空号，每篇必须有 `> 状态：`；
+  5. **站点页面与导航一致**——不在 `srcExclude` 也不在 sidebar 的文档会被构建成无人可达的 orphan page；
+  6. **本地相对链接有效**——文档迁移后最容易留下死链。
+- **接入 `package.json` 的 `check:hygiene`，并在 `quality.yml` 中排在 install 之前**（纯 node + fs，不依赖 `node_modules`，便宜且早失败）。
+- **门禁第一次运行就抓到 3 个真问题，其中一个是 P1 自己引入的**：
+  - `docs/dev/worklog/2026-09.md` 指向 `../agents/human-agent-contract.md` 的链接失效——文件切到 `worklog/` 子目录后深度变了，链接没跟着调。`docs:build` 查不出来，因为 worklog 被 `srcExclude` 排除，VitePress 不校验被排除文件的链接。
+  - `docs/reference/TAVERN_V2_COMPARISON.md` 13 处跨仓库链接全部少一级（该文件在 `docs/reference/`，`../../` 只回到仓库根，指向的是 `D:/projects/dsh-rrp/dsh-tavern-v2/`）；文首还写死了本机绝对路径 `D:/projects/dsh-tavern-v2`，违反 `docs/reference/README.md` 与 `HOST_SEAMS.md` 共有的约定。已改为 `README.md:53-68` 形式的纯文本证据引用，保留可追溯性，去掉在别人机器上永远点不开的假链接。
+  - `docs/index.md` 是站点首页，本来就不该出现在 sidebar——已作为首页特例豁免。
+- **门禁本身验证过**：真实仓库通过；故意造一个 `gallery-v2_ACCEPTANCE_R2.md` 验证能被拦住（验收报告命名违规，exit=1），确认后已清理。
+- **`docs/qgraphflow/`（872KB）已删除**：零引用的 QGraphFlow 架构图，`sourceRef` 标 `dsh-rrp@c392d07` 且自称已漂移。取回：`git show 489d2a3:docs/qgraphflow/overview-collection/index.html > 本地路径`。
+
 ## 2026-10-16 · 工程纪律重整 P1：领域词典 + 协作准则瘦身
 
 P1 主体：`src/` 与 `tests/` 仍零改动，动的全是文档与文档位置。
@@ -16,7 +35,8 @@ P1 主体：`src/` 与 `tests/` 仍零改动，动的全是文档与文档位置
 
 ### 盘点发现（未处理，待决）
 
-- **`docs/qgraphflow/overview-collection/` 872KB 零引用**：`graph.json` + QGraphFlow viewer 的 `index.html`，`sourceRef` 标 `dsh-rrp@c392d07`，自带声明「docs/ 存在漂移，仅作参考」。按 P0 新规属过程产物，但可能仍有参考价值，未擅自删。
+- **`docs/qgraphflow/overview-collection/` 872KB 已于同日 P3 删除**：QGraphFlow 生成的架构全景图（`graph.json` + viewer `index.html`），除本文件的两条记录外**零引用**，`sourceRef` 标 `dsh-rrp@c392d07`，自带声明「docs/ 存在漂移，仅作参考」。按 P0 新规属过程产物。取回：`git show 489d2a3:docs/qgraphflow/overview-collection/index.html > 本地路径`。
+- **`docs/TAVERN_V2_COMPARISON.md` 13 处跨仓库链接改为纯文本证据引用**：原文写 `../../dsh-tavern-v2/README.md#L53-L68`，但该文件在 `docs/reference/`，`../../` 只回到仓库根，实际指向 `D:/projects/dsh-rrp/dsh-tavern-v2/`——**路径少了一级**，13 处全是死链；且文首「D:/projects/dsh-tavern-v2」写入本机绝对路径，违反 `docs/reference/README.md` 与 `HOST_SEAMS.md` 共有的「本机绝对路径不写入共享文档」约定。改为 `README.md:53-68` 形式的纯文本标注，保留证据可追溯性，去掉在别人机器上永远点不开的假链接。
 - **`docs/dev/host-seams.md`（2.5KB）与 `docs/reference/HOST_SEAMS.md`（49KB）不是重复**：前者是三条铁律的对外摘要，后者是 61 个 slot 的实测勘察证据，`dev/` 那份开头已声明分工。核对后不动。
 - **VitePress 逃逸口**：`srcExclude` 只排了 5 项，导致 `worklog.md`（原 74KB）、`workflow.md`、`agents/` 4 个文件被当作 orphan page 无谓构建，且都不在 sidebar 里。已在本轮补全 `srcExclude`。
 
@@ -44,7 +64,7 @@ P1 主体：`src/` 与 `tests/` 仍零改动，动的全是文档与文档位置
 - **新规（已写入 `docs/dev/workflow.md` 第 4 节 + `docs/reference/acceptance/README.md`）**：一个功能一份验收报告，复验覆盖更新原文件并追加「复验轮次」小节，禁止 `R2`/`R3`/`ROUND-N` 平行文件。仓库不再保留过程产物，翻旧账走 git 历史（README 已给出 `git log --diff-filter=D` / `git show` 取回命令）。
 - **引用同步修复**：`docs/reference/README.md`（归档说明改为「历史内容怎么找」）、`docs/dev/workflow.md`、`docs/adr/0026-gallery-v2-cover-grid.md` 第 7 项（当时位于 `docs/reference/DECISIONS.md` D26，同日 P2 拆分后迁到 ADR）。
 - **未处理（有意）**：`docs/dev/worklog.md` 内的旧引用保持原样——那是历史陈述，记录当时动作属实；`.scratch/` 内 4 处引用指向已删目录，属过程区快照，不改以免失真，grep 时会看到这 4 处残留。
-- **待办**：`docs/qgraphflow/` 872KB 处置、补 `check:hygiene` 门禁。（`AGENTS.md` 瘦身、`worklog.md` 拆分、`CONTEXT.md` 领域词典已于同日 P1 完成；`DECISIONS.md` 拆有序 ADR 于同日 P2 完成。）
+- **待办**：无。P0–P3 已全部完成；后续纪律变更走 `check:hygiene` 这道机器门禁，不再依赖自觉。
 
 ## 2026-10-16 · P1 移植勘察：宿主 systemPrompt 装配面（未开工，仅事实）
 

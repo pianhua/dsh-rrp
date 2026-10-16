@@ -38,6 +38,9 @@ jobs:
       - name: Check toolchain
         run: pnpm run check:environment
 
+      - name: Check repo hygiene
+        run: pnpm run check:hygiene
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
