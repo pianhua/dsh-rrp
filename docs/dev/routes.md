@@ -7,7 +7,7 @@
 - 全部路由挂在宿主 webServer 的 exact path 上（零自建服务器），前缀 `/dsh-rrp/`；
 - 非 2xx 响应**只准**返回 `RrpErrorBody`：`{ "error": "..." }`；
 - 所有会话级端点带 `sessionId`（query 或 body），非 RP 会话一律 403，未知会话 404；
-- 类型单一来源在 `src/route-contract.ts`，服务端注册与客户端 fetch 都 import 它——协议级测试（`tests/route-contract.spec.ts`）锁死注册路径与契约一致。
+- 类型单一来源在 `src/route-contract.ts`，服务端注册与客户端 fetch 都 import 它——协议级测试（`tests/integration/route-contract.spec.ts`）锁死注册路径与契约一致。
 
 ## 端点一览
 

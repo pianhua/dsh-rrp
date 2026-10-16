@@ -2,6 +2,7 @@
 
 > 状态：接受
 > 原编号：D16 · 索引见 [README.md](./README.md)
+> 最后复审：2026-10-16 · 复审周期 180 天
 
 
 **决策**：将句式级中文 AI 腔禁令以硬约束形式常驻 Author persona（`presets/rp/agent.cordis.yml` 的「文风禁忌」段），具体清单为本项目自行归纳重写。

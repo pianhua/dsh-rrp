@@ -5,6 +5,60 @@
 >
 > 附录：[`2026-09`](./worklog/2026-09.md) — WorldState v2、架构重构、世界线 v2、舞台 v2、展厅 v2、宿主 0.2.0 适配
 
+## 2026-10-16 · 文档验真与工程化收尾（依赖对齐 / ADR 复审 / tests 分层）
+
+用户在 P0–P3 后提出一个更根本的质疑：**早期决策可能有误判，很多文档可能已经不具备真实性**。
+这一轮不去「相信文档」，而是逐条拿文档去对代码。
+
+- **诊断结论**：抽查的 9 个代码级断言**全部真实**（`DynamicFieldValue` 在 `world-state.ts:51`、
+  `stateFoldSeq` src 7 处、`worldlineForkCut`、`inheritedEventCount`、`AgentPromptContract` 13 处、
+  ADR 声称「已实现」的四篇代码全在、tests 109 处匹配）。**文档不是烂，是从来没被验证过。**
+- **关键分类：文档失真不是一个问题，是三类**——A 历史陈述（天然不会失真，冻结）、B 快照证据
+  （会过期但本就该冻结，顶部钉日期）、C 当前断言（**必须为真，机器验证**）。今天的困惑源于没区分它们，
+  已把这条口径写进 [`HOST_BASELINE.md`](../reference/HOST_BASELINE.md) 的头部声明。
+
+### 依赖：测试环境与声明环境脱节（已修）
+
+- `devDependencies` 原把 `@deepseek-ai/dsh-storage-domain` 精确锁在 `0.1.6-alpha.2`，
+  而 `peerDependencies` 声明 `^0.2.0-rc.1`——**517 个测试全跑在旧版上，测试通过 ≠ 真机可用**。
+- 升到 `0.2.0-rc.1` 时踩到一个二次陷阱：写 `^0.2.0-rc.1` 会装成 **rc.2**，等于又制造一次
+  测试环境≠真机的差异。改为**精确锁定 `0.2.0-rc.1`**，现三方一致：
+  peerDeps `^0.2.0-rc.1` ⊃ devDeps `0.2.0-rc.1` = 实际安装 = 真机版本。517 用例全过，无回归。
+- 门禁新增「依赖一致性」检查：devDeps 与 peerDeps 的 `@deepseek-ai` 包必须同版本线，
+  以及 `package.json.files` 声明的文件必须存在（后者当场抓出根目录缺 `README.md`）。
+
+### ADR 复审机制
+
+- 机器能验的（编号、状态栏、体积、链接）交给 `check:hygiene`；**只有人能判的**
+  （D5 的动态状态今天还合适吗、D16 的协议判断是否仍成立）靠复审登记。
+- 27 篇全部加 `> 最后复审：2026-10-16 · 复审周期 180 天`，README 索引表增「最后复审」列。
+- 门禁规则：**缺字段失败，过期只警告不失败**——周期到了没空复审不该阻断开发。
+  已验证：把一篇改成 2020 年触发 warning 且 exit=0。
+- 首次登记日 2026-10-16 是**结构核对，不等于内容有效性全面复审**；下次到期 2027-04-14。
+
+### tests 分层（对齐 dsh-tavern 的分层实践）
+
+- 63 个 `.spec.ts` 从平铺改为三层，按**依赖什么**而非测哪个模块划分：
+  `unit/` 30 篇（纯函数与投影折叠，零 I/O）、`integration/` 32 篇（宿主契约/路由/存储域/文件系统/happy-dom）、
+  `e2e/` 1 篇（多轮叙事模拟）。判定标准与日常用法见 [`tests/README.md`](../../tests/README.md)。
+- 新增 `test:unit` / `test:integration` / `test:e2e` 三个子集入口。CI 仍跑全量——分层是为了
+  改代码时知道自己在动哪一层，不是拆 CI 作业。
+- 移动带来 69 处路径修正：`../../src/`、`../stubs/`、`../../scripts/`，其中 mock 字符串路径
+  最容易漏（首轮漏了 7 个文件，`typecheck` 立即抓出）。
+- 更新 6 处文档与源码注释里的测试路径引用（`routes.md`、`CARDS.md`、ADR 0005/0018、
+  `tests/stubs/ui-primitives.ts`、`src/client/locales.ts`）；worklog 里的历史引用保持原样。
+- 门禁新增「测试必须落在分层目录」，防止文件回流到 `tests/` 根。
+
+### 顺带修掉
+
+- 补根 `README.md`（`package.json.files` 声明了它、`npm pack` 缺它会警告、GitHub 首页靠它）。
+- 修正 `docs/adr/README.md` 写成繁体的问题——**发现自己生成中文时倾向写繁体**，而项目全库是简体。
+  另修 3 处生成时损坏的字符。教训已记：中文文档写完必须查 U+FFFD 与繁简一致性。
+- `TAVERN_V2_COMPARISON.md` 的跨仓库链接在本轮已改为纯文本证据引用（P3）。
+
+验证：`check:hygiene` / `format:check` / `typecheck` / `lint` / `test`（63 文件 517 用例）/
+`build` / `docs:build` 七项全绿。
+
 ## 2026-10-16 · 工程纪律重整 P3：机器门禁 + 收尾
 
 前三阶段立的规矩全靠人自觉。这次把它们写成脚本，接进 CI——**这是唯一能让纪律不被时间冲掉的一步**。

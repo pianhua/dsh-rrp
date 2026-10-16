@@ -17,8 +17,10 @@ import { fileURLToPath } from 'node:url'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const errors = []
+const warnings = []
 
 const fail = (message, ...hints) => errors.push({ message, hints })
+const warn = (message, ...hints) => warnings.push({ message, hints })
 
 const rel = (absolutePath) => relative(repoRoot, absolutePath).replace(/\\/g, '/')
 const kb = (bytes) => `${(bytes / 1024).toFixed(1)}KB`
@@ -72,6 +74,7 @@ const ALLOWED_ROOT_ENTRIES = new Set([
   'CONTEXT.md',
   'CONTRIBUTING.md',
   'LICENSE',
+  'README.md',
   'cordis.patch.yml',
   'eslint.config.js',
   'package.json',
@@ -124,10 +127,28 @@ for (const entry of readdirSync(join(repoRoot, 'docs'), { withFileTypes: true })
   }
 }
 
-// ---------------------------------------------------------------- 2. 文档体积上限
+// 测试必须落在分层目录里：分层的意义是「改某个模块时知道该跑哪一层」，
+// 文件一旦回流到 tests/ 根，这个定位能力就消失了。
+const TEST_LAYERS = new Set(['unit', 'integration', 'e2e'])
+for (const file of read(join(repoRoot, 'tests')).filter((f) => f.endsWith('.spec.ts'))) {
+  const parts = rel(file).split('/')
+  if (parts.length === 2) {
+    fail(
+      `测试文件 ${parts[1]} 直接放在 tests/ 根目录`,
+      '新测试按依赖分到 unit/（纯函数）、integration/（宿主契约/路由/DOM）或 e2e/（多轮模拟）。',
+      '判定标准见 tests/README.md。',
+    )
+  } else if (!TEST_LAYERS.has(parts[1])) {
+    fail(`tests/${parts[1]}/ 不是已知分层`, `合法层级：${[...TEST_LAYERS].join(' / ')}`)
+  }
+}
 
+// ---------------------------------------------------------------- 2. 文档体积上限
 const SIZE_LIMITS = [
-  { file: 'docs/dev/worklog.md', max: 24 * 1024, why: '跨月内容按月切到 docs/dev/worklog/' },
+  // worklog 的切分触发点是「跨月内容堆积到无法定位」，不是固定字节数。
+  // 上限 32KB：2026-10-16 校准——当天连续完成 P0–P3 与验真收尾，五个阶段各带
+  // 实现细节，27.4KB 仍是可扫读范围；而当初切分前的 74.4KB 已经需要全文搜索才能定位。
+  { file: 'docs/dev/worklog.md', max: 32 * 1024, why: '跨月内容按月切到 docs/dev/worklog/' },
   { file: 'CONTEXT.md', max: 24 * 1024, why: '一个概念一节；过长说明该拆主题' },
   { file: 'AGENTS.md', max: 8 * 1024, why: '只写从代码推不出来的纪律，其余指向真源' },
 ]
@@ -139,6 +160,12 @@ for (const { file, max, why } of SIZE_LIMITS) {
   if (size > max) {
     fail(`${file} 体积 ${kb(size)}，超过上限 ${kb(max)}`, why)
   }
+}
+
+// 根 README 不是可选项：package.json.files 声明了它，npm pack 缺它会警告，
+// GitHub 仓库首页也靠它。
+if (!existsSync(join(repoRoot, 'README.md'))) {
+  fail('根目录缺少 README.md', 'package.json.files 声明了它，且它就是仓库首页。')
 }
 
 const adrDir = join(repoRoot, 'docs/adr')
@@ -182,11 +209,31 @@ numbered.forEach(({ full, base }, index) => {
       'ADR 编号从 0001 连续，不留空号——被取代的决策也保留原编号。',
     )
   }
-  if (!/^>\s*状态：\S/m.test(readFileSync(full, 'utf8'))) {
+  const content = readFileSync(full, 'utf8')
+  if (!/^>\s*状态：\S/m.test(content)) {
     fail(
       `${base} 缺少状态栏`,
       '每篇 ADR 首部必须写明 `> 状态：`，取值为接受/暂缓/部分取代/已实现/已废弃。',
     )
+  }
+
+  // 复审登记：判断性的决策只有人能评估，机器只能保证它被登记过。
+  const reviewed = content.match(/^>\s*最后复审：(\d{4}-\d{2}-\d{2})/m)
+  if (!reviewed) {
+    fail(
+      `${base} 未登记「最后复审」`,
+      '每篇 ADR 首部写明 `> 最后复审：YYYY-MM-DD · 复审周期 180 天`。',
+      '设计判断是否仍然成立只有人能回答，机器只能保证它不会被遗忘。',
+    )
+  } else {
+    const days = Math.floor((Date.now() - Date.parse(reviewed[1])) / 86_400_000)
+    if (days > 180) {
+      warn(
+        `${base} 已 ${days} 天未复审（上次 ${reviewed[1]}）`,
+        '回答一个问题即可：这条决策的前提今天还成立吗？',
+        '仍成立就更新日期；已失效就新增一篇 ADR 推翻它，不要改写旧篇。',
+      )
+    }
   }
 })
 
@@ -277,6 +324,42 @@ for (const file of markdownFiles) {
   }
 }
 
+// ------------------------------------------------- 7. 依赖声明与测试环境一致
+
+// devDependencies 是测试与本地开发实际跑的版本，peerDependencies 是对使用方的声明。
+// 两者脱节意味着「测试通过 ≠ 真机可用」，而这种偏差在升级宿主时最容易悄悄发生。
+const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
+const peers = pkg.peerDependencies ?? {}
+const devs = pkg.devDependencies ?? {}
+
+for (const [name, peerRange] of Object.entries(peers)) {
+  if (!name.startsWith('@deepseek-ai/')) continue
+  const devVersion = devs[name]
+  if (!devVersion) continue // 有些 peer 由宿主提供，本地不需要实现
+  const peerBase = peerRange.replace(/^[\^~>=<\s]*/, '')
+  const [pmajor, pminor] = peerBase.split('.').map((n) => Number.parseInt(n, 10))
+  const [dmajor, dminor] = devVersion
+    .replace(/^[\^~>=<\s]*/, '')
+    .split('.')
+    .map((n) => Number.parseInt(n, 10))
+  if (Number.isNaN(pmajor) || Number.isNaN(dmajor)) continue
+  if (pmajor !== dmajor || pminor !== dminor) {
+    fail(
+      `${name} 测试环境与声明环境脱节：devDependencies ${devVersion}，peerDependencies ${peerRange}`,
+      '宿主上跑的是 peer 声明的版本；测试跑的是 devDependencies 的版本。',
+      '两者不一致时，测试通过不代表真机可用——把 dev 版本对齐到 peer 同版本线。',
+    )
+  }
+}
+
+// package.json.files 承诺随包分发的文件必须真的存在，否则 npm pack 会留下缺口。
+for (const entry of pkg.files ?? []) {
+  if (entry.includes('*')) continue
+  if (!existsSync(join(repoRoot, entry))) {
+    fail(`package.json.files 声明了 ${entry}，但它不存在`, '要么创建它，要么从 files 里移除。')
+  }
+}
+
 // ---------------------------------------------------------------- 输出
 
 if (errors.length > 0) {
@@ -289,6 +372,14 @@ if (errors.length > 0) {
   process.exitCode = 1
 } else {
   console.log(
-    `[dsh-rrp] repo hygiene ok: 根目录白名单、文档体积、${numbered.length} 篇 ADR 结构、验收命名、站点导航一致性、相对链接`,
+    `[dsh-rrp] repo hygiene ok: 根目录白名单、文档体积、${numbered.length} 篇 ADR 结构与复审登记、验收命名、站点导航一致性、相对链接、依赖一致性`,
   )
+}
+
+if (warnings.length > 0) {
+  console.warn('[dsh-rrp] repo hygiene warnings')
+  for (const { message, hints } of warnings) {
+    console.warn(`  - ${message}`)
+    for (const hint of hints) console.warn(`      ${hint}`)
+  }
 }

@@ -199,7 +199,7 @@ opening: default
 - 开卡路由 `src/start.ts`：`POST /dsh-rrp/start` → 发布卡包 + 初始状态上下文（`source.rrp`；actor `card` 记入内存账本），**最后**追加开场白。
 - 卡片展厅 `src/client/gallery-panel.tsx`：`main` 主区面板 + 同名 `sidebar.panellist` 导航；开始流 = create → `agentPresets.select(presetIdForCard(card.id))` → POST start → open。UI 用宿主原子库（搜索/封面/标签/技能卡/开场白 + 底部主操作条）。
 - **主题（已撤回 P0）**：暖纸 `overrideTokens` 层观感被所有者否决，改用 **DSH 原版亮暗**；面板自身靠 `@deepseek-ai/dsh-client-ui-primitives` 原子 + `--dsw-alias-*` token 保持原生观感（主题相关历史评估已归档，本表为准）。
-- 当前验证：`tests/cards.spec.ts`、`tests/start.spec.ts`、`tests/client.spec.ts` 覆盖规范 id、开卡失败传播与可选 Workspace 归属；最新全量数字以 `pnpm test` 的当前输出为准。
+- 当前验证：`tests/integration/cards.spec.ts`、`tests/integration/start.spec.ts`、`tests/integration/client.spec.ts` 覆盖规范 id、开卡失败传播与可选 Workspace 归属；最新全量数字以 `pnpm test` 的当前输出为准。
 - **已实机确认**：开场白被宿主原生接受为**正文第一条**；卡包 persona 注入**零剧透**。
 - ✅ **技能作用域（已修）**：每张卡一个 `rp-<card-id>` preset（`src/preset-id.ts`），绑定卡包开局时 `agentPresets.select` 选它；基础 `rp` 无卡包设定。宿主启动日志会逐个打印各 preset 的技能表。
 - **待优化**：P4 输入区接管；多卡体系下的卡面封面图；第二张官方测试卡。
@@ -294,4 +294,4 @@ cards/<card-id>/
 ### 13.6 失败语义
 
 manifest 坏（JSON 非法 / 未知字段 / id 重复 / gauge 无 bind / app 指向不存在的页面 / `when` 语法错）→ **整份 UI 作废 + 一条带卡名的错误日志**，卡照常能玩。与技能 `when` 写坏的处理姿态一致：宽容加载、响亮报错。
-官方两张卡的 UI 由 `tests/card-ui.spec.ts` 做**发布门**（改卡把界面改坏会直接挂测试）。
+官方两张卡的 UI 由 `tests/integration/card-ui.spec.ts` 做**发布门**（改卡把界面改坏会直接挂测试）。

@@ -2,6 +2,7 @@
 
 > 状态：接受（边界经 ADR 0022 修订：WorldState 管近期事实，脉络管长线方向）
 > 原编号：D5 · 索引见 [README.md](./README.md)
+> 最后复审：2026-10-16 · 复审周期 180 天
 
 
 **决策**：状态结构**不锁死为固定四大模块**。在规则约定前提下，Chronicler 可以根据剧情与卡包，自行创建新的词条结构，甚至设定数值公式。
@@ -15,7 +16,7 @@
 
 **实现状态（2026-09-19 同步，issue #23）**：**已兑现受控扩展部分；「数值公式」不属于当前承诺。**
 
-已实现并测试（`tests/dynamic-fields.spec.ts` 覆盖三条写路径）：
+已实现并测试（`tests/unit/dynamic-fields.spec.ts` 覆盖三条写路径）：
 - **模型形态**：扁平扩展——核心五域（characters/inventory/scene/flags/relations）之外的顶层键即动态字段，值为 `{ type: 'number'|'string'|'boolean', value, min?, max? }`（`src/world-state.ts` DynamicFieldValue；投影 zod `catchall` 强校验，`src/projection/world-state.ts`）。
 - **命名与上限**：字段 ID `^[a-zA-Z0-9_]+$`、禁与核心保留字重复、总数 ≤ 32；number 支持 min/max，越界由 `applyConstraints` 钳制；`pruneWorldState` 在所有写路径统一裁剪。
 - **创建通道**：Chronicler 输出契约的 `createFields` 数组（`src/agents/chronicler.ts`，非法 ID 逐条跳过）；创建后作为顶层键直接更新值，无需再次 createFields。

@@ -4,7 +4,7 @@
  * The atoms are a browser platform module the host seeds at runtime; Node (and
  * therefore vitest) cannot resolve the bare specifier. vitest.config.ts aliases
  * it here. The stubs render semantic tags so `renderToStaticMarkup` in
- * tests/client-render.spec.ts can see real text, values and disabled states —
+ * tests/integration/client-render.spec.ts can see real text, values and disabled states —
  * a null component would silently swallow every assertion about what a panel
  * shows.
  */

@@ -3,7 +3,7 @@
  *
  * Single source for the 'rrp' namespace copy (ZH/EN). Extracted from
  * client/index.ts so tests can guard the red line: every t('…') key used in
- * client sources must exist in BOTH dictionaries (tests/locale-keys.spec.ts).
+ * client sources must exist in BOTH dictionaries (tests/integration/locale-keys.spec.ts).
  */
 
 export const LOCALE_ZH: Record<string, string> = {
