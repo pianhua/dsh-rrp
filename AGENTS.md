@@ -60,6 +60,7 @@ pnpm run check:hygiene && pnpm run format:check && pnpm run typecheck && pnpm ru
 | 产品目标规格与交互基线 | [`docs/DESIGN.md`](docs/DESIGN.md) |
 | 宿主能力映射与红线 | [`docs/HOST_ALIGNMENT.md`](docs/HOST_ALIGNMENT.md) · [`docs/dev/host-seams.md`](docs/dev/host-seams.md) |
 | 数据往哪流、模块怎么切 | [`docs/dev/architecture.md`](docs/dev/architecture.md) |
+| 接下来开发什么、先修什么 | [`docs/dev/restart-roadmap.md`](docs/dev/restart-roadmap.md) |
 | 需求流程、票据落点与开工门 | [`docs/dev/workflow.md`](docs/dev/workflow.md) |
 | 玩家怎么玩 / 作者怎么做卡 | [`docs/guide/`](docs/guide/) · [`docs/authoring/`](docs/authoring/) |
 | 真机验收结论与证据 | [`docs/reference/acceptance/`](docs/reference/acceptance/) |

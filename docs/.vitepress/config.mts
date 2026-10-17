@@ -15,6 +15,7 @@ export default defineConfig({
     'dev/workflow.md',
     'dev/worklog.md',
     'dev/worklog/**',
+    'dev/restart-roadmap.md',
     'DESIGN.md',
     'HOST_ALIGNMENT.md',
     'DEVELOPMENT.md',
