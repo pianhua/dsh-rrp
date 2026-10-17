@@ -379,3 +379,48 @@ export function forgetState(sessionId: string): void {
 export function forgetAllState(): void {
   RETAINED.clear()
 }
+
+/**
+ * Build (without appending) the card/facts lane messages exactly as
+ * publishState would render them for a first write — same render functions,
+ * same text, same `source.rrp` payload. The lazy-opening materializer hands
+ * these to the host loop through the `agent/pre-step` decision so the LOOP
+ * appends them right after the protected system head and before the player's
+ * message: appending from inside a session/event listener is forbidden by the
+ * host ("session append cannot reenter while another append is being
+ * published"), and appending before the head breaks the protected-head rule.
+ */
+export function buildOpeningFactsMessages(
+  session: StateSession,
+  projections: StateProjections,
+  patch: {
+    card?: CardContext
+    state?: WorldState
+    baseline?: WorldStateTimelineBatch
+  },
+): Array<Record<string, unknown>> {
+  const messages: Array<Record<string, unknown>> = []
+  if (patch.card !== undefined) {
+    messages.push(
+      rrpStateMessage(randomUUID(), renderCardContext(patch.card), { card: patch.card }),
+    )
+  }
+  if (patch.state !== undefined) {
+    const settings = rrpSettingsOf(projections.stateOf(session, RRP_SETTINGS_KEY))
+    const parts: string[] = [renderWorldState(patch.state)]
+    const triggers = patch.card === undefined ? [] : triggersOfCard(patch.card.id)
+    if (triggers.length > 0) {
+      const hits = hitSet(triggers, patch.state)
+      if (hits.length > 0) parts.push(renderTriggerBlock(hits, [], false))
+    }
+    messages.push(
+      rrpStateMessage(randomUUID(), parts.join('\n\n'), {
+        worldState: patch.state,
+        summary: null,
+        settings,
+        ...(patch.baseline === undefined ? {} : { worldStateTimelineBatch: patch.baseline }),
+      }),
+    )
+  }
+  return messages
+}

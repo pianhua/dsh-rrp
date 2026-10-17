@@ -43,7 +43,8 @@ import { loreProjection } from './projection/lore.ts'
 import { transcriptProjection } from './projection/transcript.ts'
 import { worldStateProjection } from './projection/world-state.ts'
 import { worldStateTimelineProjection } from './projection/world-state-timeline.ts'
-import { registerStartRoute } from './host/start.ts'
+import { registerStartRoute, registerOpeningMaterializer } from './host/start.ts'
+import { openStartPending } from './host/start-pending.ts'
 import {
   registerSummarizer,
   registerSummaryCommand,
@@ -205,9 +206,17 @@ export function apply(ctx: Context): void {
     registerLoreCommand(scoped)
   })
 
-  // Card start: write the initial state and the opening the browser cannot.
+  // Card start (ADR 0028 lazy opening): the route saves the payload to the
+  // pending store; the materializer writes it at the first turn's system commit.
+  const startPendingReady = openStartPending((name) => ctx.get(name)).then(({ handle }) => handle)
+  ctx.effect(() => () => {
+    void startPendingReady.then((handle) => handle.close())
+  })
   ctx.inject(['webServer', 'sessions', 'sessionProjections'], (scoped: Context) => {
-    registerStartRoute(scoped)
+    void startPendingReady.then((handle) => {
+      registerStartRoute(scoped, handle)
+      registerOpeningMaterializer(scoped, handle)
+    })
   })
 
   // Card workspace (issue #37): one workspace per card is the save-grouping

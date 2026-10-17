@@ -41,6 +41,7 @@ ADR 一旦接受就保留，即使后来被修订或取代——被取代的记�
 | [0025](0025-stage-v2-card-frontend-platform.md) | 舞台 v2：卡包前端应用平台 | 已实现（一期交付） | 2026-10-17 |
 | [0026](0026-gallery-v2-cover-grid.md) | 展厅 v2：封面网格墙 + 自有格式定性 | 已实现（DEF-02 验收 10/10 PASS） | 2026-10-17 |
 | [0027](0027-docs-sources-context-and-adr.md) | 文档真源：CONTEXT.md + 有序 ADR | 接受（2026-10-16） | 2026-10-17 |
+| [0028](0028-lazy-opening-materialization.md) | 懒开局：开局零写入、首回合物化（R1/issue 06） | 接受（2026-10-17） | 2026-10-17 |
 
 ## 关键脉络
 

@@ -77,9 +77,10 @@ export interface StartRequest {
 
 export interface StartResponse {
   ok: true
+  /** Lazy opening (ADR 0028): the log stays empty until the first turn. */
   cardWritten: boolean
   stateWritten: boolean
-  openingWritten: 'assistant' | 'notice' | 'none'
+  openingWritten: 'assistant' | 'notice' | 'deferred' | 'none'
 }
 
 // ── /dsh-rrp/world-state (player correction) ────────────────────────────────
