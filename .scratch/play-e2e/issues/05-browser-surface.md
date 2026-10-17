@@ -1,6 +1,6 @@
 # 票据 05：浏览器面「刷新看得见」
 
-> Status: wontfix（本轮由 primary Agent 代裁决，2026-10-16）· 原依赖：票据 04 + 规格 §6 决策
+> Status: wontfix（本轮由 primary Agent 代裁决，2026-10-17）· 原依赖：票据 04 + 规格 §6 决策
 
 ## 裁决与理由
 

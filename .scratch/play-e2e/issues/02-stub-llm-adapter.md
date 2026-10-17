@@ -1,6 +1,6 @@
 # 票据 02：模型桩（只覆写 `stream()` 的 LlmAdapter）
 
-> Status: resolved（2026-10-16；「真宿主里发一条消息」一项移交票据 04）· 依赖：票据 01 · 规格真源：[`spec.md`](../spec.md) §2 §3
+> Status: resolved（2026-10-17；「真宿主里发一条消息」一项移交票据 04）· 依赖：票据 01 · 规格真源：[`spec.md`](../spec.md) §2 §3
 
 ## 目标
 
@@ -34,7 +34,7 @@
 
 ## Comments
 
-**2026-10-16 交付**：`tests/e2e/support/stub-model.mjs`（薄插件）+ `stub-plan.mjs`（纯剧本，配 `.d.mts`）；
+**2026-10-17 交付**：`tests/e2e/support/stub-model.mjs`（薄插件）+ `stub-plan.mjs`（纯剧本，配 `.d.mts`）；
 `tests/unit/stub-plan.spec.ts` 3 例、`tests/integration/stub-model.spec.ts` 3 例全过。
 `isolated-host.ts` 增注 `DSH_RRP_E2E_LLM_MODULE` 与 `DSH_RRP_E2E_AUDIT`。
 

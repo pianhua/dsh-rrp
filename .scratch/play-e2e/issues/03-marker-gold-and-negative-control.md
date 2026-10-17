@@ -2,7 +2,7 @@
 
 > Status: claimed（调用方识别已交付；负向对照的端到端证明待票据 04）· 依赖：票据 02 · 规格真源：[`spec.md`](../spec.md) §4
 
-## 开工前的两处自我纠正（2026-10-16，写本票时还不知道）
+## 开工前的两处自我纠正（2026-10-17，写本票时还不知道）
 
 1. **删掉「触发 Chronicler 真实工具调用」这条**。它是从参照项目的 MVU 工具形状照搬来的臆想：
    我方 Chronicler 走 `collectText(stream)` → `parseChroniclerReply(text)`（`src/chronicler.ts:253,331`），
@@ -53,7 +53,7 @@ one-shot 调用则走 `input.system`（`dsh-llm/lib/types/types.d.ts:495-506`）
 
 ## Comments
 
-**2026-10-16 部分交付**：调用方识别已落地——`systemTextOf()` 兼容 loop（首条 system 消息）与
+**2026-10-17 部分交付**：调用方识别已落地——`systemTextOf()` 兼容 loop（首条 system 消息）与
 one-shot（`input.system`）两种请求形状，`callerOf()` 按三个智体受契约守护的身份行判定，
 `planBlocks(input, {wrongGold})` 先认调用方再分场景。`DSH_RRP_E2E_WRONG_GOLD` 由插件在边界读取，
 剧本层保持纯函数。单测 6 例 + 集成 3 例，全量 66 文件 / 530 用例通过。

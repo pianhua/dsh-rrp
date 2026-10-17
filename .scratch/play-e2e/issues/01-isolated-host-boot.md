@@ -1,6 +1,6 @@
 # 票据 01：隔离宿主现场（一次性 profile + 端口 0 + 跑完即焚）
 
-> Status: resolved（2026-10-16）· 依赖：无 · 规格真源：[`spec.md`](../spec.md) §2 §3
+> Status: resolved（2026-10-17）· 依赖：无 · 规格真源：[`spec.md`](../spec.md) §2 §3
 
 ## 定位升级（开工前必读）
 
@@ -54,7 +54,7 @@
 
 ## Comments
 
-**2026-10-16 交付**：`tests/e2e/support/isolated-host.ts` + `tests/e2e/isolated-host.spec.ts`。
+**2026-10-17 交付**：`tests/e2e/support/isolated-host.ts` + `tests/e2e/isolated-host.spec.ts`。
 公共逻辑抽成 `scripts/host-runtime.mjs`（配 `host-runtime.d.mts`，沿用本仓库
 `host-runner-ownership.d.mts` 的声明文件套路），`host-runner.mjs` 改为引用同一份
 `resolveDshBin` / `getCleanEnv`，人工开发行为不变。
