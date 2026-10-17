@@ -19,10 +19,16 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { harnessHome } from './home.ts'
-import { isCardId } from './preset-id.ts'
-import { RRP_ROUTES } from './route-contract.ts'
-import { type RuntimeFaces, type WebServerService, readJsonBody, face, send } from './host-faces.ts'
+import { harnessHome } from '../home.ts'
+import { isCardId } from '../preset-id.ts'
+import { RRP_ROUTES } from '../route-contract.ts'
+import {
+  type RuntimeFaces,
+  type WebServerService,
+  readJsonBody,
+  face,
+  send,
+} from '../host-faces.ts'
 
 const TAG = '[dsh-rrp]'
 const PATH = RRP_ROUTES.cardWorkspace

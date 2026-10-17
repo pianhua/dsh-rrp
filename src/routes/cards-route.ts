@@ -8,10 +8,10 @@
  * handler failures degrade to a JSON error, never a crash.
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { importCardFromJson, importCardFromPng, writeImportedCard } from './card-import.ts'
-import { listCards, readCard } from './cards.ts'
-import { toPlayerSafeCardPack } from './card-types.ts'
-import { ensureCardPreset } from './preset.ts'
+import { importCardFromJson, importCardFromPng, writeImportedCard } from '../card-import.ts'
+import { listCards, readCard } from '../cards.ts'
+import { toPlayerSafeCardPack } from '../card-types.ts'
+import { ensureCardPreset } from '../preset.ts'
 
 const TAG = '[dsh-rrp]'
 /** Exact read paths; the list returns summaries, \`one\` takes the whole pack. */
@@ -20,7 +20,7 @@ import {
   type CardImportResponse,
   type CardListResponse,
   type CardOneResponse,
-} from './route-contract.ts'
+} from '../route-contract.ts'
 const LIST_PATH = RRP_ROUTES.cards
 const ONE_PATH = RRP_ROUTES.cardOne
 const IMPORT_PATH = RRP_ROUTES.cardImport
@@ -33,7 +33,7 @@ import {
   CARD_IMPORT_BODY_LIMIT,
   face,
   send,
-} from './host-faces.ts'
+} from '../host-faces.ts'
 
 /**
  * Register the read-only card-pack routes.

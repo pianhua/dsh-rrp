@@ -1,15 +1,15 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { RRP_ROUTES } from './route-contract.ts'
-import { WORLD_STATE_KEY, type WorldState } from './world-state.ts'
-import { sanitizePlayerText, sanitizeWorldStateDiff } from './world-state-visibility.ts'
-import { WORLD_STATE_TIMELINE_KEY, type WorldStateTimeline } from './world-state-timeline.ts'
+import { RRP_ROUTES } from '../route-contract.ts'
+import { WORLD_STATE_KEY, type WorldState } from '../world-state.ts'
+import { sanitizePlayerText, sanitizeWorldStateDiff } from '../world-state-visibility.ts'
+import { WORLD_STATE_TIMELINE_KEY, type WorldStateTimeline } from '../world-state-timeline.ts'
 import type {
   ProjectionsService,
   RuntimeFaces,
   SessionsService,
   WebServerService,
-} from './host-faces.ts'
-import { acceptsRrpWrites, face, queryOf, send } from './host-faces.ts'
+} from '../host-faces.ts'
+import { acceptsRrpWrites, face, queryOf, send } from '../host-faces.ts'
 
 const TAG = '[dsh-rrp]'
 

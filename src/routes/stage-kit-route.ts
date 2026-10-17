@@ -15,10 +15,10 @@ import {
   type RequestLike,
   type ResponseLike,
   face,
-} from './host-faces.ts'
+} from '../host-faces.ts'
 
 const TAG = '[dsh-rrp]'
-const STAGE_KIT_DIR = fileURLToPath(new URL('../assets/stage-kit/', import.meta.url))
+const STAGE_KIT_DIR = fileURLToPath(new URL('../../assets/stage-kit/', import.meta.url))
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',

@@ -15,9 +15,9 @@ import {
   renderRecall,
   setRecallCooldowns,
   type RecallRound,
-} from './recall.ts'
-import { RRP_ROUTES } from './route-contract.ts'
-import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from './worldline-digest.ts'
+} from '../recall.ts'
+import { RRP_ROUTES } from '../route-contract.ts'
+import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from '../worldline-digest.ts'
 import {
   type ProjectionsService,
   type RequestLike,
@@ -29,7 +29,7 @@ import {
   face,
   readJsonBody,
   send,
-} from './host-faces.ts'
+} from '../host-faces.ts'
 
 const TAG = '[dsh-rrp]'
 const RECALL_PATH = RRP_ROUTES.recall

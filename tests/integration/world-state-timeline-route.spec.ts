@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { registerWorldStateTimelineRoute } from '../../src/world-state-timeline-route.ts'
+import { registerWorldStateTimelineRoute } from '../../src/routes/world-state-timeline-route.ts'
 import { emptyWorldState, type WorldState } from '../../src/world-state.ts'
 import { emptyWorldStateTimeline, type WorldStateTimeline } from '../../src/world-state-timeline.ts'
 

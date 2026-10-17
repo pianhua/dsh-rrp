@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { registerCardsRoute } from '../../src/cards-route.ts'
+import { registerCardsRoute } from '../../src/routes/cards-route.ts'
 
 function host() {
   const routes = new Map<string, { handler: (req: unknown, res: unknown) => unknown }>()

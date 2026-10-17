@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { legacySessionLoreDir, renderLore } from '../../src/lore.ts'
 import { LORE_LIMITS, applyLoreChange, type LoreEntry } from '../../src/lore-state.ts'
 import { invalidateLore, migrateLegacyLore, registerLoreRuntime } from '../../src/lore-runtime.ts'
-import { hasLoreDraft, stageLoreDraftForTesting } from '../../src/lore-route.ts'
+import { hasLoreDraft, stageLoreDraftForTesting } from '../../src/routes/lore-route.ts'
 import { rrpPayloadOf } from '../../src/state-payload.ts'
 import { transcriptProjections } from '../stubs/transcript-projections.ts'
 

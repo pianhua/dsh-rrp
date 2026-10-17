@@ -15,9 +15,9 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import { recordActivity } from './activity.ts'
-import { CARD_KEY, type CardContext } from './card-types.ts'
-import { triggersOfCard } from './cards.ts'
+import { recordActivity } from '../activity.ts'
+import { CARD_KEY, type CardContext } from '../card-types.ts'
+import { triggersOfCard } from '../cards.ts'
 import {
   type AgentsService,
   type CommandsService,
@@ -35,15 +35,15 @@ import {
   acceptsRrpWrites,
   send,
   sessionIdOf,
-} from './host-faces.ts'
-import { ensureLoreArmed, invalidateLore } from './lore-runtime.ts'
-import { RRP_LORE_KEY, loreEntriesOf, validateLoreEntry, type LoreEntry } from './lore-state.ts'
-import { RRP_ROUTES, type LoreEntryView } from './route-contract.ts'
-import { evalCondition, hitSet } from './lore-condition.ts'
-import { publishState } from './state-publisher.ts'
-import { WORLD_STATE_KEY, type WorldState } from './world-state.ts'
-import { filterWorldState } from './world-state-visibility.ts'
-import { reservedNames, scheduleLoreDraft, type LoreApplicationFaces } from './lore-application.ts'
+} from '../host-faces.ts'
+import { ensureLoreArmed, invalidateLore } from '../lore-runtime.ts'
+import { RRP_LORE_KEY, loreEntriesOf, validateLoreEntry, type LoreEntry } from '../lore-state.ts'
+import { RRP_ROUTES, type LoreEntryView } from '../route-contract.ts'
+import { evalCondition, hitSet } from '../lore-condition.ts'
+import { publishState } from '../state-publisher.ts'
+import { WORLD_STATE_KEY, type WorldState } from '../world-state.ts'
+import { filterWorldState } from '../world-state-visibility.ts'
+import { reservedNames, scheduleLoreDraft, type LoreApplicationFaces } from '../lore-application.ts'
 
 const TAG = '[dsh-rrp]'
 const LORE_PATH = RRP_ROUTES.lore
@@ -55,10 +55,10 @@ import {
   forgetAllLore,
   hasLoreDraft,
   stageLoreDraftForTesting,
-} from './lore-drafts.ts'
+} from '../lore-drafts.ts'
 
 export { forgetLore, forgetAllLore, hasLoreDraft, stageLoreDraftForTesting }
-export { reservedNames, stageLoreDraft } from './lore-application.ts'
+export { reservedNames, stageLoreDraft } from '../lore-application.ts'
 
 /** Current dynamic lore for exactly this Session/worldline. */
 function currentLore(projections: ProjectionsService, session: SessionLike): LoreEntry[] {

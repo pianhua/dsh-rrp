@@ -14,10 +14,10 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { cardDirOf, readCard, shippedCardRoot } from './cards.ts'
-import { isUiAssetName, loadUiManifest, UI_MANIFEST_FILE } from './card-ui.ts'
-import { isCardId } from './preset-id.ts'
-import { RRP_ROUTES, type CardUiResponse } from './route-contract.ts'
+import { cardDirOf, readCard, shippedCardRoot } from '../cards.ts'
+import { isUiAssetName, loadUiManifest, UI_MANIFEST_FILE } from '../card-ui.ts'
+import { isCardId } from '../preset-id.ts'
+import { RRP_ROUTES, type CardUiResponse } from '../route-contract.ts'
 import {
   type RequestLike,
   type ResponseLike,
@@ -26,8 +26,8 @@ import {
   queryOf,
   face,
   send,
-} from './host-faces.ts'
-import { assembleSandboxDoc } from './ui-bridge.ts'
+} from '../host-faces.ts'
+import { assembleSandboxDoc } from '../ui-bridge.ts'
 
 const TAG = '[dsh-rrp]'
 const UI_PATH = RRP_ROUTES.cardUi

@@ -9,25 +9,25 @@
  * only Slot/right-sidebar UI (see src/client/index.ts).
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { registerActivityRoute } from './activity-route.ts'
+import { registerActivityRoute } from './routes/activity-route.ts'
 import { listCards } from './cards.ts'
-import { registerCardsRoute } from './cards-route.ts'
-import { registerCardUiRoute } from './card-ui-route.ts'
-import { registerCardWorkspaceRoute } from './card-workspace-route.ts'
-import { registerStageKitRoute } from './stage-kit-route.ts'
-import { registerExportRoute } from './export-route.ts'
-import { registerRecallRoute } from './recall-route.ts'
+import { registerCardsRoute } from './routes/cards-route.ts'
+import { registerCardUiRoute } from './routes/card-ui-route.ts'
+import { registerCardWorkspaceRoute } from './routes/card-workspace-route.ts'
+import { registerStageKitRoute } from './routes/stage-kit-route.ts'
+import { registerExportRoute } from './routes/export-route.ts'
+import { registerRecallRoute } from './routes/recall-route.ts'
 import { forgetRecall, forgetAllRecall } from './recall.ts'
 import { registerCopilotRoute, forgetAllCopilot, forgetCopilot } from './copilot.ts'
 import { worldlineDigestProjection } from './projection/worldline-digest.ts'
-import { registerWorldlineRoute } from './worldline-route.ts'
+import { registerWorldlineRoute } from './routes/worldline-route.ts'
 import { registerWorldlineForkMarker } from './worldline-fork-marker.ts'
 import { openWorldlineStore, type WorldlineStoreHandle } from './worldline-store.ts'
-import { registerLoreCommand, registerLoreRoute } from './lore-route.ts'
+import { registerLoreCommand, registerLoreRoute } from './routes/lore-route.ts'
 import { registerLoreRuntime } from './lore-runtime.ts'
 import { registerChronicler, forgetAllInference, forgetInference } from './chronicler.ts'
 import { registerCorrectionRoute } from './correction.ts'
-import { registerWorldStateTimelineRoute } from './world-state-timeline-route.ts'
+import { registerWorldStateTimelineRoute } from './routes/world-state-timeline-route.ts'
 import {
   PRESET_ID,
   activatePresetFamily,
@@ -51,7 +51,7 @@ import {
   forgetSummary,
 } from './summarizer.ts'
 import { forgetAllActivity, forgetActivity } from './activity.ts'
-import { forgetAllLore, forgetLore } from './lore-route.ts'
+import { forgetAllLore, forgetLore } from './routes/lore-route.ts'
 import { forgetAllState, forgetState } from './state-publisher.ts'
 import { forgetAllProposals, forgetProposals } from './steward-proposals.ts'
 

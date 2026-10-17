@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { registerWorldlineRoute } from '../../src/worldline-route.ts'
+import { registerWorldlineRoute } from '../../src/routes/worldline-route.ts'
 import { RRP_ROUTES, type WorldlineTreeResponse } from '../../src/route-contract.ts'
 import { emptyWorldlineDigest, type WorldlineDigest } from '../../src/worldline-digest.ts'
 import { openWorldlineStore } from '../../src/worldline-store.ts'

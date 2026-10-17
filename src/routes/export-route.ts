@@ -9,8 +9,8 @@
  * never truncated by the transcript projection's tail caps.
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { RRP_ROUTES } from './route-contract.ts'
-import { collectTextBlocks, isPluginNotice, rrpPayloadOf } from './state-payload.ts'
+import { RRP_ROUTES } from '../route-contract.ts'
+import { collectTextBlocks, isPluginNotice, rrpPayloadOf } from '../state-payload.ts'
 
 const TAG = '[dsh-rrp]'
 const EXPORT_PATH = RRP_ROUTES.novelExport
@@ -34,7 +34,7 @@ import {
   queryOf,
   face,
   send,
-} from './host-faces.ts'
+} from '../host-faces.ts'
 
 /**
  * Extract the story prose from one session's event log, in seq order: every

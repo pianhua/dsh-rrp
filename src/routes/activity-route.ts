@@ -6,11 +6,11 @@
  * Read-only; rides the host webserver, never `createServer`.
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { readActivity } from './activity.ts'
-import { type RuntimeFaces, type WebServerService, queryOf, face, send } from './host-faces.ts'
+import { readActivity } from '../activity.ts'
+import { type RuntimeFaces, type WebServerService, queryOf, face, send } from '../host-faces.ts'
 
 const TAG = '[dsh-rrp]'
-import { RRP_ROUTES } from './route-contract.ts'
+import { RRP_ROUTES } from '../route-contract.ts'
 const ACTIVITY_PATH = RRP_ROUTES.activity
 
 /**

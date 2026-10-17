@@ -3,7 +3,7 @@ import {
   registerExportRoute,
   extractNovelProse,
   buildNovelDocument,
-} from '../../src/export-route.ts'
+} from '../../src/routes/export-route.ts'
 import { RRP_ROUTES } from '../../src/route-contract.ts'
 
 /** Minimal message event: one text block wrapped the way the host payloads look. */

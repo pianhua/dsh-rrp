@@ -7,7 +7,7 @@ import {
   recallScopeOf,
   setRecallCooldowns,
 } from '../../src/recall.ts'
-import { registerRecallRoute } from '../../src/recall-route.ts'
+import { registerRecallRoute } from '../../src/routes/recall-route.ts'
 import { RRP_ROUTES } from '../../src/route-contract.ts'
 
 function userMessage(text: string, extra: Record<string, unknown> = {}) {

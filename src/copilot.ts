@@ -58,7 +58,7 @@ import {
   stageProposal,
 } from './steward-proposals.ts'
 import { termsOf, recallHistory } from './recall.ts'
-import { fetchSessionRounds } from './recall-route.ts'
+import { fetchSessionRounds } from './routes/recall-route.ts'
 import {
   COPILOT_NO_MODEL_ROUTE,
   COPILOT_SSE,

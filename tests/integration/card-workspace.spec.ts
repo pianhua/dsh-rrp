@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { cardSaveDir, registerCardWorkspaceRoute } from '../../src/card-workspace-route.ts'
+import { cardSaveDir, registerCardWorkspaceRoute } from '../../src/routes/card-workspace-route.ts'
 import { RRP_ROUTES } from '../../src/route-contract.ts'
 
 describe('/dsh-rrp/card-workspace route', () => {

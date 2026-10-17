@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { readActivity } from '../../src/activity.ts'
-import { registerLoreCommand, registerLoreRoute } from '../../src/lore-route.ts'
+import { registerLoreCommand, registerLoreRoute } from '../../src/routes/lore-route.ts'
 import { seedCardTriggersForTesting } from '../../src/cards.ts'
 import type { CardContext } from '../../src/card-types.ts'
 import { parseWhen, type TriggerDef, type WhenCondition } from '../../src/lore-condition.ts'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { registerStageKitRoute } from '../../src/stage-kit-route.ts'
+import { registerStageKitRoute } from '../../src/routes/stage-kit-route.ts'
 
 interface FakeResponse {
   statusCode: number
