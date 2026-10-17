@@ -12,8 +12,8 @@ import {
   type WorldState,
   type WorldStateView,
   emptyWorldState,
-} from '../world-state.ts'
-import { filterWorldState } from '../world-state-visibility.ts'
+} from '../world-state/world-state.ts'
+import { filterWorldState } from '../world-state/world-state-visibility.ts'
 
 const visibilitySchema = z.enum(['player', 'model', 'hidden'])
 const objectKindSchema = z.enum(['character', 'group', 'item', 'scene'])

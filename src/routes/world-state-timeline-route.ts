@@ -1,8 +1,14 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { RRP_ROUTES } from '../route-contract.ts'
-import { WORLD_STATE_KEY, type WorldState } from '../world-state.ts'
-import { sanitizePlayerText, sanitizeWorldStateDiff } from '../world-state-visibility.ts'
-import { WORLD_STATE_TIMELINE_KEY, type WorldStateTimeline } from '../world-state-timeline.ts'
+import { WORLD_STATE_KEY, type WorldState } from '../world-state/world-state.ts'
+import {
+  sanitizePlayerText,
+  sanitizeWorldStateDiff,
+} from '../world-state/world-state-visibility.ts'
+import {
+  WORLD_STATE_TIMELINE_KEY,
+  type WorldStateTimeline,
+} from '../world-state/world-state-timeline.ts'
 import type {
   ProjectionsService,
   RuntimeFaces,

@@ -10,13 +10,13 @@ import {
   setCopilotLegacyDirForTesting,
   setCopilotWitnessForTesting,
 } from '../../src/copilot-store.ts'
-import { DRAFTING } from '../../src/lore-drafts.ts'
+import { DRAFTING } from '../../src/lore/lore-drafts.ts'
 import { hasLoreDraft, stageLoreDraftForTesting } from '../../src/routes/lore-route.ts'
 import { RRP_SETTINGS_KEY } from '../../src/settings.ts'
 import { registerSummarizer } from '../../src/summarizer.ts'
 import { listProposals, stageProposal } from '../../src/steward-proposals.ts'
 import { publishState } from '../../src/state-publisher.ts'
-import { emptyWorldState } from '../../src/world-state.ts'
+import { emptyWorldState } from '../../src/world-state/world-state.ts'
 import * as rrp from '../../src/index.ts'
 import { registerPresetFamily } from '../../src/preset.ts'
 

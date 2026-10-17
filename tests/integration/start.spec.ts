@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { forgetActivity, readActivity } from '../../src/activity.ts'
 import { forgetState } from '../../src/state-publisher.ts'
 import { registerStartRoute } from '../../src/start.ts'
-import { emptyWorldState } from '../../src/world-state.ts'
+import { emptyWorldState } from '../../src/world-state/world-state.ts'
 
 const STATE = {
   ...emptyWorldState(),

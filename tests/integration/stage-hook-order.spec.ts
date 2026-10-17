@@ -3,14 +3,14 @@ import { act } from 'react'
 import { createElement, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CARD_KEY, type CardContext } from '../../src/card-types.ts'
+import { CARD_KEY, type CardContext } from '../../src/cards/card-types.ts'
 import {
   StagePanel,
   type StageApi,
   __clearStageManifestCache,
 } from '../../src/client/stage-tab.tsx'
-import { WORLDLINE_DIGEST_KEY } from '../../src/worldline-digest.ts'
-import { WORLD_STATE_KEY, emptyWorldState } from '../../src/world-state.ts'
+import { WORLDLINE_DIGEST_KEY } from '../../src/worldline/worldline-digest.ts'
+import { WORLD_STATE_KEY, emptyWorldState } from '../../src/world-state/world-state.ts'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

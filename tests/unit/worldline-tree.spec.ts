@@ -4,7 +4,7 @@ import {
   type WorldlineNode,
   type WorldlineSessionFact,
   type WorldlineTurnFact,
-} from '../../src/worldline-tree.ts'
+} from '../../src/worldline/worldline-tree.ts'
 
 function turns(count: number, tag = ''): WorldlineTurnFact[] {
   return Array.from({ length: count }, (_, turn) => ({

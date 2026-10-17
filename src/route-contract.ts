@@ -9,11 +9,11 @@
  * the host webServer + plain fetch/SSE stay exactly as they are — no RPC
  * framework, per the personal-toy positioning.
  */
-import type { CardContext, CardMeta, CardPackPlayerView } from './card-types.ts'
+import type { CardContext, CardMeta, CardPackPlayerView } from './cards/card-types.ts'
 import type { StewardProposal } from './steward-proposals.ts'
-import type { WorldState, WorldStateDiagnostic, WorldStateDiff } from './world-state.ts'
-import type { WorldStateTimeline } from './world-state-timeline.ts'
-import type { WorldlineTree } from './worldline-tree.ts'
+import type { WorldState, WorldStateDiagnostic, WorldStateDiff } from './world-state/world-state.ts'
+import type { WorldStateTimeline } from './world-state/world-state-timeline.ts'
+import type { WorldlineTree } from './worldline/worldline-tree.ts'
 import type { UiManifest } from './ui-schema.ts'
 
 export type { StewardProposal } from './steward-proposals.ts'

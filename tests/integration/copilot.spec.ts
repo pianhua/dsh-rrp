@@ -11,8 +11,12 @@ import {
 import { readActivity } from '../../src/activity.ts'
 import { forgetState } from '../../src/state-publisher.ts'
 import { rrpPayloadOf } from '../../src/state-payload.ts'
-import type { CardContext } from '../../src/card-types.ts'
-import { emptyWorldState, WORLD_STATE_KEY, type WorldState } from '../../src/world-state.ts'
+import type { CardContext } from '../../src/cards/card-types.ts'
+import {
+  emptyWorldState,
+  WORLD_STATE_KEY,
+  type WorldState,
+} from '../../src/world-state/world-state.ts'
 import {
   liveCardContextText,
   mergeWorldStatePatch,
@@ -25,7 +29,7 @@ import {
   openCopilotStore,
 } from '../../src/copilot-store.ts'
 import { forgetProposals } from '../../src/steward-proposals.ts'
-import { hasLoreDraft } from '../../src/lore-drafts.ts'
+import { hasLoreDraft } from '../../src/lore/lore-drafts.ts'
 
 let copilotDir: string
 

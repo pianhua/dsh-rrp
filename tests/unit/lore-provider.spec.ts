@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createLoreProvider } from '../../src/lore-provider.ts'
-import type { LoreEntry } from '../../src/lore-state.ts'
+import { createLoreProvider } from '../../src/lore/lore-provider.ts'
+import type { LoreEntry } from '../../src/lore/lore-state.ts'
 
 describe('per-session lore skill provider', () => {
   it('exposes exactly the owning session skills', async () => {

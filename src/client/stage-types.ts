@@ -4,9 +4,9 @@
  * Separated as a leaf module to break the circular dependency between
  * stage-tab.tsx and stage-frame.tsx.
  */
-import type { LoreEntry } from '../lore-state.ts'
+import type { LoreEntry } from '../lore/lore-state.ts'
 import type { UiManifest } from '../ui-schema.ts'
-import type { WorldState } from '../world-state.ts'
+import type { WorldState } from '../world-state/world-state.ts'
 
 export type Translate = (key: string) => string
 

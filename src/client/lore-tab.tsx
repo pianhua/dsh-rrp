@@ -26,7 +26,7 @@ import {
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { RRP_LORE_KEY, type LoreEntry } from '../lore-state.ts'
+import { RRP_LORE_KEY, type LoreEntry } from '../lore/lore-state.ts'
 import {
   RRP_ROUTES,
   routeUrl,

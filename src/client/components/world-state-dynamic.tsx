@@ -9,7 +9,7 @@ import {
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useState, type ReactNode } from 'react'
-import { isCoreKey, isValidFieldId } from '../../world-state.ts'
+import { isCoreKey, isValidFieldId } from '../../world-state/world-state.ts'
 import { CollapsibleSection, S, type Translate } from './world-state-primitives.tsx'
 
 export interface DynamicFieldRow {

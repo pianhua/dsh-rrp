@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { registerCopilotRoute, forgetCopilot } from '../../src/copilot.ts'
 import { rrpPayloadOf } from '../../src/state-payload.ts'
 import { forgetState } from '../../src/state-publisher.ts'
-import { emptyWorldState, WORLD_STATE_KEY, type WorldState } from '../../src/world-state.ts'
+import {
+  emptyWorldState,
+  WORLD_STATE_KEY,
+  type WorldState,
+} from '../../src/world-state/world-state.ts'
 
 function state(): WorldState {
   return {

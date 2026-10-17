@@ -16,8 +16,8 @@
  * hiding prunes the map only, never the host session.
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { CARD_KEY, type CardContext } from '../card-types.ts'
-import { listCards } from '../cards.ts'
+import { CARD_KEY, type CardContext } from '../cards/card-types.ts'
+import { listCards } from '../cards/cards.ts'
 import {
   type ProjectionsService,
   type RuntimeFaces,
@@ -30,13 +30,17 @@ import {
 } from '../host-faces.ts'
 import { cardIdFromPreset } from '../preset-id.ts'
 import { RRP_ROUTES, type WorldlineTreeResponse } from '../route-contract.ts'
-import { WORLDLINE_DIGEST_KEY, seedTurnsOf, type WorldlineDigest } from '../worldline-digest.ts'
+import {
+  WORLDLINE_DIGEST_KEY,
+  seedTurnsOf,
+  type WorldlineDigest,
+} from '../worldline/worldline-digest.ts'
 import {
   foldWorldlineTrees,
   type WorldlineSessionFact,
   type WorldlineTree,
-} from '../worldline-tree.ts'
-import { openWorldlineStore, type WorldlineStoreHandle } from '../worldline-store.ts'
+} from '../worldline/worldline-tree.ts'
+import { openWorldlineStore, type WorldlineStoreHandle } from '../worldline/worldline-store.ts'
 
 const TAG = '[dsh-rrp]'
 const TREE_PATH = RRP_ROUTES.worldlineTree

@@ -17,8 +17,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity, renderActivityWorldStateDiff } from './activity.ts'
-import { cardDirOf } from './cards.ts'
-import { CARD_KEY, type CardContext } from './card-types.ts'
+import { cardDirOf } from './cards/cards.ts'
+import { CARD_KEY, type CardContext } from './cards/card-types.ts'
 import { extractFirstJsonObject } from './json-extract.ts'
 import {
   CHRONICLER_SYSTEM_PROMPT,
@@ -46,16 +46,16 @@ import {
 import { matchesPreset } from './preset-id.ts'
 import { publishState } from './state-publisher.ts'
 import { pendingTranscriptOf, proseHeadSeqOf, transcriptSliceOf } from './transcript-reader.ts'
-import { type WorldStateTimelineChangeBatch } from './world-state-timeline.ts'
+import { type WorldStateTimelineChangeBatch } from './world-state/world-state-timeline.ts'
 import {
   WORLD_STATE_KEY,
   diffWorldState,
   emptyWorldState,
   worldStatesEqual,
   type WorldState,
-} from './world-state.ts'
-import { sanitizePlayerText, sanitizeWorldStateDiff } from './world-state-visibility.ts'
-import { applyWorldStatePatch } from './world-state-references.ts'
+} from './world-state/world-state.ts'
+import { sanitizePlayerText, sanitizeWorldStateDiff } from './world-state/world-state-visibility.ts'
+import { applyWorldStatePatch } from './world-state/world-state-references.ts'
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'chronicler'

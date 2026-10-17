@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { toPlayerSafeCardPack, type CardPack } from '../../src/card-types.ts'
-import { emptyWorldState } from '../../src/world-state.ts'
-import { mergePlayerVisibleWorldState } from '../../src/world-state-visibility.ts'
+import { toPlayerSafeCardPack, type CardPack } from '../../src/cards/card-types.ts'
+import { emptyWorldState } from '../../src/world-state/world-state.ts'
+import { mergePlayerVisibleWorldState } from '../../src/world-state/world-state-visibility.ts'
 
 function pack(): CardPack {
   return {

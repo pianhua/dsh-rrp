@@ -7,12 +7,12 @@
  * is an ESTIMATE for orientation only — it does not account for the system
  * prompt, skills, or transcript. Dependency-free: host and client share it.
  */
-import type { CardContext } from './card-types.ts'
-import { renderCardContext } from './card-types.ts'
+import type { CardContext } from './cards/card-types.ts'
+import { renderCardContext } from './cards/card-types.ts'
 import type { MacroSummary } from './macro-summary.ts'
 import { renderMacroSummary } from './macro-summary.ts'
-import type { WorldState } from './world-state.ts'
-import { renderWorldState } from './world-state.ts'
+import type { WorldState } from './world-state/world-state.ts'
+import { renderWorldState } from './world-state/world-state.ts'
 
 /**
  * Gauge baseline: a common 128K-token context window. Only a yardstick for

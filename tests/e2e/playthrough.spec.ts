@@ -2,15 +2,15 @@ import { existsSync } from 'node:fs'
 import { readFile, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { WORLD_STATE_KEY } from '../../src/world-state.ts'
+import { WORLD_STATE_KEY } from '../../src/world-state/world-state.ts'
 import {
   WORLD_STATE_TIMELINE_KEY,
   type WorldStateTimeline,
-} from '../../src/world-state-timeline.ts'
+} from '../../src/world-state/world-state-timeline.ts'
 import { TRANSCRIPT_KEY, type TranscriptSlice } from '../../src/transcript.ts'
-import { interpolateCardText } from '../../src/card-types.ts'
-import type { CardPackPlayerView } from '../../src/card-types.ts'
-import type { WorldState } from '../../src/world-state.ts'
+import { interpolateCardText } from '../../src/cards/card-types.ts'
+import type { CardPackPlayerView } from '../../src/cards/card-types.ts'
+import type { WorldState } from '../../src/world-state/world-state.ts'
 import { RRP_ROUTES } from '../../src/route-contract.ts'
 import {
   AUTHOR_GOLD,

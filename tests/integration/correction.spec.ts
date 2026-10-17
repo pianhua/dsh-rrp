@@ -3,8 +3,11 @@ import { registerCorrectionRoute } from '../../src/correction.ts'
 import { readActivity, forgetActivity } from '../../src/activity.ts'
 import { forgetState } from '../../src/state-publisher.ts'
 import { rrpPayloadOf } from '../../src/state-payload.ts'
-import { emptyWorldState, type WorldState } from '../../src/world-state.ts'
-import { emptyWorldStateTimeline, type WorldStateTimeline } from '../../src/world-state-timeline.ts'
+import { emptyWorldState, type WorldState } from '../../src/world-state/world-state.ts'
+import {
+  emptyWorldStateTimeline,
+  type WorldStateTimeline,
+} from '../../src/world-state/world-state-timeline.ts'
 
 function validState(): WorldState {
   return {

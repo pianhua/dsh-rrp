@@ -1,4 +1,4 @@
-import type { WorldlineNode, WorldlineTree } from '../worldline-tree.ts'
+import type { WorldlineNode, WorldlineTree } from '../worldline/worldline-tree.ts'
 
 export type RelativeTimeUnit = 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year'
 

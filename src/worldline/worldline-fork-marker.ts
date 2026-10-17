@@ -1,8 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { ProjectionsService, SessionLike, SessionsService } from './host-faces.ts'
-import { face, type ListeningRuntimeFaces } from './host-faces.ts'
+import type { ProjectionsService, SessionLike, SessionsService } from '../host-faces.ts'
+import { face, type ListeningRuntimeFaces } from '../host-faces.ts'
 import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from './worldline-digest.ts'
-import { publishWorldlineForkCut } from './state-publisher.ts'
+import { publishWorldlineForkCut } from '../state-publisher.ts'
 
 interface ForkSession extends SessionLike {
   readonly inheritedEventCount?: number

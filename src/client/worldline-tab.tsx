@@ -11,14 +11,14 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react'
-import { WORLDLINE_DIGEST_KEY } from '../worldline-digest.ts'
+import { WORLDLINE_DIGEST_KEY } from '../worldline/worldline-digest.ts'
 import {
   RRP_ROUTES,
   routeUrl,
   type WorldlineHiddenResponse,
   type WorldlineTreeResponse,
 } from '../route-contract.ts'
-import type { WorldlineNode, WorldlineTree } from '../worldline-tree.ts'
+import type { WorldlineNode, WorldlineTree } from '../worldline/worldline-tree.ts'
 import type { RrpClientContext, RrpUiWorkspaceService, RrpUseProjection } from './context-types.ts'
 import { WorldlineBranchList } from './components/worldline-branch-list.tsx'
 import { WorldlineForkDialog } from './components/worldline-fork-dialog.tsx'

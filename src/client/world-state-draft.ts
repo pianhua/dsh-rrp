@@ -1,4 +1,8 @@
-import { emptyWorldState, type WorldState, type WorldStateView } from '../world-state.ts'
+import {
+  emptyWorldState,
+  type WorldState,
+  type WorldStateView,
+} from '../world-state/world-state.ts'
 
 /** The editable client draft is the player-safe v2 wire view, including notices. */
 export type WorldStateDraft = WorldStateView

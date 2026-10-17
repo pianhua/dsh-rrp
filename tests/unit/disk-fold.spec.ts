@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { emptyWorldState } from '../../src/world-state.ts'
+import { emptyWorldState } from '../../src/world-state/world-state.ts'
 import {
   firstSurfaceEvent,
   foldEvents,

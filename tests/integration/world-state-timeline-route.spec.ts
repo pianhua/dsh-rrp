@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { registerWorldStateTimelineRoute } from '../../src/routes/world-state-timeline-route.ts'
-import { emptyWorldState, type WorldState } from '../../src/world-state.ts'
-import { emptyWorldStateTimeline, type WorldStateTimeline } from '../../src/world-state-timeline.ts'
+import { emptyWorldState, type WorldState } from '../../src/world-state/world-state.ts'
+import {
+  emptyWorldStateTimeline,
+  type WorldStateTimeline,
+} from '../../src/world-state/world-state-timeline.ts'
 
 function host(state: WorldState, timeline: WorldStateTimeline) {
   let route: { handler: (req: unknown, res: unknown) => Promise<void> } | undefined

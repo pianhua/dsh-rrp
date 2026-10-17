@@ -12,7 +12,7 @@ import {
   normalizeWorldState,
   type TrackedObject,
   type WorldState,
-} from '../../src/world-state.ts'
+} from '../../src/world-state/world-state.ts'
 
 const tracked = (overrides: Partial<TrackedObject> = {}): TrackedObject => ({
   id: 'mia',

@@ -21,8 +21,8 @@ import { scribeAgent, SCRIBE_SYSTEM_PROMPT, scribeDraftSchema } from '../../src/
 import { copilotAgent, COPILOT_SYSTEM_PROMPT } from '../../src/agents/copilot.ts'
 import { macroSummarySchema } from '../../src/projection/summary.ts'
 import { SUMMARY_LIMITS } from '../../src/macro-summary.ts'
-import { LORE_LIMITS } from '../../src/lore-state.ts'
-import { emptyWorldState } from '../../src/world-state.ts'
+import { LORE_LIMITS } from '../../src/lore/lore-state.ts'
+import { emptyWorldState } from '../../src/world-state/world-state.ts'
 
 const CONTRACTS = [
   authorAgent,

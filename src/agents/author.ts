@@ -17,7 +17,7 @@
  * NOT port this prompt's literary license into the background agents.
  */
 import type { MacroSummary } from '../macro-summary.ts'
-import { renderWorldState, type WorldState } from '../world-state.ts'
+import { renderWorldState, type WorldState } from '../world-state/world-state.ts'
 import type { AgentPromptContract } from './contract.ts'
 
 /** The Author's complete system prompt — deployed verbatim into the RP preset. */

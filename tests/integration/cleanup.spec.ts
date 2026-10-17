@@ -10,7 +10,7 @@ import {
   setCopilotLegacyDirForTesting,
   setCopilotWitnessForTesting,
 } from '../../src/copilot-store.ts'
-import { DRAFTING } from '../../src/lore-drafts.ts'
+import { DRAFTING } from '../../src/lore/lore-drafts.ts'
 import { hasLoreDraft, stageLoreDraftForTesting } from '../../src/routes/lore-route.ts'
 import { getLastSummarizedTurn, registerSummarizer } from '../../src/summarizer.ts'
 import {
@@ -19,7 +19,7 @@ import {
 } from '../../src/client/world-state-draft-store.ts'
 import { listProposals, stageProposal } from '../../src/steward-proposals.ts'
 import { publishState } from '../../src/state-publisher.ts'
-import { emptyWorldState } from '../../src/world-state.ts'
+import { emptyWorldState } from '../../src/world-state/world-state.ts'
 import { recallScopeOf, setRecallCooldowns, recallCooldownsOf } from '../../src/recall.ts'
 import * as rrp from '../../src/index.ts'
 

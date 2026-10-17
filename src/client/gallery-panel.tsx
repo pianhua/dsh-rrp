@@ -25,7 +25,7 @@ import {
   type CardMeta,
   type CardOpening,
   type CardPackPlayerView,
-} from '../card-types.ts'
+} from '../cards/card-types.ts'
 import { presetIdForCard } from '../preset-id.ts'
 import {
   RRP_ROUTES,

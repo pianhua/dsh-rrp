@@ -8,7 +8,7 @@
 import { z } from 'zod'
 import { extractFirstJsonObject } from '../json-extract.ts'
 import { worldStateSchema } from '../projection/world-state.ts'
-import type { WorldState } from '../world-state.ts'
+import type { WorldState } from '../world-state/world-state.ts'
 import type { AgentPromptContract } from './contract.ts'
 
 const evidenceSchema = z.preprocess(

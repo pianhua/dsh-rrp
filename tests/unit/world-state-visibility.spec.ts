@@ -5,14 +5,14 @@ import {
   renderWorldState,
   type WorldState,
   type WorldStateDiff,
-} from '../../src/world-state.ts'
+} from '../../src/world-state/world-state.ts'
 import {
   filterWorldState,
   renderWorldStateForAudience,
   sanitizePlayerText,
   sanitizeWorldStateDiff,
   type WorldStatePlayerView,
-} from '../../src/world-state-visibility.ts'
+} from '../../src/world-state/world-state-visibility.ts'
 
 function state(): WorldState {
   return {

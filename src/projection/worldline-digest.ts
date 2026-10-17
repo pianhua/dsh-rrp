@@ -18,8 +18,11 @@ import {
   type WorldlineBadge,
   type WorldlineDigest,
   type WorldlineTurnMeta,
-} from '../worldline-digest.ts'
-import { isWorldStateTimelineBatch, type WorldStateTimelineBatch } from '../world-state-timeline.ts'
+} from '../worldline/worldline-digest.ts'
+import {
+  isWorldStateTimelineBatch,
+  type WorldStateTimelineBatch,
+} from '../world-state/world-state-timeline.ts'
 
 /** Slot budgets: the map shows dozens of lines, keep every node small. */
 const TURN_CAP = 500

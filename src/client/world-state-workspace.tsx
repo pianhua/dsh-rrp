@@ -1,10 +1,14 @@
 import { Button, Pill, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { CARD_KEY, type CardContext } from '../card-types.ts'
+import { CARD_KEY, type CardContext } from '../cards/card-types.ts'
 import { SUMMARY_KEY, type MacroSummary } from '../macro-summary.ts'
 import { promptBudgetReport } from '../prompt-budget.ts'
 import { RRP_ROUTES, type CorrectionResponse, routeUrl } from '../route-contract.ts'
-import { WORLD_STATE_KEY, type ObjectReference, type WorldStateView } from '../world-state.ts'
+import {
+  WORLD_STATE_KEY,
+  type ObjectReference,
+  type WorldStateView,
+} from '../world-state/world-state.ts'
 import { stateOfDraft } from './world-state-draft.ts'
 import {
   getWorldStateDraftStore,
@@ -21,7 +25,7 @@ import {
   S,
   type Translate,
 } from './components/world-state-primitives.tsx'
-import type { WorldStateTimeline } from '../world-state-timeline.ts'
+import type { WorldStateTimeline } from '../world-state/world-state-timeline.ts'
 
 interface WorkspaceProps {
   t: Translate

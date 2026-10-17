@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { parseChroniclerReply } from '../../src/agents/chronicler.ts'
-import { createDynamicField, emptyWorldState, pruneWorldState } from '../../src/world-state.ts'
+import {
+  createDynamicField,
+  emptyWorldState,
+  pruneWorldState,
+} from '../../src/world-state/world-state.ts'
 
 describe('WorldState v2 normalization', () => {
   it('keeps the same reference when no constraints need normalization', () => {

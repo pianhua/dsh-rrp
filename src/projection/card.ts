@@ -7,7 +7,7 @@
  * persona are present without ever being stuffed into every message.
  */
 import { z } from 'zod'
-import { CARD_KEY, type CardContext } from '../card-types.ts'
+import { CARD_KEY, type CardContext } from '../cards/card-types.ts'
 import { isCardId } from '../preset-id.ts'
 import { rrpPayloadOf } from '../state-payload.ts'
 

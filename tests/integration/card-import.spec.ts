@@ -10,10 +10,10 @@ import {
   normalizeCharacterCard,
   pngTextChunks,
   writeImportedCard,
-} from '../../src/card-import.ts'
-import * as cardImportCompat from '../../src/card-import.ts'
-import * as cardImportParse from '../../src/card-import-parse.ts'
-import { readCard } from '../../src/cards.ts'
+} from '../../src/cards/card-import.ts'
+import * as cardImportCompat from '../../src/cards/card-import.ts'
+import * as cardImportParse from '../../src/cards/card-import-parse.ts'
+import { readCard } from '../../src/cards/cards.ts'
 
 /** Build a minimal PNG carrying the given tEXt chunks (CRCs are not validated). */
 function pngWith(...texts: Array<[string, string]>): Buffer {

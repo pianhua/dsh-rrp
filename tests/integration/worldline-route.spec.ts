@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { registerWorldlineRoute } from '../../src/routes/worldline-route.ts'
 import { RRP_ROUTES, type WorldlineTreeResponse } from '../../src/route-contract.ts'
-import { emptyWorldlineDigest, type WorldlineDigest } from '../../src/worldline-digest.ts'
-import { openWorldlineStore } from '../../src/worldline-store.ts'
+import { emptyWorldlineDigest, type WorldlineDigest } from '../../src/worldline/worldline-digest.ts'
+import { openWorldlineStore } from '../../src/worldline/worldline-store.ts'
 
 /**
  * Host-truth session shape (issue #36): `inheritedEventCount` is top-level and

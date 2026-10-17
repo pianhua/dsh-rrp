@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { rrpStateMessage, type RrpStatePayload } from '../../src/state-payload.ts'
 import { publishState, forgetState } from '../../src/state-publisher.ts'
-import { emptyWorldState, type WorldState } from '../../src/world-state.ts'
-import { type WorldStateTimelineBatch } from '../../src/world-state-timeline.ts'
+import { emptyWorldState, type WorldState } from '../../src/world-state/world-state.ts'
+import { type WorldStateTimelineBatch } from '../../src/world-state/world-state-timeline.ts'
 
 function fakeSession(id: string) {
   const appended: Array<{ type: string; data: unknown; intent?: unknown }> = []

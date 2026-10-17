@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { WorldlineNode, WorldlineTree } from '../../src/worldline-tree.ts'
+import type { WorldlineNode, WorldlineTree } from '../../src/worldline/worldline-tree.ts'
 import {
   branchTitleForCount,
   directChildCount,

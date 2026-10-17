@@ -25,7 +25,7 @@ export {
   renderWorldStateDiff,
   emptyWorldState,
   renderWorldState,
-} from './world-state.ts'
+} from './world-state/world-state.ts'
 export {
   PROTECTED_OBJECT_REFERENCE_NAME,
   PROTECTED_WORLD_STATE_NOTICE,
@@ -34,7 +34,7 @@ export {
   renderWorldStateForAudience,
   sanitizePlayerText,
   sanitizeWorldStateDiff,
-} from './world-state-visibility.ts'
+} from './world-state/world-state-visibility.ts'
 export type {
   ActiveConflict,
   CharacterCognitionEntry,
@@ -75,12 +75,12 @@ export type {
   WorldStateAudience,
   WorldStatePlayerView,
   WorldStateVisibilityNotice,
-} from './world-state.ts'
+} from './world-state/world-state.ts'
 export {
   WORLD_STATE_TIMELINE_KEY,
   WORLD_STATE_TIMELINE_VERSION,
   emptyWorldStateTimeline,
-} from './world-state-timeline.ts'
+} from './world-state/world-state-timeline.ts'
 export type {
   TimelineActor,
   TimelineOrigin,
@@ -90,7 +90,7 @@ export type {
   WorldStateTimelineChangeBatch,
   WorldStateTimelineEntry,
   WorldStateTimelineProvenance,
-} from './world-state-timeline.ts'
+} from './world-state/world-state-timeline.ts'
 export { SUMMARY_KEY, renderMacroSummary } from './macro-summary.ts'
 export type { MacroSummary } from './macro-summary.ts'
 export { DEFAULT_RRP_SETTINGS, RRP_SETTINGS_KEY, rrpSettingsOf } from './settings.ts'
@@ -102,8 +102,8 @@ export {
   isLoreName,
   loreEntriesOf,
   validateLoreEntry,
-} from './lore-state.ts'
-export type { LoreChange, LoreEntry, LoreValidation } from './lore-state.ts'
+} from './lore/lore-state.ts'
+export type { LoreChange, LoreEntry, LoreValidation } from './lore/lore-state.ts'
 export {
   ACTIVITY_LIMIT,
   appendActivity,
@@ -112,7 +112,7 @@ export {
   pendingActivity,
 } from './activity.ts'
 export type { RrpActivity, RrpActivityLog, RrpActor, RrpPhase, RrpTarget } from './activity.ts'
-export { CARD_KEY, renderCardContext, toPlayerSafeCardPack } from './card-types.ts'
+export { CARD_KEY, renderCardContext, toPlayerSafeCardPack } from './cards/card-types.ts'
 export type {
   CardContext,
   CardMeta,
@@ -122,13 +122,13 @@ export type {
   CardPlayer,
   CardSkill,
   CardSkillPlayerView,
-} from './card-types.ts'
+} from './cards/card-types.ts'
 export type {
   CardStateAlias,
   CardStateField,
   CardStateFieldStatus,
   CardStateMigration,
   CardStateSchema,
-} from './card-state-schema.ts'
+} from './cards/card-state-schema.ts'
 export { RRP_PLUGIN, messageTextOf, rrpPayloadOf, rrpStateMessage } from './state-payload.ts'
 export type { RrpStatePayload } from './state-payload.ts'

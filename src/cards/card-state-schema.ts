@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import type { TrackedObjectKind, WorldStateVisibility } from './world-state.ts'
+import type { TrackedObjectKind, WorldStateVisibility } from '../world-state/world-state.ts'
 
 const scalarTypes = ['number', 'string', 'boolean'] as const
 const components = ['text', 'textarea', 'number', 'gauge', 'toggle'] as const

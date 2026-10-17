@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { readCard } from '../../src/cards.ts'
+import { readCard } from '../../src/cards/cards.ts'
 import {
   cardStateSchema,
   cardStateFieldOf,
@@ -10,7 +10,7 @@ import {
   parseCardStateSchema,
   readCardStateSchema,
   type CardStateSchema,
-} from '../../src/card-state-schema.ts'
+} from '../../src/cards/card-state-schema.ts'
 
 const VALID: CardStateSchema = {
   version: 2,

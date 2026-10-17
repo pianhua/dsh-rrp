@@ -8,7 +8,7 @@ import {
   type WorldStateTimelineEntry,
   emptyWorldStateTimeline,
   foldWorldStateTimeline,
-} from '../world-state-timeline.ts'
+} from '../world-state/world-state-timeline.ts'
 
 const actorSchema = z.enum([
   'initial-state',

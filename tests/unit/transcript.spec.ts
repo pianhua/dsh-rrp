@@ -4,9 +4,9 @@ import {
   pendingTranscriptOf,
   transcriptOf,
 } from '../../src/transcript-reader.ts'
-import { renderTriggerBlock } from '../../src/lore-condition.ts'
+import { renderTriggerBlock } from '../../src/lore/lore-condition.ts'
 import { rrpStateMessage } from '../../src/state-payload.ts'
-import { emptyWorldState, renderWorldState } from '../../src/world-state.ts'
+import { emptyWorldState, renderWorldState } from '../../src/world-state/world-state.ts'
 import { transcriptProjections } from '../stubs/transcript-projections.ts'
 
 /** Projections face folding the given fake event log through the transcript unit. */

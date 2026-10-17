@@ -7,8 +7,8 @@
  */
 import { existsSync, readdirSync, readFileSync, renameSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { parseFrontmatter } from './cards.ts'
-import { harnessHome } from './home.ts'
+import { parseFrontmatter } from '../cards/cards.ts'
+import { harnessHome } from '../home.ts'
 import { isLoreName, validateLoreEntry, type LoreEntry } from './lore-state.ts'
 
 /** Compatibility name used by the Scribe's draft contract. */

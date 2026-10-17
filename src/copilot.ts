@@ -21,8 +21,8 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { COPILOT_SYSTEM_PROMPT, buildCopilotPrompt, parseCopilotActions } from './agents/copilot.ts'
 import { recordActivity } from './activity.ts'
-import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
-import { readCard } from './cards.ts'
+import { CARD_KEY, renderCardContext, type CardContext } from './cards/card-types.ts'
+import { readCard } from './cards/cards.ts'
 import {
   type AgentsService,
   type LlmService,
@@ -48,8 +48,8 @@ import {
 } from './copilot-store.ts'
 import { transcriptOf } from './transcript-reader.ts'
 import { SUMMARY_KEY, renderMacroSummary } from './macro-summary.ts'
-import { stageLoreDraft, reservedNames } from './lore-application.ts'
-import { RRP_LORE_KEY, loreEntriesOf, validateLoreEntry } from './lore-state.ts'
+import { stageLoreDraft, reservedNames } from './lore/lore-application.ts'
+import { RRP_LORE_KEY, loreEntriesOf, validateLoreEntry } from './lore/lore-state.ts'
 import { publishState } from './state-publisher.ts'
 import {
   confirmProposal,
@@ -72,9 +72,9 @@ import {
   renderWorldState,
   renderWorldStateDiff,
   type WorldState,
-} from './world-state.ts'
-import { applyWorldStatePatch } from './world-state-references.ts'
-import { sanitizePlayerText, sanitizeWorldStateDiff } from './world-state-visibility.ts'
+} from './world-state/world-state.ts'
+import { applyWorldStatePatch } from './world-state/world-state-references.ts'
+import { sanitizePlayerText, sanitizeWorldStateDiff } from './world-state/world-state-visibility.ts'
 import type { CopilotWorldStateProposal, CopilotHistoryView } from './route-contract.ts'
 
 const TAG = '[dsh-rrp]'

@@ -1,6 +1,6 @@
 import { Button, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import type { WorldlineNode } from '../../worldline-tree.ts'
+import type { WorldlineNode } from '../../worldline/worldline-tree.ts'
 import { visibleTurnWindow, type WorldlineBranch } from '../worldline-utils.ts'
 
 const ROW_HEIGHT = 148

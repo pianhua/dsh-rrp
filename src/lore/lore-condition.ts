@@ -17,7 +17,7 @@
  * Dependency-free: host (cards.ts loader, state-publisher, lore-route) and any
  * client preview share it. No node, no zod.
  */
-import type { WorldState } from './world-state.ts'
+import type { WorldState } from '../world-state/world-state.ts'
 
 /** Comparison operators accepted by the condition syntax. */
 export type WhenOperator = '>' | '>=' | '<' | '<=' | '==' | '!='

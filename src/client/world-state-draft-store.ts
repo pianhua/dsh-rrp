@@ -1,5 +1,5 @@
 import { draftOf, stateOfDraft, type WorldStateDraft } from './world-state-draft.ts'
-import { stableJson, type WorldState, type WorldStateView } from '../world-state.ts'
+import { stableJson, type WorldState, type WorldStateView } from '../world-state/world-state.ts'
 
 export interface WorldStateDraftSnapshot {
   draft: WorldStateDraft

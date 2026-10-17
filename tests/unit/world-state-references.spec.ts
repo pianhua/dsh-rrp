@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { applyWorldStatePatch, preparePlayerWorldState } from '../../src/world-state-references.ts'
-import { emptyWorldState, type WorldState } from '../../src/world-state.ts'
+import {
+  applyWorldStatePatch,
+  preparePlayerWorldState,
+} from '../../src/world-state/world-state-references.ts'
+import { emptyWorldState, type WorldState } from '../../src/world-state/world-state.ts'
 
 function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys)

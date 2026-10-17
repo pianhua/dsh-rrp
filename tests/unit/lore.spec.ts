@@ -8,13 +8,13 @@ import {
   listLegacyLore,
   readLegacyLore,
   renderLore,
-} from '../../src/lore.ts'
+} from '../../src/lore/lore.ts'
 import {
   LORE_LIMITS,
   applyLoreChange,
   isLoreName,
   validateLoreEntry,
-} from '../../src/lore-state.ts'
+} from '../../src/lore/lore-state.ts'
 
 const homes: string[] = []
 function tempHome(): string {

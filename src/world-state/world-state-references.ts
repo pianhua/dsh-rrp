@@ -14,7 +14,7 @@ import {
   type WorldStateChange,
   type WorldStateDiff,
 } from './world-state.ts'
-import { worldStateSchema } from './projection/world-state.ts'
+import { worldStateSchema } from '../projection/world-state.ts'
 
 export {
   archiveTrackedObject,

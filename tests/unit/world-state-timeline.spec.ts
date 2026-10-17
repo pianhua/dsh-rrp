@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { worldStateTimelineProjection } from '../../src/projection/world-state-timeline.ts'
 import { rrpStateMessage } from '../../src/state-payload.ts'
-import { emptyWorldState, type WorldState } from '../../src/world-state.ts'
-import { type WorldStateTimelineBatch } from '../../src/world-state-timeline.ts'
+import { emptyWorldState, type WorldState } from '../../src/world-state/world-state.ts'
+import { type WorldStateTimelineBatch } from '../../src/world-state/world-state-timeline.ts'
 
 const state: WorldState = emptyWorldState()
 

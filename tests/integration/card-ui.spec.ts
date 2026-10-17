@@ -3,11 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isUiAssetName, isUiHtmlName, loadUiManifest, UI_MANIFEST_FILE } from '../../src/card-ui.ts'
-import { readCard, shippedCardRoot } from '../../src/cards.ts'
-import { renderCardContext } from '../../src/card-types.ts'
+import { readCard, shippedCardRoot } from '../../src/cards/cards.ts'
+import { renderCardContext } from '../../src/cards/card-types.ts'
 import { registerCardUiRoute } from '../../src/routes/card-ui-route.ts'
 import { RRP_ROUTES, type CardUiResponse } from '../../src/route-contract.ts'
-import { createDynamicField, emptyWorldState } from '../../src/world-state.ts'
+import { createDynamicField, emptyWorldState } from '../../src/world-state/world-state.ts'
 import {
   applyButtonPatch,
   readCharacters,

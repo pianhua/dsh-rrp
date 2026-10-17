@@ -4,8 +4,8 @@ import {
   isWorldlineFork,
   publishWorldlineForkMarker,
   registerWorldlineForkMarker,
-} from '../../src/worldline-fork-marker.ts'
-import { emptyWorldlineDigest } from '../../src/worldline-digest.ts'
+} from '../../src/worldline/worldline-fork-marker.ts'
+import { emptyWorldlineDigest } from '../../src/worldline/worldline-digest.ts'
 
 function session(id: string, header: Record<string, unknown> = {}) {
   return { id, header, inheritedEventCount: 5, append: () => {} }

@@ -10,7 +10,7 @@ import {
   getWorldStateDraftStore,
   resetWorldStateDraftStore,
 } from '../../src/client/world-state-draft-store.ts'
-import { emptyWorldState, type WorldStateView } from '../../src/world-state.ts'
+import { emptyWorldState, type WorldStateView } from '../../src/world-state/world-state.ts'
 
 function view(): WorldStateView {
   return {

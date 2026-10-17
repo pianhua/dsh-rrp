@@ -6,7 +6,7 @@ import {
   emptyWorldState,
   normalizeWorldState,
   type WorldState,
-} from '../../src/world-state.ts'
+} from '../../src/world-state/world-state.ts'
 
 const event = (worldState: unknown) => ({
   type: 'user/message',

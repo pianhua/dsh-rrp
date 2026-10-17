@@ -10,9 +10,9 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { parseWhen, whenPathWarning } from './lore-condition.ts'
-import { validateLoreEntry } from './lore-state.ts'
-import type { WorldState } from './world-state.ts'
+import { parseWhen, whenPathWarning } from './lore/lore-condition.ts'
+import { validateLoreEntry } from './lore/lore-state.ts'
+import type { WorldState } from './world-state/world-state.ts'
 import {
   UI_ACTION_KINDS,
   UI_BUTTON_LIMIT,

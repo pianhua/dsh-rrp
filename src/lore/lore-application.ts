@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { recordActivity } from './activity.ts'
-import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
-import { readCard } from './cards.ts'
+import { recordActivity } from '../activity.ts'
+import { CARD_KEY, renderCardContext, type CardContext } from '../cards/card-types.ts'
+import { readCard } from '../cards/cards.ts'
 import {
   type AgentsService,
   type JobsService,
@@ -14,13 +14,13 @@ import {
   messageOf,
   nowIso,
   routeOf,
-} from './host-faces.ts'
+} from '../host-faces.ts'
 import { invalidateLore } from './lore-runtime.ts'
 import { RRP_LORE_KEY, loreEntriesOf, type LoreEntry } from './lore-state.ts'
 import { PENDING, DRAFTING } from './lore-drafts.ts'
-import { SCRIBE_SYSTEM_PROMPT, buildScribePrompt, parseScribeReply } from './agents/scribe.ts'
-import { transcriptOf } from './transcript-reader.ts'
-import { WORLD_STATE_KEY, renderWorldState, type WorldState } from './world-state.ts'
+import { SCRIBE_SYSTEM_PROMPT, buildScribePrompt, parseScribeReply } from '../agents/scribe.ts'
+import { transcriptOf } from '../transcript-reader.ts'
+import { WORLD_STATE_KEY, renderWorldState, type WorldState } from '../world-state/world-state.ts'
 
 const TAG = '[dsh-rrp]'
 

@@ -4,8 +4,8 @@
  * it (\`src/cards.ts\` adds filesystem parsing on top).
  */
 import type { CardStateSchema } from './card-state-schema.ts'
-import { filterWorldState } from './world-state-visibility.ts'
-import type { WorldState, WorldStatePlayerView } from './world-state.ts'
+import { filterWorldState } from '../world-state/world-state-visibility.ts'
+import type { WorldState, WorldStatePlayerView } from '../world-state/world-state.ts'
 
 /** Declared player character (solves "the Author does not know who you are"). */
 export interface CardPlayer {

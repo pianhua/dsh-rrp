@@ -23,10 +23,10 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react'
-import { CARD_KEY, type CardContext } from '../card-types.ts'
+import { CARD_KEY, type CardContext } from '../cards/card-types.ts'
 import { RRP_ROUTES, type CardUiResponse } from '../route-contract.ts'
 import { RRP_SETTINGS_KEY, rrpSettingsOf } from '../settings.ts'
-import type { LoreEntry } from '../lore-state.ts'
+import type { LoreEntry } from '../lore/lore-state.ts'
 import {
   applyButtonPatch,
   readCharacters,
@@ -38,9 +38,9 @@ import {
   type UiManifest,
   type UiPanelDecl,
 } from '../ui-schema.ts'
-import { WORLD_STATE_KEY, emptyWorldState, type WorldState } from '../world-state.ts'
-import { filterWorldState } from '../world-state-visibility.ts'
-import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from '../worldline-digest.ts'
+import { WORLD_STATE_KEY, emptyWorldState, type WorldState } from '../world-state/world-state.ts'
+import { filterWorldState } from '../world-state/world-state-visibility.ts'
+import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from '../worldline/worldline-digest.ts'
 import type { RrpClientContext, RrpUseProjection } from './context-types.ts'
 import { StageFrame } from './stage-frame.tsx'
 import { askCopilot } from './copilot-prefill.ts'

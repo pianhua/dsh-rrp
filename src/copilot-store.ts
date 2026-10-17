@@ -48,7 +48,7 @@ export interface CopilotUndoEntry {
   /** Human digest of what the turn changed (shown on the undo card). */
   digest: string
   /** The WorldState before the turn's world-state actions ran. */
-  snapshot: import('./world-state.ts').WorldState
+  snapshot: import('./world-state/world-state.ts').WorldState
 }
 
 export interface CopilotStore {
@@ -87,7 +87,9 @@ const undoEntrySchema = z.object({
   digest: z.string(),
   // worldStateSchema keeps `relations` optional for pre-relations legacy logs;
   // every folded state carries it, so the stored shape is the declared type.
-  snapshot: worldStateSchema as unknown as z.ZodType<import('./world-state.ts').WorldState>,
+  snapshot: worldStateSchema as unknown as z.ZodType<
+    import('./world-state/world-state.ts').WorldState
+  >,
 })
 
 const copilotStoreSchema = z.object({

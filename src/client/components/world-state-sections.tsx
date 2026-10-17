@@ -3,7 +3,7 @@
  */
 import { Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ReactNode } from 'react'
-import type { WorldStateRelation } from '../../world-state.ts'
+import type { WorldStateRelation } from '../../world-state/world-state.ts'
 import { Field, RemoveButton, S, SectionHead, type Translate } from './world-state-primitives.tsx'
 
 export interface CharacterRow {

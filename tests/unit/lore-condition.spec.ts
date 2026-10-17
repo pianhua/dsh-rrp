@@ -9,8 +9,12 @@ import {
   whenPathWarning,
   type TriggerDef,
   type WhenCondition,
-} from '../../src/lore-condition.ts'
-import { createDynamicField, emptyWorldState, type WorldState } from '../../src/world-state.ts'
+} from '../../src/lore/lore-condition.ts'
+import {
+  createDynamicField,
+  emptyWorldState,
+  type WorldState,
+} from '../../src/world-state/world-state.ts'
 
 const LOC = '卡「演示」skill「demo」'
 

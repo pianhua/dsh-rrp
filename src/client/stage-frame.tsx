@@ -16,7 +16,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { RRP_ROUTES } from '../route-contract.ts'
-import type { WorldState } from '../world-state.ts'
+import type { WorldState } from '../world-state/world-state.ts'
 import { UI_BRIDGE_PROTOCOL, UI_BRIDGE_VERBS, parseUiCall, type UiPush } from '../ui-bridge.ts'
 import { applyButtonPatch } from '../ui-schema.ts'
 import type { StageApi, Translate } from './stage-types.ts'

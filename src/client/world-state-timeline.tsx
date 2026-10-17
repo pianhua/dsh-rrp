@@ -1,6 +1,6 @@
 import { Input, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useMemo, useState, type ReactNode } from 'react'
-import type { WorldStateTimeline } from '../world-state-timeline.ts'
+import type { WorldStateTimeline } from '../world-state/world-state-timeline.ts'
 import { S, type Translate } from './components/world-state-primitives.tsx'
 
 export function WorldStateTimelinePanel(props: {

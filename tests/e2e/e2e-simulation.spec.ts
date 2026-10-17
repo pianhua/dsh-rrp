@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { emptyWorldState, diffWorldState, type WorldState } from '../../src/world-state.ts'
-import { applyWorldStatePatch } from '../../src/world-state-references.ts'
-import { type WorldStateTimelineBatch } from '../../src/world-state-timeline.ts'
+import {
+  emptyWorldState,
+  diffWorldState,
+  type WorldState,
+} from '../../src/world-state/world-state.ts'
+import { applyWorldStatePatch } from '../../src/world-state/world-state-references.ts'
+import { type WorldStateTimelineBatch } from '../../src/world-state/world-state-timeline.ts'
 import { worldStateProjection } from '../../src/projection/world-state.ts'
 import { worldStateTimelineProjection } from '../../src/projection/world-state-timeline.ts'
 import { worldlineDigestProjection } from '../../src/projection/worldline-digest.ts'
@@ -18,7 +22,7 @@ import { parseChroniclerReply } from '../../src/agents/chronicler.ts'
 import {
   publishWorldlineForkMarker,
   type WorldlineForkMarkerFaces,
-} from '../../src/worldline-fork-marker.ts'
+} from '../../src/worldline/worldline-fork-marker.ts'
 
 function playerMsg(seq: number, text: string) {
   return {

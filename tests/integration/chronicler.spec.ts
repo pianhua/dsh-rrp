@@ -3,7 +3,7 @@ import { buildChroniclerPrompt, parseChroniclerReply } from '../../src/agents/ch
 import { forgetActivity, readActivity } from '../../src/activity.ts'
 import { forgetInference, registerChronicler } from '../../src/chronicler.ts'
 import { forgetState } from '../../src/state-publisher.ts'
-import { emptyWorldState, type WorldState } from '../../src/world-state.ts'
+import { emptyWorldState, type WorldState } from '../../src/world-state/world-state.ts'
 import { transcriptProjections } from '../stubs/transcript-projections.ts'
 
 type JobHandle = {

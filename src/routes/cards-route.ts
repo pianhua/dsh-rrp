@@ -8,9 +8,9 @@
  * handler failures degrade to a JSON error, never a crash.
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { importCardFromJson, importCardFromPng, writeImportedCard } from '../card-import.ts'
-import { listCards, readCard } from '../cards.ts'
-import { toPlayerSafeCardPack } from '../card-types.ts'
+import { importCardFromJson, importCardFromPng, writeImportedCard } from '../cards/card-import.ts'
+import { listCards, readCard } from '../cards/cards.ts'
+import { toPlayerSafeCardPack } from '../cards/card-types.ts'
 import { ensureCardPreset } from '../preset.ts'
 
 const TAG = '[dsh-rrp]'

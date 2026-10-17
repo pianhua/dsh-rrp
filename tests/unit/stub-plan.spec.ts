@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseChroniclerReply } from '../../src/agents/chronicler.ts'
-import type { WorldState } from '../../src/world-state.ts'
-import { emptyWorldState } from '../../src/world-state.ts'
+import type { WorldState } from '../../src/world-state/world-state.ts'
+import { emptyWorldState } from '../../src/world-state/world-state.ts'
 import {
   AUTHOR_GOLD,
   AUTHOR_MARKER,

@@ -14,23 +14,23 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:f
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse as parseYAML } from 'yaml'
-import { harnessHome } from './home.ts'
-import { isCardId } from './preset-id.ts'
+import { harnessHome } from '../home.ts'
+import { isCardId } from '../preset-id.ts'
 import {
   TRIGGER_EXCERPT_CHARS,
   parseWhen,
   whenPathWarning,
   type TriggerDef,
-} from './lore-condition.ts'
-import { worldStateSchema } from './projection/world-state.ts'
+} from '../lore/lore-condition.ts'
+import { worldStateSchema } from '../projection/world-state.ts'
 import { readCardStateSchema } from './card-state-schema.ts'
-import { isUiImageName } from './card-ui.ts'
-import type { WorldState } from './world-state.ts'
+import { isUiImageName } from '../card-ui.ts'
+import type { WorldState } from '../world-state/world-state.ts'
 
 const TAG = '[dsh-rrp]'
 
 /** The shipped card root (resolved against the bundled lib/index.js). */
-const SHIPPED_CARDS_DIR = fileURLToPath(new URL('../cards/', import.meta.url))
+const SHIPPED_CARDS_DIR = fileURLToPath(new URL('../../cards/', import.meta.url))
 
 /** A frontmatter scalar or one nesting level of string fields. */
 export type FrontmatterValue = string | string[] | Record<string, string>

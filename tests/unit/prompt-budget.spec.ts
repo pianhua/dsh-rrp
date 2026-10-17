@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { CardContext } from '../../src/card-types.ts'
-import { renderCardContext } from '../../src/card-types.ts'
+import type { CardContext } from '../../src/cards/card-types.ts'
+import { renderCardContext } from '../../src/cards/card-types.ts'
 import type { MacroSummary } from '../../src/macro-summary.ts'
 import { renderMacroSummary } from '../../src/macro-summary.ts'
 import {
@@ -8,7 +8,11 @@ import {
   estimateTokens,
   promptBudgetReport,
 } from '../../src/prompt-budget.ts'
-import { emptyWorldState, renderWorldState, type WorldState } from '../../src/world-state.ts'
+import {
+  emptyWorldState,
+  renderWorldState,
+  type WorldState,
+} from '../../src/world-state/world-state.ts'
 
 const CARD: CardContext = { id: 'c', name: '测试卡', persona: '人设', worldCore: '世界核心' }
 const SUMMARY: MacroSummary = { goal: '目标', conflict: '矛盾', turningPoints: [], threads: [] }

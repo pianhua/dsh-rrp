@@ -18,17 +18,17 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { ProjectionsService, SessionLike } from './host-faces.ts'
-import { CARD_KEY, renderCardContext, type CardContext } from './card-types.ts'
+import { CARD_KEY, renderCardContext, type CardContext } from './cards/card-types.ts'
 import {
   hitSet,
   renderTriggerBlock,
   TRIGGER_BLOCK_HEADER,
   type TriggerHit,
-} from './lore-condition.ts'
-import { triggersOfCard } from './cards.ts'
+} from './lore/lore-condition.ts'
+import { triggersOfCard } from './cards/cards.ts'
 import { SUMMARY_KEY, renderMacroSummary, type MacroSummary } from './macro-summary.ts'
 import { RRP_SETTINGS_KEY, rrpSettingsOf, type RrpSettings } from './settings.ts'
-import type { LoreChange } from './lore-state.ts'
+import type { LoreChange } from './lore/lore-state.ts'
 import { rrpStateMessage, type RrpStatePayload } from './state-payload.ts'
 import { TRANSCRIPT_KEY, type TranscriptSlice } from './transcript.ts'
 import {
@@ -37,13 +37,13 @@ import {
   renderWorldState,
   stableJson,
   type WorldState,
-} from './world-state.ts'
+} from './world-state/world-state.ts'
 import {
   WORLD_STATE_TIMELINE_KEY,
   isWorldStateTimelineBatch,
   type WorldStateTimeline,
   type WorldStateTimelineBatch,
-} from './world-state-timeline.ts'
+} from './world-state/world-state-timeline.ts'
 
 const TAG = '[dsh-rrp]'
 

@@ -2,9 +2,13 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { legacySessionLoreDir, renderLore } from '../../src/lore.ts'
-import { LORE_LIMITS, applyLoreChange, type LoreEntry } from '../../src/lore-state.ts'
-import { invalidateLore, migrateLegacyLore, registerLoreRuntime } from '../../src/lore-runtime.ts'
+import { legacySessionLoreDir, renderLore } from '../../src/lore/lore.ts'
+import { LORE_LIMITS, applyLoreChange, type LoreEntry } from '../../src/lore/lore-state.ts'
+import {
+  invalidateLore,
+  migrateLegacyLore,
+  registerLoreRuntime,
+} from '../../src/lore/lore-runtime.ts'
 import { hasLoreDraft, stageLoreDraftForTesting } from '../../src/routes/lore-route.ts'
 import { rrpPayloadOf } from '../../src/state-payload.ts'
 import { transcriptProjections } from '../stubs/transcript-projections.ts'
@@ -60,7 +64,8 @@ describe('lore runtime arming', () => {
     registerLoreRuntime(ctx as never)
 
     let provider:
-      ReturnType<(typeof import('../../src/lore-provider.ts'))['createLoreProvider']> | undefined
+      | ReturnType<(typeof import('../../src/lore/lore-provider.ts'))['createLoreProvider']>
+      | undefined
     const skillsService = {
       registerProvider(create: (control: { signal: AbortSignal; invalidate(): void }) => unknown) {
         provider = create({

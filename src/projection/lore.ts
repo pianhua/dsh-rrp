@@ -1,6 +1,6 @@
 /** dsh-rrp — pure Session projection for dynamic lore. */
 import { z } from 'zod'
-import { RRP_LORE_KEY, LORE_LIMITS, applyLoreChange, type LoreEntry } from '../lore-state.ts'
+import { RRP_LORE_KEY, LORE_LIMITS, applyLoreChange, type LoreEntry } from '../lore/lore-state.ts'
 import { rrpPayloadOf } from '../state-payload.ts'
 
 const nameSchema = z

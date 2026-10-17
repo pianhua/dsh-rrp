@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as client from '../../src/client/index.ts'
-import type { CardPack } from '../../src/card-types.ts'
+import type { CardPack } from '../../src/cards/card-types.ts'
 import { RRP_ROUTES } from '../../src/route-contract.ts'
 import { referenceConflictFromBody } from '../../src/client/world-state-workspace.tsx'
 

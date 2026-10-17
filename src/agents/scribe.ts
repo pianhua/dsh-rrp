@@ -12,7 +12,7 @@
  * when-then criteria) → output protocol (with ✓/✗ examples) → self-check.
  */
 import { z } from 'zod'
-import { LORE_LIMITS, isLoreName, type LoreEntry as LoreDraft } from '../lore-state.ts'
+import { LORE_LIMITS, isLoreName, type LoreEntry as LoreDraft } from '../lore/lore-state.ts'
 import { extractFirstJsonObject } from '../json-extract.ts'
 import type { AgentPromptContract } from './contract.ts'
 

@@ -9,8 +9,8 @@ import {
   parseFrontmatter,
   readCard,
   triggersOfCard,
-} from '../../src/cards.ts'
-import { interpolateCardText } from '../../src/card-types.ts'
+} from '../../src/cards/cards.ts'
+import { interpolateCardText } from '../../src/cards/card-types.ts'
 
 const SAMPLE = `---
 id: demo

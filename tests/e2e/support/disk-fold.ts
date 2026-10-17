@@ -21,7 +21,7 @@ import {
   foldWorldStateTimeline,
   isWorldStateTimelineBatch,
   type WorldStateTimeline,
-} from '../../../src/world-state-timeline.ts'
+} from '../../../src/world-state/world-state-timeline.ts'
 
 /** One event decoded from the session log (the host stamps every row with its log seq). */
 export interface LoggedEvent {

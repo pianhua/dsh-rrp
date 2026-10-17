@@ -1,6 +1,6 @@
 import { Button, Input, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ReactNode } from 'react'
-import type { TrackedObject, WorldStateScalarField } from '../world-state.ts'
+import type { TrackedObject, WorldStateScalarField } from '../world-state/world-state.ts'
 import { S, type Translate } from './components/world-state-primitives.tsx'
 
 function scalarText(field: WorldStateScalarField): string {

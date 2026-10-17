@@ -17,7 +17,7 @@ import {
   type RecallRound,
 } from '../recall.ts'
 import { RRP_ROUTES } from '../route-contract.ts'
-import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from '../worldline-digest.ts'
+import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from '../worldline/worldline-digest.ts'
 import {
   type ProjectionsService,
   type RequestLike,

@@ -4,7 +4,7 @@ import {
   buildScribePrompt,
   parseScribeReply,
 } from '../../src/agents/scribe.ts'
-import { LORE_LIMITS } from '../../src/lore-state.ts'
+import { LORE_LIMITS } from '../../src/lore/lore-state.ts'
 
 describe('Scribe reply contract', () => {
   it('parses a bare JSON draft and tolerates surrounding prose', () => {
