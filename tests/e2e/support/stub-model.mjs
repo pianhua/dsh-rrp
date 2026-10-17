@@ -15,7 +15,7 @@
 
 import { appendFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
-import { latestUserText, planBlocks } from './stub-plan.mjs'
+import { planBlocks } from './stub-plan.mjs'
 
 /** Provider id the isolated profile selects as `agent-default-model`. */
 export const STUB_PROVIDER = 'dsh-rrp-e2e'
@@ -61,7 +61,9 @@ export function apply(ctx) {
       const messages = Array.isArray(input?.messages) ? input.messages : []
       await audit({ at: 'stream-enter', call: messages.length })
 
-      const blocks = planBlocks(latestUserText(messages))
+      // The negative control is read here, at the boundary, so planBlocks stays a pure function of
+      // its arguments and can be unit-tested without touching the environment.
+      const blocks = planBlocks(input, { wrongGold: process.env.DSH_RRP_E2E_WRONG_GOLD === '1' })
       let outputChars = 0
       for (const [index, block] of blocks.entries()) {
         outputChars += block.text.length

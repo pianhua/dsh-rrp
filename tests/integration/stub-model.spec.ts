@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { resolveDshScope } from '../../scripts/host-runtime.mjs'
-import { AUTHOR_GOLD, AUTHOR_MARKER } from '../e2e/support/stub-plan.mjs'
+import { AUTHOR_GOLD, AUTHOR_MARKER, CALLER_SIGNATURES } from '../e2e/support/stub-plan.mjs'
 
 /**
  * Ticket 02: the stub must satisfy the host's stream contract exactly.
@@ -59,11 +59,15 @@ function register(): StubAdapter {
   return captured as StubAdapter
 }
 
-async function collect(adapter: StubAdapter, userText: string): Promise<Record<string, unknown>[]> {
+async function collect(
+  adapter: StubAdapter,
+  { systemText, userText }: { systemText?: string; userText: string },
+): Promise<Record<string, unknown>[]> {
+  const messages: Array<Record<string, unknown>> = []
+  if (systemText !== undefined) messages.push({ role: 'system', content: systemText })
+  messages.push({ role: 'user', content: [{ type: 'text', text: userText }] })
   const chunks: Record<string, unknown>[] = []
-  for await (const chunk of adapter.stream({
-    messages: [{ role: 'user', content: [{ type: 'text', text: userText }] }],
-  })) {
+  for await (const chunk of adapter.stream({ messages })) {
     chunks.push(chunk)
   }
   return chunks
@@ -72,7 +76,10 @@ async function collect(adapter: StubAdapter, userText: string): Promise<Record<s
 describe('E2E 模型桩适配器（play-e2e 票据 02）', () => {
   it('产出合法事件序列，且 finish 之后不再有任何事件', async () => {
     const adapter = register()
-    const chunks = await collect(adapter, `${AUTHOR_MARKER} 玩家推门而入`)
+    const chunks = await collect(adapter, {
+      systemText: CALLER_SIGNATURES.author + ' 后续六层……',
+      userText: `${AUTHOR_MARKER} 玩家推门而入`,
+    })
     expect(chunks.map((chunk) => chunk.type)).toEqual([
       'block-start',
       'text-delta',
@@ -91,7 +98,7 @@ describe('E2E 模型桩适配器（play-e2e 票据 02）', () => {
     const auditFile = join(auditDir, 'single-call.jsonl')
     process.env.DSH_RRP_E2E_AUDIT = auditFile
     const adapter = register()
-    await collect(adapter, '无标记输入')
+    await collect(adapter, { userText: '无标记输入' })
     const lines = readFileSync(auditFile, 'utf8')
       .split('\n')
       .filter(Boolean)
