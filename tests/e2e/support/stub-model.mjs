@@ -13,12 +13,11 @@
  * contract, which also avoids a second Cordis instance inside the host process.
  */
 
-import { appendFile } from 'node:fs/promises'
+import { appendFile, readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
-import { planBlocks } from './stub-plan.mjs'
+import { STUB_PROVIDER, callerOf, latestUserText, planBlocks, systemTextOf } from './stub-plan.mjs'
 
-/** Provider id the isolated profile selects as `agent-default-model`. */
-export const STUB_PROVIDER = 'dsh-rrp-e2e'
+export { STUB_PROVIDER }
 
 const llmModule = process.env.DSH_RRP_E2E_LLM_MODULE
 if (!llmModule) {
@@ -27,6 +26,20 @@ if (!llmModule) {
   )
 }
 const { LlmAdapter } = await import(pathToFileURL(llmModule))
+
+/**
+ * The card pack's initial WorldState, read once from the path isolated-host hands over
+ * (`DSH_RRP_E2E_CARD_STATE`). The Chronicler script needs the complete snapshot to render
+ * its envelope; lazy so a host boot without the playthrough env still starts (other callers
+ * get the neutral script).
+ */
+let cardStatePromise
+function cardStateOf() {
+  const file = process.env.DSH_RRP_E2E_CARD_STATE
+  if (file === undefined || file.length === 0) return Promise.resolve(undefined)
+  cardStatePromise ??= readFile(file, 'utf8').then((text) => JSON.parse(text))
+  return cardStatePromise
+}
 
 export const name = 'dsh-rrp-e2e-model-stub'
 export const inject = ['llm']
@@ -59,11 +72,22 @@ export function apply(ctx) {
 
     async *stream(input) {
       const messages = Array.isArray(input?.messages) ? input.messages : []
-      await audit({ at: 'stream-enter', call: messages.length })
+      const caller = callerOf(systemTextOf(input))
+      const seen = latestUserText(messages) ?? ''
+      await audit({
+        at: 'stream-enter',
+        call: messages.length,
+        caller,
+        marker: seen.includes('E2E-AUTHOR'),
+        sys: systemTextOf(input).slice(0, 48),
+      })
 
-      // The negative control is read here, at the boundary, so planBlocks stays a pure function of
-      // its arguments and can be unit-tested without touching the environment.
-      const blocks = planBlocks(input, { wrongGold: process.env.DSH_RRP_E2E_WRONG_GOLD === '1' })
+      // The negative control and the card state are read here, at the boundary, so planBlocks
+      // stays a pure function of its arguments and can be unit-tested without an environment.
+      const blocks = planBlocks(input, {
+        wrongGold: process.env.DSH_RRP_E2E_WRONG_GOLD === '1',
+        cardState: await cardStateOf(),
+      })
       let outputChars = 0
       for (const [index, block] of blocks.entries()) {
         outputChars += block.text.length
@@ -87,7 +111,7 @@ export function apply(ctx) {
       // `stop` closes the turn. Anything shorter (no finish, or an empty stream) is retried by the
       // host up to five times, which is the failure mode this whole file exists to avoid.
       yield { type: 'finish', reason: { kind: 'stop' } }
-      await audit({ at: 'stream-finish', blocks: blocks.length })
+      await audit({ at: 'stream-finish', blocks: blocks.length, caller })
     }
   }
 

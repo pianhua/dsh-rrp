@@ -24,15 +24,94 @@ export const CALLER_SIGNATURES = {
 /** Marker the harness embeds in a player message to select the Author scene. */
 export const AUTHOR_MARKER = 'E2E-AUTHOR'
 
+/** Provider id the isolated profile selects as `agent-default-model`. */
+export const STUB_PROVIDER = 'dsh-rrp-e2e'
+
 /** Scripted narrative prose. Deliberately free of volatile values. */
 export const AUTHOR_GOLD = '炉火把雪光映在窗纸上，她放下笔，望向门外。'
 
 /**
- * Placeholder for the Chronicler script. The real envelope is built in ticket 04 against
- * `chroniclerReplySchema` — only a real turn can prove it parses and folds. Inventing a state shape
- * here would just prove the stub can be wrong convincingly.
+ * The Chronicler script (ticket 04): a real envelope accepted by `parseChroniclerReply`,
+ * built by applying ONE exported change literal to the card's initial WorldState. The stub
+ * (host side) and the spec (assert side) both read the same change literal and the same
+ * card `state.json`, so the expected state is derived, never duplicated by hand.
+ *
+ * Selection rule: the Chronicler's user prompt embeds 【本轮明确剧情证据】; a marked turn's
+ * evidence contains AUTHOR_MARKER (the marker rides the player's message into the transcript),
+ * so the fold that covers a marked turn commits the change, and any other fold (the opening
+ * turn above all) replies with an empty patch — the runner then no-ops without publishing.
  */
-export const CHRONICLER_PLACEHOLDER_GOLD = 'E2E_CHRONICLER_PLACEHOLDER'
+export const CHRONICLER_GOLD_CHANGE = {
+  /** New value for `trackedObjects.inn.fields.time` (the scripted before/after pair). */
+  timeValue: '入夜渐深，雪声未歇',
+  /** One added currentEvent (the scripted collection-add shape). */
+  event: {
+    id: 'evt-e2e-night-watch',
+    type: 'ongoing',
+    fact: '炉火映着雪光烧到半夜，满屋目光仍落在那柄旧剑上。',
+    relatedObjects: [{ objectId: 'inn' }],
+    status: 'active',
+  },
+  changeSummary: '时间推进到深夜；客栈新增一条进行中的事件。',
+  evidence: ['炉火与雪光表明夜已深（叙述）。'],
+}
+
+/**
+ * Apply the scripted change to one complete WorldState v2 snapshot, returning a NEW snapshot.
+ * Deliberately field-level so the fold produces a `modified` change (old/new values) plus an
+ * `added` currentEvent — the two timeline shapes ticket 04 asserts.
+ * @param {unknown} baseState the card's initial state (already WorldState v2 shaped).
+ * @returns {Record<string, unknown>} the complete post-change state.
+ */
+export function applyChroniclerChange(baseState) {
+  const base = baseState
+  if (
+    base === null ||
+    typeof base !== 'object' ||
+    base.trackedObjects === null ||
+    typeof base.trackedObjects !== 'object'
+  ) {
+    throw new Error('dsh-rrp E2E：桩缺少卡包初始世界状态（DSH_RRP_E2E_CARD_STATE）。')
+  }
+  const state = structuredClone(base)
+  const inn = state.trackedObjects.inn
+  if (
+    inn === null ||
+    typeof inn !== 'object' ||
+    inn.fields === null ||
+    typeof inn.fields !== 'object'
+  ) {
+    throw new Error('dsh-rrp E2E：卡包初始状态里没有 trackedObjects.inn.fields，剧本无法落笔。')
+  }
+  if (inn.fields.time === null || typeof inn.fields.time !== 'object') {
+    throw new Error('dsh-rrp E2E：卡包初始状态缺少 inn.fields.time，剧本无法落笔。')
+  }
+  inn.fields.time.value = CHRONICLER_GOLD_CHANGE.timeValue
+  const events = Array.isArray(state.currentEvents) ? state.currentEvents : []
+  state.currentEvents = [...events, structuredClone(CHRONICLER_GOLD_CHANGE.event)]
+  return state
+}
+
+/**
+ * Render one Chronicler reply envelope as the streamed text.
+ * @param {unknown} [baseState] the card initial state; omit (or pass undefined) for the
+ *   no-op envelope (empty patch), which the runner folds to "no state change".
+ * @returns {string} one JSON object accepted by `parseChroniclerReply`.
+ */
+export function chroniclerEnvelope(baseState) {
+  if (baseState === undefined) {
+    return JSON.stringify({
+      patch: {},
+      changeSummary: '本轮没有可记录的明确世界后果。',
+      evidence: [],
+    })
+  }
+  return JSON.stringify({
+    state: applyChroniclerChange(baseState),
+    changeSummary: CHRONICLER_GOLD_CHANGE.changeSummary,
+    evidence: [...CHRONICLER_GOLD_CHANGE.evidence],
+  })
+}
 
 /** Text the stub returns when it cannot identify the caller or the scene. */
 export const NEUTRAL_GOLD = '屋里很安静。'
@@ -103,19 +182,53 @@ export function latestUserText(messages) {
 }
 
 /**
+ * Extract the newest PLAYER-voice text: like {@link latestUserText}, but trailing
+ * `<system-reminder>` user messages are the loop's bookkeeping, never the player's
+ * message, so they are skipped. The scene marker rides the player's text; without this
+ * the marker would drown under the reminder the loop appends after the player turn
+ * (found by ticket 04 against the real host loop).
+ *
+ * @param {ReadonlyArray<{ role?: string, content?: unknown }>} messages request messages.
+ * @returns {string | undefined} concatenated text of the newest non-reminder user message.
+ */
+export function latestPlayerText(messages) {
+  for (let index = (messages?.length ?? 0) - 1; index >= 0; index--) {
+    const message = messages[index]
+    if (message?.role !== 'user') continue
+    const content = message.content
+    const text =
+      typeof content === 'string'
+        ? content
+        : Array.isArray(content)
+          ? content
+              .map((block) => (typeof block === 'string' ? block : (block?.text ?? '')))
+              .join('')
+          : undefined
+    if (text === undefined) continue
+    if (text.startsWith('<system-reminder>')) continue
+    return text
+  }
+  return undefined
+}
+
+/**
  * Pick the blocks for one request: caller first, scene second.
  *
  * @param {unknown} input the adapter request (`messages`, optional `system`).
- * @param {{ wrongGold?: boolean }} [options] negative-control switch, passed in so this stays pure.
+ * @param {{ wrongGold?: boolean, cardState?: unknown }} [options] negative-control switch and
+ *   the card's initial WorldState (host side it arrives via `DSH_RRP_E2E_CARD_STATE`), both
+ *   passed in so this stays a pure function of its arguments.
  * @returns {Array<{ type: 'text', text: string }>} blocks to stream, in order.
  */
-export function planBlocks(input, { wrongGold = false } = {}) {
+export function planBlocks(input, { wrongGold = false, cardState = undefined } = {}) {
   const caller = callerOf(systemTextOf(input))
   if (caller === 'chronicler') {
-    return [{ type: 'text', text: CHRONICLER_PLACEHOLDER_GOLD }]
+    const evidence = latestPlayerText(input?.messages ?? []) ?? ''
+    const marked = cardState !== undefined && evidence.includes(AUTHOR_MARKER)
+    return [{ type: 'text', text: chroniclerEnvelope(marked ? cardState : undefined) }]
   }
   if (caller === 'author') {
-    const text = latestUserText(input?.messages ?? []) ?? ''
+    const text = latestPlayerText(input?.messages ?? []) ?? ''
     if (wrongGold) return [{ type: 'text', text: WRONG_GOLD }]
     if (text.includes(AUTHOR_MARKER)) return [{ type: 'text', text: AUTHOR_GOLD }]
   }
