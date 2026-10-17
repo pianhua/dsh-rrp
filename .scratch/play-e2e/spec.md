@@ -1,6 +1,6 @@
 # 可重复玩局 E2E 规格（play-e2e）
 
-> Status: ready-for-agent · 决策待定项见 §6（唯一需要所有者点头的是是否引入 Playwright）
+> Status: ready-for-agent · 无待决项（浏览器层已裁决不做，见 §6）
 > 借鉴来源：dsh-tavern `tests/e2e/model.mjs` + `gameplay.mjs`（只读参照，不改其仓库）
 > 对应移植清单：`docs/reference/TAVERN_DETAIL_COMPARISON.md` P0 #4
 
@@ -53,12 +53,15 @@
 - 全量质量门（`check:hygiene` / `format:check` / `typecheck` / `lint` / `test` / `build`）全绿；
 - 测试落在 `tests/e2e/`，符合 `tests/README.md:8-10` 的分层定义与 hygiene 的分层校验。
 
-## 6. 唯一待决：浏览器层要不要
+## 6. 浏览器层：**已裁决不做**（2026-10-16）
 
-前四张票据（隔离现场、桩、标记词、事实链断言）**全程无头**，不需要浏览器。只有「刷新不丢 + UI 可见」这一档需要真浏览器。
+前四张票据（隔离现场、桩、标记词、事实链断言）**全程无头**，不需要浏览器。「刷新不丢」由
+票据 04 在**数据面**守住：关闭隔离宿主 → 用同一 `DSH_HOME` 再起 → 同一 Session 的世界状态、
+时间线、转录游标全部折叠得出。
 
-- **推荐**：引入 Playwright chromium 作 devDependency，单独一个 spec，且**不进 CI**（本地发布前跑）。理由是宿主自带浏览器与 token-cookie 鉴权链已存在（`dsh-client-connection/lib/index.js:226-227` token→`dsh-auth-<authority>` 签名 cookie、`:391-410` `authorizeIndex`），一条 `page.goto(tokenUrl)` 即可进会话；而插件自己的 `webServer` 路由**不在鉴权门内**（`:644-652,829-838`），无需登录即可断言后端事实。代价：下载浏览器内核 + 一条只有本地会跑的作业。
-- **备选**：不装 Playwright，用 `fetch` 打宿主 HTTP 与插件路由断言"刷新后数据仍在"，UI 层继续人工。零新依赖，代价是"看得见的那一段"永远没有机器证据。
+裁决：**不引入 Playwright**。为一条只有本地会跑、永远不进 CI 的作业引入浏览器内核，
+属 ADR 0015 拒绝的过度工程；UI 观感与手感仍归人工 brief。重开条件与将来配方见
+[`issues/05-browser-surface.md`](issues/05-browser-surface.md)。
 
 ## 7. 术语（先在 `CONTEXT.md` 落词条，再进实现）
 
