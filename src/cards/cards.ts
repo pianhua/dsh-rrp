@@ -12,7 +12,7 @@
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { repoDirOf } from '../repo-dir.ts'
 import { parse as parseYAML } from 'yaml'
 import { harnessHome } from '../host/home.ts'
 import { isCardId } from '../host/preset-id.ts'
@@ -29,8 +29,8 @@ import type { WorldState } from '../world-state/world-state.ts'
 
 const TAG = '[dsh-rrp]'
 
-/** The shipped card root (resolved against the bundled lib/index.js). */
-const SHIPPED_CARDS_DIR = fileURLToPath(new URL('../../cards/', import.meta.url))
+/** The shipped card root (bundle- or source-layout aware). */
+const SHIPPED_CARDS_DIR = repoDirOf(import.meta.url, 'cards')
 
 /** A frontmatter scalar or one nesting level of string fields. */
 export type FrontmatterValue = string | string[] | Record<string, string>

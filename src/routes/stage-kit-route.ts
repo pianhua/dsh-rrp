@@ -7,7 +7,7 @@
  */
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { repoDirOf } from '../repo-dir.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import {
   type RuntimeFaces,
@@ -18,7 +18,7 @@ import {
 } from '../host/host-faces.ts'
 
 const TAG = '[dsh-rrp]'
-const STAGE_KIT_DIR = fileURLToPath(new URL('../../assets/stage-kit/', import.meta.url))
+const STAGE_KIT_DIR = repoDirOf(import.meta.url, 'assets/stage-kit')
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
