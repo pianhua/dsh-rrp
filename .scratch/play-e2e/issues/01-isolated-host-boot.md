@@ -2,6 +2,17 @@
 
 > Status: ready-for-agent · 依赖：无 · 规格真源：[`spec.md`](../spec.md) §2 §3
 
+## 定位升级（开工前必读）
+
+勘察发现：**本机 `rp-dev` profile 已不存在**——`~/.dsh/profiles/` 下只剩 `desktop`，其
+`cordis.patch.yml` 是空数组 `[]`（未插 `dsh-rrp`），全盘搜不到 `rp-dev` 目录；而
+`scripts/host-runner.mjs` 默认 `--profile rp-dev`（`:39`）且**不设置 `DSH_HOME`**（继承 env）。
+后果：worklog 2026-10-13 记录的那条真机验收路径**今天已不可复现**，照原命令起只会得到一个
+没加载插件的空 profile。
+
+所以本票据不只是"给测试用"：它是**唯一还能从源码重建运行现场的入口**。做完后，
+`rp-dev` 这类机器本地状态就不再是验收前提。
+
 ## 目标
 
 提供一个测试专用启动器，能在**不碰开发用 `rp-dev`/3099** 的前提下，起一个只加载本次所需插件、模型指向桩、跑完自动销毁的宿主现场。
@@ -11,6 +22,14 @@
 `scripts/host-runner.mjs` 是面向人工开发的：端口固定 3099（`:38`）、profile 固定 `rp-dev`（`:39`）、`resolveDshBin()` 解析顺序 repo→`~/.dsh-rrp/host`→全局（`:70-96`）、spawn 参数 `--profile --port --no-open`（`:386-395`）、**继承 `process.env` 且没有 `--home`/隔离模式**。`src/home.ts:10-12` 的 home 取 `DSH_HOME ?? ~/.dsh`。
 
 参照做法（已核实可行）：`dsh-tavern/tests/e2e/gameplay.mjs:132-153` 写一次性 profile 目录——软链 `node_modules/@deepseek-ai`、生成 `package.json` bundles、写 `cordis.patch.yml` 选择 provider 并插入桩插件绝对路径——再以 `DSH_HOME`/`DSH_CWD` + `--port 0` 启动（`:178-180`）。
+
+## 已核实的现场配方（照此实现，勿再猜）
+
+- **profile 落点**：`$DSH_HOME/profiles/<name>/`（实测 `~/.dsh/profiles/desktop/` 内含 `package.json` + `cordis.yml` + `cordis.patch.yml` + `pnpm-workspace.yaml`）；
+- **插件从构建产物加载**：`dsh-rrp` 的 `main` 是 `lib/index.js`，故 E2E 前**必须先 `pnpm run build`**——改 `src/` 不重构建等于在测旧代码；
+- **env 白名单**（照抄 `gameplay.mjs:186`）：只透传 `PATH/HOME/TMPDIR/LANG/LC_ALL/SYSTEMROOT`，**故意不继承凭据**——这样"桩在服务"是被证明的而不是被假设的；配 `--host 127.0.0.1 --port 0 --no-open`；
+- **取 URL**：轮询 stdout 正则 `https?://(?:127\.0\.0\.1|localhost):\d+[^\s\u001b]*`，子进程提前退出即刻报错（`gameplay.mjs:199-203`）；
+- **重启套路**（票据 04 的"重启不丢"要用）：`SIGTERM` → 等 `exit` 事件 → 断言 `exitCode !== null` → 再启（`gameplay.mjs:206-213`）。
 
 ## 范围
 
