@@ -217,6 +217,28 @@ export function apply(ctx) {
           }
         },
       }),
+      // STRICT cold read: readSession replays the log through Session.create, which runs the
+      // full v4 admission folder (turn/start must open nextTurn, protected surface head, …).
+      // This is the path that rejects issue-06 logs as corrupt; observeSession above is lenient.
+      webServer.register({
+        kind: 'exact',
+        path: '/dsh-rrp-e2e/read-session',
+        handler: async (req, res) => {
+          const sessionId = queryOf(req)?.get('sessionId') ?? ''
+          if (sessionId.length === 0) return sendJson(res, 400, { error: 'missing sessionId' })
+          try {
+            const read = await sessionQuery.readSession(sessionId)
+            sendJson(res, 200, {
+              header: read.session,
+              inheritedEventCount: read.inheritedEventCount,
+              events: read.events,
+            })
+          } catch (error) {
+            const notFound = /not found/.test(String(error))
+            return sendJson(res, notFound ? 404 : 500, { error: String(error) })
+          }
+        },
+      }),
     ]
     console.log(TAG + ' routes armed')
     return () => {

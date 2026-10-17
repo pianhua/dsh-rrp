@@ -95,7 +95,12 @@ describe('route contract (issue #22)', () => {
     registerActivityRoute(host.ctx as never)
     registerCorrectionRoute(host.ctx as never)
     registerLoreRoute(host.ctx as never)
-    registerStartRoute(host.ctx as never)
+    registerStartRoute(host.ctx as never, {
+      peek: () => undefined,
+      async save() {},
+      clear() {},
+      async close() {},
+    })
     registerCopilotRoute(host.ctx as never)
     expect([...host.registered].sort()).toEqual(
       [

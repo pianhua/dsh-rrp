@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { readFile, rm } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { WORLD_STATE_KEY } from '../../src/world-state/world-state.ts'
 import {
@@ -12,6 +12,7 @@ import { interpolateCardText } from '../../src/cards/card-types.ts'
 import type { CardPackPlayerView } from '../../src/cards/card-types.ts'
 import type { WorldState } from '../../src/world-state/world-state.ts'
 import { RRP_ROUTES } from '../../src/route-contract.ts'
+import { resolveDshScope } from '../../scripts/host-runtime.mjs'
 import {
   AUTHOR_GOLD,
   AUTHOR_MARKER,
@@ -134,10 +135,9 @@ describe('完整玩局断言链（play-e2e 票据 04）', () => {
       const openingBody = card.openings[0]?.body
       expect(openingBody).toBeTruthy()
 
-      // ── 开局：画廊顺序（create → select → start → prompt），真实 POST /dsh-rrp/start，
-      //    禁止 session.append 造开局（V4 受保护头）。select 必须早于 start（路由校验
-      //    preset 匹配），而 agent 组合随首次需要发生——loop 的回合计数器在组合时冻结，
-      //    时序错了冷读即拒（见交付评论）。────────────────────────────────────────────
+      // ── 开局：画廊顺序（create → select → start → prompt）。懒开局（ADR 0028）：
+      //    start 不写日志（预写回合与 loop 冻结计数器相撞 = issue 06），payload 存
+      //    pending 存储域，首回合 system commit（受保护头）后、玩家消息前物化。──────
       const created = (await fetchJson(`${base}/dsh-rrp-e2e/session`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -169,11 +169,12 @@ describe('完整玩局断言链（play-e2e 票据 04）', () => {
           },
         }),
       })) as { ok: boolean; cardWritten: boolean; stateWritten: boolean; openingWritten: string }
+      // 懒开局（ADR 0028）：start 路由零日志写入，payload 全部 deferred 到首回合物化。
       expect(started).toEqual({
         ok: true,
-        cardWritten: true,
-        stateWritten: true,
-        openingWritten: 'assistant',
+        cardWritten: false,
+        stateWritten: false,
+        openingWritten: 'deferred',
       })
 
       const projectionsOf = async (): Promise<Record<string, unknown> | undefined> => {
@@ -198,11 +199,14 @@ describe('完整玩局断言链（play-e2e 票据 04）', () => {
           (entry) => entry.role === 'user' && entry.text.includes(AUTHOR_MARKER),
         )
         if (userIndex < 0) return undefined
-        const reply = entries
+        // 懒开局后首回合有两个 assistant 条目：开场白（微任务落在玩家消息之后）
+        // 与正文（流末落盘）。负向对照在这里失败：WRONG_GOLD 被换进正文，
+        // 最后一条 assistant 条目与剧本常量不符（见 tests/README.md 的复述步骤）。
+        const replies = entries
           .slice(userIndex + 1)
-          .find((entry) => entry.role === 'assistant' && entry.text.length > 0)
-        return reply === undefined ? undefined : { reply, slice }
-      }, '带标记玩家消息与其后的 Author 正文落盘')
+          .filter((entry) => entry.role === 'assistant' && entry.text.length > 0)
+        return replies.length >= 2 ? { reply: replies.at(-1)!, slice } : undefined
+      }, '带标记玩家消息、开场白与其后的 Author 正文落盘')
       // 负向对照在这里失败：WRONG_GOLD 被换进正文，与剧本常量不符。注意转录折叠会把
       // 正文统计两遍（message.content 与 stream 的 block-end 块各一次，生产现状，见票据
       // 04 交付评论），所以逐字节断言落在磁盘事件的 content 块上，条目级只断言包含。
@@ -251,9 +255,8 @@ describe('完整玩局断言链（play-e2e 票据 04）', () => {
       })
       const changeBatch = liveTimeline.batches[1]
       expect(changeBatch?.kind).toBe('changes')
-      // storyTurn 是 agent loop 的回合编号：loop 在 create 时挂载（turnBoundary=0），
-      // 开局由 start 路由事后追加的 turn 1/2 不计入——首个玩家回合因此是 storyTurn 1
-      // 而非日志序号 3（生产现状，见票据 04 交付评论）。
+      // storyTurn 是 agent loop 的回合编号；懒开局后日志回合与 loop 计数天然一致
+      // （开局不再预写闭合回合，issue 06 修复）：首个玩家回合就是 turn 1。
       expect(changeBatch).toMatchObject({
         provenance: { actor: 'chronicler', storyTurn: 1, evidence: expect.any(String) },
         origin: 'local',
@@ -291,20 +294,28 @@ describe('完整玩局断言链（play-e2e 票据 04）', () => {
 
       expect(
         firstSurfaceEvent(events)?.type,
-        'V4 受保护头：首个 surface 事件必须 system/message',
+        'V4 受保护头：首个 surface 事件必须 system/message（懒开局后由 loop 自己的 commit 担任）',
       ).toBe('system/message')
-      const openingEvent = events.find(
-        (event) =>
-          event.type === 'assistant/message' && (event.data as { turn?: number }).turn === 2,
-      )
-      expect(openingEvent).toBeDefined()
+      const openingTextExpected = interpolateCardText(openingBody ?? '', card.meta.player)
+      const openingEvent = events.find((event) => {
+        if (event.type !== 'assistant/message') return false
+        const text = (
+          (event.data as { message?: { content?: Array<{ text?: string }> } }).message?.content ??
+          []
+        )
+          .map((block) => block.text ?? '')
+          .join('')
+        return text === openingTextExpected
+      })
+      expect(openingEvent, '开场白必须在首回合内、玩家消息之前物化').toBeDefined()
+      expect((openingEvent?.data as { turn?: number }).turn).toBe(1)
       const openingText = (
         (openingEvent?.data as { message?: { content?: Array<{ text?: string }> } }).message
           ?.content ?? []
       )
         .map((block) => block.text ?? '')
         .join('')
-      expect(openingText).toBe(interpolateCardText(openingBody ?? '', card.meta.player))
+      expect(openingText).toBe(openingTextExpected)
       const promptEvent = events.find(
         (event) =>
           event.type === 'user/message' &&
@@ -340,14 +351,14 @@ describe('完整玩局断言链（play-e2e 票据 04）', () => {
       ).toBe(enters.length)
       const callers = enters.map((entry) => entry.caller)
       expect(callers.filter((caller) => caller === 'author')).toHaveLength(1)
-      // 开场回合一次 no-op 折叠 + 标记回合一次提交折叠；头部回合空转录不触发模型。
-      expect(callers.filter((caller) => caller === 'chronicler')).toHaveLength(2)
+      // 懒开局后开局不再触发独立回合：开场白与玩家消息同处 loop 的 turn 1，
+      // Chronicler 只完整折叠一次（ADR 0028）。
+      expect(callers.filter((caller) => caller === 'chronicler')).toHaveLength(1)
 
-      // ── 重启不丢（数据面）：关闭宿主 → 同一 DSH_HOME 再起 → 读同一 Session 的日志并
-      //    独立折叠，世界状态/时间线/转录游标全部与玩局现场一致。
-      //    宿主进程内冷读（sessionQuery 重放）被「回合号不连续」拒读——那是 issue 06
-      //    的生产级发现（loop 计数器在组合时冻结 vs 开局路由预写回合）；本票据守
-      //    数据面：日志在磁盘上、独立于任何宿主进程折叠得出同一状态。────────────
+      // ── 重启不丢：关闭宿主 → 同一 DSH_HOME 再起 →（a）真实冷读 readSession
+      //    （宿主进程内 Session.create 重放）必须 200；（b）严格门：直接跑宿主的
+      //    restoreReleasedV4Artifacts（v3-to-v4 关系断言，issue 06 的拒绝出处），
+      //    最终日志必须满足 turn 严格连续 + 受保护头首面；（c）数据面独立折叠一致。──
       const keptRoot = host.root
       await host.close({ preserveRoot: true })
       host = await startIsolatedHost({
@@ -360,6 +371,41 @@ describe('完整玩局断言链（play-e2e 票据 04）', () => {
         auditFile,
         cardStateFile: resolve(repoRoot, 'cards', CARD_ID, 'state.json'),
       })
+      const strictCold = await fetch(
+        `${host.baseUrl}/dsh-rrp-e2e/read-session?sessionId=${encodeURIComponent(sessionId)}`,
+      )
+      expect(strictCold.status, '宿主冷读（Session.create 重放）必须接受修复后的日志').toBe(200)
+      const strictBody = (await strictCold.json()) as {
+        header: unknown
+        inheritedEventCount: number
+        events: unknown[]
+      }
+      const scope = resolveDshScope(repoRoot)
+      expect(scope, '必须能定位宿主包作用域才能跑严格门').not.toBeNull()
+      const v4 = (await import(
+        /* @vite-ignore */ join(scope!, 'dsh-session-format-v3-to-v4', 'lib', 'index.js')
+      )) as {
+        restoreReleasedV4Artifact(
+          artifact: { header: unknown; inheritedEventCount: number; events: unknown[] },
+          knownEventTypes: Set<string>,
+        ): unknown
+      }
+      const knownEventTypes = new Set(
+        (strictBody.events as Array<{ type: string }>).map((event) => event.type),
+      )
+      expect(
+        () =>
+          v4.restoreReleasedV4Artifact(
+            {
+              header: strictBody.header,
+              inheritedEventCount: strictBody.inheritedEventCount,
+              events: strictBody.events,
+            },
+            knownEventTypes,
+          ),
+        '严格 v4 关系断言（turn/start 开 nextTurn、受保护头、step 匹配）必须通过',
+      ).not.toThrow()
+
       const replayedEvents = await readSessionEvents(resolve(host.root, 'sessions'), sessionId)
       expect(replayedEvents.length, '重启后同一 DSH_HOME 的日志不得丢事件').toBe(events.length)
       const replayed = foldEvents(replayedEvents)
