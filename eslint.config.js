@@ -29,7 +29,9 @@ export default tseslint.config(
     },
   },
   {
-    files: ['tests/**/*.ts', 'scripts/**/*.mjs'],
+    // TS owns undefined-ness here, and the plain-.mjs harness files (stub plugins, isolated-host
+    // boot) reference Node globals that ESLint cannot see without a globals package.
+    files: ['tests/**/*.ts', 'tests/**/*.mjs', 'scripts/**/*.mjs'],
     rules: {
       'no-undef': 'off',
     },

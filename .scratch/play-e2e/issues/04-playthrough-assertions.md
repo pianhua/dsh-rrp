@@ -10,6 +10,13 @@
 
 1. **开局**：走真实 `POST /dsh-rrp/start`（`src/start.ts:164-289`），**禁止**自己 `session.append` 造开局——V4 受保护头不变式（`:70-90`）正是这条链要保护的。
 2. **玩一轮**：发一条带 Author 标记的玩家消息 → 等 `assistant/message` 落盘 → 等 `ctx.jobs` 上的 Chronicler 结算完成（等 `turn/end` 类持久事件，不轮询 `agent/status`）。
+   - **无头驱动入口（已查明，勿再翻）**：`ctx.sessionController.create(request)`
+     （`dsh-api-session-controller/lib/types/index.d.ts:93`）与
+     `prompt({ requestId, sessionId, mode: 'queue', content })` → `{ accepted: true }`（`:163`、`types.d.ts:319-331`）。
+     `requestId` 是客户端铸造、持久化在实际受理的那条 user 消息上的身份，**必须确定性生成**，
+     否则逐字节复跑断言当场失效。
+   - 承载方式：在隔离 profile 里再插一个 e2e 驱动插件（测试脚手架，不进生产代码），
+     通过它调用上述命令，而不是去逆向宿主的 HTTP/RPC 线格式。
 3. **状态断言**：WorldState 出现预期变更；WorldState Timeline 新增一条分组事件，`actor`/`turn`/旧值新值正确。
 4. **独立读盘**：除投影外，再从**会话日志本身**读一遍 `source.rrp` 载荷并折叠，断言与投影一致。这是参照项目最值得抄的一条纪律——界面通过 ≠ 落盘正确。
 5. **重启不丢（数据面）**：关闭隔离宿主 → 用同一 `DSH_HOME` 再起 → 读同一 Session → 世界状态、时间线、转录游标（`stateFoldSeq`）全部折叠得出。UI 可见性归票据 05。

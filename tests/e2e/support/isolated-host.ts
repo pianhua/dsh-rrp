@@ -56,6 +56,8 @@ export interface IsolatedHostOptions {
   stubPlugin?: string
   /** Provider id the stub registers; required together with `stubPlugin`. */
   stubProvider?: string
+  /** Absolute JSONL path where the stub records every `stream()` entry. */
+  auditFile?: string
   /** How long to wait for the startup URL. */
   bootTimeoutMs?: number
 }
@@ -151,6 +153,7 @@ export async function startIsolatedHost(options: IsolatedHostOptions): Promise<I
     profileName = 'e2e',
     stubPlugin,
     stubProvider,
+    auditFile,
     bootTimeoutMs = 180_000,
   } = options
   const root = await mkdtemp(join(tmpdir(), 'dsh-rrp-e2e-'))
@@ -182,7 +185,15 @@ export async function startIsolatedHost(options: IsolatedHostOptions): Promise<I
       [bin, '--profile', profileName, '--host', '127.0.0.1', '--port', '0', '--no-open'],
       {
         cwd: profileDir,
-        env: { ...env, DSH_HOME: root, DSH_CWD: root },
+        env: {
+          ...env,
+          DSH_HOME: root,
+          DSH_CWD: root,
+          // The stub must subclass the host's own LlmAdapter class; this repository does not depend
+          // on dsh-llm, so the path is handed over rather than imported.
+          DSH_RRP_E2E_LLM_MODULE: join(scope, 'dsh-llm', 'lib', 'index.js'),
+          ...(auditFile === undefined ? {} : { DSH_RRP_E2E_AUDIT: auditFile }),
+        },
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     )
