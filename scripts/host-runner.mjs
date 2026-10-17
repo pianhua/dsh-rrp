@@ -27,6 +27,7 @@ import {
   parsePosixCommandLine,
   parseWindowsCommandLine,
 } from './host-runner-ownership.mjs'
+import { getCleanEnv, resolveDshBin } from './host-runtime.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, '..')
@@ -55,45 +56,6 @@ function parseArgs() {
   }
 
   return { action, port, profile }
-}
-
-/** Locate @deepseek-ai/dsh lib/bin.js directly to bypass cmd wrapper. */
-function resolveDshBin() {
-  // The dsh package ships no "main"/"exports" entry (bin-only ESM package), so
-  // require.resolve of the bare specifier fails even when installed. Resolve the
-  // bin subpath instead, checking candidates in order:
-  //   1. the repo's own node_modules (if a local dev install exists),
-  //   2. the dedicated pinned host at ~/.dsh-rrp/host (self-consistent npm tree
-  //      matching HOST_BASELINE.md; install with:
-  //      npm install --prefix ~/.dsh-rrp/host @deepseek-ai/dsh@<baseline>),
-  //   3. the global npm install (any version — last resort).
-  const candidates = [join(repoRoot, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')]
-  try {
-    candidates.push(
-      join(
-        process.env.USERPROFILE ?? process.env.HOME ?? '',
-        '.dsh-rrp',
-        'host',
-        'node_modules',
-        '@deepseek-ai',
-        'dsh',
-        'lib',
-        'bin.js',
-      ),
-    )
-  } catch {
-    // ignore: no home directory to probe
-  }
-  try {
-    const globalRoots = execSync('npm root -g', { encoding: 'utf8' }).trim()
-    if (globalRoots) candidates.push(join(globalRoots, '@deepseek-ai', 'dsh', 'lib', 'bin.js'))
-  } catch {
-    // ignore: global lookup is best-effort
-  }
-  for (const binJs of candidates) {
-    if (existsSync(binJs)) return binJs
-  }
-  return null
 }
 
 /**
@@ -295,18 +257,6 @@ function isPositivePid(pid) {
   return Number.isSafeInteger(pid) && pid > 0
 }
 
-/** Clean environment without proxy variables. */
-function getCleanEnv() {
-  const cleanEnv = { ...process.env }
-  delete cleanEnv.ALL_PROXY
-  delete cleanEnv.all_proxy
-  delete cleanEnv.HTTP_PROXY
-  delete cleanEnv.http_proxy
-  delete cleanEnv.HTTPS_PROXY
-  delete cleanEnv.https_proxy
-  return cleanEnv
-}
-
 async function stopHost(port, profile) {
   console.log(`[host-runner] Stopping DSH host on port ${port}...`)
   const ownership = await portOwnership(port, profile)
@@ -378,7 +328,7 @@ async function startHost(port, profile) {
   console.log(`[host-runner] Proxy variables stripped to avoid LLM empty responses.`)
 
   const cleanEnv = getCleanEnv()
-  const dshBin = resolveDshBin()
+  const dshBin = resolveDshBin(repoRoot)
 
   let child
   if (dshBin) {

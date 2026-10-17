@@ -7,9 +7,13 @@
 | :--- | :--- | ---: | :--- |
 | `unit/` | 纯函数与纯词汇：投影折叠、条件求值、协议解析、命名规则。**不碰 I/O、不碰 DOM、不碰宿主服务** | 30 | `pnpm run test:unit` |
 | `integration/` | 与宿主契约对接：HTTP 路由、存储域、文件系统、宿主 face、happy-dom 下的组件渲染 | 32 | `pnpm run test:integration` |
-| `e2e/` | 多轮叙事模拟：从玩家输入一路走到状态落账 | 1 | `pnpm run test:e2e` |
+| `e2e/` | 多轮叙事模拟与真宿主现场：从玩家输入一路走到状态落账 | 2 | `pnpm run test:e2e` |
 
 `stubs/` 是共享夹具（UI primitives stub、transcript projections 等），供两层引用，不算测试。
+
+**e2e 层需要先构建**：`e2e/isolated-host.spec.ts` 会真起一个隔离 DSH 宿主，而插件入口是构建产物
+`lib/index.js`——跑这一层前必须先 `pnpm run build`，否则等于在测旧代码（spec 会直接报错提醒）。
+CI 已按 build → test 的顺序执行。
 
 ## 日常怎么用
 

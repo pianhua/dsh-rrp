@@ -1,6 +1,6 @@
 # 票据 01：隔离宿主现场（一次性 profile + 端口 0 + 跑完即焚）
 
-> Status: ready-for-agent · 依赖：无 · 规格真源：[`spec.md`](../spec.md) §2 §3
+> Status: resolved（2026-10-16）· 依赖：无 · 规格真源：[`spec.md`](../spec.md) §2 §3
 
 ## 定位升级（开工前必读）
 
@@ -51,3 +51,24 @@
 ## out-of-scope
 
 不加载真实模型、不断言任何 RP 业务事实（票据 04 的活）。
+
+## Comments
+
+**2026-10-16 交付**：`tests/e2e/support/isolated-host.ts` + `tests/e2e/isolated-host.spec.ts`。
+公共逻辑抽成 `scripts/host-runtime.mjs`（配 `host-runtime.d.mts`，沿用本仓库
+`host-runner-ownership.d.mts` 的声明文件套路），`host-runner.mjs` 改为引用同一份
+`resolveDshBin` / `getCleanEnv`，人工开发行为不变。
+
+实测结论，三条都是开工前不知道的：
+
+1. **隔离现场真的能起来**：单宿主冷启动约 3.9 秒，`/dsh-rrp/cards` 返回 200 + JSON；
+   连起连停三次端口各异、临时目录全部销毁。`rp-dev` 失踪后这是第一次从源码重建出现场成功。
+2. **插件路由不需要登录**：`webServer` 路由确实不在宿主鉴权门内（勘察时只是推断，现在有了证据）。
+   票据 04 因此可以直接 `fetch` 断言后端事实，不必处理 cookie。
+3. **CI 顺序是错的**：`quality.yml` 原本 Test 在 Build 之前，而本层依赖构建产物 `lib/index.js`
+   —— 干净检出上必然红。已把 Build 提到 Test 之前（独立提交）。顺带说明：此前 `pnpm test`
+   与 `build` 从未在同一 CI 作业里按依赖顺序校验过，只有 `prepublishOnly` 会碰。
+
+**Windows 细节**：目录链接必须用 `junction` 而非 symlink（后者要开发者模式）；
+临时目录里 1900+ 条链接用 `rm -rf` 与 PowerShell 都会因长路径失败，
+`maxRetries` + `force` 的 `rmSync` 在本场景可用（残骸只出现在被外部工具占用的 worktree 里）。
