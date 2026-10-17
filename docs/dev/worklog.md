@@ -6,6 +6,37 @@
 > 月中提前轮转：2026-10-17 主日志触 32768 字节上限，当日全部 10 月条目切至
 > [`worklog/2026-10.md`](./worklog/2026-10.md)；当月后续条目继续记本文件，次月归仓时并入。
 
+## 2026-10-17 · R1 修复：懒开局落地（issue 06 关闭，ADR 0028）
+
+### 已完成
+
+- **勘察实证**（探针 spec 现场 dump）：碰撞日志形态确认；`turnBoundary` 快照于 preset 组合时
+  （loop 首回合永远 turn 1，预写任何闭合回合必撞）；loop 首个 system commit 原生活成为
+  受保护头（占位头退休）；**`observeSession`/`readSession` 在 0.2.0-rc.1 上对碰撞日志宽容**
+  （票据 04 的冷读拒绝出自 v3-to-v4 严格断言栈）——验收门 therefore 直接跑宿主包
+  `restoreReleasedV4Artifacts`，不依赖任何冷读入口的宽容。
+- **实现两道宿主硬约束修正**（设计 v2）：① `session/event` 监听内追加被宿主禁止
+  （实测 `session append cannot reenter while another append is being published`）——
+  事实改经 **`agent/pre-step` waterfall** 改写 decision.messages，由 loop 自己在受保护头后、
+  玩家消息前追加（新增 `buildOpeningFactsMessages` 复用 publishState 同款渲染）；
+  ② 开场白必须保持 assistant 角色（decision 只收用户消息）——首个 system commit 的
+  事件监听登记 OPENING_DUE 并 **queueMicrotask**，在 loop 同步追加突发后、回复前落进
+  仍开着的 step 1。最终日志序：头→事实→玩家→提醒→开场白→正文。
+- **语义变化（ADR 0028 记录）**：开局后首条玩家消息前日志为空；开场白位于首条玩家消息
+  之后、正文之前；`StartResponse.openingWritten` 增 `'deferred'`。Chronicler 不再为
+  开局空转触发（首回合一次完整折叠）。
+- 验收：e2e playthrough 重启相升级为**宿主冷读 readSession 200 + 严格 v4 关系断言 +
+  数据面三方**；负向对照 WRONG_GOLD=1 仍非零退出（exit=1，断言点正确）；单测
+  start.spec 全量改写（10 例）。
+
+### 验证
+
+- 全量质量门（hygiene 现含 28 篇 ADR）+ 548 用例 + build 全绿；e2e 连跑 3 次一致（见当次提交）。
+
+### 待决
+
+- 无。issue 06 关闭；reopen 条件：宿主某版本 loop 计数器改为现读（ADR 0028 记录）。
+
 ## 2026-10-17 · 决策审计与文档清理：27 篇 ADR 首审、悬挂待决全裁决、死研 4 份清除（decision-audit）
 
 ### 已完成

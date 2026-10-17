@@ -79,6 +79,9 @@
 
 ## 已收口
 
+- ✅ 2026-10-17 · **R1 = issue 06 修复（懒开局，ADR 0028）**：start 零写入、事实经
+  agent/pre-step 决策注入、开场白微任务落 step 1；验收门 = 宿主 v3-to-v4 严格关系断言
+  + readSession 冷读 200 + 数据面重启一致 + 负向对照。reopen 条件：宿主 loop 计数器改现读。
 - ✅ 2026-10-17 · **ADR 首次全面内容复审**：27 篇全部 reaffirm、0 退役（逐条裁决见
   `.scratch/decision-audit/spec.md`）；P1 #6 关闭、#8 裁决不做；过期调研/一次性计划 4 份清除。
 - ✅ 2026-10-17 · repo-restructure 票据 00–07：src 分层归位（routes/ runtime/ host/ publish/
