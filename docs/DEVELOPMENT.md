@@ -94,7 +94,7 @@ pnpm run build                                  # 构建 host + client
 node scripts/host-runner.mjs start              # 真实宿主自动化启动（自动杀冲突进程、剥离代理、捕获 Token 鉴权 URL）
 node scripts/host-runner.mjs status             # 查看宿主运行状态、Token URL 与健康检查
 node scripts/host-runner.mjs stop               # 停止测试宿主
-node scripts/inspect-context.mjs --latest       # 需要时：解码日志、统计上下文与缓存
+node scripts/maintenance/inspect-context.mjs --latest       # 需要时：解码日志、统计上下文与缓存
 ```
 
 `pnpm publish` 前的 `prepublishOnly` 会串起 typecheck + lint + test + build。排版提交记在

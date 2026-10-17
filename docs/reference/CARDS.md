@@ -1,7 +1,7 @@
 # 原生卡包（Cards）规格提案 · v0
 
 > **状态：v0 已落地。** 所有者以一张真实酒馆卡（`女仆大小姐.json`）触发转译，据此采用**目录形态**；
-> 首个原生卡包见 [`../../cards/maid-heiress/`](../../cards/maid-heiress/)，加载器见 `src/cards.ts`。
+> 首个原生卡包见 [`../../cards/maid-heiress/`](../../cards/maid-heiress/)，加载器见 `src/cards/cards.ts`。
 > 宿主接缝已勘察（见 [HOST_SEAMS.md](HOST_SEAMS.md)）。
 > 关联：D7（Skills 替代 Lorebook）· D14（不兼容酒馆卡，靠 AI 单向转译）· HOST_ALIGNMENT 第 4 节红线。
 
@@ -124,9 +124,9 @@ opening: default
 
 | 卡包资产 | 落到的宿主/插件接缝 | 说明 |
 | :--- | :--- | :--- |
-| `persona` + 正文世界核心 | `rrpCard` 投影 + `src/state-publisher.ts` 注入 | 只在带该卡的会话生效，不污染 preset；模型可见、面板不显示 |
+| `persona` + 正文世界核心 | `rrpCard` 投影 + `src/publish/state-publisher.ts` 注入 | 只在带该卡的会话生效，不污染 preset；模型可见、面板不显示 |
 | `skills/` | `mountSkillsForCard` 拷入**该卡专属 preset** (`rp-<id>`) 的技能根 → DSH Skill | 启动日志打印 `card preset 'rp-maid-heiress' skills (<n>): <该卡 skills/ 下的目录名>…`；条数随卡包演进，以日志实跑为准 |
-| 酒馆卡（外部） | `src/card-import.ts` + `POST /dsh-rrp/cards/import` + 展厅上传入口 | 一次性转译成上表形态，落用户卡目录；运行时不解析酒馆字段（D14 例外，见 `HOST_ALIGNMENT.md` §3.1） |
+| 酒馆卡（外部） | `src/cards/card-import.ts` + `POST /dsh-rrp/cards/import` + 展厅上传入口 | 一次性转译成上表形态，落用户卡目录；运行时不解析酒馆字段（D14 例外，见 `HOST_ALIGNMENT.md` §3.1） |
 | `state.json` | `user/message` 的 `source.rrp.worldState` + 现有投影 | 无需新投影 |
 | 开场白 | 新会话的首条消息 | 需宿主「以预设新建会话 + 注入首条消息」接缝（见 §9 待勘察） |
 | 卡面/列表 | 卡片展厅 UI | 复用 Slots / 右侧栏 / 顶栏入口（见 §9） |
@@ -192,16 +192,16 @@ opening: default
 
 ## 12. 实现现状（2026-09-17）
 
-- 加载器 `src/cards.ts`：纯目录解析（YAML-like frontmatter 子集 / 开场白 / `state.json` / `skills`），无 HTTP、无 DB、无索引；`mountSkillsForCard()` 把**一张卡**的 `skills/*` 挂进**它自己的** preset 技能根。目录名与 manifest id 必须是同一个规范 kebab-case id，非法/不一致目录不会进入列表，直接读取也会拒绝，避免路径穿越与归一化碰撞。当前 frontmatter 解析只支持项目示例使用的有限语法，不是完整 YAML，待替换为正式 YAML 解析器。
-- 卡面类型 `src/card-types.ts`：依赖为零，宿主与浏览器共享。
-- **卡包设定投影** `rrpCard`（`src/projection/card.ts`）+ `renderCardContext`：Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入（`src/state-publisher.ts`，追加式去重）。
-- 只读路由 `src/cards-route.ts`：`GET /dsh-rrp/cards`、`GET /dsh-rrp/cards/one?id=<id>`。
-- 开卡路由 `src/start.ts`：`POST /dsh-rrp/start` → 发布卡包 + 初始状态上下文（`source.rrp`；actor `card` 记入内存账本），**最后**追加开场白。
+- 加载器 `src/cards/cards.ts`：纯目录解析（YAML-like frontmatter 子集 / 开场白 / `state.json` / `skills`），无 HTTP、无 DB、无索引；`mountSkillsForCard()` 把**一张卡**的 `skills/*` 挂进**它自己的** preset 技能根。目录名与 manifest id 必须是同一个规范 kebab-case id，非法/不一致目录不会进入列表，直接读取也会拒绝，避免路径穿越与归一化碰撞。当前 frontmatter 解析只支持项目示例使用的有限语法，不是完整 YAML，待替换为正式 YAML 解析器。
+- 卡面类型 `src/cards/card-types.ts`：依赖为零，宿主与浏览器共享。
+- **卡包设定投影** `rrpCard`（`src/projection/card.ts`）+ `renderCardContext`：Author 每步基线按「卡包设定 → 实时状态 → 大局编年」注入（`src/publish/state-publisher.ts`，追加式去重）。
+- 只读路由 `src/routes/cards-route.ts`：`GET /dsh-rrp/cards`、`GET /dsh-rrp/cards/one?id=<id>`。
+- 开卡路由 `src/host/start.ts`：`POST /dsh-rrp/start` → 发布卡包 + 初始状态上下文（`source.rrp`；actor `card` 记入内存账本），**最后**追加开场白。
 - 卡片展厅 `src/client/gallery-panel.tsx`：`main` 主区面板 + 同名 `sidebar.panellist` 导航；开始流 = create → `agentPresets.select(presetIdForCard(card.id))` → POST start → open。UI 用宿主原子库（搜索/封面/标签/技能卡/开场白 + 底部主操作条）。
 - **主题（已撤回 P0）**：暖纸 `overrideTokens` 层观感被所有者否决，改用 **DSH 原版亮暗**；面板自身靠 `@deepseek-ai/dsh-client-ui-primitives` 原子 + `--dsw-alias-*` token 保持原生观感（主题相关历史评估已归档，本表为准）。
 - 当前验证：`tests/integration/cards.spec.ts`、`tests/integration/start.spec.ts`、`tests/integration/client.spec.ts` 覆盖规范 id、开卡失败传播与可选 Workspace 归属；最新全量数字以 `pnpm test` 的当前输出为准。
 - **已实机确认**：开场白被宿主原生接受为**正文第一条**；卡包 persona 注入**零剧透**。
-- ✅ **技能作用域（已修）**：每张卡一个 `rp-<card-id>` preset（`src/preset-id.ts`），绑定卡包开局时 `agentPresets.select` 选它；基础 `rp` 无卡包设定。宿主启动日志会逐个打印各 preset 的技能表。
+- ✅ **技能作用域（已修）**：每张卡一个 `rp-<card-id>` preset（`src/host/preset-id.ts`），绑定卡包开局时 `agentPresets.select` 选它；基础 `rp` 无卡包设定。宿主启动日志会逐个打印各 preset 的技能表。
 - **待优化**：P4 输入区接管；多卡体系下的卡面封面图；第二张官方测试卡。
 
 ---
@@ -244,7 +244,7 @@ cards/<card-id>/
 | `buttonRow` | `buttons[]`（≤8） | 动作按钮 |
 | `app` | `src` = `ui/` 下裸 `*.html` | 沙箱页面（§13.4） |
 
-**`when:` 与技能的条件注入是同一套语法同一套求值器**（`src/lore-condition.ts`）：
+**`when:` 与技能的条件注入是同一套语法同一套求值器**（`src/lore/lore-condition.ts`）：
 `characters.米娅.affinity >= 40` 这类数值/布尔比较，不成立的面板直接不渲染。
 不要发明第二套条件语言。
 
@@ -275,7 +275,7 @@ cards/<card-id>/
 - `ui/` 为**多文件资产目录**（html/css/js/图片/字体，类型白名单，路径穿越防护），由
   `/dsh-rrp/card-ui` 伺服，`Access-Control-Allow-Origin: *`（opaque origin 下 `@font-face`/fetch/ESM 依赖 CORS）；
   **外链零放行**——资产必须本地化进卡包，个人单机离线可玩；
-- 桥（`src/ui-bridge.ts`，协议 v2）：入向只有 `rrp:state`（世界状态只读快照 + 卡身份 + 最近正文尾段），
+- 桥（`src/ui-contract/ui-bridge.ts`，协议 v2）：入向只有 `rrp:state`（世界状态只读快照 + 卡身份 + 最近正文尾段），
   `rrp:hello` 握手带版本号、父侧回能力集，v1 卡按旧语义兼容；出向四原语（`correct_state` /
   `ask_copilot` / `send_message` / `draft_lore`）+ `resize`（页面自报高度，宿主钳 80–4000px）；
 - 入向消息必须 `event.source === frame.contentWindow` + 过 `parseUiCall` 白名单 + 20 次/秒限流；

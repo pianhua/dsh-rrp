@@ -276,7 +276,7 @@ session.append('user/message', {
 
 > 校验器 `validateSessionEventData` 对 `user/message` 的 `source` **不做字段白名单**，所以附加 `rrp` 字段是安全的。
 
-**日志修复**：老版本写下的 `rrp/*` 事件可用 `scripts/repair-legacy-sessions.mjs` 补上 `ignorable:true`（默认 dry-run，`--apply` 会留 `*.pre-ignorable.bak`）。**注意 zstd 物理格式**：会话日志是**多帧**拼接，且宿主断言**第一帧必须恰好是一行 header**（`assertZstdHeaderFrame`）；把整个文件重压成单帧会得到 `corrupt Zstandard session log: first frame is not exactly one header line`。
+**日志修复**：老版本写下的 `rrp/*` 事件可用 `scripts/maintenance/repair-legacy-sessions.mjs` 补上 `ignorable:true`（默认 dry-run，`--apply` 会留 `*.pre-ignorable.bak`）。**注意 zstd 物理格式**：会话日志是**多帧**拼接，且宿主断言**第一帧必须恰好是一行 header**（`assertZstdHeaderFrame`）；把整个文件重压成单帧会得到 `corrupt Zstandard session log: first frame is not exactly one header line`。
 
 **历史实现旁注**：活动账本（谁改了状态）目前不进会话日志，而是宿主内存 + `GET /dsh-rrp/activity` + 面板 2s 轮询。2026-09-17 审计后，这只代表现状，不再视为最终 seam：运行状态与宿主 Jobs UI 重复，提交/矫正历史应评估放入现有 `user/message.source.rrp` 并由投影推送，从而避免平行状态通道。
 

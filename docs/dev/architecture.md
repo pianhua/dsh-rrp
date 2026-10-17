@@ -62,17 +62,23 @@ facts 通道每轮对世界状态求值 `when:` 声明（纯数值/布尔），�
 ## 模块地图
 
 ```text
-src/
-├── index.ts              # 插件入口，全部可逆 Effect
-├── preset.ts / preset-id # RP 模式物化（基础 rp + 每卡 rp-<id>）
-├── cards.ts / card-types # 卡包解析与共享词汇
-├── state-publisher.ts    # 追加式发布（唯一写通道）
-├── projection/           # 纯折叠器（7 单元：world-state/transcript/summary/settings/lore/card/worldline-digest）
-├── world-state.ts        # 状态词汇（host/client 共享纯模块）
-├── chronicler / summarizer / lore-route / correction / copilot / worldline-route
-├── route-contract.ts     # 前后端 HTTP/SSE 契约单一来源（#22）
-├── agents/               # 各智体提示词与输出契约（5 智体，统一 AgentPromptContract）
-└── client/               # 面板（展厅/状态/设定集/月停/世界线/舞台）
+src/                          # 分层方向：client/、routes/ → runtime/、publish/、各域 → host/、projection/
+├── index.ts                  # 插件入口，全部可逆 Effect
+├── contracts.ts              # 对外插件稳定读契约（无依赖公开面）
+├── route-contract.ts         # 前后端 HTTP/SSE DTO 单一来源（#22）
+├── json-extract.ts           # 通用 JSON 提取工具（无领域依赖）
+├── host/                     # 宿主接缝：host-faces（ctx.get 规约与 face 取用）、preset/preset-id（RP 模式物化）、start（开局）、settings、save-naming、home
+├── agents/                   # 五智体提示词与输出契约（统一 AgentPromptContract；纯契约，无宿主重依赖）
+├── runtime/                  # 智体运行时编排：chronicler / summarizer / copilot / copilot-store、recall（含 fetchSessionRounds）、transcript(-reader)、prompt-budget
+├── publish/                  # 追加式发布写通道（唯一写通道）：state-publisher、state-payload、correction、activity、macro-summary、steward-proposals
+├── projection/               # 纯折叠器（7 单元：world-state/transcript/summary/settings/lore/card/worldline-digest）
+├── world-state/              # 状态词汇与运行时：world-state（host/client 共享纯词汇）、references、visibility、timeline
+├── worldline/                # 世界线：tree、store、digest、fork-marker
+├── lore/                     # 设定集：lore、lore-state、lore-runtime、lore-condition、lore-application、lore-drafts、lore-provider
+├── cards/                    # 卡包：cards、card-types、card-import(-parse)、card-state-schema
+├── routes/                   # HTTP/SSE 路由（10 个 *-route.ts；只消费下层，不被下层消费）
+├── ui-contract/              # 前后端 UI 契约：ui-schema、ui-bridge、card-ui
+└── client/                   # 面板（展厅/状态/设定集/月停/世界线/舞台）
 ```
 
 ## 延伸阅读（仓库内）

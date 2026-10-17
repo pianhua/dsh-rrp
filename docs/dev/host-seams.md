@@ -9,7 +9,7 @@
 **正确姿势**：一切持久状态寄存在已知类型 `user/message` 的 `source` 里——
 
 ```ts
-// src/state-payload.ts
+// src/publish/state-payload.ts
 { type: 'user/message',
   data: { role: 'user', content: [{ type: 'text', text: '…' }],
           source: { kind: 'plugin', plugin: 'dsh-rrp', rrp: { worldState: … } } } }
