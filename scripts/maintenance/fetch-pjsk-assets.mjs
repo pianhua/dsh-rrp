@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..')
 const ASSETS = join(ROOT, 'cards', 'pjsk-saki', 'ui', 'assets')
 const BASE = 'https://raw.githubusercontent.com/Cat-organ/my-image-pjsk/refs/heads/main/image/'
 
