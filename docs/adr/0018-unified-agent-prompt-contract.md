@@ -2,7 +2,7 @@
 
 > 状态：接受
 > 原编号：D18 · 索引见 [README.md](./README.md)
-> 最后复审：2026-10-16 · 复审周期 180 天
+> 最后复审：2026-10-17 · 复审周期 180 天
 
 
 **决策**：全仓五个 Agent（Author / Chronicler / Summarizer / Scribe / Copilot）统一接入 `src/agents/contract.ts` 的 `AgentPromptContract` 接口（`id` / `name` / `systemPrompt` / `buildUserPrompt` / `parseReply` / `outputSchema`），系统提示词统一六层结构（身份 → 职责 → 输入契约 → 铁律红线 → 输出契约 → 质量自检）。**只统一工程结构，绝不照搬业务内容**：Author 的 Creative License 与反 AI 腔词库永不进入后台数据管道，后台 Agent 的 JSON 纪律也永不约束 Author 的正文。

@@ -14,33 +14,33 @@ ADR 一旦接受就保留，即使后来被修订或取代——被取代的记�
 
 | 编号 | 主题 | 状态 | 最后复审 |
 | --- | --- | --- | --- |
-| [0001](0001-plugin-composes-custom-rp-mode.md) | 插件组合成自定义 RP 模式 | 接受 | 2026-10-16 |
-| [0002](0002-defer-director-scratchpad.md) | 先不做导演草稿板 | 暂缓（不在第一版范围） | 2026-10-16 |
-| [0003](0003-author-and-state-accounting-async.md) | Author 与状态记账异步（正文优先） | 接受（已知代价已记录） | 2026-10-16 |
-| [0004](0004-chronicler-is-a-real-agent.md) | Chronicler 是一个正经 Agent | 接受 | 2026-10-16 |
-| [0005](0005-world-state-structure-evolves.md) | 世界状态结构动态演进 | 接受（边界经 0022 修订） | 2026-10-16 |
-| [0006](0006-player-correction-is-lock-free.md) | 玩家矫正是自然时序，无锁 | 接受（核心红线） | 2026-10-16 |
-| [0007](0007-knowledge-via-dsh-skills.md) | 知识体系全面 Skills 化 | 接受 | 2026-10-16 |
-| [0008](0008-controlled-knowledge-sedimentation.md) | 允许受控的动态知识沉淀 | 接受 | 2026-10-16 |
-| [0009](0009-branches-map-to-native-session-fork.md) | 分支映射原生 `Session.fork` | 接受 | 2026-10-16 |
-| [0010](0010-collaborate-with-dsh-synapse-not-benchmark.md) | 与 dsh-synapse 协同，而非对标 | **部分取代**（地图职责已自建） | 2026-10-16 |
-| [0011](0011-summary-by-dedicated-agent.md) | 摘要由独立 Agent 负责 | 接受 | 2026-10-16 |
-| [0012](0012-memory-is-an-external-extension.md) | 记忆能力外置（扩展层） | 接受（方向已定，尚未实施） | 2026-10-16 |
-| [0013](0013-card-format-decided-later.md) | 卡包格式后定 | 已实现（规范以 CARDS.md 为准） | 2026-10-16 |
-| [0014](0014-no-sillytavern-ecosystem-compat.md) | 不兼容酒馆卡生态 | 接受（经 0026 修订强化） | 2026-10-16 |
-| [0015](0015-personal-toy-scope.md) | 个人玩具定位 | 接受（核心红线） | 2026-10-16 |
-| [0016](0016-anti-cliche-pattern-list-provenance.md) | 反八股句式清单：来源与协议 | 接受 | 2026-10-16 |
-| [0017](0017-conditional-injection-v1.md) | 条件注入 v1 | 接受 | 2026-10-16 |
-| [0018](0018-unified-agent-prompt-contract.md) | 统一 AgentPromptContract | 接受 | 2026-10-16 |
-| [0019](0019-copilot-promoted-to-player-steward.md) | 月停升格为玩家私属幕僚 | 接受（命名经 0022 修订） | 2026-10-16 |
-| [0020](0020-strong-jailbreak-layer.md) | 强破限层 | 接受 | 2026-10-16 |
-| [0021](0021-no-plugin-content-in-chat-flow.md) | 聊天流内不放插件内容 | 接受（知情后重申） | 2026-10-16 |
-| [0022](0022-worldstate-vs-summarizer-division.md) | WorldState 与剧情脉络的职责分工 | 接受（2026-09-23 修订） | 2026-10-16 |
-| [0023](0023-worldstate-workspace-and-timeline.md) | WorldState 工作区与持久时间线 | 已实现（Phase 1–9 交付） | 2026-10-16 |
-| [0024](0024-worldline-v2-dual-column.md) | 世界线 v2：拓扑与摘要解耦的双栏视图 | 已实现（一期交付并真机验收） | 2026-10-16 |
-| [0025](0025-stage-v2-card-frontend-platform.md) | 舞台 v2：卡包前端应用平台 | 已实现（一期交付） | 2026-10-16 |
-| [0026](0026-gallery-v2-cover-grid.md) | 展厅 v2：封面网格墙 + 自有格式定性 | 已实现（DEF-02 验收 10/10 PASS） | 2026-10-16 |
-| [0027](0027-docs-sources-context-and-adr.md) | 文档真源：CONTEXT.md + 有序 ADR | 接受（2026-10-16） | 2026-10-16 |
+| [0001](0001-plugin-composes-custom-rp-mode.md) | 插件组合成自定义 RP 模式 | 接受 | 2026-10-17 |
+| [0002](0002-defer-director-scratchpad.md) | 先不做导演草稿板 | 暂缓（不在第一版范围） | 2026-10-17 |
+| [0003](0003-author-and-state-accounting-async.md) | Author 与状态记账异步（正文优先） | 接受（已知代价已记录） | 2026-10-17 |
+| [0004](0004-chronicler-is-a-real-agent.md) | Chronicler 是一个正经 Agent | 接受 | 2026-10-17 |
+| [0005](0005-world-state-structure-evolves.md) | 世界状态结构动态演进 | 接受（边界经 0022 修订） | 2026-10-17 |
+| [0006](0006-player-correction-is-lock-free.md) | 玩家矫正是自然时序，无锁 | 接受（核心红线） | 2026-10-17 |
+| [0007](0007-knowledge-via-dsh-skills.md) | 知识体系全面 Skills 化 | 接受 | 2026-10-17 |
+| [0008](0008-controlled-knowledge-sedimentation.md) | 允许受控的动态知识沉淀 | 接受 | 2026-10-17 |
+| [0009](0009-branches-map-to-native-session-fork.md) | 分支映射原生 `Session.fork` | 接受 | 2026-10-17 |
+| [0010](0010-collaborate-with-dsh-synapse-not-benchmark.md) | 与 dsh-synapse 协同，而非对标 | **部分取代**（地图职责已自建） | 2026-10-17 |
+| [0011](0011-summary-by-dedicated-agent.md) | 摘要由独立 Agent 负责 | 接受 | 2026-10-17 |
+| [0012](0012-memory-is-an-external-extension.md) | 记忆能力外置（扩展层） | 接受（方向已定，尚未实施） | 2026-10-17 |
+| [0013](0013-card-format-decided-later.md) | 卡包格式后定 | 已实现（规范以 CARDS.md 为准） | 2026-10-17 |
+| [0014](0014-no-sillytavern-ecosystem-compat.md) | 不兼容酒馆卡生态 | 接受（经 0026 修订强化） | 2026-10-17 |
+| [0015](0015-personal-toy-scope.md) | 个人玩具定位 | 接受（核心红线） | 2026-10-17 |
+| [0016](0016-anti-cliche-pattern-list-provenance.md) | 反八股句式清单：来源与协议 | 接受 | 2026-10-17 |
+| [0017](0017-conditional-injection-v1.md) | 条件注入 v1 | 接受 | 2026-10-17 |
+| [0018](0018-unified-agent-prompt-contract.md) | 统一 AgentPromptContract | 接受 | 2026-10-17 |
+| [0019](0019-copilot-promoted-to-player-steward.md) | 月停升格为玩家私属幕僚 | 接受（命名经 0022 修订） | 2026-10-17 |
+| [0020](0020-strong-jailbreak-layer.md) | 强破限层 | 接受 | 2026-10-17 |
+| [0021](0021-no-plugin-content-in-chat-flow.md) | 聊天流内不放插件内容 | 接受（知情后重申） | 2026-10-17 |
+| [0022](0022-worldstate-vs-summarizer-division.md) | WorldState 与剧情脉络的职责分工 | 接受（2026-09-23 修订） | 2026-10-17 |
+| [0023](0023-worldstate-workspace-and-timeline.md) | WorldState 工作区与持久时间线 | 已实现（Phase 1–9 交付） | 2026-10-17 |
+| [0024](0024-worldline-v2-dual-column.md) | 世界线 v2：拓扑与摘要解耦的双栏视图 | 已实现（一期交付并真机验收） | 2026-10-17 |
+| [0025](0025-stage-v2-card-frontend-platform.md) | 舞台 v2：卡包前端应用平台 | 已实现（一期交付） | 2026-10-17 |
+| [0026](0026-gallery-v2-cover-grid.md) | 展厅 v2：封面网格墙 + 自有格式定性 | 已实现（DEF-02 验收 10/10 PASS） | 2026-10-17 |
+| [0027](0027-docs-sources-context-and-adr.md) | 文档真源：CONTEXT.md + 有序 ADR | 接受（2026-10-16） | 2026-10-17 |
 
 ## 关键脉络
 
@@ -100,8 +100,9 @@ dsh-tavern，该决定被取代，理由与代价写在 0027 里。**D1–D26 �
 - 已失效或需改判 → **新增一篇 ADR 推翻它**，并在旧篇状态栏标注；旧篇不改写。
 - 「周期到了但没空复审」不是阻塞项，`check:hygiene` 只警告不失败。
 
-首次登记日期 2026-10-16（本次为 P3 重整时的结构核对，不等于内容有效性全面复审），
-下次到期 **2027-04-14**。
+首次登记日期 2026-10-16（P3 重整时的结构核对）。**2026-10-17 完成首次全面内容复审**：
+27 篇全部 reaffirm、0 退役（逐条裁决与证据见 `.scratch/decision-audit/spec.md`，
+本地未跟踪），下次到期 **2027-04-15**。
 
 ## 相关文档
 
