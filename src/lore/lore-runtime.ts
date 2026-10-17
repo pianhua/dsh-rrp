@@ -17,13 +17,13 @@ import {
   type ProjectionsService,
   type SessionLike,
   face,
-} from '../host-faces.ts'
-import { harnessHome } from '../home.ts'
-import { belongsToRpPreset } from '../preset-id.ts'
+} from '../host/host-faces.ts'
+import { harnessHome } from '../host/home.ts'
+import { belongsToRpPreset } from '../host/preset-id.ts'
 import { createLoreProvider, type LoreProviderControl } from './lore-provider.ts'
 import { backupLegacyLore, listLegacyLore } from './lore.ts'
 import { RRP_LORE_KEY, loreEntriesOf } from './lore-state.ts'
-import { TRANSCRIPT_KEY, type TranscriptSlice } from '../transcript.ts'
+import { TRANSCRIPT_KEY, type TranscriptSlice } from '../runtime/transcript.ts'
 import { publishState } from '../state-publisher.ts'
 import { forgetLore } from './lore-drafts.ts'
 

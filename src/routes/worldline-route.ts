@@ -27,8 +27,8 @@ import {
   face,
   readJsonBody,
   send,
-} from '../host-faces.ts'
-import { cardIdFromPreset } from '../preset-id.ts'
+} from '../host/host-faces.ts'
+import { cardIdFromPreset } from '../host/preset-id.ts'
 import { RRP_ROUTES, type WorldlineTreeResponse } from '../route-contract.ts'
 import {
   WORLDLINE_DIGEST_KEY,

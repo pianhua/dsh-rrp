@@ -20,7 +20,7 @@ import {
   messageTextOf,
   rrpPayloadOf,
 } from '../state-payload.ts'
-import { TRANSCRIPT_KEY, emptyTranscriptSlice, type TranscriptSlice } from '../transcript.ts'
+import { TRANSCRIPT_KEY, emptyTranscriptSlice, type TranscriptSlice } from '../runtime/transcript.ts'
 
 /** Tail caps: enough turns for any Chronicler/Summarizer prompt, bounded memory. */
 const ENTRY_CAP = 500

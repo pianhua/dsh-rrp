@@ -11,7 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { importCardFromJson, importCardFromPng, writeImportedCard } from '../cards/card-import.ts'
 import { listCards, readCard } from '../cards/cards.ts'
 import { toPlayerSafeCardPack } from '../cards/card-types.ts'
-import { ensureCardPreset } from '../preset.ts'
+import { ensureCardPreset } from '../host/preset.ts'
 
 const TAG = '[dsh-rrp]'
 /** Exact read paths; the list returns summaries, \`one\` takes the whole pack. */
@@ -33,7 +33,7 @@ import {
   CARD_IMPORT_BODY_LIMIT,
   face,
   send,
-} from '../host-faces.ts'
+} from '../host/host-faces.ts'
 
 /**
  * Register the read-only card-pack routes.

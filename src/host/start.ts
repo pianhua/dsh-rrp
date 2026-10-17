@@ -15,18 +15,18 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import { recordActivity } from './activity.ts'
-import { interpolateCardText, type CardContext } from './cards/card-types.ts'
-import { readCard } from './cards/cards.ts'
+import { recordActivity } from '../activity.ts'
+import { interpolateCardText, type CardContext } from '../cards/card-types.ts'
+import { readCard } from '../cards/cards.ts'
 import { isCardId, presetIdForCard } from './preset-id.ts'
-import { worldStateSchema } from './projection/world-state.ts'
-import { publishState } from './state-publisher.ts'
-import type { WorldState } from './world-state/world-state.ts'
-import { mergePlayerVisibleWorldState } from './world-state/world-state-visibility.ts'
-import type { WorldStateTimelineBatch } from './world-state/world-state-timeline.ts'
+import { worldStateSchema } from '../projection/world-state.ts'
+import { publishState } from '../state-publisher.ts'
+import type { WorldState } from '../world-state/world-state.ts'
+import { mergePlayerVisibleWorldState } from '../world-state/world-state-visibility.ts'
+import type { WorldStateTimelineBatch } from '../world-state/world-state-timeline.ts'
 
 const TAG = '[dsh-rrp]'
-import { RRP_ROUTES } from './route-contract.ts'
+import { RRP_ROUTES } from '../route-contract.ts'
 const START_PATH = RRP_ROUTES.start
 
 import {

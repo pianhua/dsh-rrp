@@ -8,40 +8,29 @@
 import type { Context } from '@deepseek-ai/cordis'
 import {
   RECALL_TOOL_DEFINITION,
-  extractRecallRounds,
+  fetchSessionRounds,
   recallCooldownsOf,
   recallHistory,
   recallScopeOf,
   renderRecall,
   setRecallCooldowns,
-  type RecallRound,
-} from '../recall.ts'
+  type PersistenceService,
+} from '../runtime/recall.ts'
 import { RRP_ROUTES } from '../route-contract.ts'
-import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from '../worldline/worldline-digest.ts'
 import {
   type ProjectionsService,
   type RequestLike,
   type ResponseLike,
   type RuntimeFaces,
-  type SessionLike,
   type SessionsService,
   acceptsRrpWrites,
   face,
   readJsonBody,
   send,
-} from '../host-faces.ts'
+} from '../host/host-faces.ts'
 
 const TAG = '[dsh-rrp]'
 const RECALL_PATH = RRP_ROUTES.recall
-
-interface ReadHandleLike {
-  read(offset?: number, length?: number): Promise<{ events: readonly unknown[] }>
-  close(): Promise<void>
-}
-
-interface PersistenceService {
-  open(id: string, access: 'read'): Promise<ReadHandleLike>
-}
 
 interface WebServerService {
   register(route: {
@@ -53,45 +42,6 @@ interface WebServerService {
 
 interface ToolsService {
   register(tool: unknown): () => void
-}
-
-export async function fetchSessionRounds(
-  sessionId: string,
-  session: SessionLike | undefined,
-  projections: ProjectionsService | undefined,
-  persistence: PersistenceService | undefined,
-): Promise<RecallRound[]> {
-  if (persistence !== undefined) {
-    try {
-      const handle = await persistence.open(sessionId, 'read')
-      try {
-        const { events } = await handle.read()
-        return extractRecallRounds(events as never[])
-      } finally {
-        await handle.close()
-      }
-    } catch {
-      // Degrade to projection
-    }
-  }
-
-  if (session !== undefined && projections !== undefined) {
-    try {
-      const digest = projections.stateOf(session, WORLDLINE_DIGEST_KEY) as
-        WorldlineDigest | undefined
-      if (digest && Array.isArray(digest.turns)) {
-        return digest.turns.map((t) => ({
-          turn: t.turn,
-          player: t.player,
-          prose: t.prose,
-        }))
-      }
-    } catch {
-      // Degrade
-    }
-  }
-
-  return []
 }
 
 export function registerRecallRoute(ctx: Context): void {

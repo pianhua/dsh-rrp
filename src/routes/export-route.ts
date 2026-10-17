@@ -34,7 +34,7 @@ import {
   queryOf,
   face,
   send,
-} from '../host-faces.ts'
+} from '../host/host-faces.ts'
 
 /**
  * Extract the story prose from one session's event log, in seq order: every

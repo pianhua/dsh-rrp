@@ -16,17 +16,17 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { recordActivity, renderActivityWorldStateDiff } from './activity.ts'
-import { cardDirOf } from './cards/cards.ts'
-import { CARD_KEY, type CardContext } from './cards/card-types.ts'
-import { extractFirstJsonObject } from './json-extract.ts'
+import { recordActivity, renderActivityWorldStateDiff } from '../activity.ts'
+import { cardDirOf } from '../cards/cards.ts'
+import { CARD_KEY, type CardContext } from '../cards/card-types.ts'
+import { extractFirstJsonObject } from '../json-extract.ts'
 import {
   CHRONICLER_SYSTEM_PROMPT,
   buildChroniclerPrompt,
   chroniclerReplySchema,
   parseChroniclerReply,
   repairChroniclerEnvelope,
-} from './agents/chronicler.ts'
+} from '../agents/chronicler.ts'
 import {
   type AgentsService,
   type ControllableJobsService,
@@ -42,20 +42,20 @@ import {
   messageOf,
   nowIso,
   routeOf,
-} from './host-faces.ts'
-import { matchesPreset } from './preset-id.ts'
-import { publishState } from './state-publisher.ts'
+} from '../host/host-faces.ts'
+import { matchesPreset } from '../host/preset-id.ts'
+import { publishState } from '../state-publisher.ts'
 import { pendingTranscriptOf, proseHeadSeqOf, transcriptSliceOf } from './transcript-reader.ts'
-import { type WorldStateTimelineChangeBatch } from './world-state/world-state-timeline.ts'
+import { type WorldStateTimelineChangeBatch } from '../world-state/world-state-timeline.ts'
 import {
   WORLD_STATE_KEY,
   diffWorldState,
   emptyWorldState,
   worldStatesEqual,
   type WorldState,
-} from './world-state/world-state.ts'
-import { sanitizePlayerText, sanitizeWorldStateDiff } from './world-state/world-state-visibility.ts'
-import { applyWorldStatePatch } from './world-state/world-state-references.ts'
+} from '../world-state/world-state.ts'
+import { sanitizePlayerText, sanitizeWorldStateDiff } from '../world-state/world-state-visibility.ts'
+import { applyWorldStatePatch } from '../world-state/world-state-references.ts'
 
 const TAG = '[dsh-rrp]'
 const JOB_KIND = 'chronicler'

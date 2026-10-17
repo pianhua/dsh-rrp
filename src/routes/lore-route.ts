@@ -35,7 +35,7 @@ import {
   acceptsRrpWrites,
   send,
   sessionIdOf,
-} from '../host-faces.ts'
+} from '../host/host-faces.ts'
 import { ensureLoreArmed, invalidateLore } from '../lore/lore-runtime.ts'
 import {
   RRP_LORE_KEY,

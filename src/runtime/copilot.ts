@@ -19,10 +19,14 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import { COPILOT_SYSTEM_PROMPT, buildCopilotPrompt, parseCopilotActions } from './agents/copilot.ts'
-import { recordActivity } from './activity.ts'
-import { CARD_KEY, renderCardContext, type CardContext } from './cards/card-types.ts'
-import { readCard } from './cards/cards.ts'
+import {
+  COPILOT_SYSTEM_PROMPT,
+  buildCopilotPrompt,
+  parseCopilotActions,
+} from '../agents/copilot.ts'
+import { recordActivity } from '../activity.ts'
+import { CARD_KEY, renderCardContext, type CardContext } from '../cards/card-types.ts'
+import { readCard } from '../cards/cards.ts'
 import {
   type AgentsService,
   type LlmService,
@@ -39,7 +43,7 @@ import {
   readJsonBody,
   routeOf,
   send,
-} from './host-faces.ts'
+} from '../host/host-faces.ts'
 import {
   openCopilotStore,
   type CopilotStoreHandle,
@@ -47,24 +51,23 @@ import {
   type CopilotTurnAction,
 } from './copilot-store.ts'
 import { transcriptOf } from './transcript-reader.ts'
-import { SUMMARY_KEY, renderMacroSummary } from './macro-summary.ts'
-import { stageLoreDraft, reservedNames } from './lore/lore-application.ts'
-import { RRP_LORE_KEY, loreEntriesOf, validateLoreEntry } from './lore/lore-state.ts'
-import { publishState } from './state-publisher.ts'
+import { SUMMARY_KEY, renderMacroSummary } from '../macro-summary.ts'
+import { stageLoreDraft, reservedNames } from '../lore/lore-application.ts'
+import { RRP_LORE_KEY, loreEntriesOf, validateLoreEntry } from '../lore/lore-state.ts'
+import { publishState } from '../state-publisher.ts'
 import {
   confirmProposal,
   discardProposal,
   listProposals,
   stageProposal,
-} from './steward-proposals.ts'
-import { termsOf, recallHistory } from './recall.ts'
-import { fetchSessionRounds } from './routes/recall-route.ts'
+} from '../steward-proposals.ts'
+import { fetchSessionRounds, termsOf, recallHistory } from './recall.ts'
 import {
   COPILOT_NO_MODEL_ROUTE,
   COPILOT_SSE,
   RRP_ROUTES,
   encodeSseFrame,
-} from './route-contract.ts'
+} from '../route-contract.ts'
 import {
   WORLD_STATE_KEY,
   diffWorldState,
@@ -72,10 +75,13 @@ import {
   renderWorldState,
   renderWorldStateDiff,
   type WorldState,
-} from './world-state/world-state.ts'
-import { applyWorldStatePatch } from './world-state/world-state-references.ts'
-import { sanitizePlayerText, sanitizeWorldStateDiff } from './world-state/world-state-visibility.ts'
-import type { CopilotWorldStateProposal, CopilotHistoryView } from './route-contract.ts'
+} from '../world-state/world-state.ts'
+import { applyWorldStatePatch } from '../world-state/world-state-references.ts'
+import {
+  sanitizePlayerText,
+  sanitizeWorldStateDiff,
+} from '../world-state/world-state-visibility.ts'
+import type { CopilotWorldStateProposal, CopilotHistoryView } from '../route-contract.ts'
 
 const TAG = '[dsh-rrp]'
 const COPILOT_PATH = RRP_ROUTES.copilot

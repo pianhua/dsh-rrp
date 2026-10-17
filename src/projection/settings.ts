@@ -6,7 +6,7 @@ import {
   DEFAULT_RRP_SETTINGS,
   RRP_SETTINGS_KEY,
   type RrpSettings,
-} from '../settings.ts'
+} from '../host/settings.ts'
 import { rrpPayloadOf } from '../state-payload.ts'
 
 export const rrpSettingsSchema = z.object({

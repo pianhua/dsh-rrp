@@ -26,7 +26,7 @@ import {
   type CardOpening,
   type CardPackPlayerView,
 } from '../cards/card-types.ts'
-import { presetIdForCard } from '../preset-id.ts'
+import { presetIdForCard } from '../host/preset-id.ts'
 import {
   RRP_ROUTES,
   type CardImportResponse,
@@ -34,7 +34,7 @@ import {
   type CardOneResponse,
   type RrpErrorBody,
 } from '../route-contract.ts'
-import { uniqueMainTitle } from '../save-naming.ts'
+import { uniqueMainTitle } from '../host/save-naming.ts'
 import type { RrpClientContext } from './context-types.ts'
 
 /** Panel id: the `main` key and the `sidebar.panellist` id must match. */

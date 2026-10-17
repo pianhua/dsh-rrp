@@ -11,8 +11,8 @@ import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
-import { listCards, readCard } from './cards/cards.ts'
-import { AUTHOR_SYSTEM_PROMPT } from './agents/author.ts'
+import { listCards, readCard } from '../cards/cards.ts'
+import { AUTHOR_SYSTEM_PROMPT } from '../agents/author.ts'
 import { harnessHome } from './home.ts'
 import { BASE_PRESET_ID, belongsToRpPreset, isCardId, presetIdForCard } from './preset-id.ts'
 
@@ -21,7 +21,7 @@ export const PRESET_ID = BASE_PRESET_ID
 
 const MARKER_FILE = '.dsh-rrp.json'
 const MANAGED_BY = 'dsh-rrp'
-const SOURCE_DIR = fileURLToPath(new URL('../presets/rp/', import.meta.url))
+const SOURCE_DIR = fileURLToPath(new URL('../../presets/rp/', import.meta.url))
 const COMPOSITION_FILE = join(SOURCE_DIR, 'agent.cordis.yml')
 const SKILL_DIR_TOKEN = '__DSH_RRP_SKILL_DIR__'
 const AUTHOR_PROMPT_TOKEN = '__DSH_RRP_AUTHOR_PROMPT__'

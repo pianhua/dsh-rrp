@@ -25,7 +25,7 @@ import {
 } from 'react'
 import { CARD_KEY, type CardContext } from '../cards/card-types.ts'
 import { RRP_ROUTES, type CardUiResponse } from '../route-contract.ts'
-import { RRP_SETTINGS_KEY, rrpSettingsOf } from '../settings.ts'
+import { RRP_SETTINGS_KEY, rrpSettingsOf } from '../host/settings.ts'
 import type { LoreEntry } from '../lore/lore-state.ts'
 import {
   applyButtonPatch,

@@ -12,12 +12,12 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import { recordActivity } from './activity.ts'
+import { recordActivity } from '../activity.ts'
 import {
   SUMMARIZER_SYSTEM_PROMPT,
   buildSummarizerPrompt,
   parseSummarizerReply,
-} from './agents/summarizer.ts'
+} from '../agents/summarizer.ts'
 import {
   type AgentsService,
   type CommandsService,
@@ -34,16 +34,16 @@ import {
   messageOf,
   nowIso,
   routeOf,
-} from './host-faces.ts'
+} from '../host/host-faces.ts'
 import {
   SUMMARY_KEY,
   diffMacroSummary,
   NO_SUMMARY_CHANGE,
   type MacroSummary,
-} from './macro-summary.ts'
-import { matchesPreset } from './preset-id.ts'
-import { RRP_SETTINGS_KEY, clampSummaryEveryTurns, rrpSettingsOf } from './settings.ts'
-import { publishState } from './state-publisher.ts'
+} from '../macro-summary.ts'
+import { matchesPreset } from '../host/preset-id.ts'
+import { RRP_SETTINGS_KEY, clampSummaryEveryTurns, rrpSettingsOf } from '../host/settings.ts'
+import { publishState } from '../state-publisher.ts'
 import { DEFAULT_TRANSCRIPT_LIMIT, transcriptOf } from './transcript-reader.ts'
 import { TRANSCRIPT_KEY, type TranscriptSlice } from './transcript.ts'
 

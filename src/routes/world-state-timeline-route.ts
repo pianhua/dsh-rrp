@@ -14,8 +14,8 @@ import type {
   RuntimeFaces,
   SessionsService,
   WebServerService,
-} from '../host-faces.ts'
-import { acceptsRrpWrites, face, queryOf, send } from '../host-faces.ts'
+} from '../host/host-faces.ts'
+import { acceptsRrpWrites, face, queryOf, send } from '../host/host-faces.ts'
 
 const TAG = '[dsh-rrp]'
 

@@ -10,7 +10,7 @@ import {
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useState, type CSSProperties, type ReactNode } from 'react'
-import type { BudgetReport, BudgetSection } from '../../prompt-budget.ts'
+import type { BudgetReport, BudgetSection } from '../../runtime/prompt-budget.ts'
 
 export type Translate = (key: string) => string
 

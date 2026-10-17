@@ -93,8 +93,8 @@ export type {
 } from './world-state/world-state-timeline.ts'
 export { SUMMARY_KEY, renderMacroSummary } from './macro-summary.ts'
 export type { MacroSummary } from './macro-summary.ts'
-export { DEFAULT_RRP_SETTINGS, RRP_SETTINGS_KEY, rrpSettingsOf } from './settings.ts'
-export type { RrpSettings } from './settings.ts'
+export { DEFAULT_RRP_SETTINGS, RRP_SETTINGS_KEY, rrpSettingsOf } from './host/settings.ts'
+export type { RrpSettings } from './host/settings.ts'
 export {
   RRP_LORE_KEY,
   LORE_LIMITS,

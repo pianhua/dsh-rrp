@@ -9,9 +9,9 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { stringify as stringifyYaml } from 'yaml'
 import { cardRoots } from './cards.ts'
-import { harnessHome } from '../home.ts'
-import { ensureCardPreset } from '../preset.ts'
-import { isCardId } from '../preset-id.ts'
+import { harnessHome } from '../host/home.ts'
+import { ensureCardPreset } from '../host/preset.ts'
+import { isCardId } from '../host/preset-id.ts'
 import { cardIdFromName, type ImportedCardSource } from './card-import-parse.ts'
 
 export {

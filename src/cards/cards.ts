@@ -14,8 +14,8 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:f
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse as parseYAML } from 'yaml'
-import { harnessHome } from '../home.ts'
-import { isCardId } from '../preset-id.ts'
+import { harnessHome } from '../host/home.ts'
+import { isCardId } from '../host/preset-id.ts'
 import {
   TRIGGER_EXCERPT_CHARS,
   parseWhen,

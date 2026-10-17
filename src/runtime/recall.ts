@@ -13,7 +13,14 @@
  * - Mandatory anti-hallucination warning prepended to all output.
  */
 import { createHash } from 'node:crypto'
-import { collectTextBlocks, isHostReminder, isPluginNotice, rrpPayloadOf } from './state-payload.ts'
+import {
+  collectTextBlocks,
+  isHostReminder,
+  isPluginNotice,
+  rrpPayloadOf,
+} from '../state-payload.ts'
+import type { ProjectionsService, SessionLike } from '../host/host-faces.ts'
+import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from '../worldline/worldline-digest.ts'
 
 export const RECALL_TOOL_NAME = 'rrp_recall_history' as const
 
@@ -383,4 +390,57 @@ export function extractRecallRounds(events: readonly SessionEventLike[]): Recall
   }
 
   return rounds
+}
+
+interface ReadHandleLike {
+  read(offset?: number, length?: number): Promise<{ events: readonly unknown[] }>
+  close(): Promise<void>
+}
+
+export interface PersistenceService {
+  open(id: string, access: 'read'): Promise<ReadHandleLike>
+}
+
+/**
+ * Read recall rounds for a session: prefer the persisted event log, degrade to
+ * the worldline digest projection. Shared by the recall HTTP route/tool and the
+ * Copilot's proactive history injection.
+ */
+export async function fetchSessionRounds(
+  sessionId: string,
+  session: SessionLike | undefined,
+  projections: ProjectionsService | undefined,
+  persistence: PersistenceService | undefined,
+): Promise<RecallRound[]> {
+  if (persistence !== undefined) {
+    try {
+      const handle = await persistence.open(sessionId, 'read')
+      try {
+        const { events } = await handle.read()
+        return extractRecallRounds(events as never[])
+      } finally {
+        await handle.close()
+      }
+    } catch {
+      // Degrade to projection
+    }
+  }
+
+  if (session !== undefined && projections !== undefined) {
+    try {
+      const digest = projections.stateOf(session, WORLDLINE_DIGEST_KEY) as
+        WorldlineDigest | undefined
+      if (digest && Array.isArray(digest.turns)) {
+        return digest.turns.map((t) => ({
+          turn: t.turn,
+          player: t.player,
+          prose: t.prose,
+        }))
+      }
+    } catch {
+      // Degrade
+    }
+  }
+
+  return []
 }

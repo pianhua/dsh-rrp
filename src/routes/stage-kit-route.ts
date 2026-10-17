@@ -15,7 +15,7 @@ import {
   type RequestLike,
   type ResponseLike,
   face,
-} from '../host-faces.ts'
+} from '../host/host-faces.ts'
 
 const TAG = '[dsh-rrp]'
 const STAGE_KIT_DIR = fileURLToPath(new URL('../../assets/stage-kit/', import.meta.url))

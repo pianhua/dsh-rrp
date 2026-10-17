@@ -17,15 +17,15 @@ import { registerCardWorkspaceRoute } from './routes/card-workspace-route.ts'
 import { registerStageKitRoute } from './routes/stage-kit-route.ts'
 import { registerExportRoute } from './routes/export-route.ts'
 import { registerRecallRoute } from './routes/recall-route.ts'
-import { forgetRecall, forgetAllRecall } from './recall.ts'
-import { registerCopilotRoute, forgetAllCopilot, forgetCopilot } from './copilot.ts'
+import { forgetRecall, forgetAllRecall } from './runtime/recall.ts'
+import { registerCopilotRoute, forgetAllCopilot, forgetCopilot } from './runtime/copilot.ts'
 import { worldlineDigestProjection } from './projection/worldline-digest.ts'
 import { registerWorldlineRoute } from './routes/worldline-route.ts'
 import { registerWorldlineForkMarker } from './worldline/worldline-fork-marker.ts'
 import { openWorldlineStore, type WorldlineStoreHandle } from './worldline/worldline-store.ts'
 import { registerLoreCommand, registerLoreRoute } from './routes/lore-route.ts'
 import { registerLoreRuntime } from './lore/lore-runtime.ts'
-import { registerChronicler, forgetAllInference, forgetInference } from './chronicler.ts'
+import { registerChronicler, forgetAllInference, forgetInference } from './runtime/chronicler.ts'
 import { registerCorrectionRoute } from './correction.ts'
 import { registerWorldStateTimelineRoute } from './routes/world-state-timeline-route.ts'
 import {
@@ -34,8 +34,8 @@ import {
   cleanupLegacyPresetCopies,
   cleanupPreset,
   type AgentPresetsRegistry,
-} from './preset.ts'
-import { presetIdForCard } from './preset-id.ts'
+} from './host/preset.ts'
+import { presetIdForCard } from './host/preset-id.ts'
 import { cardProjection } from './projection/card.ts'
 import { summaryProjection } from './projection/summary.ts'
 import { settingsProjection } from './projection/settings.ts'
@@ -43,13 +43,13 @@ import { loreProjection } from './projection/lore.ts'
 import { transcriptProjection } from './projection/transcript.ts'
 import { worldStateProjection } from './projection/world-state.ts'
 import { worldStateTimelineProjection } from './projection/world-state-timeline.ts'
-import { registerStartRoute } from './start.ts'
+import { registerStartRoute } from './host/start.ts'
 import {
   registerSummarizer,
   registerSummaryCommand,
   forgetAllSummary,
   forgetSummary,
-} from './summarizer.ts'
+} from './runtime/summarizer.ts'
 import { forgetAllActivity, forgetActivity } from './activity.ts'
 import { forgetAllLore, forgetLore } from './routes/lore-route.ts'
 import { forgetAllState, forgetState } from './state-publisher.ts'

@@ -17,7 +17,7 @@
  * share the facts event.
  */
 import { randomUUID } from 'node:crypto'
-import type { ProjectionsService, SessionLike } from './host-faces.ts'
+import type { ProjectionsService, SessionLike } from './host/host-faces.ts'
 import { CARD_KEY, renderCardContext, type CardContext } from './cards/card-types.ts'
 import {
   hitSet,
@@ -27,10 +27,10 @@ import {
 } from './lore/lore-condition.ts'
 import { triggersOfCard } from './cards/cards.ts'
 import { SUMMARY_KEY, renderMacroSummary, type MacroSummary } from './macro-summary.ts'
-import { RRP_SETTINGS_KEY, rrpSettingsOf, type RrpSettings } from './settings.ts'
+import { RRP_SETTINGS_KEY, rrpSettingsOf, type RrpSettings } from './host/settings.ts'
 import type { LoreChange } from './lore/lore-state.ts'
 import { rrpStateMessage, type RrpStatePayload } from './state-payload.ts'
-import { TRANSCRIPT_KEY, type TranscriptSlice } from './transcript.ts'
+import { TRANSCRIPT_KEY, type TranscriptSlice } from './runtime/transcript.ts'
 import {
   WORLD_STATE_KEY,
   diffWorldState,

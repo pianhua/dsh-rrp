@@ -20,7 +20,7 @@ import {
   nowIso,
   readJsonBody,
   send,
-} from './host-faces.ts'
+} from './host/host-faces.ts'
 import { RRP_ROUTES, type CorrectionRequest, type CorrectionResponse } from './route-contract.ts'
 
 const TAG = '[dsh-rrp]'

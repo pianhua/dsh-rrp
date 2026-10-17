@@ -14,12 +14,12 @@ import {
   messageOf,
   nowIso,
   routeOf,
-} from '../host-faces.ts'
+} from '../host/host-faces.ts'
 import { invalidateLore } from './lore-runtime.ts'
 import { RRP_LORE_KEY, loreEntriesOf, type LoreEntry } from './lore-state.ts'
 import { PENDING, DRAFTING } from './lore-drafts.ts'
 import { SCRIBE_SYSTEM_PROMPT, buildScribePrompt, parseScribeReply } from '../agents/scribe.ts'
-import { transcriptOf } from '../transcript-reader.ts'
+import { transcriptOf } from '../runtime/transcript-reader.ts'
 import { WORLD_STATE_KEY, renderWorldState, type WorldState } from '../world-state/world-state.ts'
 
 const TAG = '[dsh-rrp]'

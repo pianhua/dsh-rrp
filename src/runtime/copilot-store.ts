@@ -30,9 +30,9 @@ import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
-import { worldStateSchema } from './projection/world-state.ts'
-import { harnessHome } from './home.ts'
-import type { CopilotTurn, CopilotTurnAction } from './route-contract.ts'
+import { worldStateSchema } from '../projection/world-state.ts'
+import { harnessHome } from '../host/home.ts'
+import type { CopilotTurn, CopilotTurnAction } from '../route-contract.ts'
 
 const TAG = '[dsh-rrp]'
 
@@ -40,7 +40,7 @@ const TAG = '[dsh-rrp]'
 // Record vocabulary. The turn/action types are contract vocabulary
 // (src/route-contract.ts, shared with the panel); this module owns the schema.
 
-export type { CopilotTurn, CopilotTurnAction } from './route-contract.ts'
+export type { CopilotTurn, CopilotTurnAction } from '../route-contract.ts'
 
 export interface CopilotUndoEntry {
   id: string
@@ -48,7 +48,7 @@ export interface CopilotUndoEntry {
   /** Human digest of what the turn changed (shown on the undo card). */
   digest: string
   /** The WorldState before the turn's world-state actions ran. */
-  snapshot: import('./world-state/world-state.ts').WorldState
+  snapshot: import('../world-state/world-state.ts').WorldState
 }
 
 export interface CopilotStore {
@@ -88,7 +88,7 @@ const undoEntrySchema = z.object({
   // worldStateSchema keeps `relations` optional for pre-relations legacy logs;
   // every folded state carries it, so the stored shape is the declared type.
   snapshot: worldStateSchema as unknown as z.ZodType<
-    import('./world-state/world-state.ts').WorldState
+    import('../world-state/world-state.ts').WorldState
   >,
 })
 
