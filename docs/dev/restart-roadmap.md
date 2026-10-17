@@ -40,16 +40,17 @@
 - **注意**：真浏览器玩局必然走「开局 → 重启 → 恢复」路径，**会立刻撞上 R1 的冷读 bug**——
   建议排在 R1 之后，或作为 R1 的验收载体。
 - **证据**：`docs/reference/TAVERN_DETAIL_COMPARISON.md` P0 表 #4；`tests/README.md`。
+  该对照文档是 R2/R3 的未结证据基——**R2/R3 收口后按 reference/README 的死研规则一并移除**。
 - **档位**：新子系统，spec + tickets。
 
 ### R3. 上下文与缓存四项（移植清单 P1 #5–#8）
 
 | # | 项 | 落点 | 状态与注意 |
 | :--- | :--- | :--- | :--- |
-| 5 | 稳定前缀快照 + 版本迁移 | `src/publish/state-publisher.ts` 或新 snapshot 模块 | 未动；worklog 2026-10-16 待决 1 要求真机测量 section 文本变化对前缀缓存的影响，不能靠推理定案 |
-| 6 | 卡系统提示变更检测 | 卡包注入层 | 部分已有（指纹去重 + 状态侧 P1-6）；开工前评估剩余面 |
-| 7 | 当轮生效注入（旧轮快照不累积） | `src/lore/lore-application.ts` | 未动；上下文长度有界的关键 |
-| 8 | 种子对话轨迹 | `presets/rp/` 或 author 初始化 | **与 D21 冲突**，worklog 待决 3 建议不做；重开须先改 D21 |
+| 5 | 稳定前缀快照 + 版本迁移 | `src/publish/state-publisher.ts` 或新 snapshot 模块 | 未动；worklog 2026-10-16 待决 1 已裁决：**维持现状**（追加+买断），systemPrompt.section 路线须真机测量前缀缓存影响后再评估，无测量不改生产 |
+| 6 | 卡系统提示变更检测 | 卡包注入层 | ✅ **已关闭（2026-10-17 裁决）**：同值不追加（指纹去重）+ 状态侧已覆盖生产路径，无剩余工作面 |
+| 7 | 当轮生效注入（旧轮快照不累积） | `src/lore/lore-application.ts` | 未动；上下文长度有界的关键，转正时术语随实现登记 GLOSSARY |
+| 8 | 种子对话轨迹 | `presets/rp/` 或 author 初始化 | ❌ **裁决不做（2026-10-17）**：与 D21 正面冲突（伪造宿主呈现面），重开须先改 D21 |
 
 - **证据**：`docs/reference/TAVERN_DETAIL_COMPARISON.md` P1 表；`docs/dev/worklog/2026-10.md` 首条待决。
 - **档位**：每项独立走 `grill-with-docs → to-spec`；可并行。
@@ -78,7 +79,9 @@
 
 ## 已收口
 
+- ✅ 2026-10-17 · **ADR 首次全面内容复审**：27 篇全部 reaffirm、0 退役（逐条裁决见
+  `.scratch/decision-audit/spec.md`）；P1 #6 关闭、#8 裁决不做；过期调研/一次性计划 4 份清除。
 - ✅ 2026-10-17 · repo-restructure 票据 00–07：src 分层归位（routes/ runtime/ host/ publish/
   四域 ui-contract/）、空 skills/ 移除、scripts/maintenance/ 归档、worklog 月中轮转、
   文档引用对齐、本路线图。证据：`docs/dev/architecture.md` 模块地图与磁盘一一对应；
-  质量门 543 用例前后不变。
+  质量门 548 用例前后不变。

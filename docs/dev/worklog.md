@@ -6,6 +6,34 @@
 > 月中提前轮转：2026-10-17 主日志触 32768 字节上限，当日全部 10 月条目切至
 > [`worklog/2026-10.md`](./worklog/2026-10.md)；当月后续条目继续记本文件，次月归仓时并入。
 
+## 2026-10-17 · 决策审计与文档清理：27 篇 ADR 首审、悬挂待决全裁决、死研 4 份清除（decision-audit）
+
+### 已完成
+
+- **ADR 首次全面内容复审**（所有者委托裁决）：27 篇逐条重读原文、对照生产代码与测试证据裁决——
+  **全部 reaffirm，0 退役**。所有者的「不放心」在职 ADR 层面未获证实：架构基座（Host-First/投影/
+  追加式发布/无锁矫正/个人玩具红线）全部被 548 用例与 e2e 玩局链实证仍成立。复审日期统一
+  2026-10-17；0005 补「WorldState v2 已被 0023 接管」同步注；0025/0026 正文「待实现」与
+  状态栏「已实现」的内部不一致同步。逐条裁决与证据：`.scratch/decision-audit/spec.md`。
+- **悬挂待决全部裁决**（worklog 5 条清零）：#1 易变内容维持现状（section 路线须真机测量后再评估）；
+  **#2 P1-6 关闭**（指纹去重已覆盖生产路径）；**#3 P1-8 种子轨迹裁决不做**（与 D21 冲突，重开先改 D21）；
+  #4 术语不预支、随实现登记；#5「转录前缀稳定 vs 上下文有界」两维区分写进 CONTEXT.md Stable Prefix
+  ——这是防翻烧饼的关键一条。
+- **文档清除 4 份**（按 reference/README 自有的死研规则）：`plans/conditional-injection-v1`（shipped，
+  决策归 0017）、`TAVERN_V2_COMPARISON` 与 `TAVERN_SANITIZATION`（过期调研，结论已折进 ADR/roadmap/
+  tavern-migration）、`reference/examples/return-inn.SKILL`（0 引用示例）。`TAVERN_DETAIL_COMPARISON`
+  保留为 R2/R3 证据基并注明收口后移除；`docs/plans/` 留 README 桩保分类入口；workflow §4 补上
+  票据 Status 词汇规范（issue-tracker/triage-labels）的链接——0 引用是断裂不是无用。
+
+### 验证
+
+- 纯文档改动：质量门 hygiene/format/typecheck/lint、548 用例、build 全绿（前后一致）；e2e 零接触未重跑。
+- 提交：`docs(adr)` 复审同步 → `docs` 死研清除 → `docs` 待决裁决，共 3 个，已推送。
+
+### 待决
+
+- 无新增。审计结论：**决策面干净，R1（issue 06）仍是唯一 P0**，可直接开工。
+
 ## 2026-10-17 · 仓库彻底重构：对照 dsh-tavern 的分层归位 + 重启路线图（repo-restructure 票据 00–07 全 resolved）
 
 ### 已完成

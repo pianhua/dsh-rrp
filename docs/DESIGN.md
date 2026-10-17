@@ -15,7 +15,7 @@
    - 全面拥抱现代大模型训练时即原生支持的 **Skills 机制**，只在必要时按需查询或渐进展开。
 2. **彻底告别死板正则激活世界书（Regex Lorebook）**：
    - 淘汰关键字正则匹配；
-   - 设定全量 Markdown Skill 化（如 `skills/return-inn/SKILL.md`），模型根据自然语义与剧情意图自主调取。
+   - 设定全量 Markdown Skill 化（如 `skills/<知识名>/SKILL.md`），模型根据自然语义与剧情意图自主调取。
 3. **彻底告别翻页伪分支（`< 1/3 >`）与幽灵状态**：
    - 重新生成 = 派生新的 DSH 会话分支（Session Fork）；
    - 状态通过 `sessionProjections` 实时计算，切换分支时状态严丝合缝重放，数学上杜绝“文本回退、数值留在未来”的穿帮现象。

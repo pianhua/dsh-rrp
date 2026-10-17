@@ -61,6 +61,10 @@ Matt Skills 是日常主流程。Superpowers 只在新子系统启动、隔离�
 
 规格和票据先写用户可验证的行为、阻塞关系、范围与验收条件，再写实现提示。不要在多个文件复制同一条规则；需要共享时使用指针。
 
+票据的 `Status:` 词汇与流转约定见 [`../agents/issue-tracker.md`](../agents/issue-tracker.md)，
+triage 角色对照见 [`../agents/triage-labels.md`](../agents/triage-labels.md)——两文是 `.scratch` 票据
+约定本身的规范定义。
+
 ## 5. 编码前冲突检查（强制门）
 
 实现前逐项对照规格与：

@@ -15,7 +15,6 @@
 | **制作 / 修改卡包** | [`CARDS.md`](./CARDS.md) — 卡包目录格式规范 |
 | **动 Skills / 设定集机制** | [`SKILLS.md`](./SKILLS.md) — 技能注册、渐进披露、provider 分层 |
 | **想知道以前踩过什么坑** | [`LESSONS.md`](./LESSONS.md) — 旧项目复盘 |
-| **参考 tavern-v2 的可用资产** | [`TAVERN_V2_COMPARISON.md`](./TAVERN_V2_COMPARISON.md) — 对标分析（B 系列 backlog 的出处） |
 | **查某功能真机验收结论** | [`acceptance/`](./acceptance/) — 已完成的真机验收报告与证据截图 |
 
 ## 其他入口
