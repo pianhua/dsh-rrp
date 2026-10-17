@@ -9,14 +9,14 @@ import { type WorldStateTimelineBatch } from '../../src/world-state/world-state-
 import { worldStateProjection } from '../../src/projection/world-state.ts'
 import { worldStateTimelineProjection } from '../../src/projection/world-state-timeline.ts'
 import { worldlineDigestProjection } from '../../src/projection/worldline-digest.ts'
-import { rrpStateMessage } from '../../src/state-payload.ts'
+import { rrpStateMessage } from '../../src/publish/state-payload.ts'
 import {
   extractRecallRounds,
   recallHistory,
   renderRecall,
   createRecallScope,
   type RecallRound,
-} from '../../src/recall.ts'
+} from '../../src/runtime/recall.ts'
 import { buildCopilotPrompt } from '../../src/agents/copilot.ts'
 import { parseChroniclerReply } from '../../src/agents/chronicler.ts'
 import {

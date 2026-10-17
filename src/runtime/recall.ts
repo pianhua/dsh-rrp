@@ -18,7 +18,7 @@ import {
   isHostReminder,
   isPluginNotice,
   rrpPayloadOf,
-} from '../state-payload.ts'
+} from '../publish/state-payload.ts'
 import type { ProjectionsService, SessionLike } from '../host/host-faces.ts'
 import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from '../worldline/worldline-digest.ts'
 

@@ -11,7 +11,7 @@ import {
   isHostReminder,
   isPluginNotice,
   rrpPayloadOf,
-} from '../state-payload.ts'
+} from '../publish/state-payload.ts'
 import {
   emptyWorldlineDigest,
   WORLDLINE_DIGEST_KEY,

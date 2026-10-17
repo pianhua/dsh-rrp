@@ -24,7 +24,7 @@ import {
   buildCopilotPrompt,
   parseCopilotActions,
 } from '../agents/copilot.ts'
-import { recordActivity } from '../activity.ts'
+import { recordActivity } from '../publish/activity.ts'
 import { CARD_KEY, renderCardContext, type CardContext } from '../cards/card-types.ts'
 import { readCard } from '../cards/cards.ts'
 import {
@@ -51,16 +51,16 @@ import {
   type CopilotTurnAction,
 } from './copilot-store.ts'
 import { transcriptOf } from './transcript-reader.ts'
-import { SUMMARY_KEY, renderMacroSummary } from '../macro-summary.ts'
+import { SUMMARY_KEY, renderMacroSummary } from '../publish/macro-summary.ts'
 import { stageLoreDraft, reservedNames } from '../lore/lore-application.ts'
 import { RRP_LORE_KEY, loreEntriesOf, validateLoreEntry } from '../lore/lore-state.ts'
-import { publishState } from '../state-publisher.ts'
+import { publishState } from '../publish/state-publisher.ts'
 import {
   confirmProposal,
   discardProposal,
   listProposals,
   stageProposal,
-} from '../steward-proposals.ts'
+} from '../publish/steward-proposals.ts'
 import { fetchSessionRounds, termsOf, recallHistory } from './recall.ts'
 import {
   COPILOT_NO_MODEL_ROUTE,

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildChroniclerPrompt, parseChroniclerReply } from '../../src/agents/chronicler.ts'
-import { forgetActivity, readActivity } from '../../src/activity.ts'
-import { forgetInference, registerChronicler } from '../../src/chronicler.ts'
-import { forgetState } from '../../src/state-publisher.ts'
+import { forgetActivity, readActivity } from '../../src/publish/activity.ts'
+import { forgetInference, registerChronicler } from '../../src/runtime/chronicler.ts'
+import { forgetState } from '../../src/publish/state-publisher.ts'
 import { emptyWorldState, type WorldState } from '../../src/world-state/world-state.ts'
 import { transcriptProjections } from '../stubs/transcript-projections.ts'
 

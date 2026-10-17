@@ -24,7 +24,7 @@ import {
 } from '../lore/lore-condition.ts'
 import { worldStateSchema } from '../projection/world-state.ts'
 import { readCardStateSchema } from './card-state-schema.ts'
-import { isUiImageName } from '../card-ui.ts'
+import { isUiImageName } from '../ui-contract/card-ui.ts'
 import type { WorldState } from '../world-state/world-state.ts'
 
 const TAG = '[dsh-rrp]'

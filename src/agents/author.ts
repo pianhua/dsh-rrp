@@ -16,7 +16,7 @@
  * Do NOT port the background agents' JSON discipline into this prompt, and do
  * NOT port this prompt's literary license into the background agents.
  */
-import type { MacroSummary } from '../macro-summary.ts'
+import type { MacroSummary } from '../publish/macro-summary.ts'
 import { renderWorldState, type WorldState } from '../world-state/world-state.ts'
 import type { AgentPromptContract } from './contract.ts'
 

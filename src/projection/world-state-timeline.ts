@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { rrpPayloadOf } from '../state-payload.ts'
+import { rrpPayloadOf } from '../publish/state-payload.ts'
 import { worldStateSchema } from './world-state.ts'
 import {
   WORLD_STATE_TIMELINE_KEY,

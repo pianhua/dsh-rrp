@@ -37,7 +37,7 @@ import {
   type UiButtonDecl,
   type UiManifest,
   type UiPanelDecl,
-} from '../ui-schema.ts'
+} from '../ui-contract/ui-schema.ts'
 import { WORLD_STATE_KEY, emptyWorldState, type WorldState } from '../world-state/world-state.ts'
 import { filterWorldState } from '../world-state/world-state-visibility.ts'
 import { WORLDLINE_DIGEST_KEY, type WorldlineDigest } from '../worldline/worldline-digest.ts'

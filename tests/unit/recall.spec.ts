@@ -6,7 +6,7 @@ import {
   renderRecall,
   termsOf,
   type RecallRound,
-} from '../../src/recall.ts'
+} from '../../src/runtime/recall.ts'
 
 const SAMPLE_ROUNDS: RecallRound[] = [
   { turn: 0, player: '开局准备', prose: '雨夜里，林遥第一次抵达白塔。' },

@@ -15,7 +15,7 @@ import {
   isPluginNotice,
   messageTextOf,
   rrpPayloadOf,
-} from '../../../src/state-payload.ts'
+} from '../../../src/publish/state-payload.ts'
 import {
   WORLD_STATE_TIMELINE_VERSION,
   foldWorldStateTimeline,

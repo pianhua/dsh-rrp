@@ -5,8 +5,8 @@ import {
   UI_BRIDGE_SHIM,
   UI_BRIDGE_VERBS,
   parseUiCall,
-} from '../../src/ui-bridge.ts'
-import { assembleSandboxDoc } from '../../src/ui-bridge.ts'
+} from '../../src/ui-contract/ui-bridge.ts'
+import { assembleSandboxDoc } from '../../src/ui-contract/ui-bridge.ts'
 
 describe('card app bridge protocol', () => {
   it('accepts exactly the verbs a card app may raise', () => {

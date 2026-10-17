@@ -2,7 +2,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isUiAssetName, isUiHtmlName, loadUiManifest, UI_MANIFEST_FILE } from '../../src/card-ui.ts'
+import {
+  isUiAssetName,
+  isUiHtmlName,
+  loadUiManifest,
+  UI_MANIFEST_FILE,
+} from '../../src/ui-contract/card-ui.ts'
 import { readCard, shippedCardRoot } from '../../src/cards/cards.ts'
 import { renderCardContext } from '../../src/cards/card-types.ts'
 import { registerCardUiRoute } from '../../src/routes/card-ui-route.ts'
@@ -16,7 +21,7 @@ import {
   readTimeline,
   visiblePanels,
   type UiManifest,
-} from '../../src/ui-schema.ts'
+} from '../../src/ui-contract/ui-schema.ts'
 
 /** Write one card directory with an optional ui/manifest.json. */
 function cardDirWith(manifestText: string | null): string {

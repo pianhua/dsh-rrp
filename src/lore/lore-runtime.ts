@@ -24,7 +24,7 @@ import { createLoreProvider, type LoreProviderControl } from './lore-provider.ts
 import { backupLegacyLore, listLegacyLore } from './lore.ts'
 import { RRP_LORE_KEY, loreEntriesOf } from './lore-state.ts'
 import { TRANSCRIPT_KEY, type TranscriptSlice } from '../runtime/transcript.ts'
-import { publishState } from '../state-publisher.ts'
+import { publishState } from '../publish/state-publisher.ts'
 import { forgetLore } from './lore-drafts.ts'
 
 const TAG = '[dsh-rrp]'

@@ -1,15 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { recordActivity, renderActivityWorldStateDiff } from './activity.ts'
-import { worldStateSchema } from './projection/world-state.ts'
+import { worldStateSchema } from '../projection/world-state.ts'
 import { publishState } from './state-publisher.ts'
-import { WORLD_STATE_KEY, emptyWorldState, type WorldState } from './world-state/world-state.ts'
+import { WORLD_STATE_KEY, emptyWorldState, type WorldState } from '../world-state/world-state.ts'
 import {
   preparePlayerWorldState,
   type SafeWorldStateWriteResult,
-} from './world-state/world-state-references.ts'
-import { sanitizeWorldStateDiff } from './world-state/world-state-visibility.ts'
-import { type WorldStateTimelineProvenance } from './world-state/world-state-timeline.ts'
+} from '../world-state/world-state-references.ts'
+import { sanitizeWorldStateDiff } from '../world-state/world-state-visibility.ts'
+import { type WorldStateTimelineProvenance } from '../world-state/world-state-timeline.ts'
 import {
   type ProjectionsService,
   type RuntimeFaces,
@@ -20,8 +20,8 @@ import {
   nowIso,
   readJsonBody,
   send,
-} from './host/host-faces.ts'
-import { RRP_ROUTES, type CorrectionRequest, type CorrectionResponse } from './route-contract.ts'
+} from '../host/host-faces.ts'
+import { RRP_ROUTES, type CorrectionRequest, type CorrectionResponse } from '../route-contract.ts'
 
 const TAG = '[dsh-rrp]'
 const CORRECTION_PATH = RRP_ROUTES.worldState

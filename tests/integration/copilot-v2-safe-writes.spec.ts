@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { registerCopilotRoute, forgetCopilot } from '../../src/copilot.ts'
-import { rrpPayloadOf } from '../../src/state-payload.ts'
-import { forgetState } from '../../src/state-publisher.ts'
+import { registerCopilotRoute, forgetCopilot } from '../../src/runtime/copilot.ts'
+import { rrpPayloadOf } from '../../src/publish/state-payload.ts'
+import { forgetState } from '../../src/publish/state-publisher.ts'
 import {
   emptyWorldState,
   WORLD_STATE_KEY,

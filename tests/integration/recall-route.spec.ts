@@ -6,7 +6,7 @@ import {
   recallCooldownsOf,
   recallScopeOf,
   setRecallCooldowns,
-} from '../../src/recall.ts'
+} from '../../src/runtime/recall.ts'
 import { registerRecallRoute } from '../../src/routes/recall-route.ts'
 import { RRP_ROUTES } from '../../src/route-contract.ts'
 

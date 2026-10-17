@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { registerCorrectionRoute } from '../../src/correction.ts'
-import { forgetState } from '../../src/state-publisher.ts'
+import { registerCorrectionRoute } from '../../src/publish/correction.ts'
+import { forgetState } from '../../src/publish/state-publisher.ts'
 import { emptyWorldState, type WorldState } from '../../src/world-state/world-state.ts'
-import { rrpPayloadOf } from '../../src/state-payload.ts'
+import { rrpPayloadOf } from '../../src/publish/state-payload.ts'
 
 function state(): WorldState {
   return {

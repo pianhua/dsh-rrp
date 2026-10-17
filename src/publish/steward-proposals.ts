@@ -15,8 +15,8 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path'
-import { cardDirOf, parseFrontmatter, readCard } from './cards/cards.ts'
-import { harnessHome } from './host/home.ts'
+import { cardDirOf, parseFrontmatter, readCard } from '../cards/cards.ts'
+import { harnessHome } from '../host/home.ts'
 
 /** One staged Steward proposal, discriminated by kind. */
 export type StewardProposal =

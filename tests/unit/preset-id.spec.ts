@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isCardId, presetIdForCard } from '../../src/preset-id.ts'
+import { isCardId, presetIdForCard } from '../../src/host/preset-id.ts'
 
 describe('card preset identity', () => {
   it('accepts one canonical card-id grammar', () => {

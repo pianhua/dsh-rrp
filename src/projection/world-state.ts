@@ -5,7 +5,7 @@
  * fields, migrates old payloads, or adopts an invalid snapshot.
  */
 import { z } from 'zod'
-import { rrpPayloadOf } from '../state-payload.ts'
+import { rrpPayloadOf } from '../publish/state-payload.ts'
 import {
   WORLD_STATE_KEY,
   WORLD_STATE_VERSION,

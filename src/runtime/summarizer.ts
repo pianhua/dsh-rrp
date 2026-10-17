@@ -12,7 +12,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import { recordActivity } from '../activity.ts'
+import { recordActivity } from '../publish/activity.ts'
 import {
   SUMMARIZER_SYSTEM_PROMPT,
   buildSummarizerPrompt,
@@ -40,10 +40,10 @@ import {
   diffMacroSummary,
   NO_SUMMARY_CHANGE,
   type MacroSummary,
-} from '../macro-summary.ts'
+} from '../publish/macro-summary.ts'
 import { matchesPreset } from '../host/preset-id.ts'
 import { RRP_SETTINGS_KEY, clampSummaryEveryTurns, rrpSettingsOf } from '../host/settings.ts'
-import { publishState } from '../state-publisher.ts'
+import { publishState } from '../publish/state-publisher.ts'
 import { DEFAULT_TRANSCRIPT_LIMIT, transcriptOf } from './transcript-reader.ts'
 import { TRANSCRIPT_KEY, type TranscriptSlice } from './transcript.ts'
 

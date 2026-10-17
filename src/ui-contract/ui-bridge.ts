@@ -12,7 +12,7 @@
  * Dependency-free: both halves import these types and guards.
  */
 
-import { validateLoreEntry } from './lore/lore-state.ts'
+import { validateLoreEntry } from '../lore/lore-state.ts'
 
 /** Protocol version; a mismatch is ignored rather than guessed at. */
 export const UI_BRIDGE_PROTOCOL = 2

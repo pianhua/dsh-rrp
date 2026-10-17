@@ -18,7 +18,7 @@ import {
   listProposals,
   proposalArchiveOf,
   stageProposal,
-} from '../../src/steward-proposals.ts'
+} from '../../src/publish/steward-proposals.ts'
 
 const homes: string[] = []
 

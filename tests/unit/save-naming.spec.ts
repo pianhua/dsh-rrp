@@ -2,7 +2,7 @@
  * dsh-rrp — the save/branch title vocabulary (issue #37).
  */
 import { describe, expect, it } from 'vitest'
-import { branchTitle, mainTitle, uniqueMainTitle } from '../../src/save-naming.ts'
+import { branchTitle, mainTitle, uniqueMainTitle } from '../../src/host/save-naming.ts'
 
 describe('mainTitle', () => {
   it('appends the main-line marker to the card name', () => {

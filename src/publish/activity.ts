@@ -14,7 +14,7 @@
  *
  * Dependency-free: shared by host writers and the client bundle.
  */
-import type { WorldStateDiff } from './world-state/world-state.ts'
+import type { WorldStateDiff } from '../world-state/world-state.ts'
 
 /** Render a bounded, value-free summary of a structured v2 state diff. */
 export function renderActivityWorldStateDiff(diff: WorldStateDiff): string {

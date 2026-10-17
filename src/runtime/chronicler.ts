@@ -16,7 +16,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { recordActivity, renderActivityWorldStateDiff } from '../activity.ts'
+import { recordActivity, renderActivityWorldStateDiff } from '../publish/activity.ts'
 import { cardDirOf } from '../cards/cards.ts'
 import { CARD_KEY, type CardContext } from '../cards/card-types.ts'
 import { extractFirstJsonObject } from '../json-extract.ts'
@@ -44,7 +44,7 @@ import {
   routeOf,
 } from '../host/host-faces.ts'
 import { matchesPreset } from '../host/preset-id.ts'
-import { publishState } from '../state-publisher.ts'
+import { publishState } from '../publish/state-publisher.ts'
 import { pendingTranscriptOf, proseHeadSeqOf, transcriptSliceOf } from './transcript-reader.ts'
 import { type WorldStateTimelineChangeBatch } from '../world-state/world-state-timeline.ts'
 import {
@@ -54,7 +54,10 @@ import {
   worldStatesEqual,
   type WorldState,
 } from '../world-state/world-state.ts'
-import { sanitizePlayerText, sanitizeWorldStateDiff } from '../world-state/world-state-visibility.ts'
+import {
+  sanitizePlayerText,
+  sanitizeWorldStateDiff,
+} from '../world-state/world-state-visibility.ts'
 import { applyWorldStatePatch } from '../world-state/world-state-references.ts'
 
 const TAG = '[dsh-rrp]'

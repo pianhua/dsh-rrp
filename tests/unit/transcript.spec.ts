@@ -3,9 +3,9 @@ import {
   latestTurnTranscriptOf,
   pendingTranscriptOf,
   transcriptOf,
-} from '../../src/transcript-reader.ts'
+} from '../../src/runtime/transcript-reader.ts'
 import { renderTriggerBlock } from '../../src/lore/lore-condition.ts'
-import { rrpStateMessage } from '../../src/state-payload.ts'
+import { rrpStateMessage } from '../../src/publish/state-payload.ts'
 import { emptyWorldState, renderWorldState } from '../../src/world-state/world-state.ts'
 import { transcriptProjections } from '../stubs/transcript-projections.ts'
 

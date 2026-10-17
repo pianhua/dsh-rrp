@@ -5,7 +5,7 @@ import {
   readJsonBody,
   RequestBodyTooLargeError,
   readBody,
-} from '../../src/host-faces.ts'
+} from '../../src/host/host-faces.ts'
 
 type Chunk = string | Uint8Array
 

@@ -10,13 +10,13 @@
  * framework, per the personal-toy positioning.
  */
 import type { CardContext, CardMeta, CardPackPlayerView } from './cards/card-types.ts'
-import type { StewardProposal } from './steward-proposals.ts'
+import type { StewardProposal } from './publish/steward-proposals.ts'
 import type { WorldState, WorldStateDiagnostic, WorldStateDiff } from './world-state/world-state.ts'
 import type { WorldStateTimeline } from './world-state/world-state-timeline.ts'
 import type { WorldlineTree } from './worldline/worldline-tree.ts'
-import type { UiManifest } from './ui-schema.ts'
+import type { UiManifest } from './ui-contract/ui-schema.ts'
 
-export type { StewardProposal } from './steward-proposals.ts'
+export type { StewardProposal } from './publish/steward-proposals.ts'
 
 // ── Paths (host registers these; clients fetch these) ──────────────────────
 export const RRP_ROUTES = {

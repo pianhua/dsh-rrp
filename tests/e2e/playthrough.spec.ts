@@ -7,7 +7,7 @@ import {
   WORLD_STATE_TIMELINE_KEY,
   type WorldStateTimeline,
 } from '../../src/world-state/world-state-timeline.ts'
-import { TRANSCRIPT_KEY, type TranscriptSlice } from '../../src/transcript.ts'
+import { TRANSCRIPT_KEY, type TranscriptSlice } from '../../src/runtime/transcript.ts'
 import { interpolateCardText } from '../../src/cards/card-types.ts'
 import type { CardPackPlayerView } from '../../src/cards/card-types.ts'
 import type { WorldState } from '../../src/world-state/world-state.ts'

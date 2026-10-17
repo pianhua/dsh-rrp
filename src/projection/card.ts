@@ -9,7 +9,7 @@
 import { z } from 'zod'
 import { CARD_KEY, type CardContext } from '../cards/card-types.ts'
 import { isCardId } from '../host/preset-id.ts'
-import { rrpPayloadOf } from '../state-payload.ts'
+import { rrpPayloadOf } from '../publish/state-payload.ts'
 
 const playerSchema = z.object({ name: z.string(), description: z.string().optional() })
 

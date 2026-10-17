@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { readActivity } from '../../src/activity.ts'
+import { readActivity } from '../../src/publish/activity.ts'
 import { registerLoreCommand, registerLoreRoute } from '../../src/routes/lore-route.ts'
 import { seedCardTriggersForTesting } from '../../src/cards/cards.ts'
 import type { CardContext } from '../../src/cards/card-types.ts'
 import { parseWhen, type TriggerDef, type WhenCondition } from '../../src/lore/lore-condition.ts'
 import { RRP_LORE_KEY, applyLoreChange, type LoreEntry } from '../../src/lore/lore-state.ts'
-import { rrpPayloadOf } from '../../src/state-payload.ts'
-import { TRANSCRIPT_KEY, emptyTranscriptSlice } from '../../src/transcript.ts'
+import { rrpPayloadOf } from '../../src/publish/state-payload.ts'
+import { TRANSCRIPT_KEY, emptyTranscriptSlice } from '../../src/runtime/transcript.ts'
 import {
   createDynamicField,
   emptyWorldState,

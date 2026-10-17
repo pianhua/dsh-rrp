@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { CardContext } from '../../src/cards/card-types.ts'
 import { renderCardContext } from '../../src/cards/card-types.ts'
-import type { MacroSummary } from '../../src/macro-summary.ts'
-import { renderMacroSummary } from '../../src/macro-summary.ts'
+import type { MacroSummary } from '../../src/publish/macro-summary.ts'
+import { renderMacroSummary } from '../../src/publish/macro-summary.ts'
 import {
   PROMPT_BUDGET_WINDOW_TOKENS,
   estimateTokens,
   promptBudgetReport,
-} from '../../src/prompt-budget.ts'
+} from '../../src/runtime/prompt-budget.ts'
 import {
   emptyWorldState,
   renderWorldState,

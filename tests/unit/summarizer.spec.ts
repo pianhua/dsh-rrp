@@ -4,9 +4,9 @@ import {
   registerSummarizer,
   registerSummaryCommand,
   forgetAllSummary,
-} from '../../src/summarizer.ts'
-import { RRP_SETTINGS_KEY } from '../../src/settings.ts'
-import type { RrpStatePayload } from '../../src/state-payload.ts'
+} from '../../src/runtime/summarizer.ts'
+import { RRP_SETTINGS_KEY } from '../../src/host/settings.ts'
+import type { RrpStatePayload } from '../../src/publish/state-payload.ts'
 import { transcriptProjections } from '../stubs/transcript-projections.ts'
 
 type JobHandle = {
@@ -326,11 +326,13 @@ describe('Summarizer concurrency (issue #20)', () => {
 
 describe('diffMacroSummary (issue #10)', () => {
   it('returns the no-change sentinel for an identical summary', async () => {
-    const { diffMacroSummary, NO_SUMMARY_CHANGE } = await import('../../src/macro-summary.ts')
+    const { diffMacroSummary, NO_SUMMARY_CHANGE } =
+      await import('../../src/publish/macro-summary.ts')
     expect(diffMacroSummary(VALID, { ...VALID })).toBe(NO_SUMMARY_CHANGE)
   })
   it('digests a changed dimension', async () => {
-    const { diffMacroSummary, NO_SUMMARY_CHANGE } = await import('../../src/macro-summary.ts')
+    const { diffMacroSummary, NO_SUMMARY_CHANGE } =
+      await import('../../src/publish/macro-summary.ts')
     const next = { ...VALID, conflict: '追兵已至' }
     const diff = diffMacroSummary(VALID, next)
     expect(diff).not.toBe(NO_SUMMARY_CHANGE)

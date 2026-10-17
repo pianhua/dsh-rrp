@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { worldlineDigestProjection } from '../../src/projection/worldline-digest.ts'
 import { emptyWorldlineDigest, type WorldlineDigest } from '../../src/worldline/worldline-digest.ts'
-import { rrpStateMessage } from '../../src/state-payload.ts'
+import { rrpStateMessage } from '../../src/publish/state-payload.ts'
 import { emptyWorldState, type WorldState } from '../../src/world-state/world-state.ts'
 
 const apply = worldlineDigestProjection.apply as (

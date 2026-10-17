@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { worldStateProjection, worldStateSchema } from '../../src/projection/world-state.ts'
-import { rrpStateMessage } from '../../src/state-payload.ts'
+import { rrpStateMessage } from '../../src/publish/state-payload.ts'
 import {
   archiveTrackedObject,
   canDeleteTrackedObject,

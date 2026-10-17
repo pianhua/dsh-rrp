@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { recordActivity } from '../activity.ts'
+import { recordActivity } from '../publish/activity.ts'
 import { CARD_KEY, renderCardContext, type CardContext } from '../cards/card-types.ts'
 import { readCard } from '../cards/cards.ts'
 import {

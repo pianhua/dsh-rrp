@@ -9,7 +9,7 @@ import {
   recordActivity,
   renderActivityWorldStateDiff,
   type RrpActivity,
-} from '../../src/activity.ts'
+} from '../../src/publish/activity.ts'
 import { diffWorldState, emptyWorldState } from '../../src/world-state/world-state.ts'
 
 /** A complete ledger entry with overridable fields. */

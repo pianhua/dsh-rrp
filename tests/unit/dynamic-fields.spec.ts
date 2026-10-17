@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { worldStateProjection } from '../../src/projection/world-state.ts'
-import { rrpStateMessage } from '../../src/state-payload.ts'
+import { rrpStateMessage } from '../../src/publish/state-payload.ts'
 import {
   diagnoseWorldState,
   emptyWorldState,

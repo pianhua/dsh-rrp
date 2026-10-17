@@ -3,22 +3,22 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { readActivity, recordActivity } from '../../src/activity.ts'
-import { registerChronicler } from '../../src/chronicler.ts'
-import { registerCopilotRoute } from '../../src/copilot.ts'
+import { readActivity, recordActivity } from '../../src/publish/activity.ts'
+import { registerChronicler } from '../../src/runtime/chronicler.ts'
+import { registerCopilotRoute } from '../../src/runtime/copilot.ts'
 import {
   setCopilotLegacyDirForTesting,
   setCopilotWitnessForTesting,
-} from '../../src/copilot-store.ts'
+} from '../../src/runtime/copilot-store.ts'
 import { DRAFTING } from '../../src/lore/lore-drafts.ts'
 import { hasLoreDraft, stageLoreDraftForTesting } from '../../src/routes/lore-route.ts'
-import { RRP_SETTINGS_KEY } from '../../src/settings.ts'
-import { registerSummarizer } from '../../src/summarizer.ts'
-import { listProposals, stageProposal } from '../../src/steward-proposals.ts'
-import { publishState } from '../../src/state-publisher.ts'
+import { RRP_SETTINGS_KEY } from '../../src/host/settings.ts'
+import { registerSummarizer } from '../../src/runtime/summarizer.ts'
+import { listProposals, stageProposal } from '../../src/publish/steward-proposals.ts'
+import { publishState } from '../../src/publish/state-publisher.ts'
 import { emptyWorldState } from '../../src/world-state/world-state.ts'
 import * as rrp from '../../src/index.ts'
-import { registerPresetFamily } from '../../src/preset.ts'
+import { registerPresetFamily } from '../../src/host/preset.ts'
 
 /** The mandatory HMR-safety check: every registry contribution disposes cleanly. */
 describe('dsh-rrp host half', () => {

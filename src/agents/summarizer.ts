@@ -12,7 +12,7 @@
  */
 import { macroSummarySchema } from '../projection/summary.ts'
 import { extractFirstJsonObject } from '../json-extract.ts'
-import { SUMMARY_LIMITS, type MacroSummary } from '../macro-summary.ts'
+import { SUMMARY_LIMITS, type MacroSummary } from '../publish/macro-summary.ts'
 import type { AgentPromptContract } from './contract.ts'
 
 /** The Summarizer's persona and rules. */

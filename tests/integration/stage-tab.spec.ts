@@ -9,7 +9,7 @@ import {
   type StageApi,
   __clearStageManifestCache,
 } from '../../src/client/stage-tab.tsx'
-import { RRP_SETTINGS_KEY } from '../../src/settings.ts'
+import { RRP_SETTINGS_KEY } from '../../src/host/settings.ts'
 import { WORLDLINE_DIGEST_KEY } from '../../src/worldline/worldline-digest.ts'
 import { WORLD_STATE_KEY, emptyWorldState } from '../../src/world-state/world-state.ts'
 

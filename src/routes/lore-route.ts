@@ -15,7 +15,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import { recordActivity } from '../activity.ts'
+import { recordActivity } from '../publish/activity.ts'
 import { CARD_KEY, type CardContext } from '../cards/card-types.ts'
 import { triggersOfCard } from '../cards/cards.ts'
 import {
@@ -45,7 +45,7 @@ import {
 } from '../lore/lore-state.ts'
 import { RRP_ROUTES, type LoreEntryView } from '../route-contract.ts'
 import { evalCondition, hitSet } from '../lore/lore-condition.ts'
-import { publishState } from '../state-publisher.ts'
+import { publishState } from '../publish/state-publisher.ts'
 import { WORLD_STATE_KEY, type WorldState } from '../world-state/world-state.ts'
 import { filterWorldState } from '../world-state/world-state-visibility.ts'
 import {

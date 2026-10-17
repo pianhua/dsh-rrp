@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { settingsProjection as rrpSettingsProjection } from '../../src/projection/settings.ts'
-import { DEFAULT_RRP_SETTINGS, rrpSettingsOf } from '../../src/settings.ts'
+import { DEFAULT_RRP_SETTINGS, rrpSettingsOf } from '../../src/host/settings.ts'
 
 describe('RP settings vocabulary', () => {
   it('defaults allowSendMessage to true', () => {

@@ -17,33 +17,33 @@
  * share the facts event.
  */
 import { randomUUID } from 'node:crypto'
-import type { ProjectionsService, SessionLike } from './host/host-faces.ts'
-import { CARD_KEY, renderCardContext, type CardContext } from './cards/card-types.ts'
+import type { ProjectionsService, SessionLike } from '../host/host-faces.ts'
+import { CARD_KEY, renderCardContext, type CardContext } from '../cards/card-types.ts'
 import {
   hitSet,
   renderTriggerBlock,
   TRIGGER_BLOCK_HEADER,
   type TriggerHit,
-} from './lore/lore-condition.ts'
-import { triggersOfCard } from './cards/cards.ts'
+} from '../lore/lore-condition.ts'
+import { triggersOfCard } from '../cards/cards.ts'
 import { SUMMARY_KEY, renderMacroSummary, type MacroSummary } from './macro-summary.ts'
-import { RRP_SETTINGS_KEY, rrpSettingsOf, type RrpSettings } from './host/settings.ts'
-import type { LoreChange } from './lore/lore-state.ts'
+import { RRP_SETTINGS_KEY, rrpSettingsOf, type RrpSettings } from '../host/settings.ts'
+import type { LoreChange } from '../lore/lore-state.ts'
 import { rrpStateMessage, type RrpStatePayload } from './state-payload.ts'
-import { TRANSCRIPT_KEY, type TranscriptSlice } from './runtime/transcript.ts'
+import { TRANSCRIPT_KEY, type TranscriptSlice } from '../runtime/transcript.ts'
 import {
   WORLD_STATE_KEY,
   diffWorldState,
   renderWorldState,
   stableJson,
   type WorldState,
-} from './world-state/world-state.ts'
+} from '../world-state/world-state.ts'
 import {
   WORLD_STATE_TIMELINE_KEY,
   isWorldStateTimelineBatch,
   type WorldStateTimeline,
   type WorldStateTimelineBatch,
-} from './world-state/world-state-timeline.ts'
+} from '../world-state/world-state-timeline.ts'
 
 const TAG = '[dsh-rrp]'
 

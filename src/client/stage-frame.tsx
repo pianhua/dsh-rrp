@@ -17,8 +17,13 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { RRP_ROUTES } from '../route-contract.ts'
 import type { WorldState } from '../world-state/world-state.ts'
-import { UI_BRIDGE_PROTOCOL, UI_BRIDGE_VERBS, parseUiCall, type UiPush } from '../ui-bridge.ts'
-import { applyButtonPatch } from '../ui-schema.ts'
+import {
+  UI_BRIDGE_PROTOCOL,
+  UI_BRIDGE_VERBS,
+  parseUiCall,
+  type UiPush,
+} from '../ui-contract/ui-bridge.ts'
+import { applyButtonPatch } from '../ui-contract/ui-schema.ts'
 import type { StageApi, Translate } from './stage-types.ts'
 
 /** Calls a card app may raise per second; a runaway page must not flood the ledger. */

@@ -2,9 +2,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { forgetActivity, readActivity } from '../../src/activity.ts'
-import { forgetState } from '../../src/state-publisher.ts'
-import { registerStartRoute } from '../../src/start.ts'
+import { forgetActivity, readActivity } from '../../src/publish/activity.ts'
+import { forgetState } from '../../src/publish/state-publisher.ts'
+import { registerStartRoute } from '../../src/host/start.ts'
 import { emptyWorldState } from '../../src/world-state/world-state.ts'
 
 const STATE = {

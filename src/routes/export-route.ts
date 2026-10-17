@@ -10,7 +10,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { RRP_ROUTES } from '../route-contract.ts'
-import { collectTextBlocks, isPluginNotice, rrpPayloadOf } from '../state-payload.ts'
+import { collectTextBlocks, isPluginNotice, rrpPayloadOf } from '../publish/state-payload.ts'
 
 const TAG = '[dsh-rrp]'
 const EXPORT_PATH = RRP_ROUTES.novelExport

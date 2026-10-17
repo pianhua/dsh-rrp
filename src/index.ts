@@ -26,7 +26,7 @@ import { openWorldlineStore, type WorldlineStoreHandle } from './worldline/world
 import { registerLoreCommand, registerLoreRoute } from './routes/lore-route.ts'
 import { registerLoreRuntime } from './lore/lore-runtime.ts'
 import { registerChronicler, forgetAllInference, forgetInference } from './runtime/chronicler.ts'
-import { registerCorrectionRoute } from './correction.ts'
+import { registerCorrectionRoute } from './publish/correction.ts'
 import { registerWorldStateTimelineRoute } from './routes/world-state-timeline-route.ts'
 import {
   PRESET_ID,
@@ -50,10 +50,10 @@ import {
   forgetAllSummary,
   forgetSummary,
 } from './runtime/summarizer.ts'
-import { forgetAllActivity, forgetActivity } from './activity.ts'
+import { forgetAllActivity, forgetActivity } from './publish/activity.ts'
 import { forgetAllLore, forgetLore } from './routes/lore-route.ts'
-import { forgetAllState, forgetState } from './state-publisher.ts'
-import { forgetAllProposals, forgetProposals } from './steward-proposals.ts'
+import { forgetAllState, forgetState } from './publish/state-publisher.ts'
+import { forgetAllProposals, forgetProposals } from './publish/steward-proposals.ts'
 
 /** Loader row id. Keep in sync with cordis.patch.yml. */
 export const name = 'dsh-rrp'

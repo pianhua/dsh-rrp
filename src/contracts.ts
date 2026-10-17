@@ -91,8 +91,8 @@ export type {
   WorldStateTimelineEntry,
   WorldStateTimelineProvenance,
 } from './world-state/world-state-timeline.ts'
-export { SUMMARY_KEY, renderMacroSummary } from './macro-summary.ts'
-export type { MacroSummary } from './macro-summary.ts'
+export { SUMMARY_KEY, renderMacroSummary } from './publish/macro-summary.ts'
+export type { MacroSummary } from './publish/macro-summary.ts'
 export { DEFAULT_RRP_SETTINGS, RRP_SETTINGS_KEY, rrpSettingsOf } from './host/settings.ts'
 export type { RrpSettings } from './host/settings.ts'
 export {
@@ -110,8 +110,14 @@ export {
   emptyActivityLog,
   lastActivity,
   pendingActivity,
-} from './activity.ts'
-export type { RrpActivity, RrpActivityLog, RrpActor, RrpPhase, RrpTarget } from './activity.ts'
+} from './publish/activity.ts'
+export type {
+  RrpActivity,
+  RrpActivityLog,
+  RrpActor,
+  RrpPhase,
+  RrpTarget,
+} from './publish/activity.ts'
 export { CARD_KEY, renderCardContext, toPlayerSafeCardPack } from './cards/card-types.ts'
 export type {
   CardContext,
@@ -130,5 +136,10 @@ export type {
   CardStateMigration,
   CardStateSchema,
 } from './cards/card-state-schema.ts'
-export { RRP_PLUGIN, messageTextOf, rrpPayloadOf, rrpStateMessage } from './state-payload.ts'
-export type { RrpStatePayload } from './state-payload.ts'
+export {
+  RRP_PLUGIN,
+  messageTextOf,
+  rrpPayloadOf,
+  rrpStateMessage,
+} from './publish/state-payload.ts'
+export type { RrpStatePayload } from './publish/state-payload.ts'

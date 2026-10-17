@@ -5,12 +5,12 @@ import { describe, expect, it } from 'vitest'
 import { listCards, readCard } from '../../src/cards/cards.ts'
 import { toPlayerSafeCardPack } from '../../src/cards/card-types.ts'
 import { registerActivityRoute } from '../../src/routes/activity-route.ts'
-import { DEFAULT_JSON_BODY_LIMIT } from '../../src/host-faces.ts'
+import { DEFAULT_JSON_BODY_LIMIT } from '../../src/host/host-faces.ts'
 import { registerCardsRoute } from '../../src/routes/cards-route.ts'
-import { registerCopilotRoute } from '../../src/copilot.ts'
-import { registerCorrectionRoute } from '../../src/correction.ts'
+import { registerCopilotRoute } from '../../src/runtime/copilot.ts'
+import { registerCorrectionRoute } from '../../src/publish/correction.ts'
 import { registerLoreRoute } from '../../src/routes/lore-route.ts'
-import { registerStartRoute } from '../../src/start.ts'
+import { registerStartRoute } from '../../src/host/start.ts'
 import {
   COPILOT_SSE,
   RRP_ROUTES,

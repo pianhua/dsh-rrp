@@ -9,8 +9,8 @@
  */
 import type { CardContext } from '../cards/card-types.ts'
 import { renderCardContext } from '../cards/card-types.ts'
-import type { MacroSummary } from '../macro-summary.ts'
-import { renderMacroSummary } from '../macro-summary.ts'
+import type { MacroSummary } from '../publish/macro-summary.ts'
+import { renderMacroSummary } from '../publish/macro-summary.ts'
 import type { WorldState } from '../world-state/world-state.ts'
 import { renderWorldState } from '../world-state/world-state.ts'
 

@@ -10,7 +10,7 @@ import {
   cleanupPreset,
   presetDefinitionForCard,
   registerPresetFamily,
-} from '../../src/preset.ts'
+} from '../../src/host/preset.ts'
 
 const homes: string[] = []
 

@@ -7,7 +7,7 @@ import {
   RRP_SETTINGS_KEY,
   type RrpSettings,
 } from '../host/settings.ts'
-import { rrpPayloadOf } from '../state-payload.ts'
+import { rrpPayloadOf } from '../publish/state-payload.ts'
 
 export const rrpSettingsSchema = z.object({
   summaryEnabled: z.boolean(),

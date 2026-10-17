@@ -6,8 +6,8 @@
  * `wire.view` reuses that reference so an unchanged summary publishes nothing.
  */
 import { z } from 'zod'
-import { SUMMARY_KEY, SUMMARY_LIMITS, type MacroSummary } from '../macro-summary.ts'
-import { rrpPayloadOf } from '../state-payload.ts'
+import { SUMMARY_KEY, SUMMARY_LIMITS, type MacroSummary } from '../publish/macro-summary.ts'
+import { rrpPayloadOf } from '../publish/state-payload.ts'
 
 /**
  * Runtime validator for one macro summary. The list length is the hard half of

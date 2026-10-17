@@ -4,7 +4,7 @@
  * the host projection drive does, minus the Cordis registry.
  */
 import { transcriptProjection } from '../../src/projection/transcript.ts'
-import { TRANSCRIPT_KEY, type TranscriptSlice } from '../../src/transcript.ts'
+import { TRANSCRIPT_KEY, type TranscriptSlice } from '../../src/runtime/transcript.ts'
 
 /** One raw log event as specs build it; the fold stamps seqs by array index. */
 export type RawEvent = { type?: string; data?: unknown }

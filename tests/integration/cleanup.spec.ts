@@ -3,24 +3,24 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { cleanupSession, extractSessionId } from '../../src/index.ts'
-import { readActivity, recordActivity } from '../../src/activity.ts'
-import { registerChronicler } from '../../src/chronicler.ts'
-import { registerCopilotRoute } from '../../src/copilot.ts'
+import { readActivity, recordActivity } from '../../src/publish/activity.ts'
+import { registerChronicler } from '../../src/runtime/chronicler.ts'
+import { registerCopilotRoute } from '../../src/runtime/copilot.ts'
 import {
   setCopilotLegacyDirForTesting,
   setCopilotWitnessForTesting,
-} from '../../src/copilot-store.ts'
+} from '../../src/runtime/copilot-store.ts'
 import { DRAFTING } from '../../src/lore/lore-drafts.ts'
 import { hasLoreDraft, stageLoreDraftForTesting } from '../../src/routes/lore-route.ts'
-import { getLastSummarizedTurn, registerSummarizer } from '../../src/summarizer.ts'
+import { getLastSummarizedTurn, registerSummarizer } from '../../src/runtime/summarizer.ts'
 import {
   getWorldStateDraftStore,
   resetWorldStateDraftStore,
 } from '../../src/client/world-state-draft-store.ts'
-import { listProposals, stageProposal } from '../../src/steward-proposals.ts'
-import { publishState } from '../../src/state-publisher.ts'
+import { listProposals, stageProposal } from '../../src/publish/steward-proposals.ts'
+import { publishState } from '../../src/publish/state-publisher.ts'
 import { emptyWorldState } from '../../src/world-state/world-state.ts'
-import { recallScopeOf, setRecallCooldowns, recallCooldownsOf } from '../../src/recall.ts'
+import { recallScopeOf, setRecallCooldowns, recallCooldownsOf } from '../../src/runtime/recall.ts'
 import * as rrp from '../../src/index.ts'
 
 function seedSessionScopedCaches(sessionId: string) {

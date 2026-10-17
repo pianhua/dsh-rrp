@@ -1,7 +1,7 @@
 import { Button, Pill, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { CARD_KEY, type CardContext } from '../cards/card-types.ts'
-import { SUMMARY_KEY, type MacroSummary } from '../macro-summary.ts'
+import { SUMMARY_KEY, type MacroSummary } from '../publish/macro-summary.ts'
 import { promptBudgetReport } from '../runtime/prompt-budget.ts'
 import { RRP_ROUTES, type CorrectionResponse, routeUrl } from '../route-contract.ts'
 import {

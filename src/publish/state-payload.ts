@@ -16,12 +16,12 @@
  *
  * Dependency-free: host projections and the client may both import it.
  */
-import type { CardContext } from './cards/card-types.ts'
+import type { CardContext } from '../cards/card-types.ts'
 import type { MacroSummary } from './macro-summary.ts'
-import type { RrpSettings } from './host/settings.ts'
-import type { LoreChange } from './lore/lore-state.ts'
-import type { WorldState } from './world-state/world-state.ts'
-import type { WorldStateTimelineBatch } from './world-state/world-state-timeline.ts'
+import type { RrpSettings } from '../host/settings.ts'
+import type { LoreChange } from '../lore/lore-state.ts'
+import type { WorldState } from '../world-state/world-state.ts'
+import type { WorldStateTimelineBatch } from '../world-state/world-state-timeline.ts'
 
 /** The plugin identity stamped on every context message we own. */
 export const RRP_PLUGIN = 'dsh-rrp'

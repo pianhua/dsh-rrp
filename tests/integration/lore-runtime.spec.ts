@@ -10,7 +10,7 @@ import {
   registerLoreRuntime,
 } from '../../src/lore/lore-runtime.ts'
 import { hasLoreDraft, stageLoreDraftForTesting } from '../../src/routes/lore-route.ts'
-import { rrpPayloadOf } from '../../src/state-payload.ts'
+import { rrpPayloadOf } from '../../src/publish/state-payload.ts'
 import { transcriptProjections } from '../stubs/transcript-projections.ts'
 
 const homes: string[] = []

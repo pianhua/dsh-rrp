@@ -8,9 +8,9 @@ import {
   COPILOT_SYSTEM_PROMPT,
   parseCopilotActions,
 } from '../../src/agents/copilot.ts'
-import { readActivity } from '../../src/activity.ts'
-import { forgetState } from '../../src/state-publisher.ts'
-import { rrpPayloadOf } from '../../src/state-payload.ts'
+import { readActivity } from '../../src/publish/activity.ts'
+import { forgetState } from '../../src/publish/state-publisher.ts'
+import { rrpPayloadOf } from '../../src/publish/state-payload.ts'
 import type { CardContext } from '../../src/cards/card-types.ts'
 import {
   emptyWorldState,
@@ -22,13 +22,13 @@ import {
   mergeWorldStatePatch,
   registerCopilotRoute,
   forgetCopilot,
-} from '../../src/copilot.ts'
+} from '../../src/runtime/copilot.ts'
 import {
   setCopilotLegacyDirForTesting,
   setCopilotWitnessForTesting,
   openCopilotStore,
-} from '../../src/copilot-store.ts'
-import { forgetProposals } from '../../src/steward-proposals.ts'
+} from '../../src/runtime/copilot-store.ts'
+import { forgetProposals } from '../../src/publish/steward-proposals.ts'
 import { hasLoreDraft } from '../../src/lore/lore-drafts.ts'
 
 let copilotDir: string

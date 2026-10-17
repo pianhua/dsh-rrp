@@ -15,10 +15,10 @@ import {
   parseWhenPath,
   resolveWhenPath,
   type WhenCondition,
-} from './lore/lore-condition.ts'
-import { applyWorldStatePatch } from './world-state/world-state-references.ts'
-import type { LoreEntry } from './lore/lore-state.ts'
-import type { ObjectReference, TrackedObject, WorldState } from './world-state/world-state.ts'
+} from '../lore/lore-condition.ts'
+import { applyWorldStatePatch } from '../world-state/world-state-references.ts'
+import type { LoreEntry } from '../lore/lore-state.ts'
+import type { ObjectReference, TrackedObject, WorldState } from '../world-state/world-state.ts'
 
 /** The closed interpreter set: five declarative panels, or one card-authored page. */
 export type UiComponentKind =
