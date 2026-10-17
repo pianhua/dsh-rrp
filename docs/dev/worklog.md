@@ -5,6 +5,24 @@
 >
 > 附录：[`2026-09`](./worklog/2026-09.md) — WorldState v2、架构重构、世界线 v2、舞台 v2、展厅 v2、宿主 0.2.0 适配
 
+## 2026-10-17 · play-e2e 票据 04 交付 + 发现结构性生产 bug（issue 06）
+
+**票据 04 交付**：`tests/e2e/playthrough.spec.ts` 一条链跑通「开卡 → 带标记玩家消息 → Author 正文 →
+Chronicler 结算 → 世界状态/时间线断言 → 独立读盘对账 → 重启后独立折叠仍一致」。新增 e2e 驱动插件
+（测试脚手架，会话创建/prompt/投影读/flush/冷读路由）+ `disk-fold.ts` 独立读盘折叠；Chronicler 真信封
+对着 schema 造、桩侧断言侧共用同一变更字面量；负向对照端到端证明落地（`WRONG_GOLD=1` 非零退出，
+票据 03 转 resolved）。
+
+**发现（只记录不顺手改）**：
+- **回合号结构性碰撞（生产级，立 issue 06）**：开局预写 turn 1/2 与 loop 组合时冻结的计数器相撞，
+  宿主 v4 准入冷读拒整个日志（热进程不跑准入所以从没炸过；preset 被 `agent-preset/locked` 焊死
+  在首个回合前，碰撞无解于现有接缝）。票据 04 重启按数据面收口，宿主冷读移交 06。
+- 转录折叠把正文统计两遍（message.content 与 stream 的 block-end 块各一次，Chronicler 一直在读双份）；
+  loop 在玩家回合后追加 `<system-reminder>`（标记词须取「最新非提醒用户文本」）；首个 prompt 伴随一次
+  标题 LLM 调用；持久层缓冲事件，「落盘」断言前须 `sessions.flush`；时间线 storyTurn 取 loop 计数（=1）。
+- **B1 探针不可达（仪式已做）**：回退 `82ddf5e` 重跑全链依旧全绿——fold/timeline-only 元数据分支在自然
+  玩局无生产触发源（空 diff 跳过发布 + 模型渲染无损），由单测守护；结论与重开条件在 `tests/README.md`。
+
 ## 2026-10-16 · 向 dsh-tavern 靠齐：B0 仓库腐肉 + B1 P0 上下文浪费
 
 **方向修正**：用户要求向 dsh-tavern 的工程规范靠齐。勘察**推翻了前提的一半**——它没有 eslint / prettier / husky / commitlint，CI 里连 E2E 都不跑，所以靠齐 ≠ 加工具链。它真正的规范性在三件事：① 打在 `LlmAdapter` 边界的可重复模型桩（只换 `stream()`，工具/存储/HTTP/Chromium 全真；桩输出由「最新用户消息中的标记词」驱动，零 fixture；配负向对照证明测试真会失败）；② 产物漂移 `--check` 门禁；③ `docs/releases/vX.Y.md` 记录该版本全量回归数字。**我们已比它强**：eslint+prettier+hygiene+tests 三层 CI、`files` 白名单发布面。**明确不移植**（ADR 0015）：多 OS/多 Node CI 矩阵、安装器链、CDN purge、Pages 手册站、issue 模板、付费真模型 `testsets/`；`_Avoid_` 术语表它自己也没机器强制，不补。

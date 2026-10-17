@@ -33,3 +33,38 @@
 - `pnpm run test:e2e` 在无 `DEEPSEEK_API_KEY` 环境下通过；连跑 3 次结果一致；
 - 第 6 条回归探针实际做过一次并在 `tests/README.md` 留下结论；
 - 全量质量门 + `pnpm run build` 通过。
+
+**2026-10-17 交付**：`tests/e2e/playthrough.spec.ts` 一条链跑通「开卡 → 带标记玩家消息 →
+Author 正文 → Chronicler 结算 → 世界状态/时间线断言 → 独立读盘对账 → 重启后独立折叠仍
+一致」。Chronicler 真信封替换占位常量：对着 `chroniclerReplySchema` 造，单测用生产
+`parseChroniclerReply` 断言接受；剧本变更（`CHRONICLER_GOLD_CHANGE`）是桩侧与断言侧的
+单一事实源，expected state 由两边各自「卡包 state.json + 同一变更字面量」推导。
+负向对照端到端证明随本票落地（票据 03 转 resolved），命令写进 `tests/README.md`。
+
+交付时推翻/发现（按本票「暴露即发现」约束，只记录不顺手改）：
+
+1. **回合号结构性碰撞（生产级，已立 issue 06）**：开局路由预写 turn 1/2，而宿主
+   loop 的回合计数器在 preset 组合时冻结于 0——首个玩家回合被编号 turn 1，宿主
+   v4 准入（`turn/start` 必须开 `nextTurn`）在冷读时拒读整个日志。热进程不跑准入
+   折叠器所以一直没炸。preset 选择被 `agent-preset/locked` 焊死在首个回合之前，
+   碰撞无解于现有宿主接缝。→ 本票重启验收按数据面收口：关闭宿主、同一 DSH_HOME
+   再起、**磁盘日志独立折叠**与玩局现场逐字节一致；宿主进程内冷读断言移交 issue 06。
+2. **转录折叠把正文统计两遍**：`collectTextBlocks` 递归整条事件，loop 落的事件同时
+   带 `message.content` 与 `stream[].chunk.block-end.block`（各含全文）→ 散文条目
+   文本 = 正文\n正文。Chronicler 一直在读双份散文（无语义害、纯浪费）。逐字节断言
+   因此落在磁盘事件的 content 块上，条目级只断言包含。
+3. **loop 在玩家回合后追加 `<system-reminder>` 用户消息**：标记词检测必须用
+   「最新非提醒用户文本」（`latestPlayerText`），否则 Author 场景选不中剧本。
+4. **首个 prompt 伴随一次标题 LLM 调用**（unknown caller，剧本回中性文本当标题），
+   审计断言按调用方多重集精确计数（author=1、chronicler=2），顺带钉死无重试长尾。
+5. **持久层缓冲事件**：「落盘」断言前必须经 `sessions.flush`（驱动 /flush 路由），
+   否则磁盘读不到最新事件。
+6. **storyTurn=1 而非日志序号 3**：时间线批次的故事回合取 loop 计数（组合时冻结），
+   与日志序号是两套数——断言按真相钉为 1。
+7. **B1 回归探针不可达（仪式已做，结论在 tests/README.md）**：自然玩局里
+   fold/timeline-only 元数据分支无生产触发源（Chronicler 空 diff 直接跳过发布 +
+   模型侧渲染无损），回退 `82ddf5e` 重跑本链**依旧全绿**——该分支由
+   `tests/unit/state-publisher.spec.ts` 守护；本链另加邻接守卫（真实变更必须全文
+   送达模型）。重开条件：未来出现「渲染未变却推进游标/批次」的生产调用方。
+
+Status: resolved（重启的宿主冷读项移交 issue 06，理由与 reopen 条件见该票）

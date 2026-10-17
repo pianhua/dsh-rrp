@@ -61,3 +61,8 @@ one-shot（`input.system`）两种请求形状，`callerOf()` 按三个智体受
 **仍欠一项，且现在无法证明**：`DSH_RRP_E2E_WRONG_GOLD=1` 必须让 E2E 非零退出。这条要等票据 04
 出现"会被错误输出违反的断言"才谈得上验证——在那之前任何"已验证"的声明都是假的，所以本票保持
 `claimed`，把这一项与驱动面一起收口。
+
+**2026-10-17 收口（票据 04 交付时）**：负向对照的端到端证明已落地——
+`DSH_RRP_E2E_WRONG_GOLD=1 pnpm run test:e2e` 非零退出（vitest exit=1），失败即
+`转录条目必须包含 Author 正文` 一项，收到的正是 `E2E_WRONG_GOLD_OUTPUT`。命令与
+结论复述在 `tests/README.md`。本票转 **resolved**。
