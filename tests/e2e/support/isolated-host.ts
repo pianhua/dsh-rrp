@@ -52,18 +52,33 @@ export interface IsolatedHostOptions {
   repoRoot: string
   /** Profile directory name under `<DSH_HOME>/profiles/`. Default `e2e`. */
   profileName?: string
+  /**
+   * Reuse an existing directory as `DSH_HOME` instead of minting a fresh one — the restart
+   * half of "close the host, boot a new one, lose nothing". The profile inside is recomposed
+   * (links replaced, manifests rewritten); everything else under the root is left alone.
+   */
+  root?: string
   /** Absolute path to a stub-model Cordis plugin, when the run has one. */
   stubPlugin?: string
   /** Provider id the stub registers; required together with `stubPlugin`. */
   stubProvider?: string
+  /** Absolute path to a headless driver Cordis plugin (test scaffold routes). */
+  driverPlugin?: string
+  /** Absolute path to the played card's `state.json`, handed to the stub as its script base. */
+  cardStateFile?: string
   /** Absolute JSONL path where the stub records every `stream()` entry. */
   auditFile?: string
   /** How long to wait for the startup URL. */
   bootTimeoutMs?: number
 }
 
+export interface IsolatedHostCloseOptions {
+  /** Keep the `DSH_HOME` directory on disk (restart phase reuses it); default destroys it. */
+  preserveRoot?: boolean
+}
+
 export interface IsolatedHost {
-  /** Temp directory used as `DSH_HOME`; removed by `close()`. */
+  /** Temp directory used as `DSH_HOME`; removed by `close()` unless preserved. */
   root: string
   /** Composed profile directory inside `root`. */
   profileDir: string
@@ -73,8 +88,8 @@ export interface IsolatedHost {
   port: number
   /** Captured stdout+stderr so far. */
   log(): string
-  /** Terminate the child and destroy `root`. Idempotent. */
-  close(): Promise<void>
+  /** Terminate the child and destroy `root` (unless `preserveRoot`). Idempotent. */
+  close(options?: IsolatedHostCloseOptions): Promise<void>
 }
 
 function pause(ms: number): Promise<void> {
@@ -87,9 +102,11 @@ function pause(ms: number): Promise<void> {
  * Link one directory into the isolated profile without following it on teardown.
  *
  * Windows uses a junction because a directory symlink needs developer mode while a junction does
- * not; POSIX uses a plain symlink.
+ * not; POSIX uses a plain symlink. An existing link is replaced so recomposing a reused root
+ * (the restart phase) stays idempotent.
  */
 function linkDirectory(target: string, linkPath: string): void {
+  rmSync(linkPath, { recursive: true, force: true })
   symlinkSync(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
 }
 
@@ -99,11 +116,12 @@ interface ComposeInput {
   profileName: string
   stubPlugin?: string
   stubProvider?: string
+  driverPlugin?: string
 }
 
 /** Compose the profile tree and return the runtime scope it must resolve against. */
 function composeProfile(input: ComposeInput): { profileDir: string; scope: string } {
-  const { repoRoot, root, profileName, stubPlugin, stubProvider } = input
+  const { repoRoot, root, profileName, stubPlugin, stubProvider, driverPlugin } = input
   const scope = resolveDshScope(repoRoot)
   if (scope === null) {
     throw new Error(
@@ -122,7 +140,13 @@ function composeProfile(input: ComposeInput): { profileDir: string; scope: strin
 
   const stubBundle = `dsh-rrp-${profileName}-model-stub`
   const hasStub = stubPlugin !== undefined && stubProvider !== undefined
-  const bundles = [...BASE_BUNDLES, 'dsh-rrp', ...(hasStub ? [stubBundle] : [])]
+  const driverBundle = `dsh-rrp-${profileName}-driver`
+  const bundles = [
+    ...BASE_BUNDLES,
+    'dsh-rrp',
+    ...(hasStub ? [stubBundle] : []),
+    ...(driverPlugin === undefined ? [] : [driverBundle]),
+  ]
   writeFileSync(
     join(profileDir, 'package.json'),
     JSON.stringify({
@@ -141,6 +165,19 @@ function composeProfile(input: ComposeInput): { profileDir: string; scope: strin
       `- insert:\n    - id: ${stubBundle}\n      name: ${JSON.stringify(stubPlugin)}\n`,
     )
   }
+  if (driverPlugin !== undefined) {
+    patch.push(
+      `- insert:\n    - id: ${driverBundle}\n      name: ${JSON.stringify(driverPlugin)}\n`,
+    )
+  }
+  // Pin the session log to plaintext JSONL: the playthrough reads $DSH_HOME/sessions itself
+  // (independent disk fold). Persistence semantics are encoding-independent, and the override
+  // names the same root the default config resolves to.
+  patch.push(
+    '- id: session-persistence-jsonl\n  config:\n' +
+      `    root: ${JSON.stringify(join(root, 'sessions'))}\n` +
+      '    compression: none\n',
+  )
   patch.push("- insert:\n    - id: dsh-rrp\n      name: 'dsh-rrp'\n")
   writeFileSync(join(profileDir, 'cordis.patch.yml'), patch.join(''))
   return { profileDir, scope }
@@ -151,12 +188,15 @@ export async function startIsolatedHost(options: IsolatedHostOptions): Promise<I
   const {
     repoRoot,
     profileName = 'e2e',
+    root: reuseRoot,
     stubPlugin,
     stubProvider,
+    driverPlugin,
+    cardStateFile,
     auditFile,
     bootTimeoutMs = 180_000,
   } = options
-  const root = await mkdtemp(join(tmpdir(), 'dsh-rrp-e2e-'))
+  const root = reuseRoot ?? (await mkdtemp(join(tmpdir(), 'dsh-rrp-e2e-')))
   let cleaned = false
   const cleanup = (): void => {
     if (cleaned) return
@@ -172,6 +212,7 @@ export async function startIsolatedHost(options: IsolatedHostOptions): Promise<I
       profileName,
       stubPlugin,
       stubProvider,
+      driverPlugin,
     })
     const bin = join(scope, 'dsh', 'lib', 'bin.js')
     const env = Object.fromEntries(
@@ -180,6 +221,11 @@ export async function startIsolatedHost(options: IsolatedHostOptions): Promise<I
         process.env[key] as string,
       ]),
     )
+    // Deliberately narrow test-only passthrough: the negative control reaches the stub as
+    // DSH_RRP_E2E_WRONG_GOLD in the HOST process, not just in the vitest process.
+    for (const [key, value] of Object.entries(process.env)) {
+      if (key.startsWith('DSH_RRP_E2E_') && value !== undefined) env[key] = value
+    }
     child = spawn(
       process.execPath,
       [bin, '--profile', profileName, '--host', '127.0.0.1', '--port', '0', '--no-open'],
@@ -193,6 +239,7 @@ export async function startIsolatedHost(options: IsolatedHostOptions): Promise<I
           // on dsh-llm, so the path is handed over rather than imported.
           DSH_RRP_E2E_LLM_MODULE: join(scope, 'dsh-llm', 'lib', 'index.js'),
           ...(auditFile === undefined ? {} : { DSH_RRP_E2E_AUDIT: auditFile }),
+          ...(cardStateFile === undefined ? {} : { DSH_RRP_E2E_CARD_STATE: cardStateFile }),
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       },
@@ -233,7 +280,7 @@ export async function startIsolatedHost(options: IsolatedHostOptions): Promise<I
       baseUrl: `${parsed.protocol}//${parsed.host}`,
       port: Number(parsed.port),
       log: () => log,
-      async close() {
+      async close(options?: IsolatedHostCloseOptions) {
         if (running.exitCode === null) {
           running.kill('SIGTERM')
           const exited = new Promise<void>((resolveExit) => {
@@ -248,7 +295,7 @@ export async function startIsolatedHost(options: IsolatedHostOptions): Promise<I
             await Promise.race([exited, pause(5_000)])
           }
         }
-        cleanup()
+        if (options?.preserveRoot !== true) cleanup()
       },
     }
   } catch (error) {
